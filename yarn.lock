@@ -1207,7 +1207,7 @@ __metadata:
     postcss: "npm:^8.5.28"
     react: "npm:^19.3.0"
     react-dom: "npm:^19.3.0"
-    tailwindcss: "npm:~3.4.17"
+    tailwindcss: "npm:~3.4.19"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -1223,16 +1223,16 @@ __metadata:
     "@bull-board/ui": "npm:^9.10.1"
     "@dracord/types": "workspace:*"
     "@nestjs/bullmq": "npm:^12.0.0"
-    "@nestjs/cli": "npm:^12.0.7"
-    "@nestjs/common": "npm:^12.1.0"
+    "@nestjs/cli": "npm:^12.0.8"
+    "@nestjs/common": "npm:^12.1.1"
     "@nestjs/config": "npm:^12.0.1"
-    "@nestjs/core": "npm:^12.1.0"
+    "@nestjs/core": "npm:^12.1.1"
     "@nestjs/jwt": "npm:^12.0.2"
     "@nestjs/passport": "npm:^12.0.0"
-    "@nestjs/platform-express": "npm:^12.1.0"
-    "@nestjs/platform-socket.io": "npm:^12.1.0"
-    "@nestjs/typeorm": "npm:^12.0.1"
-    "@nestjs/websockets": "npm:^12.1.0"
+    "@nestjs/platform-express": "npm:^12.1.1"
+    "@nestjs/platform-socket.io": "npm:^12.1.1"
+    "@nestjs/typeorm": "npm:^12.0.2"
+    "@nestjs/websockets": "npm:^12.1.1"
     "@paralleldrive/cuid2": "npm:^3.3.0"
     "@rspack/cli": "npm:^2.2.7"
     "@rspack/core": "npm:^2.2.7"
@@ -1345,7 +1345,7 @@ __metadata:
     postcss: "npm:^8.5.28"
     react: "npm:^19.3.0"
     react-dom: "npm:^19.3.0"
-    tailwindcss: "npm:~3.4.17"
+    tailwindcss: "npm:~3.4.19"
     tslib: "npm:^2.8.1"
     typescript: "npm:^6.0.3"
   languageName: unknown
@@ -2985,9 +2985,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nestjs/cli@npm:^12.0.7":
-  version: 12.0.7
-  resolution: "@nestjs/cli@npm:12.0.7"
+"@nestjs/cli@npm:^12.0.8":
+  version: 12.0.8
+  resolution: "@nestjs/cli@npm:12.0.8"
   dependencies:
     "@angular-devkit/core": "npm:22.2.0"
     "@angular-devkit/schematics": "npm:22.2.0"
@@ -3032,13 +3032,13 @@ __metadata:
       optional: true
   bin:
     nest: bin/nest.js
-  checksum: 10c0/61b0d3879b0e8ae6b483ad24c51618c59e3a6ad8618fee3758d82d8d5e30683df171f1baedfb6f844107653cd8f13bf01c04166157dc37c8b68610cfdc2ec58f
+  checksum: 10c0/98ee3cb789b6cb96f242986ca9dc94c7bc130e8c70272d463a51adc9d1e10b999447fb52cce1291d967c207a666f8ab1e57024b949db90782c59ad8263612a58
   languageName: node
   linkType: hard
 
-"@nestjs/common@npm:^12.1.0":
-  version: 12.1.0
-  resolution: "@nestjs/common@npm:12.1.0"
+"@nestjs/common@npm:^12.1.1":
+  version: 12.1.1
+  resolution: "@nestjs/common@npm:12.1.1"
   dependencies:
     "@standard-schema/spec": "npm:1.1.0"
     file-type: "npm:22.1.1"
@@ -3056,7 +3056,7 @@ __metadata:
       optional: true
     class-validator:
       optional: true
-  checksum: 10c0/ec1ad6663b19df293ebc9943753b20d1439c8633551e1eafc4122a91fab015cb4cb35188ae1fc2689e7225d743dbae344472376f10b9e02b4cae9f94917bcac3
+  checksum: 10c0/4d143c6adfff29b2fd54ed9ffc11da596091ec3f03bdacf666355650e6086322194b3efa2be314c912d487c7f85736416a9cb96e86cd3dbf94b8abc9c98d49e7
   languageName: node
   linkType: hard
 
@@ -3075,9 +3075,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nestjs/core@npm:^12.1.0":
-  version: 12.1.0
-  resolution: "@nestjs/core@npm:12.1.0"
+"@nestjs/core@npm:^12.1.1":
+  version: 12.1.1
+  resolution: "@nestjs/core@npm:12.1.1"
   dependencies:
     fast-safe-stringify: "npm:2.1.1"
     iterare: "npm:1.2.1"
@@ -3098,7 +3098,7 @@ __metadata:
       optional: true
     "@nestjs/websockets":
       optional: true
-  checksum: 10c0/5ef9c17d9ac6ac629c85df5dbe1b8b2990a94672199739f7b596ae86b53a4a65208f74b7da19c3371588d81afcc6cb9eb9b3abae33d06f5ffdfc379a5424471c
+  checksum: 10c0/8a821a01d651d77319e7586bb4a7c8bd16b337a5ed3c22dfe724f97a98e24e967c098ff0ac31b0baa7d9e4a4707b51b5ed4b4b282046c2eac67c849cfd6d42fd
   languageName: node
   linkType: hard
 
@@ -3124,9 +3124,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nestjs/platform-express@npm:^12.1.0":
-  version: 12.1.0
-  resolution: "@nestjs/platform-express@npm:12.1.0"
+"@nestjs/platform-express@npm:^12.1.1":
+  version: 12.1.1
+  resolution: "@nestjs/platform-express@npm:12.1.1"
   dependencies:
     cors: "npm:2.8.6"
     express: "npm:5.2.1"
@@ -3136,13 +3136,13 @@ __metadata:
   peerDependencies:
     "@nestjs/common": ^12.0.0
     "@nestjs/core": ^12.0.0
-  checksum: 10c0/39b621899a9f4ac00d45615a346d77c11c7280ab058bed4865fee99794b417f4bda001f7821e2051e7db8234ad43a49135b9019343ef6e4ecb3eb73de1fcda4b
+  checksum: 10c0/e41cb40a703dd18329cc3f3cf1c9279da9be7bc0103d1426671fb25d3f436820c5c03b5fe9ecdf1602dc598b49e988d27fd63107dbb165808fd4e89eadb0ab77
   languageName: node
   linkType: hard
 
-"@nestjs/platform-socket.io@npm:^12.1.0":
-  version: 12.1.0
-  resolution: "@nestjs/platform-socket.io@npm:12.1.0"
+"@nestjs/platform-socket.io@npm:^12.1.1":
+  version: 12.1.1
+  resolution: "@nestjs/platform-socket.io@npm:12.1.1"
   dependencies:
     socket.io: "npm:4.8.3"
     tslib: "npm:2.8.1"
@@ -3150,7 +3150,7 @@ __metadata:
     "@nestjs/common": ^12.0.0
     "@nestjs/websockets": ^12.0.0
     rxjs: ^7.1.0
-  checksum: 10c0/9ba9d430547ee8be37bcb058bd8f7dc87cebf143814908f98153742a80cc013b7d7207cf16905f4e52e3788380f6159d6301034f1d1f4b11a5d8f9ca3da8630d
+  checksum: 10c0/7b6c0f0281f53b19af0fa85408c47d82a924ab44f14f1fc6b444ab12328c4f42358aa77e1663986deeeb38b2329739497c7523bf235567f3e02b6f8b0379ea0c
   languageName: node
   linkType: hard
 
@@ -3173,22 +3173,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nestjs/typeorm@npm:^12.0.1":
-  version: 12.0.1
-  resolution: "@nestjs/typeorm@npm:12.0.1"
+"@nestjs/typeorm@npm:^12.0.2":
+  version: 12.0.2
+  resolution: "@nestjs/typeorm@npm:12.0.2"
   peerDependencies:
     "@nestjs/common": ^10.0.0 || ^11.0.0 || ^12.0.0
     "@nestjs/core": ^10.0.0 || ^11.0.0 || ^12.0.0
     reflect-metadata: ^0.1.13 || ^0.2.0
     rxjs: ^7.2.0
     typeorm: ^0.3.0 || ^1.0.0-dev
-  checksum: 10c0/18dfb0847e4fbb9ac6382552ee9e90750c761f325a4fdd8084306865c9b129370a47de93d0f1d40e40ba0feba93987279258683036c8cb385210caad549ff42e
+  checksum: 10c0/d0d61cfb4f2cfae50fb764c2bbfc59dc6c56e973d45c884e7315284e43b72352803e210eada69ef10c637c47949a50e8385f3064452ec8d19e4ef0d443996c99
   languageName: node
   linkType: hard
 
-"@nestjs/websockets@npm:^12.1.0":
-  version: 12.1.0
-  resolution: "@nestjs/websockets@npm:12.1.0"
+"@nestjs/websockets@npm:^12.1.1":
+  version: 12.1.1
+  resolution: "@nestjs/websockets@npm:12.1.1"
   dependencies:
     iterare: "npm:1.2.1"
     object-hash: "npm:3.0.0"
@@ -3202,7 +3202,7 @@ __metadata:
   peerDependenciesMeta:
     "@nestjs/platform-socket.io":
       optional: true
-  checksum: 10c0/9fbf3fb75b94ab06b490ba38fb4103610d827c45ea5dddabf89f9b6a7a88d16d9e1e82797e2b65df22a2009b7d4e7bcb58a70f5ad80d2195c326f37f3bcb11f2
+  checksum: 10c0/e3c464ae67f9959baa7ee036df301bfef36d2de29d2ccc4280c89cc40e31abd61a4d53157f1a9cc4c07cd5b0ac57e02926ce591c5c290d1b85062dbbe643cec3
   languageName: node
   linkType: hard
 
@@ -3883,44 +3883,44 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@turbo/darwin-64@npm:2.11.4":
-  version: 2.11.4
-  resolution: "@turbo/darwin-64@npm:2.11.4"
+"@turbo/darwin-64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/darwin-64@npm:2.11.5"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/darwin-arm64@npm:2.11.4":
-  version: 2.11.4
-  resolution: "@turbo/darwin-arm64@npm:2.11.4"
+"@turbo/darwin-arm64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/darwin-arm64@npm:2.11.5"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/linux-64@npm:2.11.4":
-  version: 2.11.4
-  resolution: "@turbo/linux-64@npm:2.11.4"
+"@turbo/linux-64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/linux-64@npm:2.11.5"
   conditions: (os=android | os=linux) & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/linux-arm64@npm:2.11.4":
-  version: 2.11.4
-  resolution: "@turbo/linux-arm64@npm:2.11.4"
+"@turbo/linux-arm64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/linux-arm64@npm:2.11.5"
   conditions: (os=android | os=linux) & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/windows-64@npm:2.11.4":
-  version: 2.11.4
-  resolution: "@turbo/windows-64@npm:2.11.4"
+"@turbo/windows-64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/windows-64@npm:2.11.5"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/windows-arm64@npm:2.11.4":
-  version: 2.11.4
-  resolution: "@turbo/windows-arm64@npm:2.11.4"
+"@turbo/windows-arm64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/windows-arm64@npm:2.11.5"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
@@ -5947,7 +5947,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "dracord@workspace:."
   dependencies:
-    turbo: "npm:^2.11.4"
+    turbo: "npm:^2.11.5"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -11087,7 +11087,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tailwindcss@npm:~3.4.17":
+"tailwindcss@npm:~3.4.19":
   version: 3.4.19
   resolution: "tailwindcss@npm:3.4.19"
   dependencies:
@@ -11326,16 +11326,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo@npm:^2.11.4":
-  version: 2.11.4
-  resolution: "turbo@npm:2.11.4"
+"turbo@npm:^2.11.5":
+  version: 2.11.5
+  resolution: "turbo@npm:2.11.5"
   dependencies:
-    "@turbo/darwin-64": "npm:2.11.4"
-    "@turbo/darwin-arm64": "npm:2.11.4"
-    "@turbo/linux-64": "npm:2.11.4"
-    "@turbo/linux-arm64": "npm:2.11.4"
-    "@turbo/windows-64": "npm:2.11.4"
-    "@turbo/windows-arm64": "npm:2.11.4"
+    "@turbo/darwin-64": "npm:2.11.5"
+    "@turbo/darwin-arm64": "npm:2.11.5"
+    "@turbo/linux-64": "npm:2.11.5"
+    "@turbo/linux-arm64": "npm:2.11.5"
+    "@turbo/windows-64": "npm:2.11.5"
+    "@turbo/windows-arm64": "npm:2.11.5"
   dependenciesMeta:
     "@turbo/darwin-64":
       optional: true
@@ -11351,7 +11351,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: 10c0/23363cfeabe4b671f1346758b78381c9496e0b3640b28395be83de7e8f4bf8b8266b6498e4da203f8854f465261d3887116e04eb4de26348259ac3f89d216747
+  checksum: 10c0/2fc7e68ec2d56e038d84f2d3ee528e356fcf4bc6af4434e39b96d4c63518e406ff04fb35c912b0a5bbbcf5bf5431ba054ebb0ca26921e34e117ad19e6a06e6d6
   languageName: node
   linkType: hard
 
