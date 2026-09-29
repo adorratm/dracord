@@ -1,10 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { EntityManager, ILike } from 'typeorm';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { EntityManager, ILike, Not } from 'typeorm';
 import type { PublicUser, SocialLinks } from '@dracord/types';
-import { toPublicUser } from '../common/user.mapper';
-import { Friendship } from '../database/entities/friendship.entity';
-import { User } from '../database/entities/user.entity';
-import { FriendshipStatus } from '../database/enums';
+import { toPublicUser } from '@/common/user.mapper';
+import { Friendship } from '@/database/entities/friendship.entity';
+import { Guild } from '@/database/entities/guild.entity';
+import { GuildMember } from '@/database/entities/guild-member.entity';
+import { User } from '@/database/entities/user.entity';
+import { FriendshipStatus } from '@/database/enums';
+import { SearchIndexerService } from '@/search/search-indexer.service';
 
 export interface UpdateProfileInput {
   displayName?: string;
@@ -14,11 +22,15 @@ export interface UpdateProfileInput {
   bannerColor?: string | null;
   accentColor?: string | null;
   socialLinks?: SocialLinks | null;
+  censorLinkPreviews?: boolean;
 }
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly indexer: SearchIndexerService,
+  ) {}
 
   async findById(id: string): Promise<PublicUser> {
     const user = await this.em.findOne(User, { where: { id } });
@@ -58,6 +70,54 @@ export class UsersService {
     );
   }
 
+  async listBlocked(userId: string): Promise<PublicUser[]> {
+    const rows = await this.em.find(Friendship, {
+      where: { userId, status: FriendshipStatus.BLOCKED },
+      relations: { friend: true },
+    });
+    return rows.map((r) => toPublicUser(r.friend));
+  }
+
+  async blockUser(userId: string, targetId: string): Promise<{ ok: true }> {
+    if (userId === targetId) {
+      throw new BadRequestException('Kendini engelleyemezsin');
+    }
+    const target = await this.em.findOne(User, { where: { id: targetId } });
+    if (!target) throw new NotFoundException('Kullanıcı bulunamadı');
+
+    let row = await this.em.findOne(Friendship, {
+      where: { userId, friendId: targetId },
+    });
+    if (!row) {
+      row = this.em.create(Friendship, {
+        userId,
+        friendId: targetId,
+        status: FriendshipStatus.BLOCKED,
+      });
+    } else {
+      row.status = FriendshipStatus.BLOCKED;
+    }
+    await this.em.save(Friendship, row);
+
+    // Karşı yön kabul edilmişse arkadaşlığı düşür
+    const reverse = await this.em.findOne(Friendship, {
+      where: { userId: targetId, friendId: userId },
+    });
+    if (reverse && reverse.status === FriendshipStatus.ACCEPTED) {
+      reverse.status = FriendshipStatus.PENDING;
+      await this.em.save(Friendship, reverse);
+    }
+    return { ok: true };
+  }
+
+  async unblockUser(userId: string, targetId: string): Promise<{ ok: true }> {
+    const row = await this.em.findOne(Friendship, {
+      where: { userId, friendId: targetId, status: FriendshipStatus.BLOCKED },
+    });
+    if (row) await this.em.remove(Friendship, row);
+    return { ok: true };
+  }
+
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<PublicUser> {
     const user = await this.em.findOne(User, { where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
@@ -70,7 +130,82 @@ export class UsersService {
     if (input.socialLinks !== undefined) {
       user.socialLinks = input.socialLinks as Record<string, string> | null;
     }
+    if (input.censorLinkPreviews !== undefined) {
+      user.censorLinkPreviews = Boolean(input.censorLinkPreviews);
+    }
     await this.em.save(User, user);
+    void this.indexer.indexUser(user).catch(() => undefined);
     return toPublicUser(user);
+  }
+
+  normalizeUsername(raw: string): string {
+    return raw
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 32);
+  }
+
+  async isUsernameAvailable(username: string, excludeUserId?: string): Promise<boolean> {
+    const normalized = this.normalizeUsername(username);
+    if (normalized.length < 2 || normalized.length > 32) return false;
+    const existing = await this.em.findOne(User, {
+      where: excludeUserId
+        ? { username: normalized, id: Not(excludeUserId) }
+        : { username: normalized },
+    });
+    return !existing;
+  }
+
+  suggestUsernameFromDisplayName(displayName: string): string {
+    const base = this.normalizeUsername(displayName.replace(/\s+/g, '')) || 'kullanici';
+    return base.slice(0, 24);
+  }
+
+  async confirmUsername(userId: string, rawUsername: string): Promise<PublicUser> {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const username = this.normalizeUsername(rawUsername);
+    if (username.length < 2) {
+      throw new BadRequestException('Kullanıcı adı en az 2 karakter olmalı');
+    }
+    if (!/^[a-z0-9_]+$/.test(username)) {
+      throw new BadRequestException('Yalnızca a-z, 0-9 ve alt çizgi kullanılabilir');
+    }
+
+    const taken = await this.em.findOne(User, {
+      where: { username, id: Not(userId) },
+    });
+    if (taken) {
+      throw new ConflictException('Bu kullanıcı adı zaten alınmış');
+    }
+
+    user.username = username;
+    user.usernameConfirmed = true;
+    await this.em.save(User, user);
+    await this.ensureSeedGuildMembership(userId);
+    void this.indexer.indexUser(user).catch(() => undefined);
+    return toPublicUser(user);
+  }
+
+  private async ensureSeedGuildMembership(userId: string): Promise<void> {
+    const seedGuild = await this.em.findOne(Guild, {
+      where: { id: 'seed-dracula-realm' },
+    });
+    if (!seedGuild) return;
+    const membership = await this.em.findOne(GuildMember, {
+      where: { guildId: seedGuild.id, userId },
+    });
+    if (!membership) {
+      await this.em.save(
+        GuildMember,
+        this.em.create(GuildMember, {
+          guildId: seedGuild.id,
+          userId,
+        }),
+      );
+    }
   }
 }

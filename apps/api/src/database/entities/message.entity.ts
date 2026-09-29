@@ -31,6 +31,25 @@ export class Message extends CuidEntity {
     size: number;
   }> | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  embeds!: Array<{
+    url: string;
+    title?: string | null;
+    description?: string | null;
+    imageUrl?: string | null;
+    siteName?: string | null;
+  }> | null;
+
+  /** Anket: soru, seçenekler ve oy veren kullanıcı id'leri */
+  @Column({ type: 'jsonb', nullable: true })
+  poll!: {
+    question: string;
+    options: Array<{ id: string; text: string }>;
+    votes: Record<string, string[]>;
+    multi: boolean;
+    closed?: boolean;
+  } | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

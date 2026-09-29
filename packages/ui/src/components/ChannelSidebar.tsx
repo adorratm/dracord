@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
-import { presenceLabelTr } from '../lib/presence';
+import { presenceDotClass, presenceLabelTr } from '../lib/presence';
 
 export type SidebarChannelType = 'text' | 'voice';
 
@@ -46,6 +46,7 @@ export interface UserPanelProps {
   displayName: string;
   avatarUrl?: string | null;
   status?: PresenceStatus;
+  customStatus?: string | null;
   muted?: boolean;
   deafened?: boolean;
   noiseCancellation?: boolean;
@@ -53,6 +54,7 @@ export interface UserPanelProps {
   voiceConnected?: boolean;
   voiceChannelName?: string | null;
   onProfileClick?: () => void;
+  onStatusChange?: (status: PresenceStatus, customStatus?: string | null) => void;
   onMicClick?: () => void;
   onHeadphonesClick?: () => void;
   onNoiseClick?: () => void;
@@ -88,6 +90,7 @@ export function UserPanel({
   displayName,
   avatarUrl,
   status = 'ONLINE',
+  customStatus = null,
   muted,
   deafened,
   noiseCancellation,
@@ -95,6 +98,7 @@ export function UserPanel({
   voiceConnected,
   voiceChannelName,
   onProfileClick,
+  onStatusChange,
   onMicClick,
   onHeadphonesClick,
   onNoiseClick,
@@ -103,7 +107,14 @@ export function UserPanel({
   onVoiceDisconnectClick,
 }: UserPanelProps) {
   const [noiseOpen, setNoiseOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [draftCustom, setDraftCustom] = useState(customStatus ?? '');
   const noiseRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDraftCustom(customStatus ?? '');
+  }, [customStatus]);
 
   useEffect(() => {
     if (!noiseOpen) return;
@@ -113,6 +124,17 @@ export function UserPanel({
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [noiseOpen]);
+
+  useEffect(() => {
+    if (!statusOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!statusRef.current?.contains(e.target as Node)) setStatusOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [statusOpen]);
+
+  const statusOptions: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
 
   return (
     <div className="bg-surface-container-lowest shrink-0">
@@ -142,20 +164,89 @@ export function UserPanel({
           </div>
         </div>
       )}
-      <div className="h-[52px] px-space-sm flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onProfileClick}
-          className="flex items-center gap-space-xs min-w-0 p-space-xs rounded-lg hover:bg-surface-container transition-colors duration-200 flex-1 text-left"
-        >
-          <Avatar displayName={displayName} imageUrl={avatarUrl} size="md" status={status} />
-          <div className="flex flex-col min-w-0 leading-none">
-            <span className="font-label-md text-label-md text-on-surface truncate">{displayName}</span>
-            <span className="font-label-sm text-label-sm text-on-surface-variant truncate">
-              {presenceLabelTr(status)}
-            </span>
-          </div>
-        </button>
+      <div className="h-16 px-space-sm flex items-center justify-between">
+        <div className="relative flex-1 min-w-0" ref={statusRef}>
+          <button
+            type="button"
+            onClick={() => {
+              if (onStatusChange) setStatusOpen((v) => !v);
+              else onProfileClick?.();
+            }}
+            className="flex items-center gap-space-xs min-w-0 p-space-xs rounded-lg hover:bg-surface-container transition-colors duration-200 w-full text-left"
+          >
+            <Avatar displayName={displayName} imageUrl={avatarUrl} size="md" status={status} />
+            <div className="flex flex-col min-w-0 leading-none">
+              <span className="font-label-md text-label-md text-on-surface truncate">{displayName}</span>
+              <span className="font-label-sm text-label-sm text-on-surface-variant truncate">
+                {presenceLabelTr(status, customStatus)}
+              </span>
+            </div>
+          </button>
+          {statusOpen && onStatusChange && (
+            <div className="absolute bottom-full left-0 mb-2 w-64 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float p-space-sm z-50">
+              <p className="font-label-md text-on-surface mb-space-xs">Durum</p>
+              <div className="space-y-0.5 mb-space-sm">
+                {statusOptions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      onStatusChange(s, customStatus);
+                      setStatusOpen(false);
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left font-label-sm',
+                      status === s
+                        ? 'bg-surface-bright text-on-surface'
+                        : 'hover:bg-surface-container text-on-surface-variant',
+                    )}
+                  >
+                    <span className={cn('w-2.5 h-2.5 rounded-full', presenceDotClass(s))} />
+                    {presenceLabelTr(s)}
+                  </button>
+                ))}
+              </div>
+              <label className="block space-y-1">
+                <span className="font-label-sm text-on-surface-variant">Özel durum</span>
+                <input
+                  className="w-full h-9 rounded-lg bg-surface-container-lowest px-2 text-on-surface font-body-sm outline-none"
+                  value={draftCustom}
+                  maxLength={128}
+                  placeholder="Ne yapıyorsun?"
+                  onChange={(e) => setDraftCustom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      onStatusChange(status, draftCustom.trim() || null);
+                      setStatusOpen(false);
+                    }
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="mt-2 w-full h-8 rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+                onClick={() => {
+                  onStatusChange(status, draftCustom.trim() || null);
+                  setStatusOpen(false);
+                }}
+              >
+                Kaydet
+              </button>
+              {onProfileClick && (
+                <button
+                  type="button"
+                  className="mt-1 w-full h-8 rounded-lg text-on-surface-variant font-label-sm hover:bg-surface-container"
+                  onClick={() => {
+                    setStatusOpen(false);
+                    onProfileClick();
+                  }}
+                >
+                  Profili düzenle
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center text-on-surface-variant">
           {voiceConnected && (
             <div className="relative" ref={noiseRef}>

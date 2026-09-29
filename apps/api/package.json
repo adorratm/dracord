@@ -7,6 +7,7 @@
     "build": "rspack build --config rspack.config.js",
     "start:prod": "node dist/main.js",
     "db:seed": "tsx src/database/seed.ts",
+    "search:reindex": "tsx src/search/reindex.ts",
     "lint": "echo ok"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
     "@bull-board/express": "^9.10.1",
     "@bull-board/ui": "^9.10.1",
     "@dracord/types": "workspace:*",
+    "@elastic/elasticsearch": "9.5.1",
     "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^12.1.1",
     "@nestjs/config": "^12.0.1",
@@ -48,8 +50,8 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.8",
-    "@rspack/cli": "^2.2.7",
-    "@rspack/core": "^2.2.7",
+    "@rspack/cli": "^2.2.8",
+    "@rspack/core": "^2.2.8",
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import type { RoleDto } from '@dracord/types';
-import { GuildsService } from '../guilds/guilds.service';
-import { Role } from '../database/entities/role.entity';
+import { GuildsService } from '@/guilds/guilds.service';
+import { Role } from '@/database/entities/role.entity';
 
 @Injectable()
 export class RolesService {

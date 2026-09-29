@@ -1,5 +1,12 @@
 dracord.com.tr {
-  reverse_proxy web:3000
+  reverse_proxy web:3000 {
+    lb_policy round_robin
+    health_uri /health
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+    lb_try_duration 8s
+  }
 }
 
 www.dracord.com.tr {
@@ -7,11 +14,25 @@ www.dracord.com.tr {
 }
 
 api.dracord.com.tr {
-  reverse_proxy api:4000
+  reverse_proxy api:4000 {
+    lb_policy round_robin
+    health_uri /health/ready
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+    lb_try_duration 8s
+  }
 }
 
 admin.dracord.com.tr {
-  reverse_proxy admin:3000
+  reverse_proxy admin:3000 {
+    lb_policy round_robin
+    health_uri /health
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+    lb_try_duration 8s
+  }
 }
 
 rtc.dracord.com.tr {

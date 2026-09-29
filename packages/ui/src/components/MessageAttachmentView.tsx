@@ -112,6 +112,7 @@ export function MessageAttachmentView({ attachment, className }: MessageAttachme
             <img
               src={url}
               alt={filename}
+              loading="lazy"
               className="max-w-full max-h-72 rounded-lg border border-surface-container-high object-contain bg-surface-container-low"
             />
             <span className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded bg-black/60 text-white text-xs flex items-center gap-1">

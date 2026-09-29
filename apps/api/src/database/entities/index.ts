@@ -14,3 +14,5 @@ export { Friendship } from './friendship.entity';
 export { DMChannel } from './dm-channel.entity';
 export { DMChannelMember } from './dm-channel-member.entity';
 export { GuildInvite } from './guild-invite.entity';
+export { Notification } from './notification.entity';
+export { MessageHide } from './message-hide.entity';

@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
+import { tokenizeMessageContent } from '../lib/mentions';
 import {
   CURATED_GIFS,
   EMOJI_CATEGORIES,
@@ -21,7 +22,7 @@ import {
   toggleFavoriteId,
   type StoredSticker,
 } from '../lib/sticker-store';
-
+import { Avatar } from './Avatar';
 export type ChatMediaPayload =
   | { type: 'gif'; url: string; label: string }
   | { type: 'sticker'; emoji: string }
@@ -34,6 +35,19 @@ export interface GifSearchResult {
   label: string;
 }
 
+export interface ChatMentionUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
+export interface ChatMentionChannel {
+  id: string;
+  name: string;
+  type?: string;
+}
+
 export interface ChatInputProps {
   channelName?: string;
   placeholder?: string;
@@ -43,9 +57,13 @@ export interface ChatInputProps {
   onEmojiClick?: () => void;
   onAttachClick?: () => void;
   onAttachFiles?: (files: FileList | File[]) => void;
+  /** Anket oluşturma (üstte + menüsünden) */
+  onPollClick?: () => void;
   /** Tenor / harici GIF araması. Verilmezse yerel liste kullanılır. */
   searchGifs?: (query: string) => Promise<GifSearchResult[]>;
   loadFeaturedGifs?: () => Promise<GifSearchResult[]>;
+  mentionUsers?: ChatMentionUser[];
+  mentionChannels?: ChatMentionChannel[];
   className?: string;
 }
 
@@ -54,6 +72,26 @@ type StickerSection = 'recent' | 'favorites' | 'mine' | 'packs';
 
 function packStickerId(packId: string, stickerId: string) {
   return `pack:${packId}:${stickerId}`;
+}
+
+type MentionTrigger = {
+  kind: 'user' | 'channel';
+  start: number;
+  query: string;
+};
+
+function detectMentionTrigger(text: string, caret: number): MentionTrigger | null {
+  const before = text.slice(0, caret);
+  const match = before.match(/(?:^|[\s])([@#])([a-zA-Z0-9_.-]*)$/);
+  if (!match || match.index == null) return null;
+  const token = match[1]!;
+  const query = match[2] ?? '';
+  const start = caret - query.length - 1;
+  return {
+    kind: token === '@' ? 'user' : 'channel',
+    start,
+    query,
+  };
 }
 
 function resolveStickerById(
@@ -92,12 +130,17 @@ export function ChatInput({
   onEmojiClick,
   onAttachClick,
   onAttachFiles,
+  onPollClick,
   searchGifs,
   loadFeaturedGifs,
+  mentionUsers = [],
+  mentionChannels = [],
   className,
 }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [attachDragging, setAttachDragging] = useState(false);
   const [tab, setTab] = useState<PickerTab>('emoji');
   const [emojiCat, setEmojiCat] = useState(EMOJI_CATEGORIES[0]!.id);
   const [stickerSection, setStickerSection] = useState<StickerSection>('recent');
@@ -110,11 +153,35 @@ export function ChatInput({
   const [gifLoading, setGifLoading] = useState(false);
   const [gifError, setGifError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [mention, setMention] = useState<MentionTrigger | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const stickerFileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const attachRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dragDepth = useRef(0);
+  const attachDragDepth = useRef(0);
   const gifReqId = useRef(0);
+
+  const LINE_HEIGHT_PX = 24;
+  const MAX_LINES = 8;
+  const MAX_TEXTAREA_PX = LINE_HEIGHT_PX * MAX_LINES;
+  const [expanded, setExpanded] = useState(false);
+
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    const next = Math.min(Math.max(el.scrollHeight, LINE_HEIGHT_PX), MAX_TEXTAREA_PX);
+    el.style.height = `${next}px`;
+    setExpanded(next > LINE_HEIGHT_PX + 2);
+  }, [LINE_HEIGHT_PX, MAX_TEXTAREA_PX]);
+
+  useLayoutEffect(() => {
+    resizeTextarea();
+  }, [value, resizeTextarea]);
+
 
   const resolvedPlaceholder =
     placeholder ?? (channelName ? `#${channelName} kanalına mesaj gönder` : 'Mesaj yazın…');
@@ -177,7 +244,155 @@ export function ChatInput({
     onSend?.(trimmed);
     setValue('');
     setPickerOpen(false);
-  }, [value, disabled, onSend]);
+    setMention(null);
+    requestAnimationFrame(() => resizeTextarea());
+  }, [value, disabled, onSend, resizeTextarea]);
+
+  const mentionUserOptions = useMemo(() => {
+    const q = (mention?.kind === 'user' ? mention.query : '').toLowerCase();
+    const specials = [
+      { id: '__everyone', username: 'everyone', displayName: '@everyone', avatarUrl: null as string | null },
+      { id: '__all', username: 'all', displayName: '@all', avatarUrl: null as string | null },
+    ].filter(
+      (s) =>
+        !q ||
+        s.username.includes(q) ||
+        s.displayName.toLowerCase().includes(q),
+    );
+    const users = mentionUsers.filter((u) => {
+      if (!q) return true;
+      return (
+        u.username.toLowerCase().includes(q) ||
+        u.displayName.toLowerCase().includes(q)
+      );
+    });
+    return [...specials, ...users].slice(0, 12);
+  }, [mention, mentionUsers]);
+
+  const mentionChannelOptions = useMemo(() => {
+    const q = (mention?.kind === 'channel' ? mention.query : '').toLowerCase();
+    return mentionChannels
+      .filter((c) => !q || c.name.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [mention, mentionChannels]);
+
+  const mentionOptionsCount =
+    mention?.kind === 'user' ? mentionUserOptions.length : mentionChannelOptions.length;
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mention?.kind, mention?.query]);
+
+  const insertMention = useCallback(
+    (token: string) => {
+      if (!mention) return;
+      const before = value.slice(0, mention.start);
+      const after = value.slice(mention.start + 1 + mention.query.length);
+      const next = `${before}${token} ${after.replace(/^\s*/, '')}`;
+      setValue(next);
+      setMention(null);
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        const pos = before.length + token.length + 1;
+        el.focus();
+        el.setSelectionRange(pos, pos);
+        resizeTextarea();
+      });
+    },
+    [mention, value, resizeTextarea],
+  );
+
+  const syncMentionFromCaret = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const trigger = detectMentionTrigger(el.value, el.selectionStart ?? el.value.length);
+    setMention(trigger);
+  }, []);
+
+  const highlightNames = useMemo(
+    () => [
+      'everyone',
+      'all',
+      ...mentionUsers.map((u) => u.username),
+      ...mentionUsers.map((u) => u.displayName),
+    ],
+    [mentionUsers],
+  );
+  const highlightChannels = useMemo(
+    () => mentionChannels.map((c) => c.name),
+    [mentionChannels],
+  );
+
+  const highlightNodes = useMemo((): ReactNode => {
+    if (!value) return '\u00a0';
+    const tokens = tokenizeMessageContent(value, {
+      mentionNames: highlightNames,
+      channelNames: highlightChannels,
+    });
+    return tokens.map((t, i) => {
+      if (t.type === 'mention' || t.type === 'channel') {
+        // px ekleme — textarea caret ile görsel metin kayar
+        return (
+          <span key={i} className="text-primary-container bg-primary-container/25 rounded-[2px]">
+            {t.value}
+          </span>
+        );
+      }
+      if (t.type === 'url') {
+        return (
+          <span key={i} className="text-primary-container underline underline-offset-2">
+            {t.value}
+          </span>
+        );
+      }
+      return <span key={i}>{t.value}</span>;
+    });
+  }, [value, highlightNames, highlightChannels]);
+
+  const onComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mention && mentionOptionsCount > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionOptionsCount);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionOptionsCount) % mentionOptionsCount);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        if (mention.kind === 'user') {
+          const opt = mentionUserOptions[mentionIndex];
+          if (opt) insertMention(`@${opt.username}`);
+        } else {
+          const opt = mentionChannelOptions[mentionIndex];
+          if (opt) insertMention(`#${opt.name}`);
+        }
+        return;
+      }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  useEffect(() => {
+    if (!attachOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!attachRef.current?.contains(e.target as Node)) setAttachOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [attachOpen]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -190,7 +405,11 @@ export function ChatInput({
 
   const handleFiles = (list: FileList | File[] | null) => {
     if (!list || (Array.isArray(list) ? list.length === 0 : list.length === 0)) return;
-    onAttachFiles?.(list);
+    const files = Array.isArray(list) ? list : Array.from(list);
+    if (!files.length) return;
+    onAttachFiles?.(files);
+    setAttachOpen(false);
+    setAttachDragging(false);
   };
 
   const onDragEnter = (e: DragEvent) => {
@@ -363,15 +582,20 @@ export function ChatInput({
   return (
     <div
       ref={rootRef}
-      className={cn('px-space-md pb-space-md pt-space-sm shrink-0 relative', className)}
+      className={cn(
+        // Sol UserPanel (h-16) ile aynı yükseklik; uzun metinde yukarı büyür
+        'px-space-md flex shrink-0 relative box-border',
+        expanded ? 'min-h-16 items-end py-2' : 'h-16 items-center',
+        className,
+      )}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
       {dragging && (
-        <div className="absolute inset-space-sm z-30 rounded-xl border-2 border-dashed border-primary-container bg-primary-container/10 flex items-center justify-center pointer-events-none">
-          <p className="font-headline-md text-primary-container">Dosyaları buraya bırak</p>
+        <div className="absolute inset-1 z-30 rounded-xl border-2 border-dashed border-primary-container bg-primary-container/10 flex items-center justify-center pointer-events-none">
+          <p className="font-headline-md text-primary-container">Dosyaları buraya bırak (çoklu)</p>
         </div>
       )}
 
@@ -705,7 +929,88 @@ export function ChatInput({
         </div>
       )}
 
-      <div className="flex items-center gap-space-sm bg-dracula-current rounded-lg px-space-md min-h-[44px]">
+      {mention && mentionOptionsCount > 0 && (
+        <div className="absolute bottom-full left-space-md right-space-md mb-2 z-30 max-w-sm rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
+          <div className="px-space-sm py-space-xs border-b border-surface-container-highest flex items-center gap-space-xs">
+            <span className="material-symbols-outlined text-[16px] text-outline leading-none">
+              search
+            </span>
+            <span className="font-label-sm text-outline truncate">
+              {mention.kind === 'user' ? 'Kullanıcı etiketle' : 'Kanal etiketle'} · {mention.query || '…'}
+            </span>
+          </div>
+          <ul className="max-h-56 overflow-y-auto py-1">
+            {mention.kind === 'user'
+              ? mentionUserOptions.map((u, i) => (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        'w-full flex items-center gap-space-sm px-space-sm py-2 text-left',
+                        i === mentionIndex
+                          ? 'bg-primary-container/20 text-on-surface'
+                          : 'hover:bg-surface-bright text-on-surface',
+                      )}
+                      onMouseEnter={() => setMentionIndex(i)}
+                      onClick={() => insertMention(`@${u.username}`)}
+                    >
+                      {u.id.startsWith('__') ? (
+                        <span className="w-8 h-8 shrink-0 rounded-full bg-primary-container/25 text-primary-container inline-flex items-center justify-center">
+                          <span
+                            className="material-symbols-outlined leading-none"
+                            style={{ fontSize: 18 }}
+                          >
+                            groups
+                          </span>
+                        </span>
+                      ) : (
+                        <Avatar
+                          displayName={u.displayName}
+                          imageUrl={u.avatarUrl}
+                          size="md"
+                          statusRing={false}
+                          className="shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1 flex flex-col justify-center leading-tight">
+                        <p className="font-label-md truncate">{u.displayName}</p>
+                        {!u.id.startsWith('__') && (
+                          <p className="font-label-sm text-outline truncate">@{u.username}</p>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                ))
+              : mentionChannelOptions.map((c, i) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        'w-full flex items-center gap-space-sm px-space-sm py-2 text-left',
+                        i === mentionIndex
+                          ? 'bg-primary-container/20 text-on-surface'
+                          : 'hover:bg-surface-bright text-on-surface',
+                      )}
+                      onMouseEnter={() => setMentionIndex(i)}
+                      onClick={() => insertMention(`#${c.name}`)}
+                    >
+                      <span className="w-8 h-8 shrink-0 rounded-lg bg-surface-container-lowest text-outline inline-flex items-center justify-center">
+                        <span className="font-headline-md leading-none">#</span>
+                      </span>
+                      <span className="font-label-md truncate self-center">{c.name}</span>
+                    </button>
+                  </li>
+                ))}
+          </ul>
+        </div>
+      )}
+
+      <div
+        className={cn(
+          'flex gap-space-xs w-full bg-dracula-current rounded-lg px-space-sm',
+          expanded ? 'items-end py-1.5 min-h-[44px]' : 'items-center h-11',
+        )}
+      >
         <input
           ref={fileRef}
           type="file"
@@ -717,34 +1022,155 @@ export function ChatInput({
             e.target.value = '';
           }}
         />
+        <div ref={attachRef} className="relative shrink-0">
+          <button
+            type="button"
+            data-attach-trigger
+            onClick={() => {
+              onAttachClick?.();
+              setAttachOpen((v) => !v);
+              setPickerOpen(false);
+            }}
+            className={cn(
+              'h-9 w-9 flex items-center justify-center rounded-lg transition-colors duration-200',
+              attachOpen
+                ? 'text-primary-container bg-surface-container'
+                : 'text-outline hover:text-primary-container hover:bg-surface-container',
+            )}
+            aria-label="Ekle"
+            aria-expanded={attachOpen}
+          >
+            <span className="material-symbols-outlined text-[22px] leading-none">add_circle</span>
+          </button>
+          {attachOpen && (
+            <div className="absolute bottom-full left-0 mb-2 z-40 w-72 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
+              <div className="p-2 flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    fileRef.current?.click();
+                  }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left hover:bg-surface-container transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[22px] text-primary-container leading-none">
+                    upload_file
+                  </span>
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-label-md text-on-surface">Dosya yükle</span>
+                    <span className="font-body-sm text-outline text-[12px]">
+                      Birden fazla dosya seçebilirsin
+                    </span>
+                  </span>
+                </button>
+                {onPollClick && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachOpen(false);
+                      onPollClick();
+                    }}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left hover:bg-surface-container transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[22px] text-primary-container leading-none">
+                      ballot
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-label-md text-on-surface">Anket oluştur</span>
+                      <span className="font-body-sm text-outline text-[12px]">
+                        Seçenekli oylama başlat
+                      </span>
+                    </span>
+                  </button>
+                )}
+              </div>
+              <div
+                className={cn(
+                  'mx-2 mb-2 rounded-lg border-2 border-dashed px-3 py-5 flex flex-col items-center justify-center gap-1 transition-colors',
+                  attachDragging
+                    ? 'border-primary-container bg-primary-container/10 text-primary-container'
+                    : 'border-surface-container-highest text-outline hover:border-primary-container/50',
+                )}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  attachDragDepth.current += 1;
+                  if (e.dataTransfer.types.includes('Files')) setAttachDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  attachDragDepth.current = Math.max(0, attachDragDepth.current - 1);
+                  if (attachDragDepth.current === 0) setAttachDragging(false);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  attachDragDepth.current = 0;
+                  setAttachDragging(false);
+                  handleFiles(e.dataTransfer.files);
+                }}
+              >
+                <span className="material-symbols-outlined text-[28px] leading-none">
+                  {attachDragging ? 'file_download' : 'drag_indicator'}
+                </span>
+                <p className="font-label-md text-center">
+                  {attachDragging ? 'Bırak — yüklenecek' : 'Dosyaları buraya sürükle'}
+                </p>
+                <p className="font-body-sm text-[11px] text-center opacity-80">
+                  Çoklu dosya desteklenir
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="relative flex-1 min-w-0">
+          {/* Overlay ve textarea aynı tipografi/genişlik — scrollbar farkı caret kaydırır */}
+          <div
+            aria-hidden
+            id="chat-input-highlight"
+            className="pointer-events-none absolute inset-0 overflow-y-auto font-body-md text-body-md leading-6 whitespace-pre-wrap break-words text-dracula-fg [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            style={{ maxHeight: MAX_TEXTAREA_PX }}
+          >
+            {highlightNodes}
+            {value.endsWith('\n') ? '\n' : null}
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              const caret = e.target.selectionStart ?? e.target.value.length;
+              setMention(detectMentionTrigger(e.target.value, caret));
+            }}
+            onClick={syncMentionFromCaret}
+            onKeyUp={syncMentionFromCaret}
+            onSelect={syncMentionFromCaret}
+            onScroll={(e) => {
+              const mirror = document.getElementById('chat-input-highlight');
+              if (mirror) mirror.scrollTop = e.currentTarget.scrollTop;
+            }}
+            onKeyDown={onComposerKeyDown}
+            disabled={disabled}
+            rows={1}
+            placeholder={resolvedPlaceholder}
+            className="relative block w-full m-0 border-0 bg-transparent placeholder:text-dracula-comment font-body-md text-body-md leading-6 resize-none outline-none overflow-y-auto whitespace-pre-wrap break-words min-h-[24px] text-transparent [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            style={{
+              maxHeight: MAX_TEXTAREA_PX,
+              caretColor: '#f8f8f2',
+              padding: 0,
+            }}
+          />
+        </div>
         <button
           type="button"
           onClick={() => {
-            onAttachClick?.();
-            fileRef.current?.click();
+            setPickerOpen((v) => !v);
+            setAttachOpen(false);
           }}
-          className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg text-outline hover:text-primary-container hover:bg-surface-container transition-colors duration-200"
-          aria-label="Dosya ekle"
-        >
-          <span className="material-symbols-outlined text-[22px] leading-none">add_circle</span>
-        </button>
-        <textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          disabled={disabled}
-          rows={1}
-          placeholder={resolvedPlaceholder}
-          className="flex-1 bg-transparent text-dracula-fg placeholder:text-dracula-comment font-body-md text-body-md resize-none outline-none min-h-[24px] max-h-40 py-2.5 leading-6 self-center"
-        />
-        <button
-          type="button"
-          onClick={() => setPickerOpen((v) => !v)}
           className={cn(
             'h-9 w-9 shrink-0 flex items-center justify-center rounded-lg transition-colors duration-200',
             pickerOpen

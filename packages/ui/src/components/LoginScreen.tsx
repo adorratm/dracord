@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Logo } from './Logo';
 
@@ -9,6 +10,8 @@ export interface LoginScreenProps {
   onAppleLogin?: () => void;
   loading?: boolean;
   errorMessage?: string;
+  /** Logo yerine özel hero (ör. Draco maskot) */
+  hero?: ReactNode;
   className?: string;
 }
 
@@ -18,6 +21,7 @@ export function LoginScreen({
   onAppleLogin,
   loading,
   errorMessage,
+  hero,
   className,
 }: LoginScreenProps) {
   return (
@@ -29,7 +33,7 @@ export function LoginScreen({
     >
       <div className="w-full max-w-md flex flex-col items-center gap-space-xl">
         <div className="flex flex-col items-center gap-space-md text-center">
-          <Logo size={96} showBackground className="shadow-float rounded-2xl" />
+          {hero ?? <Logo size={96} showBackground className="shadow-float rounded-2xl" />}
           <h1 className="font-headline-xl text-headline-xl text-on-surface">Dracord&apos;a hoş geldin</h1>
           <p className="font-body-md text-body-md text-on-surface-variant max-w-sm">
             Dracula temalı topluluk sohbeti. Hesabınla giriş yap ve sunucularına katıl.

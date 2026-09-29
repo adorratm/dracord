@@ -11,15 +11,15 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { toPublicUser } from '../common/user.mapper';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { toPublicUser } from '@/common/user.mapper';
 import { AuthService } from './auth.service';
-import { AppleAuthDto } from './dto/apple-auth.dto';
-import { DevLoginDto } from './dto/dev-login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import type { GoogleProfile } from './strategies/google.strategy';
-import { JwtRefreshAuthGuard } from './guards/jwt-refresh-auth.guard';
+import { AppleAuthDto } from '@/auth/dto/apple-auth.dto';
+import { DevLoginDto } from '@/auth/dto/dev-login.dto';
+import { RefreshTokenDto } from '@/auth/dto/refresh-token.dto';
+import type { GoogleProfile } from '@/auth/strategies/google.strategy';
+import { JwtRefreshAuthGuard } from '@/auth/guards/jwt-refresh-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -109,7 +109,7 @@ export class AuthController {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.config.get<string>('NODE_ENV') === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     });
   }
 }

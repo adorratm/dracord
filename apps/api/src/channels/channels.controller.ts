@@ -11,8 +11,8 @@ import {
 import {
   CurrentUser,
   type JwtPayloadUser,
-} from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+} from '@/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { ChannelsService } from './channels.service';
 
 @Controller()

@@ -3,6 +3,7 @@
 import { LoginScreen } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Draco } from '@/components/Draco';
 import { useAuth } from '@/components/AuthProvider';
 import { getDracordClient } from '@/lib/client';
 import { hasSession } from '@/lib/storage';
@@ -27,6 +28,7 @@ export default function LoginPage() {
     <LoginScreen
       errorMessage={error ?? undefined}
       onGoogleLogin={onGoogleLogin}
+      hero={<Draco size={140} mood="wave" glow headset />}
     />
   );
 }

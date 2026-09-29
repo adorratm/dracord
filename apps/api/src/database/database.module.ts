@@ -13,6 +13,8 @@ import {
   GuildMember,
   GuildMemberRole,
   Message,
+  MessageHide,
+  Notification,
   Reaction,
   Role,
   RolePermission,
@@ -30,6 +32,7 @@ const entities = [
   Category,
   Channel,
   Message,
+  MessageHide,
   Reaction,
   Role,
   RolePermission,
@@ -37,6 +40,7 @@ const entities = [
   Friendship,
   DMChannel,
   DMChannelMember,
+  Notification,
 ];
 
 @Module({

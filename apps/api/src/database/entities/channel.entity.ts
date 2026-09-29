@@ -7,7 +7,7 @@ import {
   OneToMany,
   UpdateDateColumn,
 } from 'typeorm';
-import { ChannelType } from '../enums';
+import { ChannelType } from '@/database/enums';
 import { CuidEntity } from './cuid-base.entity';
 import type { Guild } from './guild.entity';
 import type { Category } from './category.entity';

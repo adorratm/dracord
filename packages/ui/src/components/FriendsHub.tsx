@@ -28,6 +28,8 @@ export interface FriendsHubProps {
   initialTab?: FriendsTab;
   onTabChange?: (tab: FriendsTab) => void;
   headerAction?: ReactNode;
+  /** Boş liste içeriği (tab’a göre override) */
+  emptyState?: ReactNode;
   className?: string;
 }
 
@@ -101,6 +103,7 @@ export function FriendsHub({
   initialTab = 'online',
   onTabChange,
   headerAction,
+  emptyState,
   className,
 }: FriendsHubProps) {
   const [tab, setTab] = useState<FriendsTab>(initialTab);
@@ -140,11 +143,13 @@ export function FriendsHub({
 
       <div className="flex-1 overflow-y-auto py-space-md space-y-0.5">
         {list.length === 0 ? (
-          <p className="px-space-md text-outline font-body-md text-body-md">
-            {tab === 'online' && 'Çevrimiçi arkadaş yok.'}
-            {tab === 'pending' && 'Bekleyen istek yok.'}
-            {tab === 'blocked' && 'Engellenen kullanıcı yok.'}
-          </p>
+          emptyState ?? (
+            <p className="px-space-md text-outline font-body-md text-body-md">
+              {tab === 'online' && 'Çevrimiçi arkadaş yok.'}
+              {tab === 'pending' && 'Bekleyen istek yok.'}
+              {tab === 'blocked' && 'Engellenen kullanıcı yok.'}
+            </p>
+          )
         ) : (
           list.map((friend) => <FriendRowItem key={friend.id} friend={friend} tab={tab} />)
         )}

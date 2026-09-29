@@ -5,6 +5,9 @@ import { Modal, ServerRail, TitleBar, type ServerRailGuild } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { AppTour } from '@/components/AppTour';
+import { MobileDrawer } from '@/components/MobileDrawer';
+import { NotificationBell } from '@/components/NotificationBell';
 
 const LAST_CHANNEL_KEY = 'dracord:last-channel';
 
@@ -58,6 +61,7 @@ export function AppShell({
   const [discover, setDiscover] = useState<ServerRailGuild[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serversOpen, setServersOpen] = useState(false);
 
   const openGuild = useCallback(
     async (guildId: string) => {
@@ -70,6 +74,8 @@ export function AppShell({
         }
       } catch {
         router.push(`/channels/${guildId}`);
+      } finally {
+        setServersOpen(false);
       }
     },
     [client, router],
@@ -162,30 +168,76 @@ export function AppShell({
     }
   };
 
+  const serverRailProps = {
+    guilds,
+    activeGuildId,
+    homeActive,
+    onHomeClick: () => {
+      setServersOpen(false);
+      router.push('/channels/@me');
+    },
+    onGuildClick: (guildId: string) => void openGuild(guildId),
+    onAddClick: () => {
+      setError(null);
+      setServersOpen(false);
+      setCreateOpen(true);
+    },
+    onExploreClick: () => {
+      setError(null);
+      setServersOpen(false);
+      setExploreOpen(true);
+    },
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface">
-      <TitleBar activeNav={titleBarNav} subtitle={subtitle} onNavClick={onNavClick} />
+      <div data-tour="nav">
+        <TitleBar
+          activeNav={titleBarNav}
+          subtitle={subtitle}
+          onNavClick={onNavClick}
+          leading={
+            showServerRail ? (
+              <button
+                type="button"
+                className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                aria-label="Sunucular"
+                onClick={() => setServersOpen(true)}
+              >
+                <span className="material-symbols-outlined text-[20px]">menu</span>
+              </button>
+            ) : undefined
+          }
+          trailing={
+            <div data-tour="notifications">
+              <NotificationBell />
+            </div>
+          }
+        />
+      </div>
       <div className="flex flex-1 min-h-0">
         {showServerRail && (
-          <ServerRail
-            guilds={guilds}
-            activeGuildId={activeGuildId}
-            homeActive={homeActive}
-            onHomeClick={() => router.push('/channels/@me')}
-            onGuildClick={(guildId) => void openGuild(guildId)}
-            onAddClick={() => {
-              setError(null);
-              setCreateOpen(true);
-            }}
-            onExploreClick={() => {
-              setError(null);
-              setExploreOpen(true);
-            }}
-          />
+          <div data-tour="servers" className="hidden md:flex h-full">
+            <ServerRail {...serverRailProps} className="h-full" />
+          </div>
         )}
-        <div className="flex flex-1 min-w-0 min-h-0">{children}</div>
+        <div className="flex flex-1 min-w-0 min-h-0" data-tour="chat">
+          {children}
+        </div>
       </div>
 
+      {showServerRail && (
+        <MobileDrawer
+          open={serversOpen}
+          onClose={() => setServersOpen(false)}
+          side="left"
+          title="Sunucular"
+        >
+          <ServerRail {...serverRailProps} className="w-full h-full" />
+        </MobileDrawer>
+      )}
+
+      <AppTour />
       <Modal
         open={createOpen}
         title="Sunucu oluştur"

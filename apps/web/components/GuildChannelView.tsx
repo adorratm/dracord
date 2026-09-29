@@ -16,6 +16,9 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell, rememberChannel } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
+import { DracoEmpty } from '@/components/Draco';
+import { openMessageSearch } from '@/components/GlobalSearch';
+import { MobileDrawer } from '@/components/MobileDrawer';
 import { buildSidebarCategories } from '@/lib/channels';
 import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
@@ -24,6 +27,7 @@ import { useVoiceSession } from '@/components/VoiceSessionProvider';
 interface GuildChannelViewProps {
   guildId: string;
   channelId: string;
+  aroundMessageId?: string | null;
 }
 
 type ConfirmState =
@@ -31,15 +35,40 @@ type ConfirmState =
   | { kind: 'guild' }
   | null;
 
-export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) {
+export function GuildChannelView({
+  guildId,
+  channelId,
+  aroundMessageId,
+}: GuildChannelViewProps) {
   const router = useRouter();
-  const { user, client } = useAuth();
+  const { user, client, setUser } = useAuth();
   const { guilds, guild, channels, loading, reload, patchGuild } = useGuildNav(guildId);
   const channel = channels.find((c) => c.id === channelId);
   const isVoiceView = channel?.type === 'VOICE';
+  const channelPending = !channel && (loading || channels.length === 0);
+  const channelMissing = !channel && !loading && channels.length > 0;
 
-  const { messages, sendMessage, sendWithAttachments, sendMedia, error: chatError } =
-    useChatChannel(isVoiceView ? undefined : channelId);
+  const {
+    messages,
+    loading: chatLoading,
+    loadingOlder,
+    hasMore,
+    pendingNewCount,
+    setAtLiveEdge,
+    loadOlder,
+    jumpToPresent,
+    sendMessage,
+    sendWithAttachments,
+    sendMedia,
+    sendPoll,
+    editMessage,
+    deleteMessage,
+    reactToMessage,
+    votePoll,
+    hideMessage,
+    unhideMessage,
+    error: chatError,
+  } = useChatChannel(isVoiceView ? undefined : channelId, aroundMessageId);
   const voice = useVoiceSession();
 
   const voiceChannel = channels.find((c) => c.id === voice.voiceChannelId);
@@ -64,9 +93,93 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [serverNameDraft, setServerNameDraft] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
+  const [canManageChannels, setCanManageChannels] = useState(false);
+  const [canManageMessages, setCanManageMessages] = useState(false);
+  const [canManageGuild, setCanManageGuild] = useState(false);
+  const [deleteMessageTarget, setDeleteMessageTarget] = useState<{
+    id: string;
+    preview: string;
+  } | null>(null);
+  const [editMessageTarget, setEditMessageTarget] = useState<{
+    id: string;
+    content: string;
+  } | null>(null);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState('Evet\nHayır');
+  const [msgBusy, setMsgBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
+  const [channelsOpen, setChannelsOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [guildMembers, setGuildMembers] = useState<
+    Array<{ id: string; username: string; displayName: string; avatarUrl?: string | null }>
+  >([]);
+
+  const mentionNames = useMemo(() => {
+    if (!user) return [] as string[];
+    const names = [user.username, user.displayName].filter(Boolean);
+    return [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  }, [user]);
+
+  const channelNames = useMemo(
+    () => channels.filter((c) => c.type === 'TEXT').map((c) => c.name),
+    [channels],
+  );
+
+  const mentionUsers = useMemo(
+    () =>
+      guildMembers.map((m) => ({
+        id: m.id,
+        username: m.username,
+        displayName: m.displayName,
+        avatarUrl: m.avatarUrl,
+      })),
+    [guildMembers],
+  );
+
+  const mentionChannels = useMemo(
+    () =>
+      channels
+        .filter((c) => c.type === 'TEXT' || c.type === 'VOICE')
+        .map((c) => ({ id: c.id, name: c.name, type: c.type })),
+    [channels],
+  );
+
+  useEffect(() => {
+    setChannelsOpen(false);
+    setMembersOpen(false);
+  }, [guildId, channelId]);
+
+  useEffect(() => {
+    if (!guildId || !user) return;
+    void client
+      .getGuildMembers(guildId)
+      .then(setGuildMembers)
+      .catch(() => setGuildMembers([]));
+  }, [client, guildId, user]);
+
+  useEffect(() => {
+    if (!guildId || !user) return;
+    void client
+      .getGuildPermissions(guildId)
+      .then((p) => {
+        const set = new Set(p.permissions);
+        setCanManageGuild(p.owner || set.has('MANAGE_GUILD') || set.has('ADMINISTRATOR'));
+        setCanManageChannels(
+          p.owner || set.has('MANAGE_CHANNELS') || set.has('ADMINISTRATOR'),
+        );
+        setCanManageMessages(
+          p.owner || set.has('MANAGE_MESSAGES') || set.has('ADMINISTRATOR'),
+        );
+      })
+      .catch(() => {
+        setCanManageGuild(false);
+        setCanManageChannels(false);
+        setCanManageMessages(false);
+      });
+  }, [client, guildId, user]);
 
   useEffect(() => {
     rememberChannel(guildId, channelId);
@@ -188,6 +301,7 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
       if (ch.type === 'VOICE') {
         voice.join(ch.id, guildId);
       }
+      setChannelsOpen(false);
       router.push(`/channels/${guildId}/${ch.id}`);
     },
     [voice.join, guildId, router],
@@ -199,13 +313,17 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
         voiceMembersByChannel,
         selfUserId: user?.id,
         selfVoiceChannelId: voice.voiceChannelId,
-        onAddChannel: (categoryId) => {
-          setChannelName('');
-          setChannelType('TEXT');
-          setChannelModal({ mode: 'create', categoryId });
-        },
-        onEditChannel: openEditChannel,
-        onDeleteChannel: (ch) => setConfirm({ kind: 'channel', channel: ch }),
+        onAddChannel: canManageChannels
+          ? (categoryId) => {
+              setChannelName('');
+              setChannelType('TEXT');
+              setChannelModal({ mode: 'create', categoryId });
+            }
+          : undefined,
+        onEditChannel: canManageChannels ? openEditChannel : undefined,
+        onDeleteChannel: canManageChannels
+          ? (ch) => setConfirm({ kind: 'channel', channel: ch })
+          : undefined,
       }),
     [
       channels,
@@ -215,6 +333,7 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
       openEditChannel,
       user?.id,
       voice.voiceChannelId,
+      canManageChannels,
     ],
   );
 
@@ -368,8 +487,11 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
     onSend: (text: string) => void sendMessage(text),
     onAttachFiles: (files: FileList | File[]) => void sendWithAttachments(files),
     onSendMedia: (payload: Parameters<typeof sendMedia>[0]) => void sendMedia(payload),
+    onPollClick: () => setPollOpen(true),
     searchGifs,
     loadFeaturedGifs,
+    mentionUsers,
+    mentionChannels,
   };
 
   if (loading && !guild) {
@@ -382,53 +504,88 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
 
   const serverName = guild?.name ?? 'Sunucu';
 
+  const renderSidebar = () => (
+    <ChannelSidebar
+      serverName={serverName}
+      serverBannerUrl={guild?.bannerUrl}
+      categories={categories}
+      onServerHeaderClick={() => setServerMenuOpen(true)}
+      className="h-full w-full md:w-60"
+      userPanel={{
+        displayName: user?.displayName ?? 'Kullanıcı',
+        avatarUrl: user?.avatarUrl,
+        status: user?.status ?? 'ONLINE',
+        customStatus: user?.customStatus ?? null,
+        muted: inVoice ? voice.muted : undefined,
+        deafened: inVoice ? voice.deafened : undefined,
+        noiseCancellation: voice.noiseCancellation,
+        noiseNote: voice.noiseNote,
+        voiceConnected: inVoice,
+        voiceChannelName: voiceChannel?.name ?? null,
+        onSettingsClick: () => router.push('/settings'),
+        onProfileClick: () => router.push('/settings/profile'),
+        onStatusChange: (status, customStatus) => {
+          void client
+            .updatePresence({ status, customStatus })
+            .then((me) => setUser(me))
+            .catch(() => undefined);
+        },
+        onMicClick: inVoice ? () => void voice.toggleMute() : undefined,
+        onHeadphonesClick: inVoice ? () => void voice.toggleDeafen() : undefined,
+        onNoiseClick: inVoice ? () => void voice.toggleNoiseCancellation() : undefined,
+        onVoiceReturnClick: () => {
+          if (voice.voiceChannelId) {
+            router.push(`/channels/${guildId}/${voice.voiceChannelId}`);
+          }
+        },
+        onVoiceDisconnectClick: () => {
+          leaveVoiceAndMaybeNavigate();
+        },
+      }}
+      headerExtra={
+        <div className="px-space-sm pb-space-sm">
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors"
+            onClick={() => void createInvite()}
+          >
+            İnsanları davet et
+          </button>
+        </div>
+      }
+    />
+  );
+
   return (
     <AppShell
       guilds={guilds}
       activeGuildId={guildId}
       onGuildsChanged={() => void reload()}
     >
-      <ChannelSidebar
-        serverName={serverName}
-        serverBannerUrl={guild?.bannerUrl}
-        categories={categories}
-        onServerHeaderClick={() => setServerMenuOpen(true)}
-        userPanel={{
-          displayName: user?.displayName ?? 'Kullanıcı',
-          avatarUrl: user?.avatarUrl,
-          status: user?.status ?? 'ONLINE',
-          muted: inVoice ? voice.muted : undefined,
-          deafened: inVoice ? voice.deafened : undefined,
-          noiseCancellation: voice.noiseCancellation,
-          noiseNote: voice.noiseNote,
-          voiceConnected: inVoice,
-          voiceChannelName: voiceChannel?.name ?? null,
-          onSettingsClick: () => router.push('/settings'),
-          onProfileClick: () => router.push('/settings/profile'),
-          onMicClick: inVoice ? () => void voice.toggleMute() : undefined,
-          onHeadphonesClick: inVoice ? () => void voice.toggleDeafen() : undefined,
-          onNoiseClick: inVoice ? () => void voice.toggleNoiseCancellation() : undefined,
-          onVoiceReturnClick: () => {
-            if (voice.voiceChannelId) {
-              router.push(`/channels/${guildId}/${voice.voiceChannelId}`);
-            }
-          },
-          onVoiceDisconnectClick: () => {
-            leaveVoiceAndMaybeNavigate();
-          },
-        }}
-        headerExtra={
-          <div className="px-space-sm pb-space-sm">
-            <button
-              type="button"
-              className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors"
-              onClick={() => void createInvite()}
-            >
-              İnsanları davet et
-            </button>
-          </div>
+      <div className="hidden md:flex h-full min-h-0 shrink-0">{renderSidebar()}</div>
+
+      <MobileDrawer
+        open={channelsOpen}
+        onClose={() => setChannelsOpen(false)}
+        side="left"
+        title={serverName}
+      >
+        {renderSidebar()}
+      </MobileDrawer>
+
+      <button
+        type="button"
+        className="md:hidden fixed bottom-20 left-3 z-40 h-11 w-11 rounded-full bg-surface-container-high text-on-surface shadow-float flex items-center justify-center border border-surface-container-highest"
+        aria-label="Kanallar"
+        onClick={() => setChannelsOpen(true)}
+        style={
+          !isVoiceView && !showingVoiceStage && !channelPending && !channelMissing
+            ? { display: 'none' }
+            : undefined
         }
-      />
+      >
+        <span className="material-symbols-outlined text-[22px]">tag</span>
+      </button>
 
       {showingVoiceStage ? (
         <VoiceStage
@@ -479,6 +636,14 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
             ) : undefined
           }
         />
+      ) : channelPending ? (
+        <div className="flex flex-1 min-w-0 min-h-0 items-center justify-center bg-surface text-outline font-body-md">
+          Kanal yükleniyor…
+        </div>
+      ) : channelMissing ? (
+        <div className="flex flex-1 min-w-0 min-h-0 items-center justify-center bg-surface text-outline font-body-md">
+          Kanal bulunamadı.
+        </div>
       ) : isVoiceView ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col bg-surface items-center justify-center gap-space-md p-space-lg">
           <span className="material-symbols-outlined text-[48px] text-primary-container">volume_up</span>
@@ -504,35 +669,121 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
       ) : (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col bg-surface">
           <header className="h-12 px-space-md flex items-center gap-space-sm border-b border-surface-container-high shadow-bar shrink-0">
+            <button
+              type="button"
+              className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Kanallar"
+              onClick={() => setChannelsOpen(true)}
+            >
+              <span className="material-symbols-outlined text-[20px]">menu</span>
+            </button>
             <span className="text-outline font-headline-md">#</span>
             <span className="font-headline-md text-headline-md text-on-surface truncate">
               {channel?.name ?? 'kanal'}
             </span>
-            {channel && (
+            <button
+              type="button"
+              className="ml-auto h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Mesajlarda ara (Ctrl+F)"
+              onClick={() => openMessageSearch()}
+            >
+              <span className="material-symbols-outlined text-[18px]">search</span>
+            </button>
+            {channel && canManageChannels && (
               <button
                 type="button"
-                className="ml-auto h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                 aria-label="Kanalı düzenle"
                 onClick={() => openEditChannel(channel)}
               >
                 <span className="material-symbols-outlined text-[18px]">edit</span>
               </button>
             )}
+            <button
+              type="button"
+              className="lg:hidden h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface shrink-0"
+              aria-label="Üyeler"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMembersOpen(true);
+              }}
+            >
+              <span className="material-symbols-outlined text-[18px] leading-none">group</span>
+            </button>
           </header>
           {chatError && (
             <p className="px-space-md py-space-sm text-error font-body-sm">{chatError}</p>
           )}
-          <MessageList
-            messages={messages}
-            emptyState={
-              <span className="font-body-md text-body-md">Henüz mesaj yok. Sohbeti başlat!</span>
-            }
-          />
-          <ChatInput {...chatInputProps} />
+          {chatLoading && messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-outline font-body-md">
+              Mesajlar yükleniyor…
+            </div>
+          ) : (
+            <MessageList
+              scrollKey={channelId}
+              messages={messages}
+              mentionNames={mentionNames}
+              channelNames={channelNames}
+              censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
+              messageActions={{
+                currentUserId: user?.id,
+                canManageMessages,
+                onEdit: (m) => setEditMessageTarget({ id: m.id, content: m.content }),
+                onDelete: (m) =>
+                  setDeleteMessageTarget({
+                    id: m.id,
+                    preview: m.content.slice(0, 80) || 'Bu mesaj',
+                  }),
+                onReact: (m, emoji) => void reactToMessage(m.id, emoji),
+                onHide: (m, permanent) => void hideMessage(m.id, permanent),
+                onUnhide: (m) => void unhideMessage(m.id),
+                onBlockAuthor: (m) => {
+                  void client.blockUser(m.author.id).then(() => hideMessage(m.id, true));
+                },
+                onVotePoll: (m, optionId) => void votePoll(m.id, optionId),
+              }}
+              hasMore={hasMore}
+              loadingOlder={loadingOlder}
+              pendingNewCount={pendingNewCount}
+              highlightMessageId={aroundMessageId}
+              onLoadOlder={() => void loadOlder()}
+              onJumpToPresent={() => void jumpToPresent()}
+              onLiveEdgeChange={setAtLiveEdge}
+              onHighlightSettled={() => {
+                if (!aroundMessageId) return;
+                router.replace(`/channels/${guildId}/${channelId}`, { scroll: false });
+              }}
+              emptyState={
+                <DracoEmpty
+                  mood="idle"
+                  size={120}
+                  title="Henüz mesaj yok"
+                  description="Draco dinliyor — sohbeti sen başlat!"
+                />
+              }
+            />
+          )}
+          <div className="relative">
+            <ChatInput key={channelId} {...chatInputProps} />
+          </div>
         </div>
       )}
 
-      {!showingVoiceStage && <MemberList groups={memberGroups} />}
+      {!showingVoiceStage && (
+        <>
+          <MemberList groups={memberGroups} className="hidden lg:flex" />
+          <MobileDrawer
+            open={membersOpen}
+            onClose={() => setMembersOpen(false)}
+            side="right"
+            title="Üyeler"
+            until="lg"
+          >
+            <MemberList groups={memberGroups} className="w-full h-full" />
+          </MobileDrawer>
+        </>
+      )}
 
       <Modal
         open={serverMenuOpen}
@@ -557,21 +808,24 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
               setServerMenuOpen(false);
               setServerSettingsOpen(true);
             }}
+            disabled={!canManageGuild}
           >
             <span className="material-symbols-outlined text-[18px]">settings</span>
             Sunucu ayarları
           </button>
-          <button
-            type="button"
-            className="h-10 px-space-sm rounded-lg text-left hover:bg-error/10 text-error font-body-sm flex items-center gap-space-sm"
-            onClick={() => {
-              setServerMenuOpen(false);
-              setConfirm({ kind: 'guild' });
-            }}
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-            Sunucuyu sil
-          </button>
+          {canManageGuild && (
+            <button
+              type="button"
+              className="h-10 px-space-sm rounded-lg text-left hover:bg-error/10 text-error font-body-sm flex items-center gap-space-sm"
+              onClick={() => {
+                setServerMenuOpen(false);
+                setConfirm({ kind: 'guild' });
+              }}
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+              Sunucuyu sil
+            </button>
+          )}
         </div>
       </Modal>
 
@@ -797,6 +1051,112 @@ export function GuildChannelView({ guildId, channelId }: GuildChannelViewProps) 
         onCancel={() => setConfirm(null)}
         onConfirm={() => void runConfirm()}
       />
+
+      <ConfirmDialog
+        open={Boolean(deleteMessageTarget)}
+        danger
+        busy={msgBusy}
+        title="Mesajı sil?"
+        description={
+          <p>
+            <span className="text-on-surface-variant">
+              {deleteMessageTarget?.preview}
+            </span>{' '}
+            kalıcı olarak silinecek.
+          </p>
+        }
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onCancel={() => setDeleteMessageTarget(null)}
+        onConfirm={() => {
+          if (!deleteMessageTarget) return;
+          setMsgBusy(true);
+          void deleteMessage(deleteMessageTarget.id)
+            .then(() => setDeleteMessageTarget(null))
+            .finally(() => setMsgBusy(false));
+        }}
+      />
+
+      <Modal
+        open={Boolean(editMessageTarget)}
+        title="Mesajı düzenle"
+        onClose={() => setEditMessageTarget(null)}
+        footer={
+          <button
+            type="button"
+            disabled={msgBusy || !editMessageTarget?.content.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              if (!editMessageTarget) return;
+              setMsgBusy(true);
+              void editMessage(editMessageTarget.id, editMessageTarget.content)
+                .then(() => setEditMessageTarget(null))
+                .finally(() => setMsgBusy(false));
+            }}
+          >
+            Kaydet
+          </button>
+        }
+      >
+        <textarea
+          value={editMessageTarget?.content ?? ''}
+          onChange={(e) =>
+            setEditMessageTarget((prev) =>
+              prev ? { ...prev, content: e.target.value } : prev,
+            )
+          }
+          rows={4}
+          className="w-full rounded-lg bg-surface-container-highest px-space-sm py-space-sm outline-none font-body-md"
+        />
+      </Modal>
+
+      <Modal
+        open={pollOpen}
+        title="Anket oluştur"
+        onClose={() => setPollOpen(false)}
+        footer={
+          <button
+            type="button"
+            disabled={msgBusy || !pollQuestion.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              const options = pollOptions
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean);
+              if (options.length < 2) return;
+              setMsgBusy(true);
+              void sendPoll(pollQuestion.trim(), options)
+                .then(() => {
+                  setPollOpen(false);
+                  setPollQuestion('');
+                  setPollOptions('Evet\nHayır');
+                })
+                .finally(() => setMsgBusy(false));
+            }}
+          >
+            Gönder
+          </button>
+        }
+      >
+        <label className="flex flex-col gap-space-xs mb-space-md">
+          <span className="font-label-sm text-on-surface-variant">Soru</span>
+          <input
+            value={pollQuestion}
+            onChange={(e) => setPollQuestion(e.target.value)}
+            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-space-xs">
+          <span className="font-label-sm text-on-surface-variant">Seçenekler (her satır bir seçenek)</span>
+          <textarea
+            value={pollOptions}
+            onChange={(e) => setPollOptions(e.target.value)}
+            rows={4}
+            className="w-full rounded-lg bg-surface-container-highest px-space-sm py-space-sm outline-none"
+          />
+        </label>
+      </Modal>
     </AppShell>
   );
 }

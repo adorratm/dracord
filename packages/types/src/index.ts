@@ -15,11 +15,15 @@ export interface PublicUser {
   displayName: string;
   avatarUrl: string | null;
   status: PresenceStatus;
+  customStatus?: string | null;
+  usernameConfirmed?: boolean;
   bannerColor?: string | null;
   bannerUrl?: string | null;
   bio?: string | null;
   accentColor?: string | null;
   socialLinks?: SocialLinks | null;
+  /** true ise link/medya önizlemeleri sansürlü (bulanık / gizli) gösterilir */
+  censorLinkPreviews?: boolean;
 }
 
 export interface VoiceMemberSummary {
@@ -59,14 +63,121 @@ export interface MessageAttachment {
   size: number;
 }
 
+export interface MessageEmbed {
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  siteName?: string | null;
+}
+
+export interface MessageReactionDto {
+  emoji: string;
+  count: number;
+  me: boolean;
+}
+
+export interface MessagePollOptionDto {
+  id: string;
+  text: string;
+  voteCount: number;
+  voted: boolean;
+}
+
+export interface MessagePollDto {
+  question: string;
+  options: MessagePollOptionDto[];
+  multi: boolean;
+  totalVotes: number;
+  closed: boolean;
+}
+
+export type MessageViewerHide = 'hidden' | 'suppressed' | null;
+
 export interface MessageDto {
   id: string;
   channelId: string;
   author: PublicUser;
   content: string;
   attachments?: MessageAttachment[];
+  embeds?: MessageEmbed[];
+  reactions?: MessageReactionDto[];
+  poll?: MessagePollDto | null;
+  /** Görüntüleyen bu mesajı gizlediyse */
+  viewerHide?: MessageViewerHide;
   createdAt: string;
   updatedAt: string | null;
+}
+
+export type GuildPermission =
+  | 'ADMINISTRATOR'
+  | 'MANAGE_GUILD'
+  | 'MANAGE_CHANNELS'
+  | 'MANAGE_MESSAGES'
+  | 'MANAGE_ROLES'
+  | 'KICK_MEMBERS'
+  | 'VIEW_CHANNELS'
+  | 'SEND_MESSAGES'
+  | 'CREATE_POLLS'
+  | 'ADD_REACTIONS';
+
+export interface GuildPermissionsDto {
+  guildId: string;
+  owner: boolean;
+  permissions: GuildPermission[];
+}
+
+export interface MessagePage {
+  items: MessageDto[];
+  hasMore: boolean;
+}
+
+export interface SearchHitGuild {
+  type: 'guild';
+  id: string;
+  name: string;
+  iconUrl: string | null;
+  discoverable?: boolean;
+}
+
+export interface SearchHitChannel {
+  type: 'channel';
+  id: string;
+  guildId: string | null;
+  name: string;
+  channelType: ChannelType;
+}
+
+export interface SearchHitUser {
+  type: 'user';
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface SearchHitMessage {
+  type: 'message';
+  id: string;
+  channelId: string;
+  guildId: string | null;
+  dmChannelId: string | null;
+  authorId: string;
+  authorName: string;
+  content: string;
+  snippet: string;
+  createdAt: string;
+}
+
+export type SearchHit =
+  | SearchHitGuild
+  | SearchHitChannel
+  | SearchHitUser
+  | SearchHitMessage;
+
+export interface SearchResponse {
+  query: string;
+  hits: SearchHit[];
 }
 
 export interface RoleDto {
@@ -102,6 +213,23 @@ export interface VoiceStatePayload {
   action: 'join' | 'leave' | 'update';
 }
 
+export type NotificationType = 'MENTION' | 'ANNOUNCEMENT' | 'SYSTEM' | 'FRIEND';
+
+export interface NotificationDto {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link: string | null;
+  actorId: string | null;
+  guildId: string | null;
+  channelId: string | null;
+  messageId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export const SocketEvents = {
   MESSAGE_CREATE: 'message:create',
   MESSAGE_UPDATE: 'message:update',
@@ -111,6 +239,8 @@ export const SocketEvents = {
   CHANNEL_JOIN: 'channel:join',
   CHANNEL_LEAVE: 'channel:leave',
   VOICE_STATE: 'voice:state',
+  NOTIFICATION_CREATE: 'notification:create',
+  REACTION_UPDATE: 'reaction:update',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

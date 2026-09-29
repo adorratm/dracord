@@ -11,7 +11,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (ready && !user && !hasSession()) {
-      router.replace('/login');
+      router.replace('/');
     }
   }, [ready, user, router]);
 

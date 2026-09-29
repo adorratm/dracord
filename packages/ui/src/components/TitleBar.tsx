@@ -23,6 +23,7 @@ export interface TitleBarProps {
   activeNav?: TitleBarNavId;
   onNavClick?: (id: TitleBarNavId) => void;
   subtitle?: string;
+  leading?: ReactNode;
   trailing?: ReactNode;
   windowControls?: TitleBarWindowControls;
   className?: string;
@@ -32,6 +33,7 @@ export function TitleBar({
   activeNav = 'servers',
   onNavClick,
   subtitle = 'Dracord',
+  leading,
   trailing,
   windowControls,
   className,
@@ -48,6 +50,7 @@ export function TitleBar({
       )}
     >
       <div className="flex items-center gap-space-sm min-w-0">
+        {leading}
         <Logo size={28} showBackground />
         <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider truncate">
           {subtitle}

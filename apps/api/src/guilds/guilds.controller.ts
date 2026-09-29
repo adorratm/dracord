@@ -11,8 +11,8 @@ import {
 import {
   CurrentUser,
   type JwtPayloadUser,
-} from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+} from '@/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { GuildsService } from './guilds.service';
 
 @Controller('guilds')
@@ -41,6 +41,16 @@ export class GuildsController {
   @Get(':guildId')
   getOne(@Param('guildId') guildId: string, @CurrentUser() user: JwtPayloadUser) {
     return this.guildsService.getGuild(guildId, user.sub);
+  }
+
+  @Get(':guildId/members')
+  members(@Param('guildId') guildId: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.guildsService.listMembers(guildId, user.sub);
+  }
+
+  @Get(':guildId/permissions')
+  myPermissions(@Param('guildId') guildId: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.guildsService.listMyPermissions(guildId, user.sub);
   }
 
   @Patch(':guildId')

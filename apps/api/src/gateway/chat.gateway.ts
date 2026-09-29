@@ -15,9 +15,12 @@ import { SocketEvents, type VoiceStatePayload } from '@dracord/types';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { Server, Socket } from 'socket.io';
-import { MessagesService } from '../messages/messages.service';
-import { PresenceService } from '../presence/presence.service';
-import { VoicePresenceService } from '../voice/voice-presence.service';
+import { UserStatus } from '@/database/enums';
+import { MessagesService } from '@/messages/messages.service';
+import { MessagesRealtimeService } from '@/messages/messages-realtime.service';
+import { NotificationsRealtimeService } from '@/notifications/notifications-realtime.service';
+import { PresenceService } from '@/presence/presence.service';
+import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { WsJwtGuard } from './ws-jwt.guard';
 
 interface WsUser {
@@ -25,6 +28,8 @@ interface WsUser {
   email: string;
   username: string;
 }
+
+const OFFLINE_GRACE_MS = 25_000;
 
 @WebSocketGateway({
   cors: {
@@ -39,6 +44,8 @@ interface WsUser {
 })
 export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
+  private readonly socketsByUser = new Map<string, Set<string>>();
+  private readonly offlineTimers = new Map<string, NodeJS.Timeout>();
 
   @WebSocketServer()
   server!: Server;
@@ -49,9 +56,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly messages: MessagesService,
     private readonly presence: PresenceService,
     private readonly voicePresence: VoicePresenceService,
+    private readonly notificationsRealtime: NotificationsRealtimeService,
+    private readonly messagesRealtime: MessagesRealtimeService,
   ) {}
 
   afterInit(server: Server) {
+    this.notificationsRealtime.setServer(server);
+    this.messagesRealtime.setServer(server);
     const redisUrl = this.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
     try {
       const pubClient = new Redis(redisUrl, {
@@ -85,10 +96,26 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
       client.data.user = user;
-      await this.presence.updateStatus(user.sub, 'ONLINE');
+      void client.join(`user:${user.sub}`);
+
+      const pending = this.offlineTimers.get(user.sub);
+      if (pending) {
+        clearTimeout(pending);
+        this.offlineTimers.delete(user.sub);
+      }
+
+      let set = this.socketsByUser.get(user.sub);
+      if (!set) {
+        set = new Set();
+        this.socketsByUser.set(user.sub, set);
+      }
+      set.add(client.id);
+
+      const pub = await this.presence.markConnected(user.sub);
       this.server.emit(SocketEvents.PRESENCE_UPDATE, {
         userId: user.sub,
-        status: 'ONLINE',
+        status: pub.status,
+        customStatus: pub.customStatus ?? null,
       });
     } catch {
       client.disconnect(true);
@@ -99,13 +126,32 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const user = client.data?.user as WsUser | undefined;
     if (!user?.sub) return;
     try {
-      // Socket kopunca ses presence silinmez: kısa reconnect'lerde hayalet leave olmasın.
-      // Ses temizliği: explicit leave, pagehide leave, heartbeat TTL (90s).
-      await this.presence.updateStatus(user.sub, 'OFFLINE');
-      this.server.emit(SocketEvents.PRESENCE_UPDATE, {
-        userId: user.sub,
-        status: 'OFFLINE',
-      });
+      const set = this.socketsByUser.get(user.sub);
+      set?.delete(client.id);
+      if (set && set.size > 0) return;
+      this.socketsByUser.delete(user.sub);
+
+      const existing = this.offlineTimers.get(user.sub);
+      if (existing) clearTimeout(existing);
+
+      const timer = setTimeout(() => {
+        this.offlineTimers.delete(user.sub);
+        // Hâlâ soket yoksa çevrimdışı işaretle
+        if (this.socketsByUser.has(user.sub)) return;
+        void this.presence
+          .markDisconnected(user.sub)
+          .then((pub) => {
+            this.server.emit(SocketEvents.PRESENCE_UPDATE, {
+              userId: user.sub,
+              status: pub.status,
+              customStatus: pub.customStatus ?? null,
+            });
+          })
+          .catch((err: Error) => {
+            this.logger.warn(`Disconnect cleanup failed: ${err.message}`);
+          });
+      }, OFFLINE_GRACE_MS);
+      this.offlineTimers.set(user.sub, timer);
     } catch (err) {
       this.logger.warn(`Disconnect cleanup failed: ${(err as Error).message}`);
     }
@@ -164,15 +210,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     },
   ) {
     const user = client.data.user as WsUser;
-    const message = await this.messages.createMessage(
+    const { message } = await this.messages.createMessage(
       body.channelId,
       user.sub,
       body.content,
       body.attachments,
     );
-    this.server
-      .to(this.channelRoom(body.channelId))
-      .emit(SocketEvents.MESSAGE_CREATE, message);
+    // createMessage zaten realtime emit ediyor
     return message;
   }
 
@@ -180,15 +224,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage('presence:update')
   async handlePresence(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { status: 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE' },
+    @MessageBody()
+    body: { status: 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE'; customStatus?: string | null },
   ) {
     const user = client.data.user as WsUser;
-    await this.presence.updateStatus(user.sub, body.status);
+    const pub = await this.presence.updateStatus(
+      user.sub,
+      body.status as UserStatus,
+      { customStatus: body.customStatus, manual: true },
+    );
     this.server.emit(SocketEvents.PRESENCE_UPDATE, {
       userId: user.sub,
-      status: body.status,
+      status: pub.status,
+      customStatus: pub.customStatus ?? null,
     });
-    return { ok: true };
+    return { ok: true, user: pub };
   }
 
   @UseGuards(WsJwtGuard)
@@ -215,7 +265,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       );
       void client.join(this.guildRoom(body.guildId));
     } else {
-      // leave all channels in guild — client should send previous channelId via optional prev
       const map = await this.voicePresence.listGuildVoice(body.guildId);
       for (const [chId, members] of Object.entries(map)) {
         if (members.some((m) => m.id === user.sub)) {
@@ -234,7 +283,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.server.emit(SocketEvents.VOICE_STATE, payload);
   }
 
+  broadcastPresence(payload: {
+    userId: string;
+    status: string;
+    customStatus?: string | null;
+  }) {
+    this.server.emit(SocketEvents.PRESENCE_UPDATE, payload);
+  }
+
   private channelRoom(channelId: string) {
     return `channel:${channelId}`;
+  }
+
+  private guildRoom(guildId: string) {
+    return `guild:${guildId}`;
   }
 }

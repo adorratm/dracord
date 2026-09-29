@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ChannelsModule } from '../channels/channels.module';
+import { ChannelsModule } from '@/channels/channels.module';
 import { VoicePresenceModule } from './voice-presence.module';
 import { VoiceController } from './voice.controller';
 import { VoiceService } from './voice.service';

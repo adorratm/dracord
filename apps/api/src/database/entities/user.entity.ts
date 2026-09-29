@@ -5,7 +5,7 @@ import {
   OneToMany,
   UpdateDateColumn,
 } from 'typeorm';
-import { UserStatus } from '../enums';
+import { UserStatus } from '@/database/enums';
 import { CuidEntity } from './cuid-base.entity';
 import type { Account } from './account.entity';
 import type { Session } from './session.entity';
@@ -50,6 +50,21 @@ export class User extends CuidEntity {
 
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.OFFLINE })
   status!: UserStatus;
+
+  /** Kullanıcının seçtiği durum (IDLE/DND); bağlantı kesilince OFFLINE görünür, reconnect'te geri yüklenir. */
+  @Column({ type: 'varchar', nullable: true, default: null })
+  preferredStatus!: UserStatus | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  customStatus!: string | null;
+
+  /** OAuth sonrası kullanıcı adı onayı; false ise onboarding gerekir. */
+  @Column({ type: 'boolean', default: true })
+  usernameConfirmed!: boolean;
+
+  /** Link/medya önizlemelerini sansürle (bulanık / tıklayınca aç). */
+  @Column({ type: 'boolean', default: false })
+  censorLinkPreviews!: boolean;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

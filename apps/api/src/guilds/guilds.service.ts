@@ -5,18 +5,35 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import type { GuildInviteDto, GuildSummary } from '@dracord/types';
+import type { GuildInviteDto, GuildPermissionsDto, GuildSummary, PublicUser } from '@dracord/types';
 import { createId } from '@paralleldrive/cuid2';
-import { Category } from '../database/entities/category.entity';
-import { Channel } from '../database/entities/channel.entity';
-import { Guild } from '../database/entities/guild.entity';
-import { GuildInvite } from '../database/entities/guild-invite.entity';
-import { GuildMember } from '../database/entities/guild-member.entity';
-import { ChannelType } from '../database/enums';
+import { toPublicUser } from '@/common/user.mapper';
+import {
+  GuildPermissions,
+  type GuildPermissionName,
+} from '@/common/permissions';
+import { Category } from '@/database/entities/category.entity';
+import { Channel } from '@/database/entities/channel.entity';
+import { Guild } from '@/database/entities/guild.entity';
+import { GuildInvite } from '@/database/entities/guild-invite.entity';
+import { GuildMember } from '@/database/entities/guild-member.entity';
+import { GuildMemberRole } from '@/database/entities/guild-member-role.entity';
+import { RolePermission } from '@/database/entities/role-permission.entity';
+import { User } from '@/database/entities/user.entity';
+import { ChannelType } from '@/database/enums';
+import { SearchIndexerService } from '@/search/search-indexer.service';
+
+export const PERM_MANAGE_GUILD = GuildPermissions.MANAGE_GUILD;
+export const PERM_MANAGE_CHANNELS = GuildPermissions.MANAGE_CHANNELS;
+export const PERM_ADMINISTRATOR = GuildPermissions.ADMINISTRATOR;
+export const PERM_MANAGE_MESSAGES = GuildPermissions.MANAGE_MESSAGES;
 
 @Injectable()
 export class GuildsService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly indexer: SearchIndexerService,
+  ) {}
 
   async listForUser(userId: string): Promise<GuildSummary[]> {
     const memberships = await this.em.find(GuildMember, {
@@ -50,10 +67,19 @@ export class GuildsService {
     return this.toSummary(guild);
   }
 
+  private async ensureUsernameConfirmed(userId: string): Promise<void> {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.usernameConfirmed === false) {
+      throw new ForbiddenException('Önce kullanıcı adını belirlemelisin');
+    }
+  }
+
   async createGuild(
     userId: string,
     data: { name: string; iconUrl?: string | null; discoverable?: boolean },
   ): Promise<GuildSummary> {
+    await this.ensureUsernameConfirmed(userId);
     const name = data.name.trim();
     if (name.length < 2) throw new BadRequestException('Sunucu adı çok kısa');
 
@@ -111,6 +137,12 @@ export class GuildsService {
       }),
     );
 
+    void this.indexer.indexGuild(guild).catch(() => undefined);
+    const createdChannels = await this.em.find(Channel, { where: { guildId: guild.id } });
+    for (const c of createdChannels) {
+      void this.indexer.indexChannel(c).catch(() => undefined);
+    }
+
     return this.toSummary(guild);
   }
 
@@ -128,8 +160,11 @@ export class GuildsService {
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
 
-    // Keşfedilebilirlik ve silme hariç görsel/ad düzenlemeyi üyeler yapabilir;
-    // discoverable yalnızca sahibi değiştirir.
+    const touchesIdentity =
+      data.name != null || data.iconUrl !== undefined || data.bannerUrl !== undefined;
+    if (touchesIdentity) {
+      await this.requirePermission(guildId, userId, PERM_MANAGE_GUILD);
+    }
     if (data.discoverable !== undefined) {
       await this.requireOwner(guildId, userId);
       guild.discoverable = data.discoverable;
@@ -142,12 +177,61 @@ export class GuildsService {
     if (data.iconUrl !== undefined) guild.iconUrl = data.iconUrl;
     if (data.bannerUrl !== undefined) guild.bannerUrl = data.bannerUrl;
     await this.em.save(Guild, guild);
+    void this.indexer.indexGuild(guild).catch(() => undefined);
     return this.toSummary(guild);
   }
 
   async deleteGuild(guildId: string, userId: string): Promise<void> {
-    const guild = await this.requireOwner(guildId, userId);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    const isOwner = guild.ownerId === userId;
+    const isAdmin =
+      !isOwner &&
+      (await this.memberHasPermission(guildId, userId, PERM_ADMINISTRATOR));
+    if (!isOwner && !isAdmin) {
+      throw new ForbiddenException('Sunucuyu yalnızca sahip veya yönetici silebilir');
+    }
     await this.em.remove(Guild, guild);
+  }
+
+  async listMyPermissions(guildId: string, userId: string): Promise<GuildPermissionsDto> {
+    await this.ensureMember(guildId, userId);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    const owner = guild.ownerId === userId;
+    if (owner) {
+      return {
+        guildId,
+        owner: true,
+        permissions: Object.values(GuildPermissions) as GuildPermissionsDto['permissions'],
+      };
+    }
+    const permissions = await this.collectMemberPermissions(guildId, userId);
+    return { guildId, owner: false, permissions };
+  }
+
+  async collectMemberPermissions(
+    guildId: string,
+    userId: string,
+  ): Promise<GuildPermissionsDto['permissions']> {
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId },
+    });
+    if (!member) return [];
+    const links = await this.em.find(GuildMemberRole, {
+      where: { guildMemberId: member.id },
+    });
+    if (!links.length) return [];
+    const roleIds = links.map((l) => l.roleId);
+    const perms = await this.em
+      .createQueryBuilder(RolePermission, 'rp')
+      .where('rp.roleId IN (:...roleIds)', { roleIds })
+      .getMany();
+    const set = new Set(perms.map((p) => p.permission));
+    if (set.has(PERM_ADMINISTRATOR)) {
+      return Object.values(GuildPermissions) as GuildPermissionsDto['permissions'];
+    }
+    return [...set] as GuildPermissionsDto['permissions'];
   }
 
   async createInvite(
@@ -177,6 +261,7 @@ export class GuildsService {
   }
 
   async joinByInvite(code: string, userId: string): Promise<GuildSummary> {
+    await this.ensureUsernameConfirmed(userId);
     const invite = await this.em.findOne(GuildInvite, {
       where: { code },
       relations: { guild: true },
@@ -204,6 +289,7 @@ export class GuildsService {
   }
 
   async joinDiscoverable(guildId: string, userId: string): Promise<GuildSummary> {
+    await this.ensureUsernameConfirmed(userId);
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     if (!guild.discoverable) {
@@ -221,6 +307,17 @@ export class GuildsService {
     return this.toSummary(guild);
   }
 
+  async listMembers(guildId: string, userId: string): Promise<PublicUser[]> {
+    await this.ensureMember(guildId, userId);
+    const members = await this.em.find(GuildMember, {
+      where: { guildId },
+      relations: { user: true },
+      take: 250,
+      order: { joinedAt: 'ASC' },
+    });
+    return members.filter((m) => m.user).map((m) => toPublicUser(m.user));
+  }
+
   async ensureMember(guildId: string, userId: string): Promise<void> {
     const member = await this.em.findOne(GuildMember, {
       where: { guildId, userId },
@@ -235,6 +332,48 @@ export class GuildsService {
       throw new ForbiddenException('Only the owner can manage this guild');
     }
     return guild;
+  }
+
+  async requirePermission(
+    guildId: string,
+    userId: string,
+    permission: string,
+  ): Promise<Guild> {
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    if (guild.ownerId === userId) return guild;
+
+    const allowed = await this.memberHasPermission(guildId, userId, permission);
+    if (!allowed) {
+      throw new ForbiddenException('Bu işlem için yetkin yok');
+    }
+    return guild;
+  }
+
+  async memberHasPermission(
+    guildId: string,
+    userId: string,
+    permission: string,
+  ): Promise<boolean> {
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId },
+    });
+    if (!member) return false;
+
+    const links = await this.em.find(GuildMemberRole, {
+      where: { guildMemberId: member.id },
+    });
+    if (!links.length) return false;
+
+    const roleIds = links.map((l) => l.roleId);
+    const perms = await this.em
+      .createQueryBuilder(RolePermission, 'rp')
+      .where('rp.roleId IN (:...roleIds)', { roleIds })
+      .andWhere('rp.permission IN (:...perms)', {
+        perms: [permission, PERM_ADMINISTRATOR],
+      })
+      .getMany();
+    return perms.length > 0;
   }
 
   private toSummary(guild: Guild): GuildSummary {

@@ -2,8 +2,8 @@ import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import {
   CurrentUser,
   type JwtPayloadUser,
-} from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+} from '@/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { RolesService } from './roles.service';
 
 @Controller('guilds/:guildId/roles')

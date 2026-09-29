@@ -22,7 +22,8 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
-    "@dracord/types": "workspace:*"
+    "@dracord/types": "workspace:*",
+    "@tanstack/react-virtual": "^3.14.13"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

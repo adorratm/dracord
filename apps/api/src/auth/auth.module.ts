@@ -4,9 +4,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { GoogleStrategy } from './strategies/google.strategy';
-import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleStrategy } from '@/auth/strategies/google.strategy';
+import { JwtRefreshStrategy } from '@/auth/strategies/jwt-refresh.strategy';
+import { JwtStrategy } from '@/auth/strategies/jwt.strategy';
 
 const googleEnabled = (): boolean => {
   return Boolean(process.env.GOOGLE_CLIENT_ID?.trim());

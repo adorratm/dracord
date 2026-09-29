@@ -11,7 +11,10 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
   async rewrites() {
-    return [{ source: '/channels/@me', destination: '/channels/me' }];
+    return [
+      { source: '/channels/@me', destination: '/channels/me' },
+      { source: '/channels/@me/:channelId', destination: '/channels/me/:channelId' },
+    ];
   },
 };
 

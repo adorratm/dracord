@@ -57,10 +57,18 @@ export class CreateMessageDto {
   @IsString()
   @MinLength(0)
   @MaxLength(4000)
-  content!: string;
+  @IsOptional()
+  content?: string;
 
   @IsOptional()
   @IsArray()
   @IsMessageAttachments()
   attachments?: MessageAttachmentInput[];
+
+  @IsOptional()
+  poll?: {
+    question: string;
+    options: string[];
+    multi?: boolean;
+  };
 }

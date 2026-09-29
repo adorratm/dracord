@@ -17,9 +17,11 @@
     "db:generate": "echo \"TypeORM: no client generation step\"",
     "db:migrate": "echo \"TypeORM synchronize on boot (non-production)\"",
     "db:seed": "yarn workspace @dracord/api db:seed",
-    "docker:up": "docker compose -f docker/docker-compose.yml --env-file .env up -d postgres pgbouncer redis livekit",
+    "docker:up": "docker compose -f docker/docker-compose.yml --env-file .env up -d postgres pgbouncer redis elasticsearch livekit",
     "docker:up:all": "docker compose -f docker/docker-compose.yml --env-file .env up -d --build",
-    "docker:down": "docker compose -f docker/docker-compose.yml --env-file .env down"
+    "docker:down": "docker compose -f docker/docker-compose.yml --env-file .env down",
+    "docker:deploy": "powershell -ExecutionPolicy Bypass -File docker/rolling-deploy.ps1",
+    "search:reindex": "yarn workspace @dracord/api search:reindex"
   },
   "devDependencies": {
     "turbo": "^2.11.5",
@@ -28,5 +30,8 @@
   "volta": {
     "node": "26.10.0",
     "yarn": "4.18.1"
+  },
+  "dependencies": {
+    "framer-motion": "^13.4.4"
   }
 }

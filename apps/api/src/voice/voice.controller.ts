@@ -2,10 +2,10 @@ import { Body, Controller, Delete, Param, Patch, Post, UseGuards } from '@nestjs
 import {
   CurrentUser,
   type JwtPayloadUser,
-} from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { ChannelsService } from '../channels/channels.service';
-import { VoiceTokenDto } from './dto/voice-token.dto';
+} from '@/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { ChannelsService } from '@/channels/channels.service';
+import { VoiceTokenDto } from '@/voice/dto/voice-token.dto';
 import { VoicePresenceService } from './voice-presence.service';
 import { VoiceService } from './voice.service';
 

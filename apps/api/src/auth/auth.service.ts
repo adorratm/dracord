@@ -9,15 +9,15 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { EntityManager } from 'typeorm';
 import type { AuthTokens } from '@dracord/types';
-import { Account } from '../database/entities/account.entity';
-import { Guild } from '../database/entities/guild.entity';
-import { GuildMember } from '../database/entities/guild-member.entity';
-import { Session } from '../database/entities/session.entity';
-import { User } from '../database/entities/user.entity';
-import { AuthProvider, UserStatus } from '../database/enums';
-import type { AppleAuthDto } from './dto/apple-auth.dto';
-import type { DevLoginDto } from './dto/dev-login.dto';
-import type { GoogleProfile } from './strategies/google.strategy';
+import { Account } from '@/database/entities/account.entity';
+import { Guild } from '@/database/entities/guild.entity';
+import { GuildMember } from '@/database/entities/guild-member.entity';
+import { Session } from '@/database/entities/session.entity';
+import { User } from '@/database/entities/user.entity';
+import { AuthProvider, UserStatus } from '@/database/enums';
+import type { AppleAuthDto } from '@/auth/dto/apple-auth.dto';
+import type { DevLoginDto } from '@/auth/dto/dev-login.dto';
+import type { GoogleProfile } from '@/auth/strategies/google.strategy';
 
 @Injectable()
 export class AuthService {
@@ -44,6 +44,8 @@ export class AuthService {
       existing.displayName = displayName;
       existing.passwordHash = passwordHash;
       existing.status = UserStatus.ONLINE;
+      existing.preferredStatus = UserStatus.ONLINE;
+      existing.usernameConfirmed = true;
       user = await this.em.save(User, existing);
     } else {
       user = await this.em.save(
@@ -53,6 +55,9 @@ export class AuthService {
           username,
           displayName,
           passwordHash,
+          usernameConfirmed: true,
+          status: UserStatus.ONLINE,
+          preferredStatus: UserStatus.ONLINE,
         }),
       );
       await this.em.save(
@@ -105,6 +110,7 @@ export class AuthService {
     });
 
     let user = account?.user;
+    let isBrandNew = false;
 
     if (!user) {
       const existingByEmail = await this.em.findOne(User, {
@@ -121,17 +127,17 @@ export class AuthService {
           }),
         );
       } else {
-        let username = profile.username.toLowerCase();
-        const taken = await this.em.findOne(User, { where: { username } });
-        if (taken) {
-          username = `${username}${randomBytes(2).toString('hex')}`;
-        }
+        isBrandNew = true;
+        const username = await this.allocateUniqueUsername(profile.username);
         user = await this.em.save(
           User,
           this.em.create(User, {
             email: profile.email.toLowerCase(),
             username,
             displayName: profile.displayName,
+            usernameConfirmed: false,
+            status: UserStatus.ONLINE,
+            preferredStatus: UserStatus.ONLINE,
           }),
         );
         await this.em.save(
@@ -146,8 +152,29 @@ export class AuthService {
     }
 
     const tokens = await this.issueTokens(user);
-    await this.ensureSeedGuildMembership(user.id);
+    // Kullanıcı adı onaylanana kadar seed sunucuya otomatik katılma
+    if (!isBrandNew && user.usernameConfirmed !== false) {
+      await this.ensureSeedGuildMembership(user.id);
+    }
     return { ...tokens, user };
+  }
+
+  /** displayName / öneriden benzersiz kullanıcı adı üretir. */
+  async allocateUniqueUsername(raw: string): Promise<string> {
+    let base = raw
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 24);
+    if (!base || base.length < 2) base = 'kullanici';
+    let candidate = base;
+    for (let i = 0; i < 20; i++) {
+      const taken = await this.em.findOne(User, { where: { username: candidate } });
+      if (!taken) return candidate;
+      candidate = `${base}${randomBytes(2).toString('hex')}`.slice(0, 32);
+    }
+    return `${base}${Date.now().toString(36)}`.slice(0, 32);
   }
 
   private async ensureSeedGuildMembership(userId: string): Promise<void> {
@@ -227,7 +254,7 @@ export class AuthService {
     const refreshToken = randomBytes(32).toString('hex');
     const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
 
-    const refreshExpires = this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d';
+    const refreshExpires = this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d';
     const expiresAt = this.addDuration(new Date(), refreshExpires);
 
     await this.em.save(
@@ -243,7 +270,7 @@ export class AuthService {
     const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
     const refreshSecret = this.config.getOrThrow<string>('JWT_REFRESH_SECRET');
     const accessExpires = (this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ??
-      '15m') as JwtSignOptions['expiresIn'];
+      '7d') as JwtSignOptions['expiresIn'];
     const refreshExpiresIn = refreshExpires as JwtSignOptions['expiresIn'];
 
     const accessToken = await this.jwt.signAsync(

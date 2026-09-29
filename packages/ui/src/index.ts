@@ -27,10 +27,25 @@ export { MemberList } from './components/MemberList';
 export type { MemberListProps, MemberListGroup, MemberListMember } from './components/MemberList';
 
 export { MessageList, MessageItem } from './components/MessageList';
-export type { MessageListProps, MessageItemProps } from './components/MessageList';
+export type { MessageListProps, MessageItemProps, MessageItemActions } from './components/MessageList';
+
+export { MessageEmbedView } from './components/MessageEmbedView';
+export type { MessageEmbedViewProps } from './components/MessageEmbedView';
+
+export { QuickSwitcher } from './components/QuickSwitcher';
+export type { QuickSwitcherProps } from './components/QuickSwitcher';
+
+export { SearchPanel } from './components/SearchPanel';
+export type { SearchPanelProps, SearchScope } from './components/SearchPanel';
 
 export { ChatInput } from './components/ChatInput';
-export type { ChatInputProps, ChatMediaPayload, GifSearchResult } from './components/ChatInput';
+export type {
+  ChatInputProps,
+  ChatMediaPayload,
+  GifSearchResult,
+  ChatMentionUser,
+  ChatMentionChannel,
+} from './components/ChatInput';
 
 export { FriendsHub } from './components/FriendsHub';
 export type { FriendsHubProps, FriendsTab, FriendRow } from './components/FriendsHub';

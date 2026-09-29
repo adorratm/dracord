@@ -4,9 +4,9 @@ import { ExpressAdapter } from '@bull-board/express';
 import { InjectQueue } from '@nestjs/bullmq';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { DRACORD_QUEUE } from '../queues/queues.constants';
-import type { DracordJobPayload } from '../queues/queues.processor';
-import { QueuesModule } from '../queues/queues.module';
+import { DRACORD_QUEUE } from '@/queues/queues.constants';
+import type { DracordJobPayload } from '@/queues/queues.processor';
+import { QueuesModule } from '@/queues/queues.module';
 
 @Module({
   imports: [QueuesModule],

@@ -7,7 +7,7 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import { AuthProvider } from '../enums';
+import { AuthProvider } from '@/database/enums';
 import { CuidEntity } from './cuid-base.entity';
 import type { User } from './user.entity';
 

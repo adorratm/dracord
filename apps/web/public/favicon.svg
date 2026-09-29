@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Dracord">
+  <defs>
+    <clipPath id="c"><rect width="32" height="32" rx="8"/></clipPath>
+  </defs>
+  <g clip-path="url(#c)">
+    <rect width="32" height="32" rx="8" fill="#1e1e2e"/>
+    <circle cx="16" cy="18" r="12" fill="#bd93f9" opacity="0.2"/>
+    <!-- wings -->
+    <path d="M9.5 19.5 C3 13, 0.5 19.5 3.5 24.5 C6.5 22.5 8 23.5 10 21.5 Z" fill="#6b4fa0"/>
+    <path d="M22.5 19.5 C29 13, 31.5 19.5 28.5 24.5 C25.5 22.5 24 23.5 22 21.5 Z" fill="#6b4fa0"/>
+    <!-- cape -->
+    <path d="M8.5 22 C11 18.5 21 18.5 23.5 22 C25 24.5 24 29 20.5 30.5 C18 31.5 14 31.5 11.5 30.5 C8 29 7 24.5 8.5 22 Z" fill="#3d2a5c"/>
+    <circle cx="16" cy="24" r="1.2" fill="#ff79c6"/>
+    <!-- head -->
+    <circle cx="16" cy="14.5" r="8" fill="#c4a8f0"/>
+    <!-- hair -->
+    <path d="M10 9 C12 5 14.5 4 16 7 C17.5 4 20 5 22 9 C20 6.5 18 7.5 16 10 C14 7.5 12 6.5 10 9 Z" fill="#5a3f8a"/>
+    <!-- ears -->
+    <path d="M9 12 L5.5 3.5 L13 10 Z" fill="#9b7fd4"/>
+    <path d="M9.5 11.5 L7 6 L12.5 10 Z" fill="#ff79c6"/>
+    <path d="M23 12 L26.5 3.5 L19 10 Z" fill="#9b7fd4"/>
+    <path d="M22.5 11.5 L25 6 L19.5 10 Z" fill="#ff79c6"/>
+    <!-- eyes -->
+    <ellipse cx="13" cy="14.5" rx="2.1" ry="2.6" fill="#1e1e2e"/>
+    <ellipse cx="13" cy="14.5" rx="1.5" ry="2" fill="#50fa7b"/>
+    <circle cx="13.6" cy="13.6" r="0.55" fill="#fff"/>
+    <ellipse cx="19" cy="14.5" rx="2.1" ry="2.6" fill="#1e1e2e"/>
+    <ellipse cx="19" cy="14.5" rx="1.5" ry="2" fill="#50fa7b"/>
+    <circle cx="19.6" cy="13.6" r="0.55" fill="#fff"/>
+    <!-- mouth -->
+    <path d="M13.8 18.2 Q16 20 18.2 18.2" stroke="#2a1f3d" stroke-width="0.7" fill="none" stroke-linecap="round"/>
+    <polygon points="14.2,18.2 14.8,19.6 15.3,18.2" fill="#fff"/>
+    <polygon points="16.7,18.2 17.3,19.6 17.8,18.2" fill="#fff"/>
+  </g>
+</svg>

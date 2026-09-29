@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { VoiceMemberSummary, VoiceStatePayload } from '@dracord/types';
 import Redis from 'ioredis';
 import { EntityManager } from 'typeorm';
-import { User } from '../database/entities/user.entity';
+import { User } from '@/database/entities/user.entity';
 
 /** Presence kaydı bu süre yenilenmezse hayalet üye temizlenir. */
 const MEMBER_TTL_SEC = 90;

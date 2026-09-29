@@ -7,7 +7,7 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import { FriendshipStatus } from '../enums';
+import { FriendshipStatus } from '@/database/enums';
 import { CuidEntity } from './cuid-base.entity';
 import type { User } from './user.entity';
 

@@ -207,7 +207,7 @@ async function main() {
       color: '#99AAB5',
       position: 0,
     },
-    ['VIEW_CHANNELS', 'SEND_MESSAGES'],
+    ['VIEW_CHANNELS', 'SEND_MESSAGES', 'ADD_REACTIONS', 'CREATE_POLLS'],
   );
 
   await upsertRole(
@@ -218,7 +218,15 @@ async function main() {
       color: '#7C0A02',
       position: 1,
     },
-    ['MANAGE_MESSAGES', 'KICK_MEMBERS'],
+    [
+      'MANAGE_MESSAGES',
+      'KICK_MEMBERS',
+      'MANAGE_CHANNELS',
+      'MANAGE_GUILD',
+      'CREATE_POLLS',
+      'ADD_REACTIONS',
+      'ADMINISTRATOR',
+    ],
   );
 
   async function upsertCategory(id: string, name: string, position: number) {

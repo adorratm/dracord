@@ -1,6 +1,7 @@
 'use client';
 
 import type { AuthTokens, PublicUser } from '@dracord/types';
+import { SocketEvents } from '@dracord/sdk';
 import {
   createContext,
   useCallback,
@@ -27,9 +28,13 @@ interface AuthContextValue {
   loginDev: (username?: string) => Promise<void>;
   logout: () => void;
   setUser: (user: PublicUser | null) => void;
+  refreshUser: () => Promise<PublicUser | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** Access JWT ~7g; proaktif yenileme aralığı */
+const PROACTIVE_REFRESH_MS = 6 * 60 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useMemo(() => getDracordClient(), []);
@@ -71,6 +76,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         client.setToken(tokens.accessToken);
       },
     });
+  }, [client]);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const me = await client.getMe();
+      setUser(me);
+      const access = getAccessToken();
+      const refresh = getRefreshToken();
+      if (access && refresh) persistSession(access, refresh, me);
+      return me;
+    } catch {
+      return null;
+    }
   }, [client]);
 
   const hydrate = useCallback(async () => {
@@ -125,6 +143,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void hydrate();
   }, [hydrate]);
 
+  // Proaktif token yenileme
+  useEffect(() => {
+    if (!ready || !user) return;
+    const tick = () => {
+      const refresh = getRefreshToken();
+      if (!refresh) return;
+      void client.refresh(refresh).then((tokens) => {
+        applyTokens(tokens.accessToken, tokens.refreshToken);
+        const existing = getStoredUser();
+        if (existing) persistSession(tokens.accessToken, tokens.refreshToken, existing);
+      }).catch(() => undefined);
+    };
+    const id = window.setInterval(tick, PROACTIVE_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [ready, user, client, applyTokens]);
+
+  // Presence socket güncellemesi
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    const userId = user.id;
+    const sock = client.connectSocket();
+    const onPresence = (payload: {
+      userId: string;
+      status: PublicUser['status'];
+      customStatus?: string | null;
+    }) => {
+      if (payload.userId !== userId) return;
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: payload.status,
+              customStatus:
+                payload.customStatus !== undefined
+                  ? payload.customStatus
+                  : prev.customStatus,
+            }
+          : prev,
+      );
+    };
+    const onConnect = () => {
+      // Soket bağlanınca UI'ı hemen çevrimiçi göster (sunucu event'i gelene kadar)
+      setUser((prev) => {
+        if (!prev) return prev;
+        if (prev.status === 'IDLE' || prev.status === 'DND') return prev;
+        if (prev.status === 'ONLINE') return prev;
+        return { ...prev, status: 'ONLINE' };
+      });
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on('connect', onConnect);
+    if (sock.connected) onConnect();
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off('connect', onConnect);
+    };
+  }, [ready, user?.id, client]);
+
   const loginDev = useCallback(
     async (username?: string) => {
       const result = await client.loginDev(username);
@@ -136,8 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, client, ready, loginDev, logout, setUser }),
-    [user, client, ready, loginDev, logout],
+    () => ({ user, client, ready, loginDev, logout, setUser, refreshUser }),
+    [user, client, ready, loginDev, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

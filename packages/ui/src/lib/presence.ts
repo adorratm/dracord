@@ -14,14 +14,19 @@ export function presenceDotClass(status: PresenceStatus): string {
   }
 }
 
-export function presenceLabelTr(status: PresenceStatus): string {
+export function presenceLabelTr(
+  status: PresenceStatus,
+  customStatus?: string | null,
+): string {
+  const custom = customStatus?.trim();
+  if (custom) return custom;
   switch (status) {
     case 'ONLINE':
       return 'Çevrimiçi';
     case 'IDLE':
-      return 'Boşta';
+      return 'Uzakta';
     case 'DND':
-      return 'Rahatsız etmeyin';
+      return 'Müsait değil';
     case 'OFFLINE':
     default:
       return 'Çevrimdışı';

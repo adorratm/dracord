@@ -37,6 +37,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Rolling deploy / SIGTERM için graceful shutdown
+  app.enableShutdownHooks();
+
   const port = config.get<number>('PORT') ?? 4000;
   await app.listen(port);
   console.log(`Dracord API listening on http://localhost:${port}`);

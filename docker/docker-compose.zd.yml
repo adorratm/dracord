@@ -1,0 +1,16 @@
+# Zero-downtime / multi-replica override.
+# Host port yayınını kaldırır; trafik Caddy (veya Docker DNS) üzerinden gider.
+# Kullanım: yarn docker:deploy  |  docker compose -f docker/docker-compose.yml -f docker/docker-compose.zd.yml ...
+services:
+  api:
+    ports: !reset []
+    expose:
+      - "4000"
+  web:
+    ports: !reset []
+    expose:
+      - "3000"
+  admin:
+    ports: !reset []
+    expose:
+      - "3000"

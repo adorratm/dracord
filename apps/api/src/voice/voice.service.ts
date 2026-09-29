@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { AccessToken } from 'livekit-server-sdk';
 import { EntityManager } from 'typeorm';
 import type { VoiceTokenResponse } from '@dracord/types';
-import { ChannelsService } from '../channels/channels.service';
-import { Channel } from '../database/entities/channel.entity';
-import { User } from '../database/entities/user.entity';
-import { ChannelType } from '../database/enums';
+import { ChannelsService } from '@/channels/channels.service';
+import { Channel } from '@/database/entities/channel.entity';
+import { User } from '@/database/entities/user.entity';
+import { ChannelType } from '@/database/enums';
 
 @Injectable()
 export class VoiceService {

@@ -2,9 +2,9 @@ import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import {
   CurrentUser,
   type JwtPayloadUser,
-} from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { UpdatePresenceDto } from './dto/update-presence.dto';
+} from '@/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { UpdatePresenceDto } from '@/presence/dto/update-presence.dto';
 import { PresenceService } from './presence.service';
 
 @Controller('presence')
@@ -19,6 +19,9 @@ export class PresenceController {
 
   @Patch('me')
   update(@CurrentUser() user: JwtPayloadUser, @Body() dto: UpdatePresenceDto) {
-    return this.presenceService.updateStatus(user.sub, dto.status);
+    return this.presenceService.updateStatus(user.sub, dto.status, {
+      customStatus: dto.customStatus,
+      manual: true,
+    });
   }
 }

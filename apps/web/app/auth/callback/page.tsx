@@ -29,7 +29,11 @@ function AuthCallbackInner() {
       .then((me: PublicUser) => {
         persistSession(accessToken, refreshToken, me);
         setUser(me);
-        router.replace('/channels/@me');
+        if (me.usernameConfirmed === false) {
+          router.replace('/onboarding/username');
+        } else {
+          router.replace('/channels/@me');
+        }
       })
       .catch(() => {
         const placeholder: PublicUser = {
@@ -38,10 +42,11 @@ function AuthCallbackInner() {
           displayName: 'Google Kullanıcısı',
           avatarUrl: null,
           status: 'ONLINE',
+          usernameConfirmed: false,
         };
         persistSession(accessToken, refreshToken, placeholder);
         setUser(placeholder);
-        router.replace('/channels/@me');
+        router.replace('/onboarding/username');
       });
   }, [params, router, client, setUser]);
 

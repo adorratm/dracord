@@ -6,11 +6,12 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
-import { GuildsService } from '../guilds/guilds.service';
-import { Channel } from '../database/entities/channel.entity';
-import { DMChannelMember } from '../database/entities/dm-channel-member.entity';
-import { ChannelType } from '../database/enums';
-import { VoicePresenceService } from '../voice/voice-presence.service';
+import { GuildsService } from '@/guilds/guilds.service';
+import { Channel } from '@/database/entities/channel.entity';
+import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
+import { ChannelType } from '@/database/enums';
+import { VoicePresenceService } from '@/voice/voice-presence.service';
+import { SearchIndexerService } from '@/search/search-indexer.service';
 
 @Injectable()
 export class ChannelsService {
@@ -18,6 +19,7 @@ export class ChannelsService {
     private readonly em: EntityManager,
     private readonly guilds: GuildsService,
     private readonly voicePresence: VoicePresenceService,
+    private readonly indexer: SearchIndexerService,
   ) {}
 
   async listGuildChannels(guildId: string, userId: string): Promise<ChannelSummary[]> {
@@ -60,7 +62,7 @@ export class ChannelsService {
       topic?: string | null;
     },
   ): Promise<ChannelSummary> {
-    await this.guilds.requireOwner(guildId, userId);
+    await this.guilds.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
     const name =
       data.type === 'VOICE'
         ? data.name.trim().slice(0, 100)
@@ -82,6 +84,7 @@ export class ChannelsService {
         position: maxPos + 1,
       }),
     );
+    void this.indexer.indexChannel(channel).catch(() => undefined);
     return this.toSummary(channel);
   }
 
@@ -92,7 +95,7 @@ export class ChannelsService {
   ): Promise<ChannelSummary> {
     const channel = await this.em.findOne(Channel, { where: { id: channelId } });
     if (!channel?.guildId) throw new NotFoundException('Channel not found');
-    await this.guilds.requireOwner(channel.guildId, userId);
+    await this.guilds.requirePermission(channel.guildId, userId, 'MANAGE_CHANNELS');
     if (data.name != null) {
       channel.name = data.name.trim().replace(/\s+/g, '-').toLowerCase();
     }
@@ -105,7 +108,7 @@ export class ChannelsService {
   async deleteChannel(channelId: string, userId: string): Promise<void> {
     const channel = await this.em.findOne(Channel, { where: { id: channelId } });
     if (!channel?.guildId) throw new NotFoundException('Channel not found');
-    await this.guilds.requireOwner(channel.guildId, userId);
+    await this.guilds.requirePermission(channel.guildId, userId, 'MANAGE_CHANNELS');
     await this.em.remove(Channel, channel);
   }
 

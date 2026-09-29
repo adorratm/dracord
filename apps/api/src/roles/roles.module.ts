@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { GuildsModule } from '../guilds/guilds.module';
+import { GuildsModule } from '@/guilds/guilds.module';
 import { RolesController } from './roles.controller';
 import { RolesService } from './roles.service';
 
