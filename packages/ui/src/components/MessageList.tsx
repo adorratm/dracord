@@ -36,6 +36,8 @@ export interface MessageItemActions {
   onCreateHeading?: (message: MessageDto) => void;
   onMarkUnread?: (message: MessageDto) => void;
   onJumpToMessage?: (messageId: string) => void;
+  /** Mesaj bildir (moderasyon) */
+  onReport?: (message: MessageDto) => void;
   /** Geliştirici modu: ID kopyala */
   developerMode?: boolean;
 }
@@ -202,7 +204,11 @@ export function MessageItem({
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactPickerOpen, setReactPickerOpen] = useState(false);
+  const [submenu, setSubmenu] = useState<'react' | 'apps' | 'interaction' | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
+  const [contentCopied, setContentCopied] = useState(false);
+  const [reportDone, setReportDone] = useState(false);
   /** Popover: aşağıda yer yoksa yukarı aç */
   const [popoverPlacement, setPopoverPlacement] = useState<'up' | 'down'>('down');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -240,6 +246,7 @@ export function MessageItem({
       if (!menuRef.current?.contains(e.target as Node)) {
         setMenuOpen(false);
         setReactPickerOpen(false);
+        setSubmenu(null);
       }
     };
     document.addEventListener('mousedown', onDoc);
@@ -249,28 +256,45 @@ export function MessageItem({
   useLayoutEffect(() => {
     if (!menuOpen && !reactPickerOpen) return;
     const panel = popoverPanelRef.current;
-    const height = panel?.offsetHeight ?? (reactPickerOpen ? 140 : 360);
+    const height = panel?.offsetHeight ?? (reactPickerOpen || submenu === 'react' ? 180 : 420);
     setPopoverPlacement(computePlacement(height));
-  }, [menuOpen, reactPickerOpen, computePlacement]);
+  }, [menuOpen, reactPickerOpen, submenu, computePlacement]);
 
   const popoverPosClass =
     popoverPlacement === 'up'
       ? 'bottom-full mb-1'
       : 'top-full mt-1';
 
+  const closeAllMenus = () => {
+    setMenuOpen(false);
+    setReactPickerOpen(false);
+    setSubmenu(null);
+  };
+
   const openMenu = () => {
     setReactPickerOpen(false);
+    setSubmenu(null);
     if (menuOpen) {
       setMenuOpen(false);
       return;
     }
-    setPopoverPlacement(computePlacement(360));
+    setPopoverPlacement(computePlacement(420));
     setMenuOpen(true);
+  };
+
+  const openReactSubmenu = () => {
+    setSubmenu((s) => (s === 'react' ? null : 'react'));
+    setReactPickerOpen(false);
   };
 
   const openReactPicker = () => {
     setMenuOpen(false);
-    setPopoverPlacement(computePlacement(140));
+    setSubmenu(null);
+    if (reactPickerOpen) {
+      setReactPickerOpen(false);
+      return;
+    }
+    setPopoverPlacement(computePlacement(180));
     setReactPickerOpen(true);
   };
 
@@ -289,7 +313,7 @@ export function MessageItem({
     } catch {
       // ignore
     }
-    setMenuOpen(false);
+    closeAllMenus();
   };
 
   if (message.viewerHide === 'hidden') {
@@ -426,48 +450,55 @@ export function MessageItem({
 
       {actions && (
         <div className={cn('absolute right-space-sm -top-3 transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-50', menuOpen || reactPickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100')}>
-          {!isHeading && QUICK_EMOJIS.map((emoji) => (
-            <button key={emoji} type="button" className="h-7 w-7 rounded hover:bg-surface-bright text-sm" title="Tepki" onClick={() => actions.onReact?.(message, emoji)}>{emoji}</button>
-          ))}
+          {!isHeading &&
+            QUICK_EMOJIS.slice(0, 3).map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="h-7 w-7 rounded hover:bg-surface-bright text-sm"
+                title="Tepki"
+                onClick={() => actions.onReact?.(message, emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
           {!isHeading && (
-            <button type="button" className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline" title="Yanıtla" onClick={() => actions.onReply?.(message)}>
+            <button
+              type="button"
+              className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline"
+              title="Tepki ekle"
+              onClick={openReactPicker}
+            >
+              <span className="material-symbols-outlined text-[16px] leading-none">
+                sentiment_satisfied
+              </span>
+            </button>
+          )}
+          {!isHeading && (
+            <button
+              type="button"
+              className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline"
+              title="Yanıtla"
+              onClick={() => actions.onReply?.(message)}
+            >
               <span className="material-symbols-outlined text-[16px] leading-none">reply</span>
             </button>
           )}
           <div className="relative" ref={menuRef}>
-            <button type="button" className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline" aria-label="Daha fazla" aria-expanded={menuOpen}
-              onClick={openMenu}>
+            <button
+              type="button"
+              className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline"
+              aria-label="Daha fazla"
+              aria-expanded={menuOpen}
+              onClick={openMenu}
+            >
               <span className="material-symbols-outlined text-[16px] leading-none">more_horiz</span>
             </button>
-            {reactPickerOpen && (
-              <div
-                ref={popoverPanelRef}
-                className={cn(
-                  'absolute right-0 p-2 rounded-xl bg-[#111214] border border-white/5 shadow-float z-[60] flex flex-wrap gap-1 w-52',
-                  popoverPosClass,
-                )}
-              >
-                {REACT_PICKER_EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className="h-8 w-8 rounded-md hover:bg-white/10 text-lg"
-                    onClick={() => {
-                      actions.onReact?.(message, emoji);
-                      setReactPickerOpen(false);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
             {menuOpen && (
               <div
                 ref={popoverPanelRef}
                 className={cn(
-                  'absolute right-0 w-[220px] rounded-xl bg-[#111214] border border-white/5 shadow-float py-1.5 z-[60] max-h-[min(28rem,75vh)] overflow-y-auto',
+                  'absolute right-0 w-[240px] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float py-1.5 z-[60]',
                   popoverPosClass,
                 )}
               >
@@ -479,28 +510,47 @@ export function MessageItem({
                           key={emoji}
                           type="button"
                           title="Tepki"
-                          className="h-8 w-8 rounded-md bg-[#2b2d31] hover:bg-[#3f4147] text-[18px] flex items-center justify-center"
+                          className="h-8 w-8 rounded-md bg-surface-container-highest hover:bg-surface-bright text-[18px] flex items-center justify-center"
                           onClick={() => {
                             actions.onReact?.(message, emoji);
-                            setMenuOpen(false);
+                            closeAllMenus();
                           }}
                         >
                           {emoji}
                         </button>
                       ))}
                     </div>
-                    <MenuRow
-                      icon="sentiment_satisfied"
-                      label="Tepki Ekle"
-                      chevron
-                      onClick={() => openReactPicker()}
-                    />
+                    <div className="relative">
+                      <MenuRow
+                        icon="sentiment_satisfied"
+                        label="Tepki Ekle"
+                        chevron
+                        onClick={openReactSubmenu}
+                      />
+                      {submenu === 'react' && (
+                        <div className="absolute right-full top-0 mr-1 w-52 p-2 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float flex flex-wrap gap-1 z-[70]">
+                          {REACT_PICKER_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="h-8 w-8 rounded-md hover:bg-surface-bright text-lg"
+                              onClick={() => {
+                                actions.onReact?.(message, emoji);
+                                closeAllMenus();
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <MenuDivider />
                     <MenuRow
                       icon="reply"
                       label="Yanıtla"
                       onClick={() => {
-                        setMenuOpen(false);
+                        closeAllMenus();
                         actions.onReply?.(message);
                       }}
                     />
@@ -508,7 +558,7 @@ export function MessageItem({
                       icon="forward"
                       label="İlet"
                       onClick={() => {
-                        setMenuOpen(false);
+                        closeAllMenus();
                         actions.onForward?.(message);
                       }}
                     />
@@ -516,7 +566,7 @@ export function MessageItem({
                       icon="title"
                       label="Alt Başlık Oluştur"
                       onClick={() => {
-                        setMenuOpen(false);
+                        closeAllMenus();
                         actions.onCreateHeading?.(message);
                       }}
                     />
@@ -528,27 +578,82 @@ export function MessageItem({
                     icon="push_pin"
                     label={message.pinnedAt ? 'Sabitlemeyi Kaldır' : 'Mesajı Sabitle'}
                     onClick={() => {
-                      setMenuOpen(false);
+                      closeAllMenus();
                       actions.onPin?.(message, !message.pinnedAt);
                     }}
                   />
                 )}
                 {!isHeading && (
-                  <MenuRow
-                    icon="apps"
-                    label="Uygulamalar"
-                    chevron
-                    onClick={() => {
-                      setMenuOpen(false);
-                      openReactPicker();
-                    }}
-                  />
+                  <div className="relative">
+                    <MenuRow
+                      icon="apps"
+                      label="Uygulamalar"
+                      chevron
+                      onClick={() =>
+                        setSubmenu((s) => (s === 'apps' ? null : 'apps'))
+                      }
+                    />
+                    {submenu === 'apps' && (
+                      <div className="absolute right-full top-0 mr-1 w-52 py-1.5 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[70]">
+                        <MenuRow
+                          icon="content_copy"
+                          label={contentCopied ? 'Kopyalandı!' : 'İçeriği Kopyala'}
+                          onClick={() => {
+                            void navigator.clipboard
+                              .writeText(message.content || '')
+                              .then(() => {
+                                setContentCopied(true);
+                                window.setTimeout(() => setContentCopied(false), 1200);
+                              })
+                              .catch(() => undefined);
+                          }}
+                        />
+                        <MenuRow
+                          icon="format_quote"
+                          label="Alıntılayarak Yanıtla"
+                          onClick={() => {
+                            closeAllMenus();
+                            actions.onReply?.(message);
+                          }}
+                        />
+                        {message.attachments?.[0]?.url && (
+                          <MenuRow
+                            icon="attach_file"
+                            label="Ek Bağlantısını Kopyala"
+                            onClick={() => {
+                              void navigator.clipboard
+                                .writeText(message.attachments![0]!.url)
+                                .catch(() => undefined);
+                              closeAllMenus();
+                            }}
+                          />
+                        )}
+                        {message.poll && (
+                          <MenuRow
+                            icon="poll"
+                            label="Anket Özetini Kopyala"
+                            onClick={() => {
+                              const poll = message.poll!;
+                              const text = [
+                                poll.question,
+                                ...poll.options.map(
+                                  (o) => `• ${o.text}: ${o.voteCount}`,
+                                ),
+                              ].join('\n');
+                              void navigator.clipboard.writeText(text).catch(() => undefined);
+                              closeAllMenus();
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <MenuRow
                   icon="mark_chat_unread"
                   label="Okunmadı Olarak İşaretle"
                   onClick={() => {
-                    setMenuOpen(false);
+                    closeAllMenus();
                     actions.onMarkUnread?.(message);
                   }}
                 />
@@ -558,23 +663,61 @@ export function MessageItem({
                   onClick={() => void copyLink()}
                 />
                 {!isHeading && (
-                  <MenuRow
-                    icon="info"
-                    label="Etkileşim Bilgilerini Görüntüle"
-                    chevron
-                    onClick={() => {
-                      const lines = [
-                        `Mesaj: ${message.id}`,
-                        `Yazar: ${author.displayName} (${author.id})`,
-                        `Tepki: ${(message.reactions ?? []).map((r) => `${r.emoji} ${r.count}`).join(', ') || 'yok'}`,
-                        `Zaman: ${message.createdAt}`,
-                      ];
-                      void navigator.clipboard.writeText(lines.join('\n')).catch(() => undefined);
-                      setMenuOpen(false);
-                      setLinkCopied(true);
-                      window.setTimeout(() => setLinkCopied(false), 1500);
-                    }}
-                  />
+                  <div className="relative">
+                    <MenuRow
+                      icon="info"
+                      label="Etkileşim Bilgilerini Görüntüle"
+                      chevron
+                      onClick={() =>
+                        setSubmenu((s) => (s === 'interaction' ? null : 'interaction'))
+                      }
+                    />
+                    {submenu === 'interaction' && (
+                      <div className="absolute right-full top-0 mr-1 w-56 p-3 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[70] space-y-2">
+                        <p className="font-label-sm text-outline uppercase tracking-wide">
+                          Etkileşim
+                        </p>
+                        <p className="font-body-sm text-on-surface">
+                          Yazar: {author.displayName}
+                        </p>
+                        <p className="font-body-sm text-on-surface-variant break-all">
+                          ID: {message.id}
+                        </p>
+                        <p className="font-body-sm text-on-surface-variant">
+                          {formatTimestamp(message.createdAt, hour24, locale)}
+                        </p>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {(message.reactions ?? []).length === 0 ? (
+                            <span className="font-body-sm text-outline">Tepki yok</span>
+                          ) : (
+                            (message.reactions ?? []).map((r) => (
+                              <span
+                                key={r.emoji}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container-highest font-body-sm"
+                              >
+                                {r.emoji} {r.count}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="w-full mt-1 h-8 rounded-lg bg-surface-container-highest font-label-sm hover:bg-surface-bright"
+                          onClick={() => {
+                            const lines = [
+                              `Mesaj: ${message.id}`,
+                              `Yazar: ${author.displayName} (${author.id})`,
+                              `Tepki: ${(message.reactions ?? []).map((r) => `${r.emoji} ${r.count}`).join(', ') || 'yok'}`,
+                              `Zaman: ${message.createdAt}`,
+                            ];
+                            void navigator.clipboard.writeText(lines.join('\n')).catch(() => undefined);
+                          }}
+                        >
+                          Bilgiyi Kopyala
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {(canEdit || canDelete || !isHeading) && <MenuDivider />}
                 {canEdit && (
@@ -582,7 +725,7 @@ export function MessageItem({
                     icon="edit"
                     label="Düzenle"
                     onClick={() => {
-                      setMenuOpen(false);
+                      closeAllMenus();
                       actions.onEdit?.(message);
                     }}
                   />
@@ -593,7 +736,7 @@ export function MessageItem({
                     label="Mesajı Sil"
                     danger
                     onClick={() => {
-                      setMenuOpen(false);
+                      closeAllMenus();
                       actions.onDelete?.(message);
                     }}
                   />
@@ -601,11 +744,19 @@ export function MessageItem({
                 {!isHeading && !isMine && (
                   <MenuRow
                     icon="flag"
-                    label="Mesaj Bildir"
+                    label={reportDone ? 'Bildirildi' : 'Mesaj Bildir'}
                     danger
                     onClick={() => {
-                      setMenuOpen(false);
-                      actions.onHide?.(message, true);
+                      if (actions.onReport) {
+                        actions.onReport(message);
+                      } else {
+                        actions.onHide?.(message, true);
+                      }
+                      setReportDone(true);
+                      window.setTimeout(() => {
+                        setReportDone(false);
+                        closeAllMenus();
+                      }, 800);
                     }}
                   />
                 )}
@@ -615,7 +766,7 @@ export function MessageItem({
                       icon="visibility_off"
                       label="Gizle"
                       onClick={() => {
-                        setMenuOpen(false);
+                        closeAllMenus();
                         actions.onHide?.(message, false);
                       }}
                     />
@@ -625,7 +776,7 @@ export function MessageItem({
                         label="Kullanıcıyı Engelle"
                         danger
                         onClick={() => {
-                          setMenuOpen(false);
+                          closeAllMenus();
                           actions.onBlockAuthor?.(message);
                         }}
                       />
@@ -635,10 +786,12 @@ export function MessageItem({
                 <MenuDivider />
                 <MenuRow
                   icon="tag"
-                  label="Mesaj ID’sini Kopyala"
+                  label={idCopied ? 'Kopyalandı!' : 'Mesaj ID’sini Kopyala'}
                   onClick={() => {
-                    void navigator.clipboard.writeText(message.id).catch(() => undefined);
-                    setMenuOpen(false);
+                    void navigator.clipboard.writeText(message.id).then(() => {
+                      setIdCopied(true);
+                      window.setTimeout(() => setIdCopied(false), 1200);
+                    }).catch(() => undefined);
                   }}
                 />
                 {actions?.developerMode && (
@@ -647,10 +800,33 @@ export function MessageItem({
                     label="Kullanıcı ID’sini Kopyala"
                     onClick={() => {
                       void navigator.clipboard.writeText(author.id).catch(() => undefined);
-                      setMenuOpen(false);
+                      closeAllMenus();
                     }}
                   />
                 )}
+              </div>
+            )}
+            {reactPickerOpen && !menuOpen && (
+              <div
+                ref={popoverPanelRef}
+                className={cn(
+                  'absolute right-0 p-2 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[60] flex flex-wrap gap-1 w-52',
+                  popoverPosClass,
+                )}
+              >
+                {REACT_PICKER_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="h-8 w-8 rounded-md hover:bg-surface-bright text-lg"
+                    onClick={() => {
+                      actions.onReact?.(message, emoji);
+                      closeAllMenus();
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </div>
             )}
           </div>

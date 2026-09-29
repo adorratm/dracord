@@ -21,6 +21,7 @@ import { GuildMemberRole } from '@/database/entities/guild-member-role.entity';
 import { RolePermission } from '@/database/entities/role-permission.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
+import { BotService } from '@/bot/bot.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
 
 export const PERM_MANAGE_GUILD = GuildPermissions.MANAGE_GUILD;
@@ -33,6 +34,7 @@ export class GuildsService {
   constructor(
     private readonly em: EntityManager,
     private readonly indexer: SearchIndexerService,
+    private readonly bot: BotService,
   ) {}
 
   async listForUser(userId: string): Promise<GuildSummary[]> {
@@ -98,6 +100,7 @@ export class GuildsService {
       GuildMember,
       this.em.create(GuildMember, { guildId: guild.id, userId }),
     );
+    await this.bot.ensureBotInGuild(guild.id);
 
     const textCat = await this.em.save(
       Category,

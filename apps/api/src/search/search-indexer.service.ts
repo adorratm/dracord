@@ -34,8 +34,12 @@ export class SearchIndexerService implements OnModuleInit {
     try {
       const count = await this.es.messageIndexCount();
       const dbCount = await this.em.count(Message, { where: { deletedAt: IsNull() } });
-      if (count === 0 && dbCount > 0) {
-        this.logger.log(`ES mesaj indeksi boş (${dbCount} DB mesajı) — reindex başlıyor`);
+      // ES boşsa veya DB'de daha fazla mesaj varsa (ör. ES downtime sırasında kaçanlar) senkronize et
+      if (count < 0) return;
+      if (dbCount > count) {
+        this.logger.log(
+          `ES mesaj indeksi geride (ES=${count}, DB=${dbCount}) — reindex başlıyor`,
+        );
         const result = await this.reindexAll();
         this.logger.log(`Reindex tamam: ${JSON.stringify(result)}`);
       }
@@ -47,6 +51,7 @@ export class SearchIndexerService implements OnModuleInit {
   async indexMessage(
     message: MessageDto,
     meta?: { guildId: string | null; dmChannelId: string | null },
+    opts?: { refresh?: boolean | 'wait_for' },
   ) {
     if (!this.es.client || !this.es.isReady()) return;
     let guildId = meta?.guildId ?? null;
@@ -70,7 +75,7 @@ export class SearchIndexerService implements OnModuleInit {
           attachmentNames: (message.attachments ?? []).map((a) => a.filename).join(' '),
           createdAt: message.createdAt,
         },
-        refresh: 'wait_for',
+        refresh: opts?.refresh ?? 'wait_for',
       });
     } catch (err) {
       this.logger.warn(`Mesaj index hatası ${message.id}: ${(err as Error).message}`);
@@ -187,21 +192,25 @@ export class SearchIndexerService implements OnModuleInit {
       take: 50_000,
     });
     for (const m of messages) {
-      await this.indexMessage({
-        id: m.id,
-        channelId: m.channelId,
-        author: {
-          id: m.author.id,
-          username: m.author.username,
-          displayName: m.author.displayName,
-          avatarUrl: m.author.avatarUrl,
-          status: m.author.status as never,
+      await this.indexMessage(
+        {
+          id: m.id,
+          channelId: m.channelId,
+          author: {
+            id: m.author.id,
+            username: m.author.username,
+            displayName: m.author.displayName,
+            avatarUrl: m.author.avatarUrl,
+            status: m.author.status as never,
+          },
+          content: m.content,
+          attachments: m.attachments ?? undefined,
+          createdAt: m.createdAt.toISOString(),
+          updatedAt: m.updatedAt?.toISOString() ?? null,
         },
-        content: m.content,
-        attachments: m.attachments ?? undefined,
-        createdAt: m.createdAt.toISOString(),
-        updatedAt: m.updatedAt?.toISOString() ?? null,
-      });
+        undefined,
+        { refresh: false },
+      );
     }
 
     await this.es.client.indices.refresh({

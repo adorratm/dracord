@@ -74,6 +74,10 @@ export class User extends CuidEntity {
   @Column({ type: 'timestamptz', nullable: true })
   disabledAt!: Date | null;
 
+  /** Sistem botu (Dracord-Bot vb.) */
+  @Column({ type: 'boolean', default: false })
+  isBot!: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

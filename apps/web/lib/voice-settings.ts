@@ -3,6 +3,8 @@ export interface VoiceAudioSettings {
   inputDeviceId: string;
   /** Boş = sistem varsayılanı */
   outputDeviceId: string;
+  /** Boş = sistem varsayılanı */
+  videoDeviceId: string;
   /** 0–2 (0%–200%), varsayılan 1 */
   micVolume: number;
   /** 0–2 (0%–200%), varsayılan 1 */
@@ -12,6 +14,7 @@ export interface VoiceAudioSettings {
 export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
   inputDeviceId: '',
   outputDeviceId: '',
+  videoDeviceId: '',
   micVolume: 1,
   outputVolume: 1,
 };
@@ -32,6 +35,7 @@ export function loadVoiceAudioSettings(): VoiceAudioSettings {
     return {
       inputDeviceId: typeof parsed.inputDeviceId === 'string' ? parsed.inputDeviceId : '',
       outputDeviceId: typeof parsed.outputDeviceId === 'string' ? parsed.outputDeviceId : '',
+      videoDeviceId: typeof parsed.videoDeviceId === 'string' ? parsed.videoDeviceId : '',
       micVolume: clampVolume(parsed.micVolume ?? 1),
       outputVolume: clampVolume(parsed.outputVolume ?? 1),
     };

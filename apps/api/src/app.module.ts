@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from '@/admin/admin.module';
 import { AuthModule } from '@/auth/auth.module';
+import { BotModule } from '@/bot/bot.module';
 import { ChannelsModule } from '@/channels/channels.module';
 import { DatabaseModule } from '@/database/database.module';
 import { ChatGatewayModule } from '@/gateway/chat-gateway.module';
 import { GuildsModule } from '@/guilds/guilds.module';
 import { MessagesModule } from '@/messages/messages.module';
+import { MusicModule } from '@/music/music.module';
 import { PresenceModule } from '@/presence/presence.module';
 import { QueuesModule } from '@/queues/queues.module';
 import { RolesModule } from '@/roles/roles.module';
@@ -24,11 +26,13 @@ import { NotificationsModule } from '@/notifications/notifications.module';
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     QueuesModule,
+    BotModule,
     AuthModule,
     UsersModule,
     GuildsModule,
     ChannelsModule,
     MessagesModule,
+    MusicModule,
     RolesModule,
     PresenceModule,
     VoiceModule,

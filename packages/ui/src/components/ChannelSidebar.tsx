@@ -16,6 +16,7 @@ export interface SidebarVoiceMember {
   muted?: boolean;
   deafened?: boolean;
   speaking?: boolean;
+  isBot?: boolean;
 }
 
 export interface SidebarCategory {
@@ -455,6 +456,11 @@ function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
               >
                 {m.displayName}
               </span>
+              {m.isBot && (
+                <span className="shrink-0 px-1 py-px rounded text-[8px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
+                  BOT
+                </span>
+              )}
               {m.muted && (
                 <span className="material-symbols-outlined text-[14px] text-error">mic_off</span>
               )}

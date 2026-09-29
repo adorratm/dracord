@@ -509,6 +509,31 @@ export class DracordClient {
     });
   }
 
+  async getMusicState(
+    guildId: string,
+    voiceChannelId: string,
+  ): Promise<import('@dracord/types').MusicQueueState | { empty: true }> {
+    const q = new URLSearchParams({ guildId, voiceChannelId });
+    return this.request(`/music/state?${q.toString()}`);
+  }
+
+  async controlMusic(body: {
+    guildId: string;
+    voiceChannelId: string;
+    textChannelId?: string;
+    action: 'pause' | 'resume' | 'skip' | 'stop' | 'volume';
+    volume?: number;
+  }): Promise<{
+    ok: boolean;
+    state?: import('@dracord/types').MusicQueueState | null;
+    reason?: string;
+  }> {
+    return this.request('/music/control', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
   async presignUpload(input: {
     filename: string;
     contentType: string;

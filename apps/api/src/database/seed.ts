@@ -359,6 +359,51 @@ async function main() {
   }
 
   console.log('Seed completed: Dracula Realm guild with channels and sample messages.');
+
+  // Dracord-Bot — tüm sunuculara
+  const {
+    DRACORD_BOT_USER_ID,
+    DRACORD_BOT_EMAIL,
+    DRACORD_BOT_USERNAME,
+    DRACORD_BOT_DISPLAY_NAME,
+    DRACORD_BOT_AVATAR_PATH,
+  } = await import('../bot/bot.constants');
+  const frontend = (process.env.FRONTEND_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+  const botAvatarUrl = `${frontend}${DRACORD_BOT_AVATAR_PATH}`;
+  let bot = await em.findOne(User, { where: { id: DRACORD_BOT_USER_ID } });
+  if (!bot) {
+    bot = await em.save(
+      User,
+      em.create(User, {
+        id: DRACORD_BOT_USER_ID,
+        email: DRACORD_BOT_EMAIL,
+        username: DRACORD_BOT_USERNAME,
+        displayName: DRACORD_BOT_DISPLAY_NAME,
+        passwordHash: null,
+        avatarUrl: botAvatarUrl,
+        bannerColor: '#bd93f9',
+        status: UserStatus.ONLINE,
+        usernameConfirmed: true,
+        isBot: true,
+      }),
+    );
+  } else {
+    bot.isBot = true;
+    bot.displayName = DRACORD_BOT_DISPLAY_NAME;
+    bot.avatarUrl = botAvatarUrl;
+    await em.save(User, bot);
+  }
+  const botMem = await em.findOne(GuildMember, {
+    where: { guildId: guild.id, userId: bot.id },
+  });
+  if (!botMem) {
+    await em.save(
+      GuildMember,
+      em.create(GuildMember, { guildId: guild.id, userId: bot.id }),
+    );
+  }
+  console.log('Dracord-Bot seeded into guild.');
+
   await ds.destroy();
 }
 

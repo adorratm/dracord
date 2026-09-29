@@ -24,6 +24,8 @@ export interface PublicUser {
   socialLinks?: SocialLinks | null;
   /** true ise link/medya önizlemeleri sansürlü (bulanık / gizli) gösterilir */
   censorLinkPreviews?: boolean;
+  /** Sistem / müzik botu */
+  isBot?: boolean;
 }
 
 export interface VoiceMemberSummary {
@@ -32,6 +34,49 @@ export interface VoiceMemberSummary {
   avatarUrl: string | null;
   muted?: boolean;
   deafened?: boolean;
+  isBot?: boolean;
+}
+
+/** Müzik kuyruk parçası */
+export const DRACORD_BOT_USER_ID = 'system-dracord-bot';
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  url: string;
+  /** yt-dlp için nihai YouTube URL veya ytsearch ifadesi */
+  source: string;
+  requestedById: string;
+  requestedByName: string;
+  durationSec?: number | null;
+  thumbnailUrl?: string | null;
+}
+
+export interface MusicQueueState {
+  guildId: string;
+  voiceChannelId: string;
+  textChannelId: string;
+  nowPlaying: MusicTrack | null;
+  queue: MusicTrack[];
+  paused: boolean;
+  volume: number;
+}
+
+export type MusicJobType =
+  | 'ensure_session'
+  | 'play_next'
+  | 'skip'
+  | 'pause'
+  | 'resume'
+  | 'stop'
+  | 'set_volume';
+
+export interface MusicJobPayload {
+  type: MusicJobType;
+  guildId: string;
+  voiceChannelId: string;
+  textChannelId?: string;
+  volume?: number;
 }
 
 export interface GuildSummary {

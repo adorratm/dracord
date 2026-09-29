@@ -38,6 +38,26 @@ export class SearchService {
       return { query, hits: [] };
     }
 
+    try {
+      return await this.runSearch(userId, query, opts);
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) throw err;
+      throw new ServiceUnavailableException(
+        `Arama başarısız: ${(err as Error).message?.slice(0, 120) || 'bilinmeyen hata'}`,
+      );
+    }
+  }
+
+  private async runSearch(
+    userId: string,
+    query: string,
+    opts: {
+      types?: string[];
+      guildId?: string;
+      channelId?: string;
+      limit?: number;
+    },
+  ): Promise<SearchResponse> {
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
     const types = new Set(
       (opts.types?.length ? opts.types : ['guilds', 'channels', 'users', 'messages']).map((t) =>

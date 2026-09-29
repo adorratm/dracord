@@ -10,7 +10,10 @@ export interface VoiceParticipant {
   avatarUrl?: string | null;
   speaking?: boolean;
   muted?: boolean;
+  /** Ekran paylaşımı açık */
   video?: boolean;
+  /** Kamera (webcam) açık */
+  camera?: boolean;
 }
 
 export interface VoiceStageScreenShare {
@@ -22,15 +25,23 @@ export interface VoiceStageScreenShare {
 export interface VoiceStageProps {
   channelName: string;
   participants: VoiceParticipant[];
+  /** Yerel katılımcı id — ses kaydırıcısı gösterilmez */
+  localParticipantId?: string | null;
+  /** 0–100 kişi başı ses */
+  participantVolumes?: Record<string, number>;
+  onParticipantVolumeChange?: (participantId: string, volume: number) => void;
+  onCameraVideoRef?: (participantId: string, el: HTMLVideoElement | null) => void;
   rtcConnected?: boolean;
   muted?: boolean;
   deafened?: boolean;
+  cameraEnabled?: boolean;
   screenSharing?: boolean;
   screenShare?: VoiceStageScreenShare | null;
   participantsDrawerOpen?: boolean;
   chatDrawerOpen?: boolean;
   onToggleMute?: () => void;
   onToggleDeafen?: () => void;
+  onToggleCamera?: () => void;
   onToggleScreenShare?: () => void;
   onLeave?: () => void;
   onToggleParticipants?: () => void;
@@ -44,15 +55,21 @@ export interface VoiceStageProps {
 export function VoiceStage({
   channelName,
   participants,
+  localParticipantId,
+  participantVolumes,
+  onParticipantVolumeChange,
+  onCameraVideoRef,
   rtcConnected = true,
   muted,
   deafened,
+  cameraEnabled,
   screenSharing,
   screenShare,
   participantsDrawerOpen,
   chatDrawerOpen,
   onToggleMute,
   onToggleDeafen,
+  onToggleCamera,
   onToggleScreenShare,
   onLeave,
   onToggleParticipants,
@@ -132,37 +149,107 @@ export function VoiceStage({
             className={cn(
               'grid gap-space-md content-start overflow-y-auto',
               screenShare
-                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 shrink-0 max-h-36'
+                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 shrink-0 max-h-40'
                 : 'flex-1 grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
             )}
           >
-            {participants.map((p) => (
-              <div
-                key={p.id}
-                className={cn(
-                  'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-md relative transition-shadow duration-200',
-                  screenShare ? 'aspect-auto py-space-sm' : 'aspect-video',
-                  p.speaking && 'ring-2 ring-primary-container',
-                )}
-              >
-                <Avatar displayName={p.displayName} imageUrl={p.avatarUrl} size="lg" statusRing={false} />
-                <span className="font-body-sm text-body-sm text-on-surface truncate max-w-full">
-                  {p.displayName}
-                </span>
-                <div className="absolute bottom-space-sm right-space-sm flex gap-1">
-                  {p.muted && (
-                    <span className="material-symbols-outlined text-[16px] text-error bg-surface-container-high rounded-full p-0.5">
-                      mic_off
-                    </span>
+            {participants.map((p) => {
+              const isLocal = Boolean(localParticipantId && p.id === localParticipantId);
+              const vol = participantVolumes?.[p.id] ?? 100;
+              const showVolume = !isLocal && Boolean(onParticipantVolumeChange);
+
+              return (
+                <div
+                  key={p.id}
+                  className={cn(
+                    'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-md relative overflow-hidden transition-shadow duration-200',
+                    screenShare ? 'aspect-auto py-space-sm min-h-[5.5rem]' : 'aspect-video',
+                    p.speaking && 'ring-2 ring-primary-container',
                   )}
-                  {p.video && (
-                    <span className="material-symbols-outlined text-[16px] text-primary-container">
-                      present_to_all
-                    </span>
+                >
+                  {p.camera ? (
+                    <video
+                      ref={(el) => onCameraVideoRef?.(p.id, el)}
+                      className="absolute inset-0 w-full h-full object-cover bg-black"
+                      playsInline
+                      autoPlay
+                      muted
+                    />
+                  ) : (
+                    <Avatar displayName={p.displayName} imageUrl={p.avatarUrl} size="lg" statusRing={false} />
                   )}
+                  <div
+                    className={cn(
+                      'absolute left-space-sm bottom-space-sm right-space-sm flex flex-col gap-1 min-w-0 z-[1]',
+                      p.camera && 'rounded-lg bg-black/55 px-space-sm py-1',
+                    )}
+                  >
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span
+                        className={cn(
+                          'font-body-sm text-body-sm truncate flex-1',
+                          p.camera ? 'text-white' : 'text-on-surface',
+                        )}
+                      >
+                        {p.displayName}
+                        {isLocal ? ' (sen)' : ''}
+                      </span>
+                      {p.muted && (
+                        <span className="material-symbols-outlined text-[16px] text-error shrink-0">
+                          mic_off
+                        </span>
+                      )}
+                      {p.video && (
+                        <span className="material-symbols-outlined text-[16px] text-primary-container shrink-0">
+                          present_to_all
+                        </span>
+                      )}
+                      {p.camera && (
+                        <span
+                          className={cn(
+                            'material-symbols-outlined text-[16px] shrink-0',
+                            p.camera ? 'text-white/80' : 'text-primary-container',
+                          )}
+                        >
+                          videocam
+                        </span>
+                      )}
+                    </div>
+                    {showVolume && (
+                      <label className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={cn(
+                            'material-symbols-outlined text-[14px] shrink-0',
+                            p.camera ? 'text-white/70' : 'text-outline',
+                          )}
+                        >
+                          {vol === 0 ? 'volume_off' : 'volume_up'}
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={vol}
+                          aria-label={`${p.displayName} ses seviyesi`}
+                          className="flex-1 min-w-0 h-1 accent-primary-container"
+                          onChange={(e) =>
+                            onParticipantVolumeChange?.(p.id, Number(e.target.value))
+                          }
+                        />
+                        <span
+                          className={cn(
+                            'font-label-sm tabular-nums w-7 text-right shrink-0',
+                            p.camera ? 'text-white/70' : 'text-outline',
+                          )}
+                        >
+                          {vol}
+                        </span>
+                      </label>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {stageOverlay}
         </div>
@@ -220,6 +307,21 @@ export function VoiceStage({
             {deafened && (
               <span className="absolute left-1/2 top-1/2 block w-[28px] h-[2.5px] -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] rounded-full bg-current" />
             )}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onToggleCamera}
+          className={cn(
+            'w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-200',
+            cameraEnabled
+              ? 'bg-primary-container text-on-primary-container'
+              : 'bg-surface-container-highest text-on-surface hover:bg-surface-bright',
+          )}
+          aria-label={cameraEnabled ? 'Kamerayı kapat' : 'Kamerayı aç'}
+        >
+          <span className="material-symbols-outlined text-[24px]">
+            {cameraEnabled ? 'videocam' : 'videocam_off'}
           </span>
         </button>
         <button

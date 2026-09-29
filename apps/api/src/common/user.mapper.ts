@@ -21,5 +21,6 @@ export function toPublicUser(user: User): PublicUser {
     accentColor: user.accentColor ?? user.bannerColor,
     socialLinks: user.socialLinks as PublicUser['socialLinks'],
     censorLinkPreviews: Boolean(user.censorLinkPreviews),
+    isBot: Boolean(user.isBot),
   };
 }

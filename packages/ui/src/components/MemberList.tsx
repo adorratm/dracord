@@ -11,6 +11,7 @@ export interface MemberListMember {
   status: PresenceStatus;
   roleColor?: string;
   subtitle?: string;
+  isBot?: boolean;
   onClick?: () => void;
 }
 
@@ -54,11 +55,18 @@ export function MemberList({ groups, className }: MemberListProps) {
                     status={member.status}
                   />
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span
-                      className="font-body-sm text-body-sm truncate"
-                      style={member.roleColor ? { color: member.roleColor } : undefined}
-                    >
-                      {member.displayName}
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className="font-body-sm text-body-sm truncate"
+                        style={member.roleColor ? { color: member.roleColor } : undefined}
+                      >
+                        {member.displayName}
+                      </span>
+                      {member.isBot && (
+                        <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
+                          BOT
+                        </span>
+                      )}
                     </span>
                     {member.subtitle && (
                       <span className="font-label-sm text-label-sm text-outline truncate">{member.subtitle}</span>

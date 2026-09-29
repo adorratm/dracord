@@ -214,6 +214,9 @@ function DmChatInner({
               onReact: (m, emoji) => void reactToMessage(m.id, emoji),
               onHide: (m, permanent) => void hideMessage(m.id, permanent),
               onUnhide: (m) => void unhideMessage(m.id),
+              onReport: (m) => {
+                void hideMessage(m.id, true);
+              },
               onBlockAuthor: (m) => {
                 void client.blockUser(m.author.id).then(() => hideMessage(m.id, true));
               },

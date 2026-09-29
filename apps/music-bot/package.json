@@ -1,0 +1,24 @@
+{
+  "name": "@dracord/music-bot",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "start:prod": "node dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "lint": "echo ok"
+  },
+  "dependencies": {
+    "@dracord/types": "workspace:*",
+    "@livekit/rtc-node": "^0.13.18",
+    "bullmq": "^6.3.9",
+    "dotenv": "^18.0.4",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3"
+  }
+}

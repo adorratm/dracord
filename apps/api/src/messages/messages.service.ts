@@ -34,6 +34,8 @@ import { GuildsService } from '@/guilds/guilds.service';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationsRealtimeService } from '@/notifications/notifications-realtime.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
+import { MusicCommandsService } from '@/music/music-commands.service';
+import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { LinkPreviewService } from './link-preview.service';
 import { MessagesRealtimeService } from './messages-realtime.service';
 
@@ -55,6 +57,7 @@ export class MessagesService {
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly linkPreview: LinkPreviewService,
     private readonly realtime: MessagesRealtimeService,
+    private readonly musicCommands: MusicCommandsService,
   ) {}
 
   async listChannelMessages(
@@ -342,6 +345,17 @@ export class MessagesService {
         ? []
         : await this.createMessageNotifications(dto, channelRow, userId);
     this.realtime.emitCreate(channelId, dto);
+
+    if (
+      userId !== DRACORD_BOT_USER_ID &&
+      msgType === 'default' &&
+      trimmed.startsWith('/') &&
+      !attachments?.length &&
+      !poll
+    ) {
+      void this.musicCommands.tryHandle(userId, channelId, trimmed).catch(() => undefined);
+    }
+
     return { message: dto, notifications };
   }
 
@@ -544,6 +558,7 @@ export class MessagesService {
     await this.em.save(Message, message);
     const reactions = await this.em.find(Reaction, { where: { messageId } });
     const dto = this.toDto(message, { viewerId: userId, reactions });
+    void this.indexer.indexMessage(dto).catch(() => undefined);
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
   }
@@ -573,6 +588,7 @@ export class MessagesService {
     }
     message.deletedAt = new Date();
     await this.em.save(Message, message);
+    void this.indexer.deleteMessage(message.id).catch(() => undefined);
     this.realtime.emitDelete(message.channelId, message.id);
     return { id: message.id, channelId: message.channelId };
   }

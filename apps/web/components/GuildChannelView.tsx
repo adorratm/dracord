@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChannelSummary, VoiceMemberSummary, VoiceStatePayload } from '@dracord/types';
+import type { ChannelSummary, PublicUser, VoiceMemberSummary, VoiceStatePayload } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import {
   ChannelSidebar,
@@ -24,6 +24,7 @@ import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { useUserPreferences } from '@/lib/user-preferences';
+import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -133,9 +134,7 @@ export function GuildChannelView({
   const [busy, setBusy] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
-  const [guildMembers, setGuildMembers] = useState<
-    Array<{ id: string; username: string; displayName: string; avatarUrl?: string | null }>
-  >([]);
+  const [guildMembers, setGuildMembers] = useState<PublicUser[]>([]);
 
   const mentionNames = useMemo(() => {
     if (!user) return [] as string[];
@@ -387,6 +386,7 @@ export function GuildChannelView({
           displayName: p.displayName,
           avatarUrl: p.avatarUrl,
           status: 'ONLINE' as const,
+          isBot: Boolean((p as { isBot?: boolean }).isBot),
         }))
       : [];
     return [
@@ -403,12 +403,24 @@ export function GuildChannelView({
                     displayName: user.displayName,
                     avatarUrl: user.avatarUrl,
                     status: user.status,
+                    isBot: Boolean(user.isBot),
                   },
                 ]
               : [],
       },
+      {
+        id: 'members',
+        label: 'Üyeler',
+        members: guildMembers.map((m) => ({
+          id: m.id,
+          displayName: m.displayName,
+          avatarUrl: m.avatarUrl,
+          status: m.status,
+          isBot: Boolean(m.isBot),
+        })),
+      },
     ];
-  }, [user, inVoice, voice.participants]);
+  }, [user, inVoice, voice.participants, guildMembers]);
 
   const saveChannel = useCallback(async () => {
     if (!channelModal) return;
@@ -644,12 +656,18 @@ export function GuildChannelView({
       </button>
 
       {showingVoiceStage ? (
-        <VoiceStage
+        <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+          <VoiceStage
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
           participants={voice.participants}
+          localParticipantId={user?.id}
+          participantVolumes={voice.participantVolumes}
+          onParticipantVolumeChange={voice.setParticipantVolume}
+          onCameraVideoRef={voice.setCameraVideoElement}
           rtcConnected={voice.connected}
           muted={voice.muted}
           deafened={voice.deafened}
+          cameraEnabled={voice.cameraEnabled}
           screenSharing={voice.screenSharing}
           screenShare={
             voice.activeScreenShare
@@ -664,6 +682,7 @@ export function GuildChannelView({
           chatDrawerOpen={chatOpen}
           onToggleMute={() => void voice.toggleMute()}
           onToggleDeafen={() => void voice.toggleDeafen()}
+          onToggleCamera={() => void voice.toggleCamera()}
           onToggleScreenShare={() => void voice.toggleScreenShare()}
           onLeave={() => {
             leaveVoiceAndMaybeNavigate();
@@ -679,19 +698,89 @@ export function GuildChannelView({
           }
           participantsPanel={
             participantsOpen ? (
-              <MemberList groups={memberGroups} className="w-full" />
+              <div className="flex flex-col h-full min-h-0">
+                <div className="px-space-md py-space-sm border-b border-surface-container-high">
+                  <p className="font-label-sm text-outline uppercase tracking-wide">Sestekiler</p>
+                </div>
+                <ul className="flex-1 overflow-y-auto p-space-sm space-y-space-sm">
+                  {voice.participants.map((p) => {
+                    const isLocal = p.id === user?.id;
+                    const vol = voice.participantVolumes[p.id] ?? 100;
+                    return (
+                      <li
+                        key={p.id}
+                        className="rounded-lg bg-surface-container px-space-sm py-space-sm"
+                      >
+                        <div className="flex items-center gap-space-sm min-w-0">
+                          <span className="font-body-sm text-on-surface truncate flex-1">
+                            {p.displayName}
+                            {isLocal ? ' (sen)' : ''}
+                          </span>
+                          {p.muted && (
+                            <span className="material-symbols-outlined text-[16px] text-error">
+                              mic_off
+                            </span>
+                          )}
+                          {p.camera && (
+                            <span className="material-symbols-outlined text-[16px] text-primary-container">
+                              videocam
+                            </span>
+                          )}
+                        </div>
+                        {!isLocal && (
+                          <label className="mt-space-xs flex items-center gap-space-xs">
+                            <span className="material-symbols-outlined text-[16px] text-outline">
+                              {vol === 0 ? 'volume_off' : 'volume_up'}
+                            </span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={vol}
+                              className="flex-1 accent-primary-container"
+                              aria-label={`${p.displayName} ses`}
+                              onChange={(e) =>
+                                voice.setParticipantVolume(p.id, Number(e.target.value))
+                              }
+                            />
+                            <span className="font-label-sm text-outline w-7 text-right tabular-nums">
+                              {vol}
+                            </span>
+                          </label>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="border-t border-surface-container-high min-h-0 max-h-[40%] overflow-y-auto">
+                  <MemberList groups={memberGroups} className="w-full" />
+                </div>
+              </div>
             ) : undefined
           }
           chatPanel={
             chatOpen ? (
-              <div className="flex flex-col h-full min-h-0 px-space-md py-space-sm">
-                <p className="font-body-sm text-on-surface-variant">
-                  Metin sohbeti için bir metin kanalına geçebilirsin — ses bağlantın kopmaz.
-                </p>
+              <div className="flex flex-col h-full min-h-0">
+                <div className="flex-1 min-h-0 px-space-md py-space-sm">
+                  <p className="font-body-sm text-on-surface-variant">
+                    Metin sohbeti için bir metin kanalına geçebilirsin — ses bağlantın kopmaz.
+                  </p>
+                </div>
+                <MusicPlayerBar
+                  guildId={guildId}
+                  textChannelId={channels.find((c) => c.type === 'TEXT')?.id ?? null}
+                  variant="chat"
+                />
               </div>
             ) : undefined
           }
         />
+          <MusicPlayerBar
+            guildId={guildId}
+            textChannelId={channels.find((c) => c.type === 'TEXT')?.id ?? null}
+            variant="stage"
+          />
+        </div>
       ) : channelPending ? (
         <div className="flex flex-1 min-w-0 min-h-0 items-center justify-center bg-surface text-outline font-body-md">
           Kanal yükleniyor…
@@ -836,6 +925,9 @@ export function GuildChannelView({
                 onReact: (m, emoji) => void reactToMessage(m.id, emoji),
                 onHide: (m, permanent) => void hideMessage(m.id, permanent),
                 onUnhide: (m) => void unhideMessage(m.id),
+                onReport: (m) => {
+                  void hideMessage(m.id, true);
+                },
                 onBlockAuthor: (m) => {
                   void client.blockUser(m.author.id).then(() => hideMessage(m.id, true));
                 },
@@ -889,7 +981,14 @@ export function GuildChannelView({
               }
             />
           )}
-          <div className="relative">
+          <div className="relative shrink-0">
+            {inVoice && (
+              <MusicPlayerBar
+                guildId={guildId}
+                textChannelId={isVoiceView ? channels.find((c) => c.type === 'TEXT')?.id : channelId}
+                variant="chat"
+              />
+            )}
             <ChatInput key={channelId} {...chatInputProps} />
           </div>
         </div>

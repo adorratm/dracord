@@ -65,6 +65,7 @@ export class VoicePresenceService implements OnModuleDestroy {
       avatarUrl: user.avatarUrl,
       muted: flags?.muted ?? false,
       deafened: flags?.deafened ?? false,
+      isBot: Boolean(user.isBot),
     };
 
     // Aynı kullanıcı başka kanallardaysa çıkar
@@ -198,6 +199,13 @@ export class VoicePresenceService implements OnModuleDestroy {
       if (members.length) out[channelId] = members;
     }
     return out;
+  }
+
+  /** Kullanıcının bulunduğu ses kanal(lar)ı */
+  async getUserVoiceLocations(
+    userId: string,
+  ): Promise<Array<{ guildId: string; channelId: string }>> {
+    return this.findUserChannels(userId);
   }
 
   private async findUserChannels(

@@ -84,8 +84,9 @@ export default function VoiceSettingsPage() {
       <div>
         <h2 className="font-headline-lg text-headline-lg text-on-surface">Ses ve Görüntü</h2>
         <p className="font-body-md text-body-md text-on-surface-variant mt-space-xs">
-          Mikrofon, kulaklık seviyeleri ve varsayılan ses aygıtlarını buradan yönet.
+          Mikrofon, kulaklık, kamera ve varsayılan aygıtları buradan yönet.
           Ayarlar bu tarayıcıda saklanır; ses kanalındayken anında uygulanır.
+          Her kullanıcının sesini ayrıca ses sahnesindeki kaydırıcıdan ayarlayabilirsin.
         </p>
       </div>
 
@@ -133,6 +134,52 @@ export default function VoiceSettingsPage() {
         {voice.audioInputDevices.length === 0 && voice.audioOutputDevices.length === 0 && (
           <p className="font-body-sm text-outline">
             Aygıt listesi boşsa tarayıcı mikrofon iznini ver; ardından Yenile’ye bas.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-xl bg-surface-container-low p-space-lg space-y-space-lg">
+        <div className="flex items-center justify-between gap-space-md">
+          <h3 className="font-headline-md text-headline-md text-on-surface">Kamera</h3>
+          <button
+            type="button"
+            onClick={() => void voice.refreshAudioDevices()}
+            className="font-label-sm text-primary-container hover:underline"
+          >
+            Yenile
+          </button>
+        </div>
+        <p className="font-body-sm text-on-surface-variant">
+          Varsayılan webcam’i seç. Ses kanalındayken alttaki kamera düğmesiyle açıp kapatabilirsin.
+        </p>
+        <DeviceSelect
+          label="Kamera aygıtı"
+          icon="videocam"
+          value={voice.audioSettings.videoDeviceId}
+          devices={voice.videoInputDevices}
+          onChange={(id) => void voice.setVideoDevice(id)}
+        />
+        {voice.connected ? (
+          <div className="flex items-center justify-between gap-space-md">
+            <span className="font-body-sm text-on-surface">
+              Kamera: {voice.cameraEnabled ? 'Açık' : 'Kapalı'}
+            </span>
+            <button
+              type="button"
+              onClick={() => void voice.toggleCamera()}
+              className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+            >
+              {voice.cameraEnabled ? 'Kamerayı kapat' : 'Kamerayı aç'}
+            </button>
+          </div>
+        ) : (
+          <p className="font-body-sm text-outline">
+            Kamerayı denemek için önce bir ses kanalına katıl.
+          </p>
+        )}
+        {voice.videoInputDevices.length === 0 && (
+          <p className="font-body-sm text-outline">
+            Kamera listesi boşsa tarayıcı kamera iznini ver; ardından Yenile’ye bas.
           </p>
         )}
       </section>

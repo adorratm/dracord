@@ -5,6 +5,7 @@ RUN npm install -g corepack && corepack enable
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY apps/admin/package.json ./apps/admin/
+COPY apps/music-bot/package.json ./apps/music-bot/
 COPY packages/types/package.json ./packages/types/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/config/package.json ./packages/config/
