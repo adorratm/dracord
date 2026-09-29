@@ -7,6 +7,19 @@
 #   - If dracord.com.tr currently points at another site (e.g. TTEN Games), remove
 #     `dracord.com.tr` from that site's server_name list first, then enable this.
 #
+# If domains are SWAPPED (A shows B's content) or one site is 502:
+#   This is almost always host Nginx server_name / default_server / wrong root|proxy —
+#   NOT the Dracord compose stack. Diagnose on the server:
+#     sudo nginx -T 2>/dev/null | grep -E 'server_name|listen|root |proxy_pass|default_server'
+#     ls -la /etc/nginx/sites-enabled/
+#   Fix: each domain must appear in exactly ONE server{} block; remove duplicate
+#   server_name entries; ensure no accidental default_server steals Host headers.
+#   Example recovery checklist:
+#     1) Open each sites-available/*.conf — verify server_name matches the site root/proxy
+#     2) ttengamesstudio.com.tr → TTEN root/proxy; emrekilic.web.tr → portfolio; etc.
+#     3) kiliccoffeeroaster 502 → upstream/container down OR wrong proxy_pass port
+#     4) sudo nginx -t && sudo systemctl reload nginx
+#
 # Public repo: this file has no secrets. TLS certs stay on the server via Certbot.
 
 # Install:

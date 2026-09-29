@@ -56,12 +56,17 @@ docker compose \
   --env-file .env \
   up -d postgres pgbouncer redis elasticsearch livekit minio
 
-bash docker/rolling-deploy.sh api web admin
+if ! bash docker/rolling-deploy.sh api web admin; then
+  echo "==> Rolling deploy failed — attempting stack recover (replicas + edge)"
+  bash docker/recover-stack.sh || true
+  exit 1
+fi
 
 docker image prune -f >/dev/null || true
 
 echo "==> Smoke (local loopback)"
 curl -fsS -o /dev/null -w "web %{http_code}\n" http://127.0.0.1:13000/health || true
 curl -fsS -o /dev/null -w "api %{http_code}\n" http://127.0.0.1:14000/health/ready || true
+curl -fsS -o /dev/null -w "admin %{http_code}\n" http://127.0.0.1:13001/health || true
 
 echo "==> Deploy finished"

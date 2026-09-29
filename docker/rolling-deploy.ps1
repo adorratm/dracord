@@ -29,10 +29,25 @@ function Invoke-Compose([string[]]$ComposeArgs) {
   if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($ComposeArgs -join ' ')" }
 }
 
+function Wait-Healthy([string]$Svc, [int]$Want) {
+  for ($i = 0; $i -lt 90; $i++) {
+    $psOut = & docker compose @composeArgs ps $Svc 2>&1 | Out-String
+    $running = @(& docker compose @composeArgs ps -q $Svc | Where-Object { $_ }).Count
+    $healthy = ([regex]::Matches($psOut, '\(healthy\)')).Count
+    if ($running -ge $Want -and $healthy -ge $Want) { return }
+    Start-Sleep -Seconds 2
+  }
+  Write-Host "!! Timeout waiting for $Svc healthy (want=$Want)"
+  Invoke-Compose @('ps', $Svc)
+  throw "unhealthy: $Svc"
+}
+
 Write-Host "==> Compose: $($composeArgs -join ' ')"
 if (-not $SkipBuild -and $env:DRACORD_SKIP_BUILD -ne '1') {
-  Write-Host "==> Building: $($Services -join ', ')"
-  Invoke-Compose (@('build') + $Services)
+  foreach ($svc in $Services) {
+    Write-Host "==> Building: $svc"
+    Invoke-Compose @('build', $svc)
+  }
 }
 
 foreach ($svc in $Services) {
@@ -54,17 +69,27 @@ foreach ($svc in $Services) {
     & docker stop -t 25 $id | Out-Null
     & docker rm $id | Out-Null
     Invoke-Compose @('up', '-d', '--scale', "$svc=$Replicas", '--no-recreate', $svc)
-
-    for ($i = 0; $i -lt 60; $i++) {
-      $psOut = & docker compose @composeArgs ps $svc 2>&1 | Out-String
-      $running = @(& docker compose @composeArgs ps -q $svc).Count
-      $healthy = ([regex]::Matches($psOut, '\(healthy\)')).Count
-      if ($running -ge $Replicas -and $healthy -ge 1) { break }
-      Start-Sleep -Seconds 2
-    }
+    Wait-Healthy $svc $Replicas
   }
 
   Write-Host "==> $svc roll complete"
+}
+
+if ($useProd -eq '1') {
+  Write-Host '==> Locking replica scales before edge'
+  Invoke-Compose @(
+    'up', '-d',
+    '--scale', "api=$Replicas",
+    '--scale', "web=$Replicas",
+    '--scale', "admin=$Replicas",
+    '--no-recreate',
+    'api', 'web', 'admin'
+  )
+  Wait-Healthy 'api' $Replicas
+  Wait-Healthy 'web' $Replicas
+  Wait-Healthy 'admin' $Replicas
+  Write-Host '==> Starting edge LB (--no-deps)'
+  Invoke-Compose @('up', '-d', '--no-deps', '--force-recreate', 'edge')
 }
 
 if ($env:DRACORD_ROLL_MUSIC_BOT -ne '0') {

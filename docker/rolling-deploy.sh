@@ -33,16 +33,49 @@ REPLICAS="${DRACORD_REPLICAS:-2}"
 SERVICES=("${@:-api web admin}")
 
 echo "==> Compose: ${COMPOSE_FILES[*]}"
+
+# Sequential builds — parallel yarn focus thrashs small VPS disks/network
 if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
-  echo "==> Building: ${SERVICES[*]}"
-  "${COMPOSE[@]}" build "${SERVICES[@]}"
+  for svc in "${SERVICES[@]}"; do
+    echo "==> Building: $svc"
+    "${COMPOSE[@]}" build "$svc"
+  done
 fi
 
-# Drop obsolete 127.0.0.1 port publishes on app services (breaks multi-replica).
-# Recreate at scale=1 first so host ports are released for `edge`.
-if [[ "$USE_PROD" == "1" ]]; then
+wait_healthy() {
+  local svc="$1"
+  local want="$2"
+  local healthy=0 running=0
+  for _ in $(seq 1 90); do
+    healthy="$("${COMPOSE[@]}" ps "$svc" 2>/dev/null | grep -c '(healthy)' || true)"
+    running="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null | wc -l | tr -d ' ')"
+    if [[ "${running:-0}" -ge "$want" && "${healthy:-0}" -ge "$want" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "!! Timeout waiting for $svc (want=$want running=${running:-0} healthy=${healthy:-0})"
+  "${COMPOSE[@]}" ps "$svc" || true
+  return 1
+}
+
+# Only when app containers still publish loopback ports that edge needs.
+release_host_ports_if_needed() {
+  [[ "$USE_PROD" == "1" ]] || return 0
+  local clash=0
+  while read -r line; do
+    if echo "$line" | grep -qE ':(13000|13001|14000)->'; then
+      clash=1
+      break
+    fi
+  done < <(docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -E 'docker-(api|web|admin)-' || true)
+
+  if [[ "$clash" -ne 1 ]]; then
+    echo "==> App services already without conflicting host ports"
+    return 0
+  fi
+
   echo "==> Releasing host ports from api/web/admin (edge will own them)"
-  # Stop anything still binding loopback app ports (old single-replica publish)
   for cname in $("${COMPOSE[@]}" ps -q api web admin 2>/dev/null || true); do
     docker stop -t 15 "$cname" >/dev/null 2>&1 || true
   done
@@ -50,7 +83,7 @@ if [[ "$USE_PROD" == "1" ]]; then
     "${COMPOSE[@]}" up -d --scale "$svc=1" --force-recreate --no-deps "$svc" || \
       "${COMPOSE[@]}" up -d --scale "$svc=1" "$svc" || true
   done
-fi
+}
 
 roll_service() {
   local svc="$1"
@@ -65,30 +98,39 @@ roll_service() {
   fi
 
   for id in "${containers[@]}"; do
+    [[ -n "${id:-}" ]] || continue
     echo "--> Recreating $svc container ${id:0:12}"
     docker stop -t 25 "$id" >/dev/null
     docker rm "$id" >/dev/null
     "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" --no-recreate "$svc"
-    for _ in $(seq 1 60); do
-      healthy="$("${COMPOSE[@]}" ps "$svc" | grep -c '(healthy)' || true)"
-      running="$("${COMPOSE[@]}" ps -q "$svc" | wc -l | tr -d ' ')"
-      if [[ "$running" -ge "$REPLICAS" && "$healthy" -ge 1 ]]; then
-        break
-      fi
-      sleep 2
-    done
+    wait_healthy "$svc" "$REPLICAS"
   done
 
   echo "==> $svc roll complete"
 }
+
+release_host_ports_if_needed
 
 for svc in "${SERVICES[@]}"; do
   roll_service "$svc"
 done
 
 if [[ "$USE_PROD" == "1" ]]; then
-  echo "==> Starting edge LB (127.0.0.1:13000/13001/14000)"
-  "${COMPOSE[@]}" up -d edge
+  # CRITICAL: plain `up -d edge` reconciles the project and can scale api/web/admin
+  # back to 1 (or leave orphaned *-3/*-4 unhealthy). Lock scales, then edge --no-deps.
+  echo "==> Locking replica scales before edge"
+  "${COMPOSE[@]}" up -d \
+    --scale "api=$REPLICAS" \
+    --scale "web=$REPLICAS" \
+    --scale "admin=$REPLICAS" \
+    --no-recreate \
+    api web admin
+  wait_healthy api "$REPLICAS"
+  wait_healthy web "$REPLICAS"
+  wait_healthy admin "$REPLICAS"
+
+  echo "==> Starting edge LB (--no-deps; 127.0.0.1:13000/13001/14000)"
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate edge
 fi
 
 if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then

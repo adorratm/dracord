@@ -74,16 +74,15 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dracord.com.tr}
 
   # Loopback edge LB — one listener per port, upstream = all replicas
+  # depends_on: service_started (not healthy) so `up --no-deps edge` stays simple;
+  # rolling-deploy waits for healthy replicas before starting edge.
   edge:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      api:
-        condition: service_healthy
-      web:
-        condition: service_healthy
-      admin:
-        condition: service_healthy
+      - api
+      - web
+      - admin
     ports:
       - "127.0.0.1:13000:13000"
       - "127.0.0.1:13001:13001"
