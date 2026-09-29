@@ -37,6 +37,18 @@ export class Channel extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   topic!: string | null;
 
+  /** Ses kanalı kilidi — şifre gerekir */
+  @Column({ type: 'boolean', default: false })
+  locked!: boolean;
+
+  /** bcrypt hash; client’a asla gönderilmez */
+  @Column({ type: 'varchar', nullable: true })
+  passwordHash!: string | null;
+
+  /** Bu odaya girmesi engellenen kullanıcı id’leri */
+  @Column({ type: 'simple-json', nullable: true })
+  deniedUserIds!: string[] | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

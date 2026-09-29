@@ -2,8 +2,9 @@
 
 import type { FriendRow } from '@dracord/ui';
 import { FriendsHub } from '@dracord/ui';
+import type { ChannelSummary } from '@dracord/types';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { DracoEmpty } from '@/components/Draco';
 import { RequireAuth } from '@/components/RequireAuth';
@@ -15,9 +16,28 @@ export default function FriendsHubPage() {
   const { user, client } = useAuth();
   const { guilds } = useGuildNav(undefined);
   const [friends, setFriends] = useState<FriendRow[]>([]);
+  const [dms, setDms] = useState<ChannelSummary[]>([]);
+  const [dmError, setDmError] = useState<string | null>(null);
+
+  const openDm = useCallback(
+    async (userId: string) => {
+      setDmError(null);
+      try {
+        const ch = await client.openDm(userId);
+        router.push(`/channels/me/${ch.id}`);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'DM açılamadı');
+      }
+    },
+    [client, router],
+  );
 
   useEffect(() => {
     if (!user) return;
+    void client
+      .listDms()
+      .then(setDms)
+      .catch(() => setDms([]));
     void client
       .getFriends()
       .then((list) => {
@@ -28,9 +48,7 @@ export default function FriendsHubPage() {
             avatarUrl: f.avatarUrl,
             status: f.status,
             onMessage: () => {
-              void client.openDm(f.id).then((ch) => {
-                router.push(`/channels/@me/${ch.id}`);
-              });
+              void openDm(f.id);
             },
           })),
         );
@@ -38,12 +56,59 @@ export default function FriendsHubPage() {
       .catch(() => {
         setFriends([]);
       });
-  }, [client, user, router]);
+  }, [client, user, openDm]);
 
   return (
     <RequireAuth>
-      <AppShell guilds={guilds} homeActive titleBarNav="direct-messages" subtitle="Arkadaşlar">
+      <AppShell guilds={guilds} homeActive titleBarNav="direct-messages" subtitle="Direkt mesajlar">
         <div className="flex flex-1 min-h-0 bg-surface">
+          <aside className="w-60 shrink-0 border-r border-surface-container-highest bg-surface-container-low flex flex-col min-h-0">
+            <div className="px-space-md py-space-md border-b border-surface-container-highest">
+              <p className="font-label-sm text-on-surface-variant uppercase tracking-wider font-bold">
+                Mesajlar
+              </p>
+              <button
+                type="button"
+                className="mt-space-sm w-full h-9 rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+                onClick={() => user && void openDm(user.id)}
+              >
+                Notlarım
+              </button>
+              {dmError && (
+                <p className="mt-space-xs font-body-sm text-error">{dmError}</p>
+              )}
+            </div>
+            <ul className="flex-1 overflow-y-auto py-space-sm px-space-xs">
+              {dms.length === 0 ? (
+                <li className="px-space-sm py-space-md font-body-sm text-outline">
+                  Henüz DM yok. Üye listesinden birine tıkla.
+                </li>
+              ) : (
+                dms.map((ch) => (
+                  <li key={ch.id}>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/channels/me/${ch.id}`)}
+                      className="w-full flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg hover:bg-surface-container text-left"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-outline shrink-0">
+                        {ch.selfNotes ? 'sticky_note_2' : 'person'}
+                      </span>
+                      <span className="font-body-sm text-on-surface truncate flex-1">
+                        {ch.name}
+                      </span>
+                      {ch.unread && (
+                        <span
+                          className="w-2 h-2 rounded-full bg-primary shrink-0"
+                          aria-label="Okunmamış"
+                        />
+                      )}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </aside>
           <FriendsHub
             friends={friends}
             pending={[]}
@@ -63,9 +128,7 @@ export default function FriendsHubPage() {
                 className="px-space-md py-space-xs rounded-lg bg-primary-container text-on-primary-container font-label-md hover:opacity-90"
                 onClick={() => {
                   const firstGuild = guilds[0];
-                  if (firstGuild) {
-                    router.push(`/channels/${firstGuild.id}/seed-ch-genel`);
-                  }
+                  if (firstGuild) router.push(`/channels/${firstGuild.id}`);
                 }}
               >
                 Sunuculara git

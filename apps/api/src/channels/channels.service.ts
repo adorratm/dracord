@@ -4,15 +4,27 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { EntityManager, In } from 'typeorm';
 import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
-import { GuildsService } from '@/guilds/guilds.service';
+import { GuildsService, PERM_MANAGE_CHANNELS } from '@/guilds/guilds.service';
 import { Channel } from '@/database/entities/channel.entity';
 import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
+import { Guild } from '@/database/entities/guild.entity';
 import { ChannelType } from '@/database/enums';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
+
+export type ChannelUpdateInput = {
+  name?: string;
+  topic?: string | null;
+  categoryId?: string | null;
+  locked?: boolean;
+  /** Düz şifre; null/'' = şifreyi kaldır */
+  password?: string | null;
+  deniedUserIds?: string[];
+};
 
 @Injectable()
 export class ChannelsService {
@@ -34,11 +46,15 @@ export class ChannelsService {
       userId,
       channels.filter((c) => c.type === ChannelType.TEXT).map((c) => c.id),
     );
+    const canManage = await this.canManageChannels(guildId, userId);
     return channels.map((c) =>
       this.toSummary(
         c,
-        c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
-        c.type === ChannelType.TEXT ? unreadMap.get(c.id) : undefined,
+        {
+          voiceMembers: c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
+          unread: c.type === ChannelType.TEXT ? unreadMap.get(c.id) : undefined,
+          includeDenied: canManage,
+        },
       ),
     );
   }
@@ -58,7 +74,10 @@ export class ChannelsService {
     if (channel.type === ChannelType.VOICE && channel.guildId) {
       voiceMembers = await this.voicePresence.listChannel(channel.guildId, channel.id);
     }
-    return this.toSummary(channel, voiceMembers);
+    const canManage = channel.guildId
+      ? await this.canManageChannels(channel.guildId, userId)
+      : false;
+    return this.toSummary(channel, { voiceMembers, includeDenied: canManage });
   }
 
   async createChannel(
@@ -91,27 +110,50 @@ export class ChannelsService {
         categoryId: data.categoryId ?? null,
         topic: data.topic ?? null,
         position: maxPos + 1,
+        locked: false,
+        passwordHash: null,
+        deniedUserIds: null,
       }),
     );
     void this.indexer.indexChannel(channel).catch(() => undefined);
-    return this.toSummary(channel);
+    return this.toSummary(channel, { includeDenied: true });
   }
 
   async updateChannel(
     channelId: string,
     userId: string,
-    data: { name?: string; topic?: string | null; categoryId?: string | null },
+    data: ChannelUpdateInput,
   ): Promise<ChannelSummary> {
     const channel = await this.em.findOne(Channel, { where: { id: channelId } });
     if (!channel?.guildId) throw new NotFoundException('Channel not found');
     await this.guilds.requirePermission(channel.guildId, userId, 'MANAGE_CHANNELS');
     if (data.name != null) {
-      channel.name = data.name.trim().replace(/\s+/g, '-').toLowerCase();
+      channel.name =
+        channel.type === ChannelType.VOICE
+          ? data.name.trim().slice(0, 100)
+          : data.name.trim().replace(/\s+/g, '-').toLowerCase().slice(0, 100);
     }
     if (data.topic !== undefined) channel.topic = data.topic;
     if (data.categoryId !== undefined) channel.categoryId = data.categoryId;
+    if (data.locked !== undefined) channel.locked = Boolean(data.locked);
+    if (data.password !== undefined) {
+      const plain = data.password?.trim() ?? '';
+      if (!plain) {
+        channel.passwordHash = null;
+      } else {
+        channel.passwordHash = await bcrypt.hash(plain, 10);
+        channel.locked = true;
+      }
+    }
+    if (data.deniedUserIds !== undefined) {
+      channel.deniedUserIds = [...new Set(data.deniedUserIds.filter(Boolean))];
+    }
+    if (channel.locked === false && data.password === undefined) {
+      // kilit kapatılırsa şifreyi de temizle (açıkça password verilmediyse)
+      if (data.locked === false) channel.passwordHash = null;
+    }
     await this.em.save(Channel, channel);
-    return this.toSummary(channel);
+    return this.toSummary(channel, { includeDenied: true });
   }
 
   async deleteChannel(channelId: string, userId: string): Promise<void> {
@@ -119,6 +161,72 @@ export class ChannelsService {
     if (!channel?.guildId) throw new NotFoundException('Channel not found');
     await this.guilds.requirePermission(channel.guildId, userId, 'MANAGE_CHANNELS');
     await this.em.remove(Channel, channel);
+  }
+
+  /** Ses token / join öncesi erişim kontrolü */
+  async assertVoiceAccess(
+    channelId: string,
+    userId: string,
+    password?: string | null,
+  ): Promise<Channel> {
+    const channel = await this.em.findOne(Channel, { where: { id: channelId } });
+    if (!channel) throw new NotFoundException('Channel not found');
+    if (channel.type !== ChannelType.VOICE) {
+      throw new BadRequestException('Channel is not a voice channel');
+    }
+    if (channel.guildId) {
+      await this.guilds.ensureMember(channel.guildId, userId);
+    }
+    const denied = channel.deniedUserIds ?? [];
+    if (denied.includes(userId)) {
+      throw new ForbiddenException('Bu odaya girmen engellendi');
+    }
+    const canBypass =
+      channel.guildId != null &&
+      (await this.canManageChannels(channel.guildId, userId));
+    if (channel.locked && !canBypass) {
+      if (!channel.passwordHash) {
+        throw new ForbiddenException('Bu oda kilitli');
+      }
+      const ok = password
+        ? await bcrypt.compare(password, channel.passwordHash)
+        : false;
+      if (!ok) {
+        throw new ForbiddenException('Oda şifresi gerekli veya hatalı');
+      }
+    }
+    return channel;
+  }
+
+  async denyUserFromVoice(
+    channelId: string,
+    actorId: string,
+    targetUserId: string,
+  ): Promise<ChannelSummary> {
+    const channel = await this.em.findOne(Channel, { where: { id: channelId } });
+    if (!channel?.guildId) throw new NotFoundException('Channel not found');
+    if (channel.type !== ChannelType.VOICE) {
+      throw new BadRequestException('Yalnızca ses kanalları için geçerli');
+    }
+    await this.guilds.requirePermission(channel.guildId, actorId, 'MANAGE_CHANNELS');
+    const list = new Set(channel.deniedUserIds ?? []);
+    list.add(targetUserId);
+    channel.deniedUserIds = [...list];
+    await this.em.save(Channel, channel);
+    return this.toSummary(channel, { includeDenied: true });
+  }
+
+  async allowUserVoice(
+    channelId: string,
+    actorId: string,
+    targetUserId: string,
+  ): Promise<ChannelSummary> {
+    const channel = await this.em.findOne(Channel, { where: { id: channelId } });
+    if (!channel?.guildId) throw new NotFoundException('Channel not found');
+    await this.guilds.requirePermission(channel.guildId, actorId, 'MANAGE_CHANNELS');
+    channel.deniedUserIds = (channel.deniedUserIds ?? []).filter((id) => id !== targetUserId);
+    await this.em.save(Channel, channel);
+    return this.toSummary(channel, { includeDenied: true });
   }
 
   /** TEXT kanallar için okunmamış bayrağı (en son mesaj ≠ lastRead). */
@@ -154,19 +262,22 @@ export class ChannelsService {
     return map;
   }
 
+  private async canManageChannels(guildId: string, userId: string): Promise<boolean> {
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) return false;
+    if (guild.ownerId === userId) return true;
+    return this.guilds.memberHasPermission(guildId, userId, PERM_MANAGE_CHANNELS);
+  }
+
   private toSummary(
-    channel: {
-      id: string;
-      guildId: string | null;
-      name: string;
-      type: ChannelSummary['type'];
-      categoryId: string | null;
-      position: number;
-      topic?: string | null;
+    channel: Channel,
+    opts?: {
+      voiceMembers?: VoiceMemberSummary[];
+      unread?: boolean;
+      includeDenied?: boolean;
     },
-    voiceMembers?: VoiceMemberSummary[],
-    unread?: boolean,
   ): ChannelSummary {
+    const isVoice = channel.type === ChannelType.VOICE;
     return {
       id: channel.id,
       guildId: channel.guildId,
@@ -175,8 +286,12 @@ export class ChannelsService {
       categoryId: channel.categoryId,
       position: channel.position,
       topic: channel.topic ?? null,
-      voiceMembers,
-      unread,
+      voiceMembers: opts?.voiceMembers,
+      unread: opts?.unread,
+      locked: isVoice ? Boolean(channel.locked) : undefined,
+      hasPassword: isVoice ? Boolean(channel.passwordHash) : undefined,
+      deniedUserIds:
+        isVoice && opts?.includeDenied ? (channel.deniedUserIds ?? []) : undefined,
     };
   }
 }

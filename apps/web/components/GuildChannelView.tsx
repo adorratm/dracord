@@ -135,6 +135,14 @@ export function GuildChannelView({
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [guildMembers, setGuildMembers] = useState<PublicUser[]>([]);
+  const [voicePasswordPrompt, setVoicePasswordPrompt] = useState<{
+    channel: ChannelSummary;
+  } | null>(null);
+  const [voicePasswordDraft, setVoicePasswordDraft] = useState('');
+  const [channelLocked, setChannelLocked] = useState(false);
+  const [channelPasswordDraft, setChannelPasswordDraft] = useState('');
+  const [channelDeniedIds, setChannelDeniedIds] = useState<string[]>([]);
+  const [dmError, setDmError] = useState<string | null>(null);
 
   const mentionNames = useMemo(() => {
     if (!user) return [] as string[];
@@ -335,18 +343,54 @@ export function GuildChannelView({
   const openEditChannel = useCallback((ch: ChannelSummary) => {
     setChannelName(ch.name);
     setChannelType(ch.type === 'VOICE' ? 'VOICE' : 'TEXT');
+    setChannelLocked(Boolean(ch.locked));
+    setChannelPasswordDraft('');
+    setChannelDeniedIds(ch.deniedUserIds ?? []);
     setChannelModal({ mode: 'edit', categoryId: ch.categoryId, channel: ch });
   }, []);
+
+  const openMemberDm = useCallback(
+    async (memberId: string, isBot?: boolean) => {
+      if (isBot) {
+        setDmError('Bot’a DM açılamaz');
+        return;
+      }
+      setDmError(null);
+      try {
+        const ch = await client.openDm(memberId);
+        setMembersOpen(false);
+        router.push(`/channels/me/${ch.id}`);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'DM açılamadı');
+      }
+    },
+    [client, router],
+  );
+
+  const joinVoiceChannel = useCallback(
+    (ch: ChannelSummary, password?: string) => {
+      voice.join(ch.id, guildId, password ? { password } : undefined);
+      setChannelsOpen(false);
+      router.push(`/channels/${guildId}/${ch.id}`);
+    },
+    [voice, guildId, router],
+  );
 
   const selectChannel = useCallback(
     (ch: ChannelSummary) => {
       if (ch.type === 'VOICE') {
-        voice.join(ch.id, guildId);
+        if (ch.locked && ch.hasPassword && !canManageChannels) {
+          setVoicePasswordDraft('');
+          setVoicePasswordPrompt({ channel: ch });
+          return;
+        }
+        joinVoiceChannel(ch);
+        return;
       }
       setChannelsOpen(false);
       router.push(`/channels/${guildId}/${ch.id}`);
     },
-    [voice.join, guildId, router],
+    [joinVoiceChannel, guildId, router, canManageChannels],
   );
 
   const categories = useMemo(
@@ -359,6 +403,9 @@ export function GuildChannelView({
           ? (categoryId) => {
               setChannelName('');
               setChannelType('TEXT');
+              setChannelLocked(false);
+              setChannelPasswordDraft('');
+              setChannelDeniedIds([]);
               setChannelModal({ mode: 'create', categoryId });
             }
           : undefined,
@@ -379,6 +426,20 @@ export function GuildChannelView({
     ],
   );
 
+  const denyFromVoice = useCallback(
+    async (targetUserId: string) => {
+      const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+      if (!chId || !canManageChannels) return;
+      try {
+        await client.denyVoiceUser(chId, targetUserId);
+        await reload();
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Engellenemedi');
+      }
+    },
+    [voice.voiceChannelId, isVoiceView, channelId, canManageChannels, client, reload],
+  );
+
   const memberGroups: MemberListGroup[] = useMemo(() => {
     const voiceList = inVoice
       ? voice.participants.map((p) => ({
@@ -387,6 +448,15 @@ export function GuildChannelView({
           avatarUrl: p.avatarUrl,
           status: 'ONLINE' as const,
           isBot: Boolean((p as { isBot?: boolean }).isBot),
+          subtitle:
+            canManageChannels && p.id !== user?.id ? 'Tıkla: DM · Sağ tık: engelle' : undefined,
+          onClick: () => void openMemberDm(p.id, Boolean((p as { isBot?: boolean }).isBot)),
+          onContextMenu: canManageChannels
+            ? () => {
+                if (p.id === user?.id) return;
+                void denyFromVoice(p.id);
+              }
+            : undefined,
         }))
       : [];
     return [
@@ -404,6 +474,8 @@ export function GuildChannelView({
                     avatarUrl: user.avatarUrl,
                     status: user.status,
                     isBot: Boolean(user.isBot),
+                    subtitle: 'Notlarım / DM',
+                    onClick: () => void openMemberDm(user.id, Boolean(user.isBot)),
                   },
                 ]
               : [],
@@ -417,10 +489,20 @@ export function GuildChannelView({
           avatarUrl: m.avatarUrl,
           status: m.status,
           isBot: Boolean(m.isBot),
+          subtitle: m.id === user?.id ? 'Notlarım' : 'Mesaj gönder',
+          onClick: () => void openMemberDm(m.id, Boolean(m.isBot)),
         })),
       },
     ];
-  }, [user, inVoice, voice.participants, guildMembers]);
+  }, [
+    user,
+    inVoice,
+    voice.participants,
+    guildMembers,
+    openMemberDm,
+    canManageChannels,
+    denyFromVoice,
+  ]);
 
   const saveChannel = useCallback(async () => {
     if (!channelModal) return;
@@ -432,18 +514,50 @@ export function GuildChannelView({
           type: channelType,
           categoryId: channelModal.categoryId,
         });
+        if (channelType === 'VOICE' && (channelLocked || channelPasswordDraft.trim())) {
+          await client.updateChannel(created.id, {
+            locked: channelLocked || Boolean(channelPasswordDraft.trim()),
+            password: channelPasswordDraft.trim() || null,
+          });
+        }
         await reload();
         setChannelModal(null);
         router.push(`/channels/${guildId}/${created.id}`);
       } else if (channelModal.channel) {
-        await client.updateChannel(channelModal.channel.id, { name: channelName });
+        const patch: {
+          name: string;
+          locked?: boolean;
+          password?: string | null;
+          deniedUserIds?: string[];
+        } = { name: channelName };
+        if (channelModal.channel.type === 'VOICE') {
+          patch.locked = channelLocked;
+          if (channelPasswordDraft.trim()) {
+            patch.password = channelPasswordDraft.trim();
+          } else if (!channelLocked) {
+            patch.password = null;
+          }
+          patch.deniedUserIds = channelDeniedIds;
+        }
+        await client.updateChannel(channelModal.channel.id, patch);
         await reload();
         setChannelModal(null);
       }
     } finally {
       setBusy(false);
     }
-  }, [channelModal, channelName, channelType, client, guildId, reload, router]);
+  }, [
+    channelModal,
+    channelName,
+    channelType,
+    channelLocked,
+    channelPasswordDraft,
+    channelDeniedIds,
+    client,
+    guildId,
+    reload,
+    router,
+  ]);
 
   const saveServerSettings = useCallback(async () => {
     if (!serverNameDraft.trim()) {
@@ -630,6 +744,19 @@ export function GuildChannelView({
       activeGuildId={guildId}
       onGuildsChanged={() => void reload()}
     >
+      {dmError && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
+          <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
+          <p className="font-body-sm flex-1 min-w-0">{dmError}</p>
+          <button
+            type="button"
+            className="font-label-sm underline shrink-0"
+            onClick={() => setDmError(null)}
+          >
+            Kapat
+          </button>
+        </div>
+      )}
       <div className="hidden md:flex h-full min-h-0 shrink-0">{renderSidebar()}</div>
 
       <MobileDrawer
@@ -801,11 +928,12 @@ export function GuildChannelView({
                 : 'Bu ses kanalına katılmak için aşağıdaki butonu kullan.'}
           </p>
           {voice.error && <p className="text-error font-body-sm">{voice.error}</p>}
-          {!isConnecting && (
+          {dmError && <p className="text-error font-body-sm">{dmError}</p>}
+          {!isConnecting && channel && (
             <button
               type="button"
               className="h-10 px-space-md rounded-lg bg-primary-container text-on-primary-container"
-              onClick={() => voice.join(channelId, guildId)}
+              onClick={() => selectChannel(channel)}
             >
               {inVoice && voice.voiceChannelId !== channelId ? 'Bu kanala geç' : 'Kanala katıl'}
             </button>
@@ -1027,10 +1155,8 @@ export function GuildChannelView({
             type="button"
             className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
             onClick={() => {
-              setServerNameDraft(serverName);
-              setServerError(null);
               setServerMenuOpen(false);
-              setServerSettingsOpen(true);
+              router.push(`/guilds/${guildId}/settings`);
             }}
             disabled={!canManageGuild}
           >
@@ -1226,6 +1352,98 @@ export function GuildChannelView({
             </button>
           </div>
         )}
+        {(channelType === 'VOICE' || channelModal?.channel?.type === 'VOICE') && (
+          <div className="mt-space-md space-y-space-sm">
+            <label className="flex items-center gap-space-sm font-body-sm text-on-surface">
+              <input
+                type="checkbox"
+                checked={channelLocked}
+                onChange={(e) => setChannelLocked(e.target.checked)}
+              />
+              Odayı kilitle (şifre ile giriş)
+            </label>
+            <label className="flex flex-col gap-space-xs">
+              <span className="font-label-sm text-on-surface-variant">
+                Oda şifresi {channelModal?.mode === 'edit' ? '(boş bırak = değiştirme)' : ''}
+              </span>
+              <input
+                type="password"
+                value={channelPasswordDraft}
+                onChange={(e) => setChannelPasswordDraft(e.target.value)}
+                placeholder={channelLocked ? 'Şifre' : 'İsteğe bağlı'}
+                className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+              />
+            </label>
+            {channelModal?.mode === 'edit' && channelDeniedIds.length > 0 && (
+              <div className="space-y-space-xs">
+                <p className="font-label-sm text-on-surface-variant">Engellenen kullanıcılar</p>
+                {channelDeniedIds.map((id) => {
+                  const m = guildMembers.find((g) => g.id === id);
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center justify-between gap-space-sm rounded-lg bg-surface-container-highest px-space-sm py-space-xs"
+                    >
+                      <span className="font-body-sm truncate">
+                        {m?.displayName ?? id.slice(0, 8)}
+                      </span>
+                      <button
+                        type="button"
+                        className="font-label-sm text-primary-container hover:underline"
+                        onClick={() =>
+                          setChannelDeniedIds((prev) => prev.filter((x) => x !== id))
+                        }
+                      >
+                        İzin ver
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(voicePasswordPrompt)}
+        title="Kilitli ses odası"
+        onClose={() => setVoicePasswordPrompt(null)}
+        footer={
+          <button
+            type="button"
+            disabled={!voicePasswordDraft.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              if (!voicePasswordPrompt) return;
+              const ch = voicePasswordPrompt.channel;
+              const pwd = voicePasswordDraft.trim();
+              setVoicePasswordPrompt(null);
+              joinVoiceChannel(ch, pwd);
+            }}
+          >
+            Katıl
+          </button>
+        }
+      >
+        <p className="font-body-sm text-on-surface-variant mb-space-sm">
+          <strong>{voicePasswordPrompt?.channel.name}</strong> kilitli. Şifreyi gir.
+        </p>
+        <input
+          type="password"
+          value={voicePasswordDraft}
+          onChange={(e) => setVoicePasswordDraft(e.target.value)}
+          className="w-full h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && voicePasswordPrompt && voicePasswordDraft.trim()) {
+              const ch = voicePasswordPrompt.channel;
+              const pwd = voicePasswordDraft.trim();
+              setVoicePasswordPrompt(null);
+              joinVoiceChannel(ch, pwd);
+            }
+          }}
+          autoFocus
+        />
       </Modal>
 
       <Modal open={Boolean(inviteUrl)} title="Davet linki" onClose={() => setInviteUrl(null)}>

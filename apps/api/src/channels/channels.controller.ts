@@ -52,7 +52,15 @@ export class ChannelsController {
   update(
     @Param('channelId') channelId: string,
     @CurrentUser() user: JwtPayloadUser,
-    @Body() body: { name?: string; topic?: string | null; categoryId?: string | null },
+    @Body()
+    body: {
+      name?: string;
+      topic?: string | null;
+      categoryId?: string | null;
+      locked?: boolean;
+      password?: string | null;
+      deniedUserIds?: string[];
+    },
   ) {
     return this.channelsService.updateChannel(channelId, user.sub, body);
   }

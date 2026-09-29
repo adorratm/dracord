@@ -4,7 +4,6 @@ import { AccessToken } from 'livekit-server-sdk';
 import { EntityManager } from 'typeorm';
 import type { VoiceTokenResponse } from '@dracord/types';
 import { ChannelsService } from '@/channels/channels.service';
-import { Channel } from '@/database/entities/channel.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
 
@@ -16,11 +15,12 @@ export class VoiceService {
     private readonly channels: ChannelsService,
   ) {}
 
-  async createToken(userId: string, channelId: string): Promise<VoiceTokenResponse> {
-    await this.channels.getChannel(channelId, userId);
-    const channel = await this.em.findOneOrFail(Channel, {
-      where: { id: channelId },
-    });
+  async createToken(
+    userId: string,
+    channelId: string,
+    password?: string | null,
+  ): Promise<VoiceTokenResponse> {
+    const channel = await this.channels.assertVoiceAccess(channelId, userId, password);
     if (channel.type !== ChannelType.VOICE) {
       throw new BadRequestException('Channel is not a voice channel');
     }

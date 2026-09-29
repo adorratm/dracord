@@ -101,6 +101,14 @@ export interface ChannelSummary {
   /** Görüntüleyen için okunmamış mesaj var mı */
   unread?: boolean;
   lastReadMessageId?: string | null;
+  /** Self-DM (notlar) kanalı */
+  selfNotes?: boolean;
+  /** Ses kanalı kilitli mi */
+  locked?: boolean;
+  /** Şifre var mı (hash asla gönderilmez) */
+  hasPassword?: boolean;
+  /** Odaya girmesi engellenen kullanıcı id’leri (yalnızca yetkiliye) */
+  deniedUserIds?: string[];
 }
 
 export interface MessageAttachment {
@@ -283,7 +291,7 @@ export interface VoiceStatePayload {
   action: 'join' | 'leave' | 'update';
 }
 
-export type NotificationType = 'MENTION' | 'ANNOUNCEMENT' | 'SYSTEM' | 'FRIEND';
+export type NotificationType = 'MENTION' | 'ANNOUNCEMENT' | 'SYSTEM' | 'FRIEND' | 'DM';
 
 export interface NotificationDto {
   id: string;

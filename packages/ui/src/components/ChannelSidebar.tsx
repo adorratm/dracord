@@ -34,6 +34,7 @@ export interface SidebarChannelItem {
   type: SidebarChannelType;
   active?: boolean;
   unread?: boolean;
+  locked?: boolean;
   badgeCount?: number;
   memberCount?: string;
   voiceMembers?: SidebarVoiceMember[];
@@ -386,7 +387,9 @@ function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
               #
             </span>
           ) : (
-            <span className="material-symbols-outlined text-[18px] text-outline">volume_up</span>
+            <span className="material-symbols-outlined text-[18px] text-outline">
+              {channel.locked ? 'lock' : 'volume_up'}
+            </span>
           )}
           <span className="font-body-sm text-body-sm truncate flex-1">{channel.name}</span>
           {channel.badgeCount != null && channel.badgeCount > 0 && (

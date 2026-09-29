@@ -16,6 +16,8 @@ function typeIcon(type: NotificationDto['type']): string {
       return 'campaign';
     case 'FRIEND':
       return 'person_add';
+    case 'DM':
+      return 'mail';
     default:
       return 'notifications';
   }

@@ -128,9 +128,9 @@ export function GlobalSearch() {
       if (hit.type === 'user') {
         try {
           const ch = await client.openDm(hit.id);
-          router.push(`/channels/@me/${ch.id}`);
+          router.push(`/channels/me/${ch.id}`);
         } catch {
-          router.push('/channels/@me');
+          router.push('/channels/me');
         }
       }
     },

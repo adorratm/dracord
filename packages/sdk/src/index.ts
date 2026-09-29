@@ -301,7 +301,14 @@ export class DracordClient {
 
   async updateChannel(
     channelId: string,
-    data: { name?: string; topic?: string | null; categoryId?: string | null },
+    data: {
+      name?: string;
+      topic?: string | null;
+      categoryId?: string | null;
+      locked?: boolean;
+      password?: string | null;
+      deniedUserIds?: string[];
+    },
   ): Promise<ChannelSummary> {
     return this.request(`/channels/${channelId}`, {
       method: 'PATCH',
@@ -471,16 +478,19 @@ export class DracordClient {
     return this.request('/users/blocked');
   }
 
-  async getVoiceToken(channelId: string): Promise<VoiceTokenResponse> {
+  async getVoiceToken(
+    channelId: string,
+    password?: string,
+  ): Promise<VoiceTokenResponse> {
     return this.request('/voice/token', {
       method: 'POST',
-      body: JSON.stringify({ channelId }),
+      body: JSON.stringify({ channelId, password }),
     });
   }
 
   async joinVoiceState(
     channelId: string,
-    flags?: { muted?: boolean; deafened?: boolean },
+    flags?: { muted?: boolean; deafened?: boolean; password?: string },
   ): Promise<VoiceStatePayload> {
     return this.request('/voice/state', {
       method: 'POST',
@@ -500,6 +510,20 @@ export class DracordClient {
 
   async leaveVoiceState(channelId: string): Promise<VoiceStatePayload | null> {
     return this.request(`/voice/state/${channelId}`, { method: 'DELETE' });
+  }
+
+  async denyVoiceUser(channelId: string, userId: string): Promise<ChannelSummary> {
+    return this.request(`/voice/channels/${channelId}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async allowVoiceUser(channelId: string, userId: string): Promise<ChannelSummary> {
+    return this.request(`/voice/channels/${channelId}/allow`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
   }
 
   async voiceHeartbeat(channelId: string): Promise<{ ok: boolean }> {

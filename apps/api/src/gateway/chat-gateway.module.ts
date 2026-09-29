@@ -16,5 +16,6 @@ import { WsJwtGuard } from './ws-jwt.guard';
     NotificationsModule,
   ],
   providers: [ChatGateway, WsJwtGuard],
+  exports: [ChatGateway],
 })
 export class ChatGatewayModule {}

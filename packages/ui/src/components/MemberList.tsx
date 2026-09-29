@@ -13,6 +13,7 @@ export interface MemberListMember {
   subtitle?: string;
   isBot?: boolean;
   onClick?: () => void;
+  onContextMenu?: () => void;
 }
 
 export interface MemberListGroup {
@@ -46,6 +47,11 @@ export function MemberList({ groups, className }: MemberListProps) {
                 <button
                   type="button"
                   onClick={member.onClick}
+                  onContextMenu={(e) => {
+                    if (!member.onContextMenu) return;
+                    e.preventDefault();
+                    member.onContextMenu();
+                  }}
                   className="w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group"
                 >
                   <Avatar

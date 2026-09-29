@@ -8,6 +8,7 @@ import { EntityManager, In, IsNull, LessThan, MoreThan, Not } from 'typeorm';
 import { createId } from '@paralleldrive/cuid2';
 import { Channel } from '@/database/entities/channel.entity';
 import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
+import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Friendship } from '@/database/entities/friendship.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
 import { Message } from '@/database/entities/message.entity';
@@ -769,6 +770,28 @@ export class MessagesService {
           link: linkBase,
           actorId: authorId,
           guildId: channel.guildId,
+          channelId: message.channelId,
+          messageId: message.id,
+        });
+      }
+    }
+
+    // Düz DM mesajı bildirimi (self-DM hariç; mention varsa tekrar etme)
+    if (channel?.dmChannelId) {
+      const members = await this.em.find(DMChannelMember, {
+        where: { dmChannelId: channel.dmChannelId },
+      });
+      for (const m of members) {
+        if (m.userId === authorId) continue;
+        if (mentionedIds.has(m.userId)) continue;
+        inputs.push({
+          userId: m.userId,
+          type: 'DM',
+          title: authorName,
+          body: snippet,
+          link: linkBase,
+          actorId: authorId,
+          guildId: null,
           channelId: message.channelId,
           messageId: message.id,
         });

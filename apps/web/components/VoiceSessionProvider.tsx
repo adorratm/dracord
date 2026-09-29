@@ -1,6 +1,7 @@
 'use client';
 
 import type { VoiceParticipant } from '@dracord/ui';
+import { SocketEvents } from '@dracord/sdk';
 import {
   Room,
   RoomEvent,
@@ -75,7 +76,7 @@ interface VoiceSessionValue {
   setAudioBitrate: (kbps: VoiceBitrateKbps) => Promise<void>;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
-  join: (channelId: string, guildId: string) => void;
+  join: (channelId: string, guildId: string, opts?: { password?: string }) => void;
   leave: () => string | null;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
@@ -221,6 +222,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const participantVolumesRef = useRef<Map<string, number>>(new Map());
   const restoringRef = useRef(false);
   const intentionalLeaveRef = useRef(false);
+  const voicePasswordRef = useRef<string | undefined>(undefined);
 
   const [connected, setConnected] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -613,7 +615,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        const { token, url } = await client.getVoiceToken(channelId);
+        const password = voicePasswordRef.current;
+        const { token, url } = await client.getVoiceToken(channelId, password);
         const livekitUrl =
           process.env.NEXT_PUBLIC_LIVEKIT_URL?.trim() || url || 'ws://localhost:7880';
         await room.connect(livekitUrl, token);
@@ -639,7 +642,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
         await applyRoomAudioSettings(room, audioSettingsRef.current);
         try {
-          await client.joinVoiceState(channelId, { muted: false, deafened: false });
+          await client.joinVoiceState(channelId, {
+            muted: false,
+            deafened: false,
+            password,
+          });
           if (guildId) {
             client.connectSocket();
             client.emitVoiceState({ guildId, channelId, muted: false, deafened: false });
@@ -744,8 +751,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [user, voiceChannelId]);
 
-  const join = useCallback((channelId: string, guildId: string) => {
+  const join = useCallback((channelId: string, guildId: string, opts?: { password?: string }) => {
     intentionalLeaveRef.current = false;
+    voicePasswordRef.current = opts?.password;
     saveActiveVoice({ guildId, channelId });
     setVoiceChannelId((prev) => {
       if (prev === channelId) return prev;
@@ -758,6 +766,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const channelId = channelIdRef.current;
     const guildId = guildIdRef.current;
     intentionalLeaveRef.current = true;
+    voicePasswordRef.current = undefined;
     clearActiveVoice();
     setVoiceChannelId(null);
     setVoiceGuildId(null);
@@ -782,6 +791,27 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
     return channelId;
   }, [client, clearScreenShareView, clearCameraViews]);
+
+  /** Yetkili kick: sunucu VOICE_STATE leave yayınladığında oturumu kapat */
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const onVoice = (payload: {
+      channelId: string | null;
+      user: { id: string };
+      action: string;
+    }) => {
+      if (payload.action !== 'leave') return;
+      if (payload.user.id !== user.id) return;
+      if (!payload.channelId || payload.channelId !== channelIdRef.current) return;
+      leave();
+      setError('Bu odadan çıkarıldın veya girişin engellendi.');
+    };
+    sock.on(SocketEvents.VOICE_STATE, onVoice);
+    return () => {
+      sock.off(SocketEvents.VOICE_STATE, onVoice);
+    };
+  }, [user, client, leave]);
 
   const applyParticipantVolume = useCallback((identity: string, volume: number) => {
     const room = roomRef.current;
