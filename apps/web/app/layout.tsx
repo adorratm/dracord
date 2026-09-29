@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { OnboardingGate } from '@/components/OnboardingGate';
+import { SettingsReturnTracker } from '@/components/SettingsReturnTracker';
 import { VoiceSessionProvider } from '@/components/VoiceSessionProvider';
 import { PreferencesProvider } from '@/lib/user-preferences';
 import './globals.css';
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Suspense fallback={null}>
                   <GlobalSearch />
                 </Suspense>
+                <SettingsReturnTracker />
                 {children}
               </VoiceSessionProvider>
             </OnboardingGate>

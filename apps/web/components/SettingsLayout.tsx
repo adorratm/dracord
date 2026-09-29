@@ -2,8 +2,9 @@
 
 import { SettingsShell, type SettingsNavSection } from '@dracord/ui';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { getSettingsReturnPath } from '@/lib/settings-return';
 
 type NavDef = {
   id: string;
@@ -113,13 +114,17 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { logout } = useAuth();
 
+  const closeSettings = useCallback(() => {
+    router.push(getSettingsReturnPath('/channels/@me'));
+  }, [router]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') router.push('/channels/@me');
+      if (e.key === 'Escape') closeSettings();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [router]);
+  }, [closeSettings]);
 
   const sections: SettingsNavSection[] = NAV.map((section) => ({
     id: section.id,
@@ -149,7 +154,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
     <SettingsShell
       title="Dracord Ayarları"
       sections={sections}
-      onClose={() => router.push('/channels/@me')}
+      onClose={closeSettings}
       className="h-screen overflow-hidden"
     >
       {children}

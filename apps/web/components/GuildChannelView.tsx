@@ -692,9 +692,10 @@ export function GuildChannelView({
       serverBannerUrl={guild?.bannerUrl}
       categories={categories}
       onServerHeaderClick={() => setServerMenuOpen(true)}
-      className="h-full w-full md:w-60"
+      className="h-full w-full md:w-72"
       userPanel={{
         displayName: user?.displayName ?? 'Kullanıcı',
+        username: user?.username ?? null,
         avatarUrl: user?.avatarUrl,
         status: user?.status ?? 'ONLINE',
         customStatus: user?.customStatus ?? null,
@@ -704,7 +705,20 @@ export function GuildChannelView({
         noiseNote: voice.noiseNote,
         voiceConnected: inVoice,
         voiceChannelName: voiceChannel?.name ?? null,
+        micVolume: voice.audioSettings.micVolume,
+        outputVolume: voice.audioSettings.outputVolume,
+        inputDeviceId: voice.audioSettings.inputDeviceId,
+        outputDeviceId: voice.audioSettings.outputDeviceId,
+        inputDevices: voice.audioInputDevices.map((d) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Mikrofon (${d.deviceId.slice(0, 8)})`,
+        })),
+        outputDevices: voice.audioOutputDevices.map((d) => ({
+          deviceId: d.deviceId,
+          label: d.label || `Hoparlör (${d.deviceId.slice(0, 8)})`,
+        })),
         onSettingsClick: () => router.push('/settings'),
+        onVoiceSettingsClick: () => router.push('/settings/voice'),
         onProfileClick: () => router.push('/settings/profile'),
         onStatusChange: (status, customStatus) => {
           void client
@@ -715,6 +729,13 @@ export function GuildChannelView({
         onMicClick: inVoice ? () => void voice.toggleMute() : undefined,
         onHeadphonesClick: inVoice ? () => void voice.toggleDeafen() : undefined,
         onNoiseClick: inVoice ? () => void voice.toggleNoiseCancellation() : undefined,
+        onMicVolumeChange: (v) => voice.setMicVolume(v),
+        onOutputVolumeChange: (v) => voice.setOutputVolume(v),
+        onInputDeviceChange: (id) => void voice.setInputDevice(id),
+        onOutputDeviceChange: (id) => void voice.setOutputDevice(id),
+        onAudioMenuOpen: () => {
+          void voice.refreshAudioDevices();
+        },
         onVoiceReturnClick: () => {
           if (voice.voiceChannelId) {
             router.push(`/channels/${guildId}/${voice.voiceChannelId}`);
@@ -757,7 +778,9 @@ export function GuildChannelView({
           </button>
         </div>
       )}
-      <div className="hidden md:flex h-full min-h-0 shrink-0">{renderSidebar()}</div>
+      <div className="hidden md:flex h-full min-h-0 shrink-0 overflow-visible relative z-20">
+        {renderSidebar()}
+      </div>
 
       <MobileDrawer
         open={channelsOpen}

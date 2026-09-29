@@ -40,7 +40,7 @@ export function ServerRail({
   return (
     <aside
       className={cn(
-        'w-[72px] bg-surface-container-lowest flex flex-col items-center py-space-md gap-space-sm shrink-0',
+        'w-[72px] bg-surface-container-lowest flex flex-col items-center pt-space-md pb-32 gap-space-sm shrink-0 relative z-0',
         className,
       )}
       aria-label="Sunucular"

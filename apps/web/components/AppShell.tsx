@@ -217,11 +217,11 @@ export function AppShell({
       </div>
       <div className="flex flex-1 min-h-0">
         {showServerRail && (
-          <div data-tour="servers" className="hidden md:flex h-full">
+          <div data-tour="servers" className="hidden md:flex h-full relative z-0">
             <ServerRail {...serverRailProps} className="h-full" />
           </div>
         )}
-        <div className="flex flex-1 min-w-0 min-h-0" data-tour="chat">
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-visible" data-tour="chat">
           {children}
         </div>
       </div>
