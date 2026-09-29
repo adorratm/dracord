@@ -1,24 +1,35 @@
 # Nginx vhost example for Dracord on a shared Hetzner host.
 #
+# IMPORTANT — on this host public traffic is usually Docker Nginx
+#   (`ttengamesstudio-nginx`), NOT systemd `nginx.service`.
+#   Host `/etc/nginx/sites-enabled` may only have leftover portfolio/hydrorage
+#   stubs; `systemctl reload nginx` will fail if the unit is inactive — that is OK.
+#   Site routing lives in:
+#     /opt/ttengamesstudio/docker/nginx/…  and container conf.d/
+#   Recover with (from kiliccoffee/TTEN deploy tree):
+#     bash /opt/kiliccofferoaster/deploy/recover-nginx.sh
+#     bash /opt/kiliccofferoaster/deploy/sync-tten-nginx.sh https
+#
 # IMPORTANT — other sites must stay untouched:
 #   - Do NOT replace the default server or existing site confs
 #     (ttengamesstudio.com.tr, emrekilic.web.tr, kiliccoffeeroaster.com.tr, hydrorage.com.tr, …).
-#   - Only add/enable THIS file for dracord.com.tr (+ api / admin / rtc / www).
+#   - Only add/enable THIS file for dracord.com.tr (+ api / admin / rtc / www)
+#     either as a host vhost OR as an extra conf in the Docker Nginx conf.d.
 #   - If dracord.com.tr currently points at another site (e.g. TTEN Games), remove
 #     `dracord.com.tr` from that site's server_name list first, then enable this.
 #
 # If domains are SWAPPED (A shows B's content) or one site is 502:
-#   This is almost always host Nginx server_name / default_server / wrong root|proxy —
-#   NOT the Dracord compose stack. Diagnose on the server:
-#     sudo nginx -T 2>/dev/null | grep -E 'server_name|listen|root |proxy_pass|default_server'
-#     ls -la /etc/nginx/sites-enabled/
-#   Fix: each domain must appear in exactly ONE server{} block; remove duplicate
-#   server_name entries; ensure no accidental default_server steals Host headers.
-#   Example recovery checklist:
-#     1) Open each sites-available/*.conf — verify server_name matches the site root/proxy
-#     2) ttengamesstudio.com.tr → TTEN root/proxy; emrekilic.web.tr → portfolio; etc.
-#     3) kiliccoffeeroaster 502 → upstream/container down OR wrong proxy_pass port
-#     4) sudo nginx -t && sudo systemctl reload nginx
+#   Fix Docker Nginx server_name / upstreams — NOT the Dracord compose stack:
+#     docker exec ttengamesstudio-nginx nginx -T 2>/dev/null \
+#       | grep -E 'server_name|listen |root |proxy_pass|upstream |default_server'
+#     docker ps -a --format '{{.Names}} {{.Status}}' | grep -Ei 'kilic|tten|portfolio|nginx'
+#   Checklist:
+#     1) Each public domain in exactly ONE server{} (default.conf vs portfolio-*.conf)
+#     2) kiliccoffee 502 / nginx -t "host not found in upstream" → start
+#        kiliccoffee-prod-api (and join TTEN network), THEN sync-tten-nginx.sh
+#     3) ttengamesstudio ↔ emrekilic swap → wrong server_name in default.conf /
+#        portfolio-emrekilic.conf — recover-nginx.sh then re-sync
+#     4) Never `systemctl reload nginx` unless that unit is actually the edge
 #
 # Public repo: this file has no secrets. TLS certs stay on the server via Certbot.
 
