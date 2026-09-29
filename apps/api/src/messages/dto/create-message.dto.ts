@@ -1,5 +1,7 @@
 import {
   IsArray,
+  IsBoolean,
+  IsIn,
   IsOptional,
   IsString,
   MaxLength,
@@ -71,4 +73,34 @@ export class CreateMessageDto {
     options: string[];
     multi?: boolean;
   };
+
+  @IsOptional()
+  @IsString()
+  replyToId?: string;
+
+  @IsOptional()
+  @IsIn(['default', 'heading'])
+  type?: 'default' | 'heading';
+}
+
+export class ForwardMessageDto {
+  @IsString()
+  @MinLength(1)
+  targetChannelId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  content?: string;
+}
+
+export class MarkReadDto {
+  @IsOptional()
+  @IsString()
+  messageId?: string;
+
+  /** true ise bu mesajın bir öncesi = imleç (okunmadı işaretle) */
+  @IsOptional()
+  @IsBoolean()
+  unreadFrom?: boolean;
 }

@@ -1,0 +1,376 @@
+  return (
+    <article
+      className={cn(
+        'group flex gap-space-md px-space-md py-space-xs hover:bg-surface-container-low/60 transition-colors relative',
+        compact && !isHeading && 'py-0.5',
+        isSelfMention && 'bg-primary-container/10 hover:bg-primary-container/15',
+        isHeading && 'py-space-md mt-space-sm border-t border-surface-container-highest/80',
+        (menuOpen || reactPickerOpen) && 'z-50',
+        className,
+      )}
+      data-menu-open={menuOpen || reactPickerOpen ? '' : undefined}
+    >
+      {isSelfMention && (
+        <span
+          className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary-container"
+          aria-hidden
+        />
+      )}
+      {isHeading ? (
+        <div className="w-12 shrink-0 flex justify-center pt-1" aria-hidden>
+          <span className="material-symbols-outlined text-outline text-[22px]">title</span>
+        </div>
+      ) : showAvatar ? (
+        <Avatar
+          displayName={author.displayName}
+          imageUrl={author.avatarUrl}
+          size="lg"
+          status={author.status}
+          statusRing={false}
+          className="mt-0.5"
+        />
+      ) : (
+        <div className="w-12 shrink-0" aria-hidden />
+      )}
+      <div className="flex flex-col min-w-0 flex-1">
+        {isHeading ? (
+          <h3 className="font-headline-lg text-xl text-on-surface tracking-tight">{message.content}</h3>
+        ) : (
+          <>
+            <header className="flex items-baseline gap-space-sm flex-wrap">
+              <span
+                className="font-headline-md text-headline-md hover:underline cursor-pointer"
+                style={author.bannerColor ? { color: author.bannerColor } : { color: '#bd93f9' }}
+              >
+                {author.displayName}
+              </span>
+              <time className="font-label-sm text-label-sm text-outline" dateTime={message.createdAt}>
+                {formatTimestamp(message.createdAt)}
+              </time>
+              {message.updatedAt && (
+                <span className="font-label-sm text-label-sm text-outline">(düzenlendi)</span>
+              )}
+              {message.pinnedAt && (
+                <span className="font-label-sm text-label-sm text-primary-container inline-flex items-center gap-0.5">
+                  <span className="material-symbols-outlined text-[14px] leading-none">push_pin</span>
+                  Sabitlendi
+                </span>
+              )}
+            </header>
+            {message.replyTo && (
+              <button
+                type="button"
+                onClick={() => actions?.onJumpToMessage?.(message.replyTo!.id)}
+                className="mb-1 mt-0.5 max-w-md text-left rounded border-l-2 border-primary-container bg-surface-container-high/80 px-2 py-1 hover:bg-surface-bright"
+              >
+                <span className="block font-label-sm text-primary-container truncate">
+                  {message.replyTo.authorName}
+                </span>
+                <span className="block font-body-sm text-outline truncate text-[12px]">
+                  {message.replyTo.contentPreview}
+                </span>
+              </button>
+            )}
+            {message.forwardedFrom && (
+              <p className="mb-1 font-label-sm text-outline inline-flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">forward</span>
+                {message.forwardedFrom.authorName} mesajından iletildi
+              </p>
+            )}
+            {!hidePlainContent && (
+              <p
+                className={cn(
+                  'font-body-md text-body-md text-on-surface whitespace-pre-wrap break-words',
+                  sticker && 'mt-1',
+                )}
+              >
+                {renderMessageContent(message.content, mentionNames, channelNames)}
+              </p>
+            )}
+            {sticker && hidePlainContent && (
+              <div className="mt-1">
+                {renderMessageContent(message.content, mentionNames, channelNames)}
+              </div>
+            )}
+          </>
+        )}
+        {!isHeading && message.attachments && message.attachments.length > 0 && (
+          <ul className="flex flex-col gap-space-sm">
+            {message.attachments.map((a) => (
+              <li key={a.id}>
+                <MessageAttachmentView attachment={a} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {!isHeading && message.embeds && message.embeds.length > 0 && (
+          <div className="flex flex-col gap-space-xs">
+            {message.embeds.map((embed) => (
+              <MessageEmbedView key={embed.url} embed={embed} censored={censorLinkPreviews} />
+            ))}
+          </div>
+        )}
+        {!isHeading && message.poll && (
+          <div className="mt-space-sm max-w-md rounded-lg border border-surface-container-highest bg-surface-container-low p-space-sm space-y-space-xs">
+            <p className="font-headline-md text-on-surface">{message.poll.question}</p>
+            {message.poll.options.map((opt) => {
+              const pct =
+                message.poll!.totalVotes > 0
+                  ? Math.round((opt.voteCount / message.poll!.totalVotes) * 100)
+                  : 0;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={message.poll!.closed}
+                  onClick={() => actions?.onVotePoll?.(message, opt.id)}
+                  className={cn(
+                    'relative w-full text-left rounded-lg overflow-hidden border px-space-sm py-space-xs',
+                    opt.voted
+                      ? 'border-primary-container bg-primary-container/15'
+                      : 'border-surface-container-highest hover:bg-surface-bright',
+                  )}
+                >
+                  <span
+                    className="absolute inset-y-0 left-0 bg-primary-container/20"
+                    style={{ width: `${pct}%` }}
+                  />
+                  <span className="relative flex justify-between gap-space-sm font-body-sm">
+                    <span>{opt.text}</span>
+                    <span className="text-outline">
+                      {opt.voteCount} · %{pct}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {!isHeading && message.reactions && message.reactions.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {message.reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                onClick={() => actions?.onReact?.(message, r.emoji)}
+                className={cn(
+                  'h-7 px-2 rounded-full text-sm inline-flex items-center gap-1 border',
+                  r.me
+                    ? 'border-primary-container bg-primary-container/20'
+                    : 'border-surface-container-highest bg-surface-container-low hover:bg-surface-bright',
+                )}
+              >
+                <span>{r.emoji}</span>
+                <span className="font-label-sm text-outline">{r.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {actions && (
+        <div
+          className={cn(
+            'absolute right-space-sm -top-3 transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-50',
+            menuOpen || reactPickerOpen
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+          )}
+        >
+          {!isHeading &&
+            QUICK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="h-7 w-7 rounded hover:bg-surface-bright text-sm"
+                title="Tepki"
+                onClick={() => actions.onReact?.(message, emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+          {!isHeading && (
+            <button
+              type="button"
+              className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline"
+              title="Yanıtla"
+              onClick={() => actions.onReply?.(message)}
+            >
+              <span className="material-symbols-outlined text-[16px] leading-none">reply</span>
+            </button>
+          )}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline"
+              aria-label="Daha fazla"
+              aria-expanded={menuOpen}
+              onClick={() => {
+                setReactPickerOpen(false);
+                setMenuOpen((v) => !v);
+              }}
+            >
+              <span className="material-symbols-outlined text-[16px] leading-none">more_horiz</span>
+            </button>
+            {reactPickerOpen && (
+              <div className="absolute right-0 top-full mt-1 p-2 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float z-[60] flex flex-wrap gap-1 w-44">
+                {QUICK_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="h-8 w-8 rounded hover:bg-surface-bright text-lg"
+                    onClick={() => {
+                      actions.onReact?.(message, emoji);
+                      setReactPickerOpen(false);
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-52 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1 z-[60]">
+                {!isHeading && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setReactPickerOpen(true);
+                    }}
+                  >
+                    Tepki ekle
+                  </button>
+                )}
+                {!isHeading && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.onReply?.(message);
+                    }}
+                  >
+                    Yanıtla
+                  </button>
+                )}
+                {!isHeading && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.onForward?.(message);
+                    }}
+                  >
+                    İlet
+                  </button>
+                )}
+                {canPin && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.onPin?.(message, !message.pinnedAt);
+                    }}
+                  >
+                    {message.pinnedAt ? 'Sabitlemeyi kaldır' : 'Sabitle'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    actions.onCreateHeading?.(message);
+                  }}
+                >
+                  Alt başlık oluştur
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    actions.onMarkUnread?.(message);
+                  }}
+                >
+                  Okunmadı olarak işaretle
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                  onClick={() => void copyLink()}
+                >
+                  {linkCopied ? 'Kopyalandı!' : 'Mesaj bağlantısını kopyala'}
+                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.onEdit?.(message);
+                    }}
+                  >
+                    Düzenle
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-space-sm py-1.5 font-body-sm text-error hover:bg-error/10"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.onDelete?.(message);
+                    }}
+                  >
+                    Sil
+                  </button>
+                )}
+                {!isHeading && (
+                  <>
+                    <button
+                      type="button"
+                      className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        actions.onHide?.(message, false);
+                      }}
+                    >
+                      Gizle
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        actions.onHide?.(message, true);
+                      }}
+                    >
+                      Bir daha gösterme
+                    </button>
+                    {!isMine && (
+                      <button
+                        type="button"
+                        className="w-full text-left px-space-sm py-1.5 font-body-sm text-error hover:bg-error/10"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          actions.onBlockAuthor?.(message);
+                        }}
+                      >
+                        Kullanıcıyı engelle
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}

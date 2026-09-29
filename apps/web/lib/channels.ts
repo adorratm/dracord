@@ -59,6 +59,7 @@ export function buildSidebarCategories(
         name: ch.name,
         type: ch.type === 'VOICE' ? 'voice' : 'text',
         active: ch.id === activeChannelId,
+        unread: Boolean(ch.unread) && ch.id !== activeChannelId,
         voiceMembers: voiceMembers?.map((m) => ({
           id: m.id,
           displayName: m.displayName,

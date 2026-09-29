@@ -66,6 +66,14 @@ export class User extends CuidEntity {
   @Column({ type: 'boolean', default: false })
   censorLinkPreviews!: boolean;
 
+  /** Discord tarzı istemci tercihleri */
+  @Column({ type: 'jsonb', nullable: true })
+  clientSettings!: Record<string, unknown> | null;
+
+  /** Hesap devre dışı (giriş engeli) */
+  @Column({ type: 'timestamptz', nullable: true })
+  disabledAt!: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

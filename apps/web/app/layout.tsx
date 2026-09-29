@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { OnboardingGate } from '@/components/OnboardingGate';
 import { VoiceSessionProvider } from '@/components/VoiceSessionProvider';
+import { PreferencesProvider } from '@/lib/user-preferences';
 import './globals.css';
 
 const inter = Inter({
@@ -43,7 +44,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" className={`dark ${inter.variable}`}>
+    <html lang="tr" className={`dark ${inter.variable}`} suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -52,14 +53,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans antialiased">
         <AuthProvider>
-          <OnboardingGate>
-            <VoiceSessionProvider>
-              <Suspense fallback={null}>
-                <GlobalSearch />
-              </Suspense>
-              {children}
-            </VoiceSessionProvider>
-          </OnboardingGate>
+          <PreferencesProvider>
+            <OnboardingGate>
+              <VoiceSessionProvider>
+                <Suspense fallback={null}>
+                  <GlobalSearch />
+                </Suspense>
+                {children}
+              </VoiceSessionProvider>
+            </OnboardingGate>
+          </PreferencesProvider>
         </AuthProvider>
       </body>
     </html>

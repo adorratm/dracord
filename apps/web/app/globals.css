@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+html.dark {
+  color-scheme: dark;
+  --color-background: #11131e;
+  --color-surface: #11131e;
+  --color-surface-dim: #11131e;
+  --color-surface-bright: #373845;
+  --color-surface-container-lowest: #0b0e18;
+  --color-surface-container-low: #191b26;
+  --color-surface-container: #1d1f2b;
+  --color-surface-container-high: #272935;
+  --color-surface-container-highest: #323440;
+  --color-surface-variant: #323440;
+  --color-on-surface: #e1e1f1;
+  --color-on-surface-variant: #ccc3d3;
+  --color-on-background: #e1e1f1;
+  --color-primary: #d7baff;
+  --color-primary-container: #bd93f9;
+  --color-on-primary: #411478;
+  --color-on-primary-container: #4e2484;
+  --color-secondary: #b5c5fc;
+  --color-secondary-container: #374776;
+  --color-on-secondary: #1d2e5c;
+  --color-on-secondary-container: #a7b7ed;
+  --color-tertiary: #ffafd7;
+  --color-tertiary-container: #fe78c5;
+  --color-on-tertiary: #620044;
+  --color-on-tertiary-container: #770054;
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+  --color-on-error: #690005;
+  --color-on-error-container: #ffdad6;
+  --color-outline: #968e9c;
+  --color-outline-variant: #4a4451;
+}
+
+html.light {
+  color-scheme: light;
+  --color-background: #f2f3f5;
+  --color-surface: #ffffff;
+  --color-surface-dim: #e3e5e8;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2f3f5;
+  --color-surface-container: #ebedef;
+  --color-surface-container-high: #e3e5e8;
+  --color-surface-container-highest: #dcdfe3;
+  --color-surface-variant: #e3e5e8;
+  --color-on-surface: #060607;
+  --color-on-surface-variant: #4e5058;
+  --color-on-background: #060607;
+  --color-primary: #5865f2;
+  --color-primary-container: #4752c4;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #ffffff;
+  --color-secondary: #4e5058;
+  --color-secondary-container: #e3e5e8;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #2e3338;
+  --color-tertiary: #eb459e;
+  --color-tertiary-container: #c23a85;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #ffffff;
+  --color-error: #da373c;
+  --color-error-container: #fde2e3;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #5c0005;
+  --color-outline: #80848e;
+  --color-outline-variant: #c4c9ce;
+}
+
 @layer base {
   html,
   body {
@@ -25,6 +96,34 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html.high-contrast {
+    filter: contrast(1.12);
+  }
+
+  html.underline-links a {
+    text-decoration: underline !important;
+    text-underline-offset: 2px;
+  }
+
+  html.no-hw-accel * {
+    transform: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html.experimental-ui body {
+    outline: 2px dashed var(--color-primary-container);
+    outline-offset: -2px;
   }
 }
 

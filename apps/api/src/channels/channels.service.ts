@@ -4,10 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { EntityManager, In } from 'typeorm';
 import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
 import { GuildsService } from '@/guilds/guilds.service';
 import { Channel } from '@/database/entities/channel.entity';
+import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { ChannelType } from '@/database/enums';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
@@ -29,8 +30,16 @@ export class ChannelsService {
       order: { categoryId: 'ASC', position: 'ASC' },
     });
     const voiceMap = await this.voicePresence.listGuildVoice(guildId);
+    const unreadMap = await this.unreadByChannelIds(
+      userId,
+      channels.filter((c) => c.type === ChannelType.TEXT).map((c) => c.id),
+    );
     return channels.map((c) =>
-      this.toSummary(c, c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined),
+      this.toSummary(
+        c,
+        c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
+        c.type === ChannelType.TEXT ? unreadMap.get(c.id) : undefined,
+      ),
     );
   }
 
@@ -112,6 +121,39 @@ export class ChannelsService {
     await this.em.remove(Channel, channel);
   }
 
+  /** TEXT kanallar için okunmamış bayrağı (en son mesaj ≠ lastRead). */
+  async unreadByChannelIds(
+    userId: string,
+    channelIds: string[],
+  ): Promise<Map<string, boolean>> {
+    const map = new Map<string, boolean>();
+    if (channelIds.length === 0) return map;
+
+    const states = await this.em.find(ChannelReadState, {
+      where: { userId, channelId: In(channelIds) },
+    });
+    const lastRead = new Map(
+      states.map((s) => [s.channelId, s.lastReadMessageId] as const),
+    );
+
+    const latestRows = (await this.em.query(
+      `SELECT DISTINCT ON ("channelId") "channelId", id
+       FROM messages
+       WHERE "channelId" = ANY($1) AND "deletedAt" IS NULL
+       ORDER BY "channelId", "createdAt" DESC`,
+      [channelIds],
+    )) as Array<{ channelId: string; id: string }>;
+
+    for (const row of latestRows) {
+      const readId = lastRead.get(row.channelId) ?? null;
+      map.set(row.channelId, !readId || readId !== row.id);
+    }
+    for (const id of channelIds) {
+      if (!map.has(id)) map.set(id, false);
+    }
+    return map;
+  }
+
   private toSummary(
     channel: {
       id: string;
@@ -123,6 +165,7 @@ export class ChannelsService {
       topic?: string | null;
     },
     voiceMembers?: VoiceMemberSummary[],
+    unread?: boolean,
   ): ChannelSummary {
     return {
       id: channel.id,
@@ -133,6 +176,7 @@ export class ChannelsService {
       position: channel.position,
       topic: channel.topic ?? null,
       voiceMembers,
+      unread,
     };
   }
 }

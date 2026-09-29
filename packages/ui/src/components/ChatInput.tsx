@@ -52,18 +52,29 @@ export interface ChatInputProps {
   channelName?: string;
   placeholder?: string;
   disabled?: boolean;
-  onSend?: (text: string) => void;
+  onSend?: (text: string, meta?: { replyToId?: string }) => void;
   onSendMedia?: (payload: ChatMediaPayload) => void;
   onEmojiClick?: () => void;
   onAttachClick?: () => void;
   onAttachFiles?: (files: FileList | File[]) => void;
   /** Anket oluşturma (üstte + menüsünden) */
   onPollClick?: () => void;
+  /** Bölüm başlığı oluştur */
+  onHeadingClick?: () => void;
+  /** Yanıtlanan mesaj (composer quote) */
+  replyTo?: {
+    id: string;
+    authorName: string;
+    contentPreview: string;
+  } | null;
+  onCancelReply?: () => void;
   /** Tenor / harici GIF araması. Verilmezse yerel liste kullanılır. */
   searchGifs?: (query: string) => Promise<GifSearchResult[]>;
   loadFeaturedGifs?: () => Promise<GifSearchResult[]>;
   mentionUsers?: ChatMentionUser[];
   mentionChannels?: ChatMentionChannel[];
+  /** Tarayıcı yazım denetimi */
+  spellCheck?: boolean;
   className?: string;
 }
 
@@ -131,10 +142,14 @@ export function ChatInput({
   onAttachClick,
   onAttachFiles,
   onPollClick,
+  onHeadingClick,
+  replyTo,
+  onCancelReply,
   searchGifs,
   loadFeaturedGifs,
   mentionUsers = [],
   mentionChannels = [],
+  spellCheck = true,
   className,
 }: ChatInputProps) {
   const [value, setValue] = useState('');
@@ -241,12 +256,13 @@ export function ChatInput({
   const submit = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    onSend?.(trimmed);
+    onSend?.(trimmed, replyTo ? { replyToId: replyTo.id } : undefined);
     setValue('');
     setPickerOpen(false);
     setMention(null);
+    onCancelReply?.();
     requestAnimationFrame(() => resizeTextarea());
-  }, [value, disabled, onSend, resizeTextarea]);
+  }, [value, disabled, onSend, replyTo, onCancelReply, resizeTextarea]);
 
   const mentionUserOptions = useMemo(() => {
     const q = (mention?.kind === 'user' ? mention.query : '').toLowerCase();
@@ -583,9 +599,8 @@ export function ChatInput({
     <div
       ref={rootRef}
       className={cn(
-        // Sol UserPanel (h-16) ile aynı yükseklik; uzun metinde yukarı büyür
-        'px-space-md flex shrink-0 relative box-border',
-        expanded ? 'min-h-16 items-end py-2' : 'h-16 items-center',
+        'px-space-md flex flex-col shrink-0 relative box-border',
+        expanded || replyTo ? 'min-h-16 justify-end py-2' : 'h-16 justify-center',
         className,
       )}
       onDragEnter={onDragEnter}
@@ -596,6 +611,25 @@ export function ChatInput({
       {dragging && (
         <div className="absolute inset-1 z-30 rounded-xl border-2 border-dashed border-primary-container bg-primary-container/10 flex items-center justify-center pointer-events-none">
           <p className="font-headline-md text-primary-container">Dosyaları buraya bırak (çoklu)</p>
+        </div>
+      )}
+
+      {replyTo && (
+        <div className="mb-1.5 mx-0 flex items-center gap-2 rounded-lg bg-surface-container-high border-l-4 border-primary-container px-3 py-1.5">
+          <div className="min-w-0 flex-1">
+            <p className="font-label-sm text-primary-container truncate">
+              {replyTo.authorName} yanıtlanıyor
+            </p>
+            <p className="font-body-sm text-outline truncate text-[12px]">{replyTo.contentPreview}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onCancelReply?.()}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-outline hover:bg-surface-bright"
+            aria-label="Yanıtı iptal et"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
         </div>
       )}
 
@@ -1045,23 +1079,26 @@ export function ChatInput({
           {attachOpen && (
             <div className="absolute bottom-full left-0 mb-2 z-40 w-72 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
               <div className="p-2 flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    fileRef.current?.click();
-                  }}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left hover:bg-surface-container transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[22px] text-primary-container leading-none">
-                    upload_file
-                  </span>
-                  <span className="flex flex-col min-w-0">
-                    <span className="font-label-md text-on-surface">Dosya yükle</span>
-                    <span className="font-body-sm text-outline text-[12px]">
-                      Birden fazla dosya seçebilirsin
+                {onHeadingClick && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachOpen(false);
+                      onHeadingClick();
+                    }}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left hover:bg-surface-container transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[22px] text-primary-container leading-none">
+                      title
                     </span>
-                  </span>
-                </button>
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-label-md text-on-surface">Bölüm başlığı</span>
+                      <span className="font-body-sm text-outline text-[12px]">
+                        Sohbette görsel bölüm ayırıcı
+                      </span>
+                    </span>
+                  </button>
+                )}
                 {onPollClick && (
                   <button
                     type="button"
@@ -1083,13 +1120,15 @@ export function ChatInput({
                   </button>
                 )}
               </div>
-              <div
+              <button
+                type="button"
                 className={cn(
-                  'mx-2 mb-2 rounded-lg border-2 border-dashed px-3 py-5 flex flex-col items-center justify-center gap-1 transition-colors',
+                  'mx-2 mb-2 w-[calc(100%-1rem)] rounded-lg border-2 border-dashed px-3 py-5 flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer',
                   attachDragging
                     ? 'border-primary-container bg-primary-container/10 text-primary-container'
                     : 'border-surface-container-highest text-outline hover:border-primary-container/50',
                 )}
+                onClick={() => fileRef.current?.click()}
                 onDragEnter={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1115,15 +1154,15 @@ export function ChatInput({
                 }}
               >
                 <span className="material-symbols-outlined text-[28px] leading-none">
-                  {attachDragging ? 'file_download' : 'drag_indicator'}
+                  {attachDragging ? 'file_download' : 'upload_file'}
                 </span>
                 <p className="font-label-md text-center">
-                  {attachDragging ? 'Bırak — yüklenecek' : 'Dosyaları buraya sürükle'}
+                  {attachDragging ? 'Bırak — yüklenecek' : 'Dosyaları sürükle veya tıkla'}
                 </p>
                 <p className="font-body-sm text-[11px] text-center opacity-80">
                   Çoklu dosya desteklenir
                 </p>
-              </div>
+              </button>
             </div>
           )}
         </div>
@@ -1155,6 +1194,7 @@ export function ChatInput({
             }}
             onKeyDown={onComposerKeyDown}
             disabled={disabled}
+            spellCheck={spellCheck}
             rows={1}
             placeholder={resolvedPlaceholder}
             className="relative block w-full m-0 border-0 bg-transparent placeholder:text-dracula-comment font-body-md text-body-md leading-6 resize-none outline-none overflow-y-auto whitespace-pre-wrap break-words min-h-[24px] text-transparent [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"

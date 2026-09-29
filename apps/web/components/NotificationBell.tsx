@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { DracoEmpty } from '@/components/Draco';
+import { useUserPreferences } from '@/lib/user-preferences';
 
 function typeIcon(type: NotificationDto['type']): string {
   switch (type) {
@@ -20,21 +21,46 @@ function typeIcon(type: NotificationDto['type']): string {
   }
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, hour24: boolean, locale: string): string {
   try {
-    return new Date(iso).toLocaleString('tr-TR', {
+    return new Date(iso).toLocaleString(locale, {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit',
+      hour12: !hour24,
     });
   } catch {
     return '';
   }
 }
 
+function inQuietHours(): boolean {
+  const h = new Date().getHours();
+  return h >= 23 || h < 7;
+}
+
+function playNotifySound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.04;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.12);
+    window.setTimeout(() => void ctx.close(), 300);
+  } catch {
+    // ignore
+  }
+}
+
 export function NotificationBell() {
   const { client, user, ready } = useAuth();
+  const { prefs } = useUserPreferences();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationDto[]>([]);
@@ -60,8 +86,26 @@ export function NotificationBell() {
     void refresh();
     const sock = client.connectSocket();
     const onNotif = (n: NotificationDto) => {
+      if (prefs.notifications.mentionsOnly && n.type !== 'MENTION') return;
+      if (prefs.notifications.quietHours && inQuietHours()) return;
+
       setItems((prev) => [n, ...prev.filter((x) => x.id !== n.id)].slice(0, 40));
       setUnread((c) => c + 1);
+
+      if (prefs.notifications.soundEnabled) playNotifySound();
+
+      if (
+        prefs.notifications.desktopEnabled &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted' &&
+        document.visibilityState === 'hidden'
+      ) {
+        try {
+          new Notification(n.title, { body: n.body, tag: n.id });
+        } catch {
+          // ignore
+        }
+      }
     };
     sock.on(SocketEvents.NOTIFICATION_CREATE, onNotif);
     const interval = window.setInterval(() => void refresh(), 60_000);
@@ -69,7 +113,7 @@ export function NotificationBell() {
       sock.off(SocketEvents.NOTIFICATION_CREATE, onNotif);
       window.clearInterval(interval);
     };
-  }, [ready, user, client, refresh]);
+  }, [ready, user, client, refresh, prefs.notifications]);
 
   useEffect(() => {
     if (!open) return;
@@ -111,6 +155,9 @@ export function NotificationBell() {
 
   if (!user) return null;
 
+  const showBadge = prefs.notifications.unreadBadge && unread > 0;
+  const locale = prefs.language.locale === 'en' ? 'en-US' : 'tr-TR';
+
   return (
     <div className="relative" ref={rootRef}>
       <button
@@ -120,7 +167,7 @@ export function NotificationBell() {
         aria-label="Bildirimler"
       >
         <span className="material-symbols-outlined text-[20px] leading-none">notifications</span>
-        {unread > 0 && (
+        {showBadge && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center">
             {unread > 99 ? '99+' : unread}
           </span>
@@ -166,7 +213,9 @@ export function NotificationBell() {
                   <div className="min-w-0 flex-1">
                     <p className="font-label-md text-on-surface truncate">{n.title}</p>
                     <p className="font-body-sm text-on-surface-variant line-clamp-2">{n.body}</p>
-                    <p className="font-label-sm text-outline mt-0.5">{formatTime(n.createdAt)}</p>
+                    <p className="font-label-sm text-outline mt-0.5">
+                      {formatTime(n.createdAt, prefs.language.hour24, locale)}
+                    </p>
                   </div>
                 </button>
               ))

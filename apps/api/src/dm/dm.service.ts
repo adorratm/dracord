@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { ChannelSummary } from '@dracord/types';
 import { EntityManager } from 'typeorm';
+import { ChannelsService } from '@/channels/channels.service';
 import { Channel } from '@/database/entities/channel.entity';
 import { DMChannel } from '@/database/entities/dm-channel.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
@@ -12,12 +14,14 @@ import { Friendship } from '@/database/entities/friendship.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType, FriendshipStatus } from '@/database/enums';
 import { SearchIndexerService } from '@/search/search-indexer.service';
+import { mergeClientSettings } from '@/users/client-settings';
 
 @Injectable()
 export class DmService {
   constructor(
     private readonly em: EntityManager,
     private readonly indexer: SearchIndexerService,
+    private readonly channels: ChannelsService,
   ) {}
 
   async openOrCreate(userId: string, otherUserId: string): Promise<ChannelSummary> {
@@ -27,17 +31,20 @@ export class DmService {
     const other = await this.em.findOne(User, { where: { id: otherUserId } });
     if (!other) throw new NotFoundException('Kullanıcı bulunamadı');
 
-    const friendship = await this.em.findOne(Friendship, {
+    // Engellenmiş mi?
+    const blocked = await this.em.findOne(Friendship, {
       where: [
-        { userId, friendId: otherUserId, status: FriendshipStatus.ACCEPTED },
-        { userId: otherUserId, friendId: userId, status: FriendshipStatus.ACCEPTED },
+        { userId: otherUserId, friendId: userId, status: FriendshipStatus.BLOCKED },
+        { userId, friendId: otherUserId, status: FriendshipStatus.BLOCKED },
       ],
     });
-    if (!friendship) {
-      throw new BadRequestException('Yalnızca arkadaşlarınla DM açabilirsin');
+    if (blocked) {
+      throw new BadRequestException('Bu kullanıcıyla DM açılamaz');
     }
 
-    // Find existing 1:1 DM where both are members
+    await this.assertDmAllowed(userId, other);
+
+    // Mevcut 1:1 DM
     const myMemberships = await this.em.find(DMChannelMember, {
       where: { userId },
     });
@@ -83,11 +90,13 @@ export class DmService {
   async listForUser(userId: string): Promise<ChannelSummary[]> {
     const memberships = await this.em.find(DMChannelMember, { where: { userId } });
     const out: ChannelSummary[] = [];
+    const channelRows: Channel[] = [];
     for (const m of memberships) {
       const channel = await this.em.findOne(Channel, {
         where: { dmChannelId: m.dmChannelId, type: ChannelType.TEXT },
       });
       if (!channel) continue;
+      channelRows.push(channel);
       const others = await this.em.find(DMChannelMember, {
         where: { dmChannelId: m.dmChannelId },
         relations: { user: true },
@@ -95,7 +104,31 @@ export class DmService {
       const peer = others.find((o) => o.userId !== userId);
       out.push(this.toSummary(channel, peer?.user?.displayName ?? channel.name));
     }
-    return out;
+    const unreadMap = await this.channels.unreadByChannelIds(
+      userId,
+      channelRows.map((c) => c.id),
+    );
+    return out.map((s) => ({ ...s, unread: unreadMap.get(s.id) ?? false }));
+  }
+
+  private async assertDmAllowed(fromUserId: string, other: User): Promise<void> {
+    if (other.disabledAt) {
+      throw new ForbiddenException('Bu hesap kullanılamıyor');
+    }
+    const settings = mergeClientSettings(other.clientSettings);
+    const level = settings.messaging.whoCanDm;
+    if (level === 'nobody') {
+      throw new ForbiddenException('Bu kullanıcı DM kabul etmiyor');
+    }
+    const friendship = await this.em.findOne(Friendship, {
+      where: [
+        { userId: fromUserId, friendId: other.id, status: FriendshipStatus.ACCEPTED },
+        { userId: other.id, friendId: fromUserId, status: FriendshipStatus.ACCEPTED },
+      ],
+    });
+    if (level === 'friends' && !friendship) {
+      throw new BadRequestException('Yalnızca arkadaşlarınla DM açabilirsin');
+    }
   }
 
   private toSummary(channel: Channel, displayName: string): ChannelSummary {

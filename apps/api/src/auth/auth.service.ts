@@ -246,10 +246,17 @@ export class AuthService {
   }
 
   async getUserById(userId: string): Promise<User> {
-    return this.em.findOneOrFail(User, { where: { id: userId } });
+    const user = await this.em.findOneOrFail(User, { where: { id: userId } });
+    if (user.disabledAt) {
+      throw new UnauthorizedException('Hesap devre dışı');
+    }
+    return user;
   }
 
   private async issueTokens(user: User): Promise<AuthTokens> {
+    if (user.disabledAt) {
+      throw new UnauthorizedException('Hesap devre dışı. Yeniden etkinleştirmek için destekle iletişime geç.');
+    }
     const sessionId = randomBytes(16).toString('hex');
     const refreshToken = randomBytes(32).toString('hex');
     const refreshTokenHash = await bcrypt.hash(refreshToken, 10);

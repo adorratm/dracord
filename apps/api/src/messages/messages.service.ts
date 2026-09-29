@@ -4,27 +4,31 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager, In, IsNull, LessThan, MoreThan } from 'typeorm';
+import { EntityManager, In, IsNull, LessThan, MoreThan, Not } from 'typeorm';
 import { createId } from '@paralleldrive/cuid2';
-import type {
-  MessageAttachment,
-  MessageDto,
-  MessageEmbed,
-  MessagePage,
-  MessagePollDto,
-  MessageReactionDto,
-  NotificationDto,
-} from '@dracord/types';
-import { toPublicUser } from '@/common/user.mapper';
-import { GuildPermissions } from '@/common/permissions';
-import { ChannelsService } from '@/channels/channels.service';
 import { Channel } from '@/database/entities/channel.entity';
+import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { Friendship } from '@/database/entities/friendship.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
 import { Message } from '@/database/entities/message.entity';
 import { MessageHide } from '@/database/entities/message-hide.entity';
 import { Reaction } from '@/database/entities/reaction.entity';
 import { User } from '@/database/entities/user.entity';
+import type {
+  MessageAttachment,
+  MessageDto,
+  MessageEmbed,
+  MessageForwardedFrom,
+  MessagePage,
+  MessagePollDto,
+  MessageReactionDto,
+  MessageReplyRef,
+  MessageType,
+  NotificationDto,
+} from '@dracord/types';
+import { toPublicUser } from '@/common/user.mapper';
+import { GuildPermissions } from '@/common/permissions';
+import { ChannelsService } from '@/channels/channels.service';
 import { FriendshipStatus } from '@/database/enums';
 import { GuildsService } from '@/guilds/guilds.service';
 import { NotificationsService } from '@/notifications/notifications.service';
@@ -33,6 +37,13 @@ import { SearchIndexerService } from '@/search/search-indexer.service';
 import { LinkPreviewService } from './link-preview.service';
 import { MessagesRealtimeService } from './messages-realtime.service';
 
+type MessagePollStored = {
+  question: string;
+  options: Array<{ id: string; text: string }>;
+  votes: Record<string, string[]>;
+  multi: boolean;
+  closed?: boolean;
+};
 @Injectable()
 export class MessagesService {
   constructor(
@@ -160,6 +171,25 @@ export class MessagesService {
       reactionByMsg.set(r.messageId, list);
     }
 
+    const replyIds = [
+      ...new Set(messages.map((m) => m.replyToId).filter((id): id is string => Boolean(id))),
+    ];
+    const replyMap = new Map<string, MessageReplyRef>();
+    if (replyIds.length) {
+      const parents = await this.em.find(Message, {
+        where: { id: In(replyIds) },
+        relations: { author: true },
+      });
+      for (const p of parents) {
+        replyMap.set(p.id, {
+          id: p.id,
+          authorId: p.authorId,
+          authorName: p.author?.displayName ?? 'Kullanıcı',
+          contentPreview: (p.content || '').slice(0, 120),
+        });
+      }
+    }
+
     const out: MessageDto[] = [];
     for (const m of messages) {
       if (blocked.has(m.authorId)) continue;
@@ -170,6 +200,7 @@ export class MessagesService {
           viewerId,
           hideMode: mode === 'HIDDEN' ? 'hidden' : null,
           reactions: reactionByMsg.get(m.id) ?? [],
+          replyTo: m.replyToId ? replyMap.get(m.replyToId) ?? null : null,
         }),
       );
     }
@@ -197,12 +228,18 @@ export class MessagesService {
     content: string,
     attachments?: MessageAttachment[],
     pollInput?: { question: string; options: string[]; multi?: boolean },
+    opts: {
+      replyToId?: string;
+      type?: MessageType;
+      forwardedFrom?: MessageForwardedFrom | null;
+    } = {},
   ): Promise<{ message: MessageDto; notifications: NotificationDto[] }> {
     await this.channels.getChannel(channelId, userId);
     const channelRow = await this.em.findOne(Channel, { where: { id: channelId } });
     const trimmed = content.trim();
+    const msgType: MessageType = opts.type === 'heading' ? 'heading' : 'default';
     let poll: MessagePollStored | null = null;
-    if (pollInput) {
+    if (pollInput && msgType === 'default') {
       if (channelRow?.guildId) {
         const ok =
           (await this.guilds.memberHasPermission(
@@ -216,7 +253,6 @@ export class MessagesService {
             GuildPermissions.SEND_MESSAGES,
           )) ||
           (await this.guilds.listMyPermissions(channelRow.guildId, userId)).owner;
-        // CREATE_POLLS or SEND_MESSAGES or owner — soft: allow members with SEND
         void ok;
       }
       const options = pollInput.options
@@ -236,16 +272,50 @@ export class MessagesService {
         closed: false,
       };
     }
-    if (!trimmed && (!attachments || attachments.length === 0) && !poll) {
+    if (msgType === 'heading') {
+      if (!trimmed) throw new BadRequestException('Başlık boş olamaz');
+      if (trimmed.length > 200) throw new BadRequestException('Başlık çok uzun');
+    }
+    if (
+      !trimmed &&
+      (!attachments || attachments.length === 0) &&
+      !poll &&
+      msgType === 'default' &&
+      !opts.forwardedFrom
+    ) {
       throw new BadRequestException('Mesaj boş olamaz');
     }
-    const embeds = trimmed ? await this.linkPreview.buildEmbeds(trimmed) : [];
+
+    let replyToId: string | null = null;
+    let replyRef: MessageReplyRef | null = null;
+    if (opts.replyToId) {
+      const parent = await this.em.findOne(Message, {
+        where: { id: opts.replyToId, channelId, deletedAt: IsNull() },
+        relations: { author: true },
+      });
+      if (!parent) throw new BadRequestException('Yanıtlanan mesaj bulunamadı');
+      replyToId = parent.id;
+      replyRef = {
+        id: parent.id,
+        authorId: parent.authorId,
+        authorName: parent.author?.displayName ?? 'Kullanıcı',
+        contentPreview: (parent.content || '').slice(0, 120),
+      };
+    }
+
+    const embeds =
+      msgType === 'default' && trimmed ? await this.linkPreview.buildEmbeds(trimmed) : [];
     const saved = await this.em.save(
       Message,
       this.em.create(Message, {
         channelId,
         authorId: userId,
-        content: trimmed || (poll ? ' ' : ' '),
+        content: trimmed || (poll || opts.forwardedFrom ? ' ' : ' '),
+        type: msgType,
+        replyToId,
+        pinnedAt: null,
+        pinnedById: null,
+        forwardedFrom: opts.forwardedFrom ?? null,
         attachments: attachments?.length ? attachments : null,
         embeds: embeds.length ? embeds : null,
         poll,
@@ -255,7 +325,11 @@ export class MessagesService {
       where: { id: saved.id },
       relations: { author: true },
     });
-    const dto = this.toDto(message, { viewerId: userId, reactions: [] });
+    const dto = this.toDto(message, {
+      viewerId: userId,
+      reactions: [],
+      replyTo: replyRef,
+    });
     void this.indexer
       .indexMessage(dto, {
         guildId: channelRow?.guildId ?? null,
@@ -263,9 +337,194 @@ export class MessagesService {
       })
       .catch(() => undefined);
 
-    const notifications = await this.createMessageNotifications(dto, channelRow, userId);
+    const notifications =
+      msgType === 'heading'
+        ? []
+        : await this.createMessageNotifications(dto, channelRow, userId);
     this.realtime.emitCreate(channelId, dto);
     return { message: dto, notifications };
+  }
+
+  async forwardMessage(
+    messageId: string,
+    userId: string,
+    targetChannelId: string,
+    note?: string,
+  ): Promise<MessageDto> {
+    const source = await this.em.findOne(Message, {
+      where: { id: messageId, deletedAt: IsNull() },
+      relations: { author: true },
+    });
+    if (!source) throw new NotFoundException('Mesaj bulunamadı');
+    await this.channels.getChannel(source.channelId, userId);
+    await this.channels.getChannel(targetChannelId, userId);
+
+    const snapshot: MessageForwardedFrom = {
+      messageId: source.id,
+      channelId: source.channelId,
+      authorId: source.authorId,
+      authorName: source.author?.displayName ?? 'Kullanıcı',
+      contentPreview: (source.content || '').slice(0, 200),
+      createdAt: source.createdAt.toISOString(),
+    };
+    const { message } = await this.createMessage(
+      targetChannelId,
+      userId,
+      note?.trim() || '',
+      source.attachments ?? undefined,
+      undefined,
+      { forwardedFrom: snapshot },
+    );
+    return message;
+  }
+
+  async pinMessage(messageId: string, userId: string): Promise<MessageDto> {
+    const message = await this.em.findOne(Message, {
+      where: { id: messageId, deletedAt: IsNull() },
+      relations: { author: true },
+    });
+    if (!message) throw new NotFoundException('Mesaj bulunamadı');
+    await this.channels.getChannel(message.channelId, userId);
+    await this.requireManageMessages(message.channelId, userId);
+    message.pinnedAt = new Date();
+    message.pinnedById = userId;
+    await this.em.save(Message, message);
+    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const dto = await this.toDtoWithReply(message, userId, reactions);
+    this.realtime.emitUpdate(message.channelId, dto);
+    return dto;
+  }
+
+  async unpinMessage(messageId: string, userId: string): Promise<MessageDto> {
+    const message = await this.em.findOne(Message, {
+      where: { id: messageId, deletedAt: IsNull() },
+      relations: { author: true },
+    });
+    if (!message) throw new NotFoundException('Mesaj bulunamadı');
+    await this.channels.getChannel(message.channelId, userId);
+    await this.requireManageMessages(message.channelId, userId);
+    message.pinnedAt = null;
+    message.pinnedById = null;
+    await this.em.save(Message, message);
+    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const dto = await this.toDtoWithReply(message, userId, reactions);
+    this.realtime.emitUpdate(message.channelId, dto);
+    return dto;
+  }
+
+  async listPinned(channelId: string, userId: string): Promise<MessageDto[]> {
+    await this.channels.getChannel(channelId, userId);
+    const messages = await this.em.find(Message, {
+      where: { channelId, deletedAt: IsNull(), pinnedAt: Not(IsNull()) },
+      relations: { author: true },
+      order: { pinnedAt: 'DESC' },
+      take: 50,
+    });
+    return this.mapMessagesForViewer(messages, userId);
+  }
+
+  async markChannelRead(
+    channelId: string,
+    userId: string,
+    opts: { messageId?: string; unreadFrom?: boolean } = {},
+  ): Promise<{ lastReadMessageId: string | null }> {
+    await this.channels.getChannel(channelId, userId);
+    let lastReadMessageId: string | null = null;
+
+    if (opts.messageId && opts.unreadFrom) {
+      const target = await this.em.findOne(Message, {
+        where: { id: opts.messageId, channelId, deletedAt: IsNull() },
+      });
+      if (!target) throw new NotFoundException('Mesaj bulunamadı');
+      const prev = await this.em.findOne(Message, {
+        where: {
+          channelId,
+          deletedAt: IsNull(),
+          createdAt: LessThan(target.createdAt),
+        },
+        order: { createdAt: 'DESC' },
+      });
+      lastReadMessageId = prev?.id ?? null;
+    } else if (opts.messageId) {
+      const target = await this.em.findOne(Message, {
+        where: { id: opts.messageId, channelId, deletedAt: IsNull() },
+      });
+      if (!target) throw new NotFoundException('Mesaj bulunamadı');
+      lastReadMessageId = target.id;
+    } else {
+      const latest = await this.em.findOne(Message, {
+        where: { channelId, deletedAt: IsNull() },
+        order: { createdAt: 'DESC' },
+      });
+      lastReadMessageId = latest?.id ?? null;
+    }
+
+    let state = await this.em.findOne(ChannelReadState, {
+      where: { userId, channelId },
+    });
+    if (!state) {
+      state = this.em.create(ChannelReadState, { userId, channelId });
+    }
+    state.lastReadMessageId = lastReadMessageId;
+    state.lastReadAt = new Date();
+    await this.em.save(ChannelReadState, state);
+    return { lastReadMessageId };
+  }
+
+  async getReadState(
+    channelId: string,
+    userId: string,
+  ): Promise<{ lastReadMessageId: string | null; unread: boolean }> {
+    await this.channels.getChannel(channelId, userId);
+    const state = await this.em.findOne(ChannelReadState, {
+      where: { userId, channelId },
+    });
+    const latest = await this.em.findOne(Message, {
+      where: { channelId, deletedAt: IsNull() },
+      order: { createdAt: 'DESC' },
+    });
+    const lastReadMessageId = state?.lastReadMessageId ?? null;
+    const unread = Boolean(
+      latest && lastReadMessageId && latest.id !== lastReadMessageId,
+    ) || Boolean(latest && !lastReadMessageId);
+    return { lastReadMessageId, unread: latest ? unread : false };
+  }
+
+  private async requireManageMessages(channelId: string, userId: string) {
+    const channel = await this.em.findOne(Channel, { where: { id: channelId } });
+    if (!channel?.guildId) return; // DM: herkes pinleyebilir
+    const ok = await this.guilds.memberHasPermission(
+      channel.guildId,
+      userId,
+      GuildPermissions.MANAGE_MESSAGES,
+    );
+    if (ok) return;
+    const perms = await this.guilds.listMyPermissions(channel.guildId, userId);
+    if (perms.owner || perms.permissions.includes('ADMINISTRATOR')) return;
+    throw new ForbiddenException('Mesaj sabitleme yetkin yok');
+  }
+
+  private async toDtoWithReply(
+    message: Message,
+    viewerId: string,
+    reactions: Reaction[],
+  ): Promise<MessageDto> {
+    let replyTo: MessageReplyRef | null = null;
+    if (message.replyToId) {
+      const parent = await this.em.findOne(Message, {
+        where: { id: message.replyToId },
+        relations: { author: true },
+      });
+      if (parent) {
+        replyTo = {
+          id: parent.id,
+          authorId: parent.authorId,
+          authorName: parent.author?.displayName ?? 'Kullanıcı',
+          contentPreview: (parent.content || '').slice(0, 120),
+        };
+      }
+    }
+    return this.toDto(message, { viewerId, reactions, replyTo });
   }
 
   async updateMessage(messageId: string, userId: string, content: string): Promise<MessageDto> {
@@ -561,6 +820,7 @@ export class MessagesService {
       viewerId?: string;
       hideMode?: 'hidden' | null;
       reactions?: Reaction[];
+      replyTo?: MessageReplyRef | null;
     } = {},
   ): MessageDto {
     const hidden = opts.hideMode === 'hidden';
@@ -569,6 +829,10 @@ export class MessagesService {
       channelId: message.channelId,
       author: toPublicUser(message.author),
       content: hidden ? '' : message.content,
+      type: message.type ?? 'default',
+      replyTo: hidden ? null : (opts.replyTo ?? null),
+      pinnedAt: message.pinnedAt?.toISOString() ?? null,
+      forwardedFrom: hidden ? null : (message.forwardedFrom ?? null),
       attachments: hidden ? undefined : (message.attachments ?? undefined),
       embeds: hidden ? undefined : message.embeds?.length ? message.embeds : undefined,
       reactions: hidden ? [] : this.toReactionsDto(opts.reactions ?? [], opts.viewerId),

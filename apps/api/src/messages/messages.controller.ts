@@ -14,7 +14,11 @@ import {
   type JwtPayloadUser,
 } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { CreateMessageDto } from '@/messages/dto/create-message.dto';
+import {
+  CreateMessageDto,
+  ForwardMessageDto,
+  MarkReadDto,
+} from '@/messages/dto/create-message.dto';
 import { MessagesService } from './messages.service';
 
 @Controller()
@@ -38,6 +42,34 @@ export class MessagesController {
     });
   }
 
+  @Get('channels/:channelId/pins')
+  listPins(
+    @Param('channelId') channelId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.messagesService.listPinned(channelId, user.sub);
+  }
+
+  @Get('channels/:channelId/read-state')
+  readState(
+    @Param('channelId') channelId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.messagesService.getReadState(channelId, user.sub);
+  }
+
+  @Post('channels/:channelId/read')
+  markRead(
+    @Param('channelId') channelId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: MarkReadDto,
+  ) {
+    return this.messagesService.markChannelRead(channelId, user.sub, {
+      messageId: body.messageId,
+      unreadFrom: body.unreadFrom,
+    });
+  }
+
   @Post('channels/:channelId/messages')
   async create(
     @Param('channelId') channelId: string,
@@ -50,6 +82,7 @@ export class MessagesController {
       dto.content ?? '',
       dto.attachments,
       dto.poll,
+      { replyToId: dto.replyToId, type: dto.type },
     );
     return message;
   }
@@ -87,6 +120,36 @@ export class MessagesController {
     @Body() body: { optionId: string },
   ) {
     return this.messagesService.votePoll(messageId, user.sub, body.optionId ?? '');
+  }
+
+  @Post('messages/:messageId/pin')
+  pin(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.messagesService.pinMessage(messageId, user.sub);
+  }
+
+  @Delete('messages/:messageId/pin')
+  unpin(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.messagesService.unpinMessage(messageId, user.sub);
+  }
+
+  @Post('messages/:messageId/forward')
+  forward(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: ForwardMessageDto,
+  ) {
+    return this.messagesService.forwardMessage(
+      messageId,
+      user.sub,
+      body.targetChannelId,
+      body.content,
+    );
   }
 
   @Post('messages/:messageId/hide')

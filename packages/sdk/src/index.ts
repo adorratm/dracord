@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import type {
   AuthTokens,
   ChannelSummary,
+  ClientSettings,
   GuildInviteDto,
   GuildSummary,
   MessageAttachment,
@@ -161,6 +162,33 @@ export class DracordClient {
     censorLinkPreviews?: boolean;
   }): Promise<PublicUser> {
     return this.request('/users/me', { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async getClientSettings(): Promise<ClientSettings> {
+    return this.request('/users/me/settings');
+  }
+
+  async updateClientSettings(
+    patch: Partial<ClientSettings>,
+  ): Promise<ClientSettings> {
+    return this.request('/users/me/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ ok: true }> {
+    return this.request('/users/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
+  async deactivateAccount(password?: string): Promise<{ ok: true }> {
+    return this.request('/users/me/deactivate', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
   }
 
   async loginDev(username?: string): Promise<AuthTokens & { user: PublicUser }> {
@@ -335,10 +363,20 @@ export class DracordClient {
     content: string,
     attachments?: MessageAttachment[],
     poll?: { question: string; options: string[]; multi?: boolean },
+    opts?: {
+      replyToId?: string;
+      type?: 'default' | 'heading';
+    },
   ): Promise<MessageDto> {
     return this.request(`/channels/${channelId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content, attachments, poll }),
+      body: JSON.stringify({
+        content,
+        attachments,
+        poll,
+        replyToId: opts?.replyToId,
+        type: opts?.type,
+      }),
     });
   }
 
@@ -365,6 +403,45 @@ export class DracordClient {
       method: 'POST',
       body: JSON.stringify({ optionId }),
     });
+  }
+
+  async pinMessage(messageId: string): Promise<MessageDto> {
+    return this.request(`/messages/${messageId}/pin`, { method: 'POST' });
+  }
+
+  async unpinMessage(messageId: string): Promise<MessageDto> {
+    return this.request(`/messages/${messageId}/pin`, { method: 'DELETE' });
+  }
+
+  async listPinnedMessages(channelId: string): Promise<MessageDto[]> {
+    return this.request(`/channels/${channelId}/pins`);
+  }
+
+  async forwardMessage(
+    messageId: string,
+    targetChannelId: string,
+    content?: string,
+  ): Promise<MessageDto> {
+    return this.request(`/messages/${messageId}/forward`, {
+      method: 'POST',
+      body: JSON.stringify({ targetChannelId, content }),
+    });
+  }
+
+  async markChannelRead(
+    channelId: string,
+    opts?: { messageId?: string; unreadFrom?: boolean },
+  ): Promise<{ lastReadMessageId: string | null }> {
+    return this.request(`/channels/${channelId}/read`, {
+      method: 'POST',
+      body: JSON.stringify(opts ?? {}),
+    });
+  }
+
+  async getChannelReadState(
+    channelId: string,
+  ): Promise<{ lastReadMessageId: string | null; unread: boolean }> {
+    return this.request(`/channels/${channelId}/read-state`);
   }
 
   async hideMessage(messageId: string, permanent = false): Promise<{ ok: true }> {

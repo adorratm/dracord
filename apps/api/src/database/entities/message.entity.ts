@@ -11,6 +11,17 @@ import type { Channel } from './channel.entity';
 import type { User } from './user.entity';
 import type { Reaction } from './reaction.entity';
 
+export type MessageType = 'default' | 'heading';
+
+export type MessageForwardedFrom = {
+  messageId: string;
+  channelId: string;
+  authorId: string;
+  authorName: string;
+  contentPreview: string;
+  createdAt: string;
+};
+
 @Entity('messages')
 export class Message extends CuidEntity {
   @Column({ type: 'varchar' })
@@ -21,6 +32,21 @@ export class Message extends CuidEntity {
 
   @Column({ type: 'text' })
   content!: string;
+
+  @Column({ type: 'varchar', default: 'default' })
+  type!: MessageType;
+
+  @Column({ type: 'varchar', nullable: true })
+  replyToId!: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  pinnedAt!: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  pinnedById!: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  forwardedFrom!: MessageForwardedFrom | null;
 
   @Column({ type: 'jsonb', nullable: true })
   attachments!: Array<{
@@ -66,6 +92,10 @@ export class Message extends CuidEntity {
   @ManyToOne('User', 'messages', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'authorId' })
   author!: User;
+
+  @ManyToOne('Message', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'replyToId' })
+  replyTo!: Message | null;
 
   @OneToMany('Reaction', 'message')
   reactions!: Reaction[];

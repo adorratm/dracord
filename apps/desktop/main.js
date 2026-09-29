@@ -89,9 +89,31 @@ function registerWindowIpc() {
 
   ipcMain.on('window-close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    win?.close();
+    if (!win) return;
+    // minimizeToTray tercihini web gönderir; yoksa kapat
+    if (trayEnabled) {
+      win.hide();
+    } else {
+      win.close();
+    }
+  });
+
+  ipcMain.on('system-prefs', (_event, prefs) => {
+    if (!prefs || typeof prefs !== 'object') return;
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: Boolean(prefs.openOnStartup),
+        openAsHidden: false,
+      });
+    } catch {
+      // platform desteklemeyebilir
+    }
+    trayEnabled = Boolean(prefs.minimizeToTray);
   });
 }
+
+/** @type {boolean} */
+let trayEnabled = true;
 
 const gotLock = app.requestSingleInstanceLock();
 

@@ -190,9 +190,19 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
   }, [channelId, client, applyPage]);
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: MessageAttachment[]) => {
+    async (
+      content: string,
+      attachments?: MessageAttachment[],
+      opts?: { replyToId?: string; type?: 'default' | 'heading' },
+    ) => {
       if (!channelId) return;
-      const message = await client.sendMessage(channelId, content, attachments);
+      const message = await client.sendMessage(
+        channelId,
+        content,
+        attachments,
+        undefined,
+        opts,
+      );
       setAtLiveEdge(true);
       setPendingNewCount(0);
       setMessages((prev) => {
@@ -201,6 +211,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         remember(channelId, { items: next, hasMore });
         return next;
       });
+      void client.markChannelRead(channelId).catch(() => undefined);
     },
     [channelId, client, hasMore],
   );
@@ -372,6 +383,38 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     [channelId, client, hasMore],
   );
 
+  const pinMessage = useCallback(
+    async (messageId: string, pin: boolean) => {
+      if (!channelId) return;
+      const message = pin
+        ? await client.pinMessage(messageId)
+        : await client.unpinMessage(messageId);
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === message.id ? message : m));
+        remember(channelId, { items: next, hasMore });
+        return next;
+      });
+    },
+    [channelId, client, hasMore],
+  );
+
+  const upsertMessage = useCallback(
+    (message: MessageDto) => {
+      if (!channelId) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) {
+          const next = prev.map((m) => (m.id === message.id ? message : m));
+          remember(channelId, { items: next, hasMore });
+          return next;
+        }
+        const next = [...prev, message];
+        remember(channelId, { items: next, hasMore });
+        return next;
+      });
+    },
+    [channelId, hasMore],
+  );
+
   return {
     messages,
     loading,
@@ -393,5 +436,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     votePoll,
     hideMessage,
     unhideMessage,
+    pinMessage,
+    upsertMessage,
   };
 }

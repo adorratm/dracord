@@ -10,6 +10,8 @@ export interface SettingsNavItem {
   icon?: string;
   active?: boolean;
   onClick?: () => void;
+  /** Kırmızı stil (ör. Çıkış Yap) */
+  variant?: 'default' | 'danger';
 }
 
 export interface SettingsNavSection {
@@ -79,13 +81,24 @@ export function SettingsShell({
                       onClick={item.onClick}
                       className={cn(
                         'w-full flex items-center gap-space-sm px-space-sm py-2 rounded-lg text-left transition-colors font-body-md text-body-md',
-                        item.active
-                          ? 'bg-surface-container-highest text-on-surface'
-                          : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
+                        item.variant === 'danger'
+                          ? item.active
+                            ? 'bg-error/15 text-error'
+                            : 'text-error hover:bg-error/10'
+                          : item.active
+                            ? 'bg-surface-container-highest text-on-surface'
+                            : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
                       )}
                     >
                       {item.icon && (
-                        <span className="material-symbols-outlined text-[20px] text-outline">{item.icon}</span>
+                        <span
+                          className={cn(
+                            'material-symbols-outlined text-[20px]',
+                            item.variant === 'danger' ? 'text-error' : 'text-outline',
+                          )}
+                        >
+                          {item.icon}
+                        </span>
                       )}
                       {item.label}
                     </button>

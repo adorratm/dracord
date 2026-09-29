@@ -6,3 +6,10 @@ contextBridge.exposeInMainWorld('windowControls', {
   close: () => ipcRenderer.send('window-close'),
   isElectron: true,
 });
+
+contextBridge.exposeInMainWorld('dracordDesktop', {
+  isElectron: true,
+  setSystemPrefs: (prefs) => {
+    ipcRenderer.send('system-prefs', prefs);
+  },
+});

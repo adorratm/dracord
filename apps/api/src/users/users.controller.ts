@@ -58,6 +58,44 @@ export class UsersController {
     return this.usersService.updateProfile(req.user.sub, body);
   }
 
+  @Get('me/settings')
+  getSettings(@Req() req: { user: { sub: string } }) {
+    return this.usersService.getClientSettings(req.user.sub);
+  }
+
+  @Patch('me/settings')
+  updateSettings(
+    @Req() req: { user: { sub: string } },
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.usersService.updateClientSettings(req.user.sub, body as never);
+  }
+
+  @Post('me/password')
+  changePassword(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { currentPassword?: string; newPassword?: string },
+  ) {
+    return this.usersService.changePassword(
+      req.user.sub,
+      body.currentPassword ?? '',
+      body.newPassword ?? '',
+    );
+  }
+
+  @Post('me/deactivate')
+  deactivate(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { password?: string },
+  ) {
+    return this.usersService.deactivateAccount(req.user.sub, body.password);
+  }
+
+  @Post('me/reactivate')
+  reactivate(@Req() req: { user: { sub: string } }) {
+    return this.usersService.reactivateAccount(req.user.sub);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findById(id);

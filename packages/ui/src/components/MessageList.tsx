@@ -20,6 +20,9 @@ import { MessageEmbedView } from './MessageEmbedView';
 export interface MessageItemActions {
   currentUserId?: string | null;
   canManageMessages?: boolean;
+  guildId?: string | null;
+  /** DM ise true — link formatı için */
+  isDm?: boolean;
   onEdit?: (message: MessageDto) => void;
   onDelete?: (message: MessageDto) => void;
   onReact?: (message: MessageDto, emoji: string) => void;
@@ -27,6 +30,14 @@ export interface MessageItemActions {
   onUnhide?: (message: MessageDto) => void;
   onBlockAuthor?: (message: MessageDto) => void;
   onVotePoll?: (message: MessageDto, optionId: string) => void;
+  onReply?: (message: MessageDto) => void;
+  onForward?: (message: MessageDto) => void;
+  onPin?: (message: MessageDto, pin: boolean) => void;
+  onCreateHeading?: (message: MessageDto) => void;
+  onMarkUnread?: (message: MessageDto) => void;
+  onJumpToMessage?: (messageId: string) => void;
+  /** Geliştirici modu: ID kopyala */
+  developerMode?: boolean;
 }
 
 export interface MessageItemProps {
@@ -36,16 +47,88 @@ export interface MessageItemProps {
   mentionNames?: string[];
   channelNames?: string[];
   censorLinkPreviews?: boolean;
+  hideEmbeds?: boolean;
+  hour24?: boolean;
+  locale?: string;
   actions?: MessageItemActions;
   className?: string;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+const MENU_QUICK_EMOJIS = ['👍', '👀', '😂', '😀'];
+const REACT_PICKER_EMOJIS = [
+  ...QUICK_EMOJIS,
+  '🔥',
+  '👏',
+  '💯',
+  '👀',
+  '✨',
+  '🙏',
+  '💪',
+  '🤔',
+  '😎',
+  '🥳',
+  '😀',
+];
 
-function formatTimestamp(iso: string): string {
+function MenuDivider() {
+  return <div className="h-px my-1 mx-2 bg-outline-variant/40" role="separator" />;
+}
+
+function MenuRow({
+  icon,
+  label,
+  onClick,
+  danger,
+  chevron,
+  disabled,
+}: {
+  icon: string;
+  label: string;
+  onClick?: () => void;
+  danger?: boolean;
+  chevron?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-2.5 px-2.5 py-[6px] rounded mx-1 my-0.5 text-left font-body-sm transition-colors disabled:opacity-40',
+        danger
+          ? 'text-error hover:bg-error/15'
+          : 'text-on-surface hover:bg-surface-bright',
+      )}
+      style={{ width: 'calc(100% - 8px)' }}
+    >
+      <span
+        className={cn(
+          'material-symbols-outlined text-[18px] leading-none shrink-0',
+          danger ? 'text-error' : 'text-on-surface-variant',
+        )}
+      >
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
+      {chevron && (
+        <span className="material-symbols-outlined text-[16px] text-outline leading-none">
+          chevron_right
+        </span>
+      )}
+    </button>
+  );
+}
+
+function formatTimestamp(iso: string, hour24 = true, locale = 'tr-TR'): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: !hour24,
+    });
   } catch {
     return iso;
   }
@@ -111,17 +194,27 @@ export function MessageItem({
   mentionNames = [],
   channelNames = [],
   censorLinkPreviews = false,
+  hideEmbeds = false,
+  hour24 = true,
+  locale = 'tr-TR',
   actions,
   className,
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reactPickerOpen, setReactPickerOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  /** Popover: aşağıda yer yoksa yukarı aç */
+  const [popoverPlacement, setPopoverPlacement] = useState<'up' | 'down'>('down');
   const menuRef = useRef<HTMLDivElement>(null);
+  const popoverPanelRef = useRef<HTMLDivElement>(null);
   const author = message.author;
   const isMine = Boolean(actions?.currentUserId && author.id === actions.currentUserId);
   const canDelete = isMine || Boolean(actions?.canManageMessages);
-  const canEdit = isMine;
+  const canEdit = isMine && message.type !== 'heading';
+  const canPin = Boolean(actions?.canManageMessages) || !actions?.guildId;
   const sticker = isStickerOnly(message.content);
   const isSelfMention = contentHasSelfMention(message.content, mentionNames);
+  const isHeading = message.type === 'heading';
   const hidePlainContent =
     sticker ||
     (message.attachments?.length === 1 && !message.content.trim()) ||
@@ -129,14 +222,75 @@ export function MessageItem({
       message.attachments[0] &&
       message.content.trim() === message.attachments[0].filename);
 
+  const computePlacement = useCallback((estimatedHeight: number) => {
+    const el = menuRef.current;
+    if (!el || typeof window === 'undefined') return 'down' as const;
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    if (spaceBelow >= estimatedHeight) return 'down' as const;
+    if (spaceAbove >= estimatedHeight) return 'up' as const;
+    return spaceAbove > spaceBelow ? ('up' as const) : ('down' as const);
+  }, []);
+
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !reactPickerOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      if (!menuRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setReactPickerOpen(false);
+      }
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [menuOpen]);
+  }, [menuOpen, reactPickerOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen && !reactPickerOpen) return;
+    const panel = popoverPanelRef.current;
+    const height = panel?.offsetHeight ?? (reactPickerOpen ? 140 : 360);
+    setPopoverPlacement(computePlacement(height));
+  }, [menuOpen, reactPickerOpen, computePlacement]);
+
+  const popoverPosClass =
+    popoverPlacement === 'up'
+      ? 'bottom-full mb-1'
+      : 'top-full mt-1';
+
+  const openMenu = () => {
+    setReactPickerOpen(false);
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
+    setPopoverPlacement(computePlacement(360));
+    setMenuOpen(true);
+  };
+
+  const openReactPicker = () => {
+    setMenuOpen(false);
+    setPopoverPlacement(computePlacement(140));
+    setReactPickerOpen(true);
+  };
+
+  const copyLink = async () => {
+    const path = actions?.isDm
+      ? `/channels/@me/${message.channelId}?messageId=${message.id}`
+      : actions?.guildId
+        ? `/channels/${actions.guildId}/${message.channelId}?messageId=${message.id}`
+        : `${typeof window !== 'undefined' ? window.location.pathname : ''}?messageId=${message.id}`;
+    const url =
+      typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+    setMenuOpen(false);
+  };
 
   if (message.viewerHide === 'hidden') {
     return (
@@ -165,131 +319,103 @@ export function MessageItem({
     <article
       className={cn(
         'group flex gap-space-md px-space-md py-space-xs hover:bg-surface-container-low/60 transition-colors relative',
-        compact && 'py-0.5',
+        compact && !isHeading && 'py-0.5',
         isSelfMention && 'bg-primary-container/10 hover:bg-primary-container/15',
-        menuOpen && 'z-50',
+        isHeading && 'py-space-md mt-space-sm border-t border-surface-container-highest/80',
+        (menuOpen || reactPickerOpen) && 'z-50',
         className,
       )}
-      data-menu-open={menuOpen ? '' : undefined}
+      data-menu-open={menuOpen || reactPickerOpen ? '' : undefined}
     >
       {isSelfMention && (
-        <span
-          className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary-container"
-          aria-hidden
-        />
+        <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary-container" aria-hidden />
       )}
-      {showAvatar ? (
-        <Avatar
-          displayName={author.displayName}
-          imageUrl={author.avatarUrl}
-          size="lg"
-          status={author.status}
-          statusRing={false}
-          className="mt-0.5"
-        />
+      {isHeading ? (
+        <div className="w-12 shrink-0 flex justify-center pt-1" aria-hidden>
+          <span className="material-symbols-outlined text-outline text-[22px]">title</span>
+        </div>
+      ) : showAvatar ? (
+        <Avatar displayName={author.displayName} imageUrl={author.avatarUrl} size="lg" status={author.status} statusRing={false} className="mt-0.5" />
       ) : (
         <div className="w-12 shrink-0" aria-hidden />
       )}
       <div className="flex flex-col min-w-0 flex-1">
-        <header className="flex items-baseline gap-space-sm flex-wrap">
-          <span
-            className="font-headline-md text-headline-md hover:underline cursor-pointer"
-            style={author.bannerColor ? { color: author.bannerColor } : { color: '#bd93f9' }}
-          >
-            {author.displayName}
-          </span>
-          <time className="font-label-sm text-label-sm text-outline" dateTime={message.createdAt}>
-            {formatTimestamp(message.createdAt)}
-          </time>
-          {message.updatedAt && (
-            <span className="font-label-sm text-label-sm text-outline">(düzenlendi)</span>
-          )}
-        </header>
-        {!hidePlainContent && (
-          <p
-            className={cn(
-              'font-body-md text-body-md text-on-surface whitespace-pre-wrap break-words',
-              sticker && 'mt-1',
+        {isHeading ? (
+          <h3 className="font-headline-lg text-xl text-on-surface tracking-tight">{message.content}</h3>
+        ) : (
+          <>
+            <header className="flex items-baseline gap-space-sm flex-wrap">
+              <span className="font-headline-md text-headline-md hover:underline cursor-pointer" style={author.bannerColor ? { color: author.bannerColor } : { color: '#bd93f9' }}>
+                {author.displayName}
+              </span>
+              <time className="font-label-sm text-label-sm text-outline" dateTime={message.createdAt}>{formatTimestamp(message.createdAt, hour24, locale)}</time>
+              {message.updatedAt && <span className="font-label-sm text-label-sm text-outline">(düzenlendi)</span>}
+              {message.pinnedAt && (
+                <span className="font-label-sm text-label-sm text-primary-container inline-flex items-center gap-0.5">
+                  <span className="material-symbols-outlined text-[14px] leading-none">push_pin</span>
+                  Sabitlendi
+                </span>
+              )}
+            </header>
+            {message.replyTo && (
+              <button type="button" onClick={() => actions?.onJumpToMessage?.(message.replyTo!.id)} className="mb-1 mt-0.5 max-w-md text-left rounded border-l-2 border-primary-container bg-surface-container-high/80 px-2 py-1 hover:bg-surface-bright">
+                <span className="block font-label-sm text-primary-container truncate">{message.replyTo.authorName}</span>
+                <span className="block font-body-sm text-outline truncate text-[12px]">{message.replyTo.contentPreview}</span>
+              </button>
             )}
-          >
-            {renderMessageContent(message.content, mentionNames, channelNames)}
-          </p>
+            {message.forwardedFrom && (
+              <p className="mb-1 font-label-sm text-outline inline-flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">forward</span>
+                {message.forwardedFrom.authorName} mesajından iletildi
+              </p>
+            )}
+            {!hidePlainContent && (
+              <p className={cn('font-body-md text-body-md text-on-surface whitespace-pre-wrap break-words', sticker && 'mt-1')}>
+                {renderMessageContent(message.content, mentionNames, channelNames)}
+              </p>
+            )}
+            {sticker && hidePlainContent && (
+              <div className="mt-1">{renderMessageContent(message.content, mentionNames, channelNames)}</div>
+            )}
+          </>
         )}
-        {sticker && hidePlainContent && (
-          <div className="mt-1">
-            {renderMessageContent(message.content, mentionNames, channelNames)}
-          </div>
-        )}
-        {message.attachments && message.attachments.length > 0 && (
+        {!isHeading && message.attachments && message.attachments.length > 0 && (
           <ul className="flex flex-col gap-space-sm">
             {message.attachments.map((a) => (
-              <li key={a.id}>
-                <MessageAttachmentView attachment={a} />
-              </li>
+              <li key={a.id}><MessageAttachmentView attachment={a} /></li>
             ))}
           </ul>
         )}
-        {message.embeds && message.embeds.length > 0 && (
+        {!isHeading && !hideEmbeds && message.embeds && message.embeds.length > 0 && (
           <div className="flex flex-col gap-space-xs">
             {message.embeds.map((embed) => (
-              <MessageEmbedView
-                key={embed.url}
-                embed={embed}
-                censored={censorLinkPreviews}
-              />
+              <MessageEmbedView key={embed.url} embed={embed} censored={censorLinkPreviews} />
             ))}
           </div>
         )}
-        {message.poll && (
+        {!isHeading && message.poll && (
           <div className="mt-space-sm max-w-md rounded-lg border border-surface-container-highest bg-surface-container-low p-space-sm space-y-space-xs">
             <p className="font-headline-md text-on-surface">{message.poll.question}</p>
             {message.poll.options.map((opt) => {
-              const pct =
-                message.poll!.totalVotes > 0
-                  ? Math.round((opt.voteCount / message.poll!.totalVotes) * 100)
-                  : 0;
+              const pct = message.poll!.totalVotes > 0 ? Math.round((opt.voteCount / message.poll!.totalVotes) * 100) : 0;
               return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={message.poll!.closed}
-                  onClick={() => actions?.onVotePoll?.(message, opt.id)}
-                  className={cn(
-                    'relative w-full text-left rounded-lg overflow-hidden border px-space-sm py-space-xs',
-                    opt.voted
-                      ? 'border-primary-container bg-primary-container/15'
-                      : 'border-surface-container-highest hover:bg-surface-bright',
-                  )}
-                >
-                  <span
-                    className="absolute inset-y-0 left-0 bg-primary-container/20"
-                    style={{ width: `${pct}%` }}
-                  />
+                <button key={opt.id} type="button" disabled={message.poll!.closed} onClick={() => actions?.onVotePoll?.(message, opt.id)}
+                  className={cn('relative w-full text-left rounded-lg overflow-hidden border px-space-sm py-space-xs', opt.voted ? 'border-primary-container bg-primary-container/15' : 'border-surface-container-highest hover:bg-surface-bright')}>
+                  <span className="absolute inset-y-0 left-0 bg-primary-container/20" style={{ width: pct + '%' }} />
                   <span className="relative flex justify-between gap-space-sm font-body-sm">
                     <span>{opt.text}</span>
-                    <span className="text-outline">
-                      {opt.voteCount} · %{pct}
-                    </span>
+                    <span className="text-outline">{opt.voteCount} · %{pct}</span>
                   </span>
                 </button>
               );
             })}
           </div>
         )}
-        {message.reactions && message.reactions.length > 0 && (
+        {!isHeading && message.reactions && message.reactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {message.reactions.map((r) => (
-              <button
-                key={r.emoji}
-                type="button"
-                onClick={() => actions?.onReact?.(message, r.emoji)}
-                className={cn(
-                  'h-7 px-2 rounded-full text-sm border flex items-center gap-1',
-                  r.me
-                    ? 'border-primary-container bg-primary-container/20'
-                    : 'border-surface-container-highest hover:bg-surface-bright',
-                )}
-              >
+              <button key={r.emoji} type="button" onClick={() => actions?.onReact?.(message, r.emoji)}
+                className={cn('h-7 px-2 rounded-full text-sm inline-flex items-center gap-1 border', r.me ? 'border-primary-container bg-primary-container/20' : 'border-surface-container-highest bg-surface-container-low hover:bg-surface-bright')}>
                 <span>{r.emoji}</span>
                 <span className="font-label-sm text-outline">{r.count}</span>
               </button>
@@ -299,92 +425,231 @@ export function MessageItem({
       </div>
 
       {actions && (
-        <div
-          className={cn(
-            'absolute right-space-sm -top-3 transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-50',
-            menuOpen
-              ? 'opacity-100'
-              : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
-          )}
-        >
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              className="h-7 w-7 rounded hover:bg-surface-bright text-sm"
-              title="Tepki"
-              onClick={() => actions.onReact?.(message, emoji)}
-            >
-              {emoji}
-            </button>
+        <div className={cn('absolute right-space-sm -top-3 transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-50', menuOpen || reactPickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100')}>
+          {!isHeading && QUICK_EMOJIS.map((emoji) => (
+            <button key={emoji} type="button" className="h-7 w-7 rounded hover:bg-surface-bright text-sm" title="Tepki" onClick={() => actions.onReact?.(message, emoji)}>{emoji}</button>
           ))}
+          {!isHeading && (
+            <button type="button" className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline" title="Yanıtla" onClick={() => actions.onReply?.(message)}>
+              <span className="material-symbols-outlined text-[16px] leading-none">reply</span>
+            </button>
+          )}
           <div className="relative" ref={menuRef}>
-            <button
-              type="button"
-              className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline"
-              aria-label="Daha fazla"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}
-            >
+            <button type="button" className="h-7 w-7 rounded hover:bg-surface-bright flex items-center justify-center text-outline" aria-label="Daha fazla" aria-expanded={menuOpen}
+              onClick={openMenu}>
               <span className="material-symbols-outlined text-[16px] leading-none">more_horiz</span>
             </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-48 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1 z-[60]">
-                {canEdit && (
+            {reactPickerOpen && (
+              <div
+                ref={popoverPanelRef}
+                className={cn(
+                  'absolute right-0 p-2 rounded-xl bg-[#111214] border border-white/5 shadow-float z-[60] flex flex-wrap gap-1 w-52',
+                  popoverPosClass,
+                )}
+              >
+                {REACT_PICKER_EMOJIS.map((emoji) => (
                   <button
+                    key={emoji}
                     type="button"
-                    className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
+                    className="h-8 w-8 rounded-md hover:bg-white/10 text-lg"
+                    onClick={() => {
+                      actions.onReact?.(message, emoji);
+                      setReactPickerOpen(false);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+            {menuOpen && (
+              <div
+                ref={popoverPanelRef}
+                className={cn(
+                  'absolute right-0 w-[220px] rounded-xl bg-[#111214] border border-white/5 shadow-float py-1.5 z-[60] max-h-[min(28rem,75vh)] overflow-y-auto',
+                  popoverPosClass,
+                )}
+              >
+                {!isHeading && (
+                  <>
+                    <div className="flex items-center justify-center gap-1.5 px-2.5 pb-1.5 pt-0.5">
+                      {MENU_QUICK_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          title="Tepki"
+                          className="h-8 w-8 rounded-md bg-[#2b2d31] hover:bg-[#3f4147] text-[18px] flex items-center justify-center"
+                          onClick={() => {
+                            actions.onReact?.(message, emoji);
+                            setMenuOpen(false);
+                          }}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                    <MenuRow
+                      icon="sentiment_satisfied"
+                      label="Tepki Ekle"
+                      chevron
+                      onClick={() => openReactPicker()}
+                    />
+                    <MenuDivider />
+                    <MenuRow
+                      icon="reply"
+                      label="Yanıtla"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        actions.onReply?.(message);
+                      }}
+                    />
+                    <MenuRow
+                      icon="forward"
+                      label="İlet"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        actions.onForward?.(message);
+                      }}
+                    />
+                    <MenuRow
+                      icon="title"
+                      label="Alt Başlık Oluştur"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        actions.onCreateHeading?.(message);
+                      }}
+                    />
+                    <MenuDivider />
+                  </>
+                )}
+                {canPin && (
+                  <MenuRow
+                    icon="push_pin"
+                    label={message.pinnedAt ? 'Sabitlemeyi Kaldır' : 'Mesajı Sabitle'}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      actions.onPin?.(message, !message.pinnedAt);
+                    }}
+                  />
+                )}
+                {!isHeading && (
+                  <MenuRow
+                    icon="apps"
+                    label="Uygulamalar"
+                    chevron
+                    onClick={() => {
+                      setMenuOpen(false);
+                      openReactPicker();
+                    }}
+                  />
+                )}
+                <MenuRow
+                  icon="mark_chat_unread"
+                  label="Okunmadı Olarak İşaretle"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    actions.onMarkUnread?.(message);
+                  }}
+                />
+                <MenuRow
+                  icon="link"
+                  label={linkCopied ? 'Kopyalandı!' : 'Mesaj Bağlantısını Kopyala'}
+                  onClick={() => void copyLink()}
+                />
+                {!isHeading && (
+                  <MenuRow
+                    icon="info"
+                    label="Etkileşim Bilgilerini Görüntüle"
+                    chevron
+                    onClick={() => {
+                      const lines = [
+                        `Mesaj: ${message.id}`,
+                        `Yazar: ${author.displayName} (${author.id})`,
+                        `Tepki: ${(message.reactions ?? []).map((r) => `${r.emoji} ${r.count}`).join(', ') || 'yok'}`,
+                        `Zaman: ${message.createdAt}`,
+                      ];
+                      void navigator.clipboard.writeText(lines.join('\n')).catch(() => undefined);
+                      setMenuOpen(false);
+                      setLinkCopied(true);
+                      window.setTimeout(() => setLinkCopied(false), 1500);
+                    }}
+                  />
+                )}
+                {(canEdit || canDelete || !isHeading) && <MenuDivider />}
+                {canEdit && (
+                  <MenuRow
+                    icon="edit"
+                    label="Düzenle"
                     onClick={() => {
                       setMenuOpen(false);
                       actions.onEdit?.(message);
                     }}
-                  >
-                    Düzenle
-                  </button>
+                  />
                 )}
                 {canDelete && (
-                  <button
-                    type="button"
-                    className="w-full text-left px-space-sm py-1.5 font-body-sm text-error hover:bg-error/10"
+                  <MenuRow
+                    icon="delete"
+                    label="Mesajı Sil"
+                    danger
                     onClick={() => {
                       setMenuOpen(false);
                       actions.onDelete?.(message);
                     }}
-                  >
-                    Sil
-                  </button>
+                  />
                 )}
-                <button
-                  type="button"
-                  className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    actions.onHide?.(message, false);
-                  }}
-                >
-                  Gizle
-                </button>
-                <button
-                  type="button"
-                  className="w-full text-left px-space-sm py-1.5 font-body-sm hover:bg-surface-bright"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    actions.onHide?.(message, true);
-                  }}
-                >
-                  Bir daha gösterme
-                </button>
-                {!isMine && (
-                  <button
-                    type="button"
-                    className="w-full text-left px-space-sm py-1.5 font-body-sm text-error hover:bg-error/10"
+                {!isHeading && !isMine && (
+                  <MenuRow
+                    icon="flag"
+                    label="Mesaj Bildir"
+                    danger
                     onClick={() => {
                       setMenuOpen(false);
-                      actions.onBlockAuthor?.(message);
+                      actions.onHide?.(message, true);
                     }}
-                  >
-                    Kullanıcıyı engelle
-                  </button>
+                  />
+                )}
+                {!isHeading && (
+                  <>
+                    <MenuRow
+                      icon="visibility_off"
+                      label="Gizle"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        actions.onHide?.(message, false);
+                      }}
+                    />
+                    {!isMine && (
+                      <MenuRow
+                        icon="block"
+                        label="Kullanıcıyı Engelle"
+                        danger
+                        onClick={() => {
+                          setMenuOpen(false);
+                          actions.onBlockAuthor?.(message);
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+                <MenuDivider />
+                <MenuRow
+                  icon="tag"
+                  label="Mesaj ID’sini Kopyala"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(message.id).catch(() => undefined);
+                    setMenuOpen(false);
+                  }}
+                />
+                {actions?.developerMode && (
+                  <MenuRow
+                    icon="person"
+                    label="Kullanıcı ID’sini Kopyala"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(author.id).catch(() => undefined);
+                      setMenuOpen(false);
+                    }}
+                  />
                 )}
               </div>
             )}
@@ -395,11 +660,16 @@ export function MessageItem({
   );
 }
 
+
 export interface MessageListProps {
   messages: MessageDto[];
   mentionNames?: string[];
   channelNames?: string[];
   censorLinkPreviews?: boolean;
+  hideEmbeds?: boolean;
+  messageGrouping?: boolean;
+  hour24?: boolean;
+  locale?: string;
   messageActions?: MessageItemActions;
   emptyState?: ReactNode;
   className?: string;
@@ -431,6 +701,10 @@ export function MessageList({
   mentionNames = [],
   channelNames = [],
   censorLinkPreviews = false,
+  hideEmbeds = false,
+  messageGrouping = true,
+  hour24 = true,
+  locale = 'tr-TR',
   messageActions,
   emptyState,
   className,
@@ -633,6 +907,7 @@ export function MessageList({
             if (!message) return null;
             const prev = messages[virtualRow.index - 1];
             const compact =
+              messageGrouping &&
               !!prev &&
               prev.author.id === message.author.id &&
               new Date(message.createdAt).getTime() - new Date(prev.createdAt).getTime() <
@@ -663,6 +938,9 @@ export function MessageList({
                   mentionNames={mentionNames}
                   channelNames={channelNames}
                   censorLinkPreviews={censorLinkPreviews}
+                  hideEmbeds={hideEmbeds}
+                  hour24={hour24}
+                  locale={locale}
                   actions={messageActions}
                 />
               </div>
@@ -686,9 +964,14 @@ export function MessageList({
               onLiveEdgeChange?.(true);
             });
           }}
-          className="absolute bottom-space-md right-space-md z-10 h-9 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm shadow-bar hover:opacity-95"
+          className="shrink-0 w-full h-9 px-space-md flex items-center justify-center gap-space-xs border-t border-primary-container/30 bg-primary-container text-on-primary-container font-label-sm hover:opacity-95 transition-opacity"
         >
-          {pendingNewCount > 0 ? `${pendingNewCount} yeni mesaj · Günümüze git` : 'Günümüze git'}
+          <span className="material-symbols-outlined text-[16px] leading-none">
+            keyboard_double_arrow_down
+          </span>
+          {pendingNewCount > 0
+            ? `${pendingNewCount} yeni mesaj · Günümüze git`
+            : 'Günümüze git'}
         </button>
       )}
     </div>

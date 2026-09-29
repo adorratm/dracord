@@ -6,12 +6,13 @@ import { RequireAuth } from '@/components/RequireAuth';
 
 interface PageProps {
   params: Promise<{ guildId: string; channelId: string }>;
-  searchParams: Promise<{ around?: string }>;
+  searchParams: Promise<{ around?: string; messageId?: string }>;
 }
 
 export default function GuildChannelPage({ params, searchParams }: PageProps) {
   const { guildId, channelId } = use(params);
   const sp = use(searchParams);
+  const aroundMessageId = sp.messageId ?? sp.around ?? null;
 
   return (
     <RequireAuth>
@@ -19,7 +20,7 @@ export default function GuildChannelPage({ params, searchParams }: PageProps) {
         <GuildChannelView
           guildId={guildId}
           channelId={channelId}
-          aroundMessageId={sp.around ?? null}
+          aroundMessageId={aroundMessageId}
         />
       </Suspense>
     </RequireAuth>

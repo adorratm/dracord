@@ -1,18 +1,23 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { EntityManager, ILike, Not } from 'typeorm';
-import type { PublicUser, SocialLinks } from '@dracord/types';
+import type { ClientSettings, PublicUser, SocialLinks } from '@dracord/types';
 import { toPublicUser } from '@/common/user.mapper';
 import { Friendship } from '@/database/entities/friendship.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
+import { Session } from '@/database/entities/session.entity';
 import { User } from '@/database/entities/user.entity';
 import { FriendshipStatus } from '@/database/enums';
 import { SearchIndexerService } from '@/search/search-indexer.service';
+import { mergeClientSettings } from './client-settings';
+import * as bcrypt from 'bcrypt';
 
 export interface UpdateProfileInput {
   displayName?: string;
@@ -188,6 +193,108 @@ export class UsersService {
     await this.ensureSeedGuildMembership(userId);
     void this.indexer.indexUser(user).catch(() => undefined);
     return toPublicUser(user);
+  }
+
+  async getClientSettings(userId: string): Promise<ClientSettings> {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return mergeClientSettings(user.clientSettings);
+  }
+
+  async updateClientSettings(
+    userId: string,
+    patch: Partial<ClientSettings>,
+  ): Promise<ClientSettings> {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const current = mergeClientSettings(user.clientSettings);
+    const merged: Record<string, unknown> = { ...current };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) continue;
+      const cur = merged[k];
+      if (
+        v &&
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        cur &&
+        typeof cur === 'object' &&
+        !Array.isArray(cur)
+      ) {
+        merged[k] = { ...(cur as object), ...(v as object) };
+      } else {
+        merged[k] = v;
+      }
+    }
+    const next = mergeClientSettings(merged);
+    user.clientSettings = next as unknown as Record<string, unknown>;
+    await this.em.save(User, user);
+    return next;
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true }> {
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      throw new BadRequestException('Geçersiz şifre');
+    }
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.passwordHash) {
+      throw new BadRequestException('Bu hesap için şifre tanımlı değil (OAuth)');
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Mevcut şifre yanlış');
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.em.save(User, user);
+    return { ok: true };
+  }
+
+  async deactivateAccount(userId: string, password?: string): Promise<{ ok: true }> {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.passwordHash && password) {
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) throw new UnauthorizedException('Şifre yanlış');
+    }
+    user.disabledAt = new Date();
+    await this.em.save(User, user);
+    await this.em.delete(Session, { userId });
+    return { ok: true };
+  }
+
+  async reactivateAccount(userId: string): Promise<PublicUser> {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    user.disabledAt = null;
+    await this.em.save(User, user);
+    return toPublicUser(user);
+  }
+
+  /** Hedef kullanıcıya DM açılabilir mi? */
+  async assertCanOpenDm(fromUserId: string, toUserId: string): Promise<void> {
+    const target = await this.em.findOne(User, { where: { id: toUserId } });
+    if (!target) throw new NotFoundException('Kullanıcı bulunamadı');
+    if (target.disabledAt) {
+      throw new ForbiddenException('Bu hesap kullanılamıyor');
+    }
+    const settings = mergeClientSettings(target.clientSettings);
+    const level = settings.messaging.whoCanDm ?? settings.privacy.dmFilter;
+    if (level === 'nobody') {
+      throw new ForbiddenException('Bu kullanıcı DM kabul etmiyor');
+    }
+    const friendship = await this.em.findOne(Friendship, {
+      where: [
+        { userId: fromUserId, friendId: toUserId, status: FriendshipStatus.ACCEPTED },
+        { userId: toUserId, friendId: fromUserId, status: FriendshipStatus.ACCEPTED },
+      ],
+    });
+    const areFriends = Boolean(friendship);
+    if (level === 'friends' && !areFriends) {
+      throw new ForbiddenException('Yalnızca arkadaşlarınla DM açabilirsin');
+    }
+    // everyone: arkadaşlık şart değil
   }
 
   private async ensureSeedGuildMembership(userId: string): Promise<void> {

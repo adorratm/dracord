@@ -53,6 +53,9 @@ export interface ChannelSummary {
   position: number;
   topic?: string | null;
   voiceMembers?: VoiceMemberSummary[];
+  /** Görüntüleyen için okunmamış mesaj var mı */
+  unread?: boolean;
+  lastReadMessageId?: string | null;
 }
 
 export interface MessageAttachment {
@@ -94,11 +97,33 @@ export interface MessagePollDto {
 
 export type MessageViewerHide = 'hidden' | 'suppressed' | null;
 
+export type MessageType = 'default' | 'heading';
+
+export interface MessageReplyRef {
+  id: string;
+  authorId: string;
+  authorName: string;
+  contentPreview: string;
+}
+
+export interface MessageForwardedFrom {
+  messageId: string;
+  channelId: string;
+  authorId: string;
+  authorName: string;
+  contentPreview: string;
+  createdAt: string;
+}
+
 export interface MessageDto {
   id: string;
   channelId: string;
   author: PublicUser;
   content: string;
+  type?: MessageType;
+  replyTo?: MessageReplyRef | null;
+  pinnedAt?: string | null;
+  forwardedFrom?: MessageForwardedFrom | null;
   attachments?: MessageAttachment[];
   embeds?: MessageEmbed[];
   reactions?: MessageReactionDto[];
@@ -248,6 +273,91 @@ export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+}
+
+/** Kullanıcı istemci ayarları (Discord tarzı tercihler) */
+export type DmPrivacyLevel = 'everyone' | 'friends' | 'nobody';
+
+export interface ClientSettings {
+  privacy: {
+    dmFilter: DmPrivacyLevel;
+    allowFriendRequests: boolean;
+    shareActivityStatus: boolean;
+    dataCollection: boolean;
+    personalizeAds: boolean;
+  };
+  messaging: {
+    whoCanDm: DmPrivacyLevel;
+    filterExplicit: boolean;
+    autoEmbed: boolean;
+    spellcheck: boolean;
+  };
+  notifications: {
+    desktopEnabled: boolean;
+    soundEnabled: boolean;
+    unreadBadge: boolean;
+    mentionsOnly: boolean;
+    quietHours: boolean;
+  };
+  accessibility: {
+    reducedMotion: boolean;
+    highContrast: boolean;
+    messageGrouping: boolean;
+    underlineLinks: boolean;
+    roleColors: boolean;
+  };
+  appearance: {
+    theme: 'dark' | 'light';
+    messageDensity: 'cozy' | 'compact';
+  };
+  system: {
+    openOnStartup: boolean;
+    hardwareAcceleration: boolean;
+    minimizeToTray: boolean;
+    autoUpdate: boolean;
+  };
+  language: {
+    locale: 'tr' | 'en';
+    hour24: boolean;
+  };
+  activity: {
+    displayActivity: boolean;
+    shareGames: boolean;
+    allowJoinRequests: boolean;
+  };
+  developer: {
+    developerMode: boolean;
+    experimental: boolean;
+  };
+  family: {
+    activitySummary: boolean;
+    parentalControls: boolean;
+    members: Array<{ id: string; displayName: string; role: 'parent' | 'teen' }>;
+    inviteCode: string | null;
+  };
+  security: {
+    twoFactorEnabled: boolean;
+    twoFactorSecret: string | null;
+    recoveryCodes: string[];
+  };
+  billing: {
+    nitroPlan: 'none' | 'basic' | 'nitro';
+    nitroExpiresAt: string | null;
+    boostCredits: number;
+    boostAssignments: Array<{ guildId: string; guildName: string }>;
+    gifts: Array<{
+      id: string;
+      kind: 'nitro' | 'boost';
+      label: string;
+      code: string;
+      redeemed: boolean;
+    }>;
+    paymentMethods: Array<{ id: string; brand: string; last4: string }>;
+    invoices: Array<{ id: string; label: string; amount: string; at: string }>;
+  };
+  connections: {
+    apps: Array<{ id: string; name: string; connectedAt: string }>;
+  };
 }
 
 export interface VoiceTokenResponse {

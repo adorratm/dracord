@@ -23,6 +23,7 @@ import { buildSidebarCategories } from '@/lib/channels';
 import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
+import { useUserPreferences } from '@/lib/user-preferences';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -67,9 +68,11 @@ export function GuildChannelView({
     votePoll,
     hideMessage,
     unhideMessage,
+    pinMessage,
     error: chatError,
   } = useChatChannel(isVoiceView ? undefined : channelId, aroundMessageId);
   const voice = useVoiceSession();
+  const { prefs } = useUserPreferences();
 
   const voiceChannel = channels.find((c) => c.id === voice.voiceChannelId);
   const inVoice = Boolean(voice.voiceChannelId);
@@ -108,6 +111,23 @@ export function GuildChannelView({
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState('Evet\nHayır');
   const [msgBusy, setMsgBusy] = useState(false);
+  const [replyTo, setReplyTo] = useState<{
+    id: string;
+    authorName: string;
+    contentPreview: string;
+  } | null>(null);
+  const [headingOpen, setHeadingOpen] = useState(false);
+  const [headingText, setHeadingText] = useState('');
+  const [forwardTarget, setForwardTarget] = useState<{
+    id: string;
+    contentPreview: string;
+  } | null>(null);
+  const [forwardChannelId, setForwardChannelId] = useState('');
+  const [forwardNote, setForwardNote] = useState('');
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const [pins, setPins] = useState<
+    Array<{ id: string; content: string; authorName: string }>
+  >([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
@@ -184,6 +204,29 @@ export function GuildChannelView({
   useEffect(() => {
     rememberChannel(guildId, channelId);
   }, [guildId, channelId]);
+
+  useEffect(() => {
+    setReplyTo(null);
+    setPinsOpen(false);
+    if (!channelId || isVoiceView) return;
+    void client.markChannelRead(channelId).catch(() => undefined);
+  }, [channelId, client, isVoiceView]);
+
+  useEffect(() => {
+    if (!pinsOpen || !channelId) return;
+    void client
+      .listPinnedMessages(channelId)
+      .then((list) =>
+        setPins(
+          list.map((m) => ({
+            id: m.id,
+            content: m.content.slice(0, 100),
+            authorName: m.author.displayName,
+          })),
+        ),
+      )
+      .catch(() => setPins([]));
+  }, [pinsOpen, channelId, client]);
 
   useEffect(() => {
     const map: Record<string, VoiceMemberSummary[]> = {};
@@ -484,14 +527,27 @@ export function GuildChannelView({
 
   const chatInputProps = {
     channelName: channel?.name,
-    onSend: (text: string) => void sendMessage(text),
+    onSend: (text: string, meta?: { replyToId?: string }) => {
+      void sendMessage(
+        text,
+        undefined,
+        meta?.replyToId ? { replyToId: meta.replyToId } : undefined,
+      ).then(() => setReplyTo(null));
+    },
     onAttachFiles: (files: FileList | File[]) => void sendWithAttachments(files),
     onSendMedia: (payload: Parameters<typeof sendMedia>[0]) => void sendMedia(payload),
     onPollClick: () => setPollOpen(true),
+    onHeadingClick: () => {
+      setHeadingText('');
+      setHeadingOpen(true);
+    },
+    replyTo,
+    onCancelReply: () => setReplyTo(null),
     searchGifs,
     loadFeaturedGifs,
     mentionUsers,
     mentionChannels,
+    spellCheck: prefs.messaging.spellcheck,
   };
 
   if (loading && !guild) {
@@ -681,6 +737,31 @@ export function GuildChannelView({
             <span className="font-headline-md text-headline-md text-on-surface truncate">
               {channel?.name ?? 'kanal'}
             </span>
+            {prefs.developer.developerMode && (
+              <>
+                <button
+                  type="button"
+                  title="Kanal ID kopyala"
+                  className="h-8 px-2 rounded-lg text-outline hover:bg-surface-container font-label-sm"
+                  onClick={() => void navigator.clipboard.writeText(channelId)}
+                >
+                  #ID
+                </button>
+                <button
+                  type="button"
+                  title="Sunucu ID kopyala"
+                  className="h-8 px-2 rounded-lg text-outline hover:bg-surface-container font-label-sm"
+                  onClick={() => void navigator.clipboard.writeText(guildId)}
+                >
+                  G-ID
+                </button>
+              </>
+            )}
+            {prefs.billing.nitroPlan !== 'none' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-container/30 text-primary-container font-label-sm">
+                NITRO
+              </span>
+            )}
             <button
               type="button"
               className="ml-auto h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
@@ -688,6 +769,14 @@ export function GuildChannelView({
               onClick={() => openMessageSearch()}
             >
               <span className="material-symbols-outlined text-[18px]">search</span>
+            </button>
+            <button
+              type="button"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Sabitlenen mesajlar"
+              onClick={() => setPinsOpen((v) => !v)}
+            >
+              <span className="material-symbols-outlined text-[18px]">push_pin</span>
             </button>
             {channel && canManageChannels && (
               <button
@@ -726,9 +815,18 @@ export function GuildChannelView({
               mentionNames={mentionNames}
               channelNames={channelNames}
               censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
+              hideEmbeds={!prefs.messaging.autoEmbed}
+              messageGrouping={
+                prefs.accessibility.messageGrouping &&
+                prefs.appearance.messageDensity !== 'compact'
+              }
+              hour24={prefs.language.hour24}
+              locale={prefs.language.locale === 'en' ? 'en-US' : 'tr-TR'}
               messageActions={{
                 currentUserId: user?.id,
                 canManageMessages,
+                guildId,
+                developerMode: prefs.developer.developerMode,
                 onEdit: (m) => setEditMessageTarget({ id: m.id, content: m.content }),
                 onDelete: (m) =>
                   setDeleteMessageTarget({
@@ -742,6 +840,33 @@ export function GuildChannelView({
                   void client.blockUser(m.author.id).then(() => hideMessage(m.id, true));
                 },
                 onVotePoll: (m, optionId) => void votePoll(m.id, optionId),
+                onReply: (m) =>
+                  setReplyTo({
+                    id: m.id,
+                    authorName: m.author.displayName,
+                    contentPreview: m.content.slice(0, 120) || 'Ek / medya',
+                  }),
+                onForward: (m) => {
+                  setForwardTarget({ id: m.id, contentPreview: m.content.slice(0, 80) });
+                  setForwardChannelId(channels.find((c) => c.type === 'TEXT' && c.id !== channelId)?.id ?? '');
+                  setForwardNote('');
+                },
+                onPin: (m, pin) => void pinMessage(m.id, pin),
+                onCreateHeading: (m) => {
+                  setHeadingText(m.content.slice(0, 120));
+                  setHeadingOpen(true);
+                },
+                onMarkUnread: (m) => {
+                  void client
+                    .markChannelRead(channelId, { messageId: m.id, unreadFrom: true })
+                    .then(() => void reload())
+                    .catch(() => undefined);
+                },
+                onJumpToMessage: (id) => {
+                  router.replace(`/channels/${guildId}/${channelId}?messageId=${id}`, {
+                    scroll: false,
+                  });
+                },
               }}
               hasMore={hasMore}
               loadingOlder={loadingOlder}
@@ -1156,6 +1281,142 @@ export function GuildChannelView({
             className="w-full rounded-lg bg-surface-container-highest px-space-sm py-space-sm outline-none"
           />
         </label>
+      </Modal>
+
+      <Modal
+        open={headingOpen}
+        title="Bölüm başlığı"
+        onClose={() => setHeadingOpen(false)}
+        footer={
+          <button
+            type="button"
+            disabled={msgBusy || !headingText.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              const text = headingText.trim();
+              if (!text) return;
+              setMsgBusy(true);
+              void sendMessage(text, undefined, { type: 'heading' })
+                .then(() => {
+                  setHeadingOpen(false);
+                  setHeadingText('');
+                })
+                .finally(() => setMsgBusy(false));
+            }}
+          >
+            Oluştur
+          </button>
+        }
+      >
+        <label className="flex flex-col gap-space-xs">
+          <span className="font-label-sm text-on-surface-variant">Başlık</span>
+          <input
+            value={headingText}
+            onChange={(e) => setHeadingText(e.target.value.slice(0, 120))}
+            maxLength={120}
+            placeholder="Örn. Duyurular"
+            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+            autoFocus
+          />
+        </label>
+      </Modal>
+
+      <Modal
+        open={Boolean(forwardTarget)}
+        title="Mesajı ilet"
+        onClose={() => setForwardTarget(null)}
+        footer={
+          <button
+            type="button"
+            disabled={msgBusy || !forwardTarget || !forwardChannelId}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              if (!forwardTarget || !forwardChannelId) return;
+              setMsgBusy(true);
+              void client
+                .forwardMessage(
+                  forwardTarget.id,
+                  forwardChannelId,
+                  forwardNote.trim() || undefined,
+                )
+                .then(() => {
+                  setForwardTarget(null);
+                  router.push(`/channels/${guildId}/${forwardChannelId}`);
+                })
+                .catch(() => undefined)
+                .finally(() => setMsgBusy(false));
+            }}
+          >
+            İlet
+          </button>
+        }
+      >
+        {forwardTarget && (
+          <p className="font-body-sm text-outline mb-space-md truncate">
+            {forwardTarget.contentPreview || 'Ek / medya'}
+          </p>
+        )}
+        <label className="flex flex-col gap-space-xs mb-space-md">
+          <span className="font-label-sm text-on-surface-variant">Hedef kanal</span>
+          <select
+            value={forwardChannelId}
+            onChange={(e) => setForwardChannelId(e.target.value)}
+            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+          >
+            <option value="">Kanal seç…</option>
+            {channels
+              .filter((c) => c.type === 'TEXT')
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  #{c.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-space-xs">
+          <span className="font-label-sm text-on-surface-variant">Not (isteğe bağlı)</span>
+          <textarea
+            value={forwardNote}
+            onChange={(e) => setForwardNote(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg bg-surface-container-highest px-space-sm py-space-sm outline-none"
+          />
+        </label>
+      </Modal>
+
+      <Modal
+        open={pinsOpen}
+        title="Sabitlenen mesajlar"
+        onClose={() => setPinsOpen(false)}
+      >
+        {pins.length === 0 ? (
+          <p className="font-body-sm text-outline">Bu kanalda sabitlenmiş mesaj yok.</p>
+        ) : (
+          <ul className="flex flex-col gap-space-sm max-h-80 overflow-y-auto">
+            {pins.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="w-full text-left rounded-lg px-space-sm py-space-sm hover:bg-surface-container-high"
+                  onClick={() => {
+                    setPinsOpen(false);
+                    router.replace(
+                      `/channels/${guildId}/${channelId}?messageId=${p.id}`,
+                      { scroll: false },
+                    );
+                  }}
+                >
+                  <span className="block font-label-sm text-primary-container truncate">
+                    {p.authorName}
+                  </span>
+                  <span className="block font-body-sm text-on-surface truncate">
+                    {p.content || 'Ek / medya'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Modal>
     </AppShell>
   );
