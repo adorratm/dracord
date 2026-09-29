@@ -1,14 +1,10 @@
 # Production override for Hetzner (Nginx terminates TLS on host).
-# Does NOT bind 80/443 — other sites (ttengamesstudio, hydrorage, …) keep their Nginx vhosts.
+# Does NOT bind 80/443 — other sites keep their Nginx vhosts.
 #
-# Usage:
-#   docker compose -f docker/docker-compose.yml \
-#     -f docker/docker-compose.zd.yml \
-#     -f docker/docker-compose.prod.yml \
-#     --env-file .env up -d
+# Replicas: api/web/admin MUST NOT publish host ports (all would fight for :14000).
+# `edge` (Caddy) listens on 127.0.0.1:{13000,13001,14000} and LB's to Docker DNS.
 #
-# App traffic: Nginx → 127.0.0.1:{13000,13001,14000,17880}
-# Data ports are not published on the host.
+# Host Nginx → 127.0.0.1:13000/13001/14000/17880 → edge / livekit
 
 services:
   postgres:
@@ -34,18 +30,17 @@ services:
   livekit:
     command: ["--config", "/etc/livekit.yaml", "--bind", "0.0.0.0"]
     volumes:
-      # Generated on server by docker/generate-livekit-prod.sh (gitignored; never commit).
       - ./livekit.prod.yaml:/etc/livekit.yaml:ro
     ports:
-      # Signaling (Nginx proxies wss → here)
       - "127.0.0.1:17880:7880"
-      # RTC — must be reachable from clients (firewall allow)
       - "7881:7881"
       - "7882:7882/udp"
 
+  # No host ports — scaled replicas share Docker DNS name only
   api:
-    ports:
-      - "127.0.0.1:14000:4000"
+    ports: !reset []
+    expose:
+      - "4000"
     environment:
       NODE_ENV: production
       LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rtc.dracord.com.tr}
@@ -58,8 +53,9 @@ services:
       API_URL: http://api:4000
 
   web:
-    ports:
-      - "127.0.0.1:13000:3000"
+    ports: !reset []
+    expose:
+      - "3000"
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
@@ -68,15 +64,36 @@ services:
         NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-wss://rtc.dracord.com.tr}
 
   admin:
-    ports:
-      - "127.0.0.1:13001:3000"
+    ports: !reset []
+    expose:
+      - "3000"
     build:
       context: ..
       dockerfile: docker/Dockerfile.admin
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dracord.com.tr}
 
-  # Never start Compose Caddy on shared Hetzner hosts (port clash with host Nginx).
+  # Loopback edge LB — one listener per port, upstream = all replicas
+  edge:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:13000:13000"
+      - "127.0.0.1:13001:13001"
+      - "127.0.0.1:14000:14000"
+    volumes:
+      - ./Caddyfile.edge:/etc/caddy/Caddyfile:ro
+    networks:
+      - public
+
+  # Host Nginx owns 80/443 — never start Compose Caddy profile
   caddy:
     profiles: ["caddy-disabled"]
     ports: !reset []

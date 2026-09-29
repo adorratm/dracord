@@ -1,16 +1,26 @@
 # syntax=docker/dockerfile:1
 FROM node:current-alpine3.23 AS deps
 WORKDIR /app
+ENV YARN_ENABLE_GLOBAL_CACHE=1 \
+    YARN_ENABLE_TELEMETRY=0 \
+    YARN_ENABLE_SCRIPTS=1 \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    CI=false
 RUN npm install -g corepack && corepack enable
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
+COPY apps/api/package.json ./apps/api/
+COPY apps/admin/package.json ./apps/admin/
 COPY apps/web/package.json ./apps/web/
+COPY apps/desktop/package.json ./apps/desktop/
+COPY apps/mobile/package.json ./apps/mobile/
 COPY apps/music-bot/package.json ./apps/music-bot/
 COPY packages/types/package.json ./packages/types/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/config/package.json ./packages/config/
 COPY packages/ui/package.json ./packages/ui/
-RUN yarn install --immutable || yarn install
+RUN --mount=type=cache,id=dracord-yarn,target=/root/.yarn/berry/cache \
+    yarn workspaces focus @dracord/web
 
 FROM deps AS build
 ARG NEXT_PUBLIC_API_URL

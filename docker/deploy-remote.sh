@@ -31,6 +31,19 @@ fi
 export DRACORD_COMPOSE_PROD=1
 export DRACORD_REPLICAS="$REPLICAS"
 export DRACORD_ROLL_MUSIC_BOT="${DRACORD_ROLL_MUSIC_BOT:-1}"
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
+echo "==> Disk / Docker usage (slow yarn fetch often = full disk or no BuildKit cache)"
+df -h / /var/lib/docker 2>/dev/null || df -h /
+docker system df 2>/dev/null || true
+# If root filesystem is critically full, free dangling build junk (safe for other stacks)
+ROOT_USE="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+if [[ "${ROOT_USE:-0}" -ge 90 ]]; then
+  echo "==> Disk >=90% — pruning dangling images/build cache (containers kept)"
+  docker builder prune -f >/dev/null || true
+  docker image prune -f >/dev/null || true
+fi
 
 echo "==> Generate LiveKit prod config from .env"
 bash docker/generate-livekit-prod.sh .env

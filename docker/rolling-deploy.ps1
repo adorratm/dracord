@@ -6,6 +6,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$env:DOCKER_BUILDKIT = if ($env:DOCKER_BUILDKIT) { $env:DOCKER_BUILDKIT } else { '1' }
+$env:COMPOSE_DOCKER_CLI_BUILD = if ($env:COMPOSE_DOCKER_CLI_BUILD) { $env:COMPOSE_DOCKER_CLI_BUILD } else { '1' }
 $DockerDir = $PSScriptRoot
 $Root = Split-Path $DockerDir -Parent
 $ComposeFile = Join-Path $DockerDir 'docker-compose.yml'

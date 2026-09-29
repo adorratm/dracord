@@ -16,12 +16,11 @@
 #   sudo certbot --nginx -d dracord.com.tr -d www.dracord.com.tr \
 #     -d api.dracord.com.tr -d admin.dracord.com.tr -d rtc.dracord.com.tr
 #
-# Compose prod binds (see docker-compose.prod.yml):
-#   web   127.0.0.1:13000
-#   admin 127.0.0.1:13001
-#   api   127.0.0.1:14000
-#   livekit signaling 127.0.0.1:17880
-#   livekit RTC 7881/tcp + 7882/udp (public; open in firewall)
+# Compose prod:
+#   edge LB → 127.0.0.1:13000 (web), :13001 (admin), :14000 (api)
+#   livekit signaling → 127.0.0.1:17880
+#   livekit RTC → 7881/tcp + 7882/udp (public; open in firewall)
+# api/web/admin replicas do NOT bind host ports (avoids "port already allocated").
 
 map $http_upgrade $dracord_connection_upgrade {
   default upgrade;

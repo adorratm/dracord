@@ -1,16 +1,31 @@
 # syntax=docker/dockerfile:1
+# Shared notes for all Dracord images:
+# - Copy EVERY workspace package.json so yarn.lock matches (apps/* + packages/*).
+# - Use `yarn workspaces focus` so mobile/desktop/expo deps are NOT installed.
+# - BuildKit cache mount keeps .yarn berry cache across builds on the VPS.
+
 FROM node:current-alpine3.23 AS deps
 WORKDIR /app
+ENV YARN_ENABLE_GLOBAL_CACHE=1 \
+    YARN_ENABLE_TELEMETRY=0 \
+    YARN_ENABLE_SCRIPTS=1 \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    CI=false
 RUN npm install -g corepack && corepack enable
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY apps/api/package.json ./apps/api/
+COPY apps/admin/package.json ./apps/admin/
+COPY apps/web/package.json ./apps/web/
+COPY apps/desktop/package.json ./apps/desktop/
+COPY apps/mobile/package.json ./apps/mobile/
 COPY apps/music-bot/package.json ./apps/music-bot/
 COPY packages/types/package.json ./packages/types/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/config/package.json ./packages/config/
 COPY packages/ui/package.json ./packages/ui/
-RUN yarn install --immutable || yarn install
+RUN --mount=type=cache,id=dracord-yarn,target=/root/.yarn/berry/cache \
+    yarn workspaces focus @dracord/api
 
 FROM deps AS build
 COPY packages/types ./packages/types

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Zero-downtime rolling deploy for api/web/admin (Docker Compose).
 # Requires replicas >= 2 and docker-compose.zd.yml (no host port clash).
+# Production: api/web/admin have NO host ports; `edge` LB owns 127.0.0.1:13000/13001/14000.
 #
 # Env:
 #   DRACORD_REPLICAS=2
@@ -15,6 +16,9 @@ USE_PROD="${DRACORD_COMPOSE_PROD:-}"
 if [[ -z "$USE_PROD" ]]; then
   if [[ -f "$PROD_FILE" ]]; then USE_PROD=1; else USE_PROD=0; fi
 fi
+
+export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
+export COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-1}"
 
 COMPOSE_FILES=(
   -f "$ROOT/docker/docker-compose.yml"
@@ -32,6 +36,20 @@ echo "==> Compose: ${COMPOSE_FILES[*]}"
 if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
   echo "==> Building: ${SERVICES[*]}"
   "${COMPOSE[@]}" build "${SERVICES[@]}"
+fi
+
+# Drop obsolete 127.0.0.1 port publishes on app services (breaks multi-replica).
+# Recreate at scale=1 first so host ports are released for `edge`.
+if [[ "$USE_PROD" == "1" ]]; then
+  echo "==> Releasing host ports from api/web/admin (edge will own them)"
+  # Stop anything still binding loopback app ports (old single-replica publish)
+  for cname in $("${COMPOSE[@]}" ps -q api web admin 2>/dev/null || true); do
+    docker stop -t 15 "$cname" >/dev/null 2>&1 || true
+  done
+  for svc in api web admin; do
+    "${COMPOSE[@]}" up -d --scale "$svc=1" --force-recreate --no-deps "$svc" || \
+      "${COMPOSE[@]}" up -d --scale "$svc=1" "$svc" || true
+  done
 fi
 
 roll_service() {
@@ -67,6 +85,11 @@ roll_service() {
 for svc in "${SERVICES[@]}"; do
   roll_service "$svc"
 done
+
+if [[ "$USE_PROD" == "1" ]]; then
+  echo "==> Starting edge LB (127.0.0.1:13000/13001/14000)"
+  "${COMPOSE[@]}" up -d edge
+fi
 
 if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then
   echo "==> Recreating music-bot"

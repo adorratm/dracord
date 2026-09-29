@@ -1,0 +1,35 @@
+# Internal edge for replica LB (host Nginx → these ports).
+# Docker DNS round-robins service names with multiple replicas.
+
+:13000 {
+  reverse_proxy web:3000 {
+    lb_policy round_robin
+    health_uri /health
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+    lb_try_duration 8s
+  }
+}
+
+:13001 {
+  reverse_proxy admin:3000 {
+    lb_policy round_robin
+    health_uri /health
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+    lb_try_duration 8s
+  }
+}
+
+:14000 {
+  reverse_proxy api:4000 {
+    lb_policy round_robin
+    health_uri /health/ready
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+    lb_try_duration 8s
+  }
+}
