@@ -14,6 +14,7 @@ import { openMessageSearch } from '@/components/GlobalSearch';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
+import { getDmReturnPath } from '@/lib/settings-return';
 import { useUserPreferences } from '@/lib/user-preferences';
 
 function DmChatInner({
@@ -161,7 +162,7 @@ function DmChatInner({
           <button
             type="button"
             className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container"
-            onClick={() => router.push('/channels/@me')}
+            onClick={() => router.push(getDmReturnPath('/channels/@me'))}
             aria-label="Geri"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>

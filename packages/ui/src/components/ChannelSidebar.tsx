@@ -63,6 +63,8 @@ export interface UserPanelProps {
   noiseNote?: string | null;
   voiceConnected?: boolean;
   voiceChannelName?: string | null;
+  /** WebRTC ping (RTT), ms */
+  voiceLatencyMs?: number | null;
   /** 0–2 */
   micVolume?: number;
   /** 0–2 */
@@ -218,6 +220,7 @@ export function UserPanel({
   noiseNote,
   voiceConnected,
   voiceChannelName,
+  voiceLatencyMs = null,
   micVolume = 1,
   outputVolume = 1,
   inputDeviceId = '',
@@ -288,18 +291,63 @@ export function UserPanel({
     <div className="bg-surface-container-lowest border-t border-surface-container-high shadow-[0_-4px_16px_rgba(0,0,0,0.2)]">
       {voiceConnected && voiceChannelName && (
         <div className="px-2 pt-2">
-          <div className="rounded-lg bg-dracula-green/15 border border-dracula-green/30 px-2.5 py-1.5 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[16px] text-dracula-green leading-none">
-              signal_cellular_alt
+          <div
+            className={cn(
+              'rounded-lg border px-2.5 py-1.5 flex items-center gap-1.5',
+              voiceLatencyMs != null && voiceLatencyMs >= 150
+                ? 'bg-error/15 border-error/35'
+                : voiceLatencyMs != null && voiceLatencyMs >= 80
+                  ? 'bg-dracula-orange/15 border-dracula-orange/35'
+                  : 'bg-dracula-green/15 border-dracula-green/30',
+            )}
+          >
+            <span
+              className={cn(
+                'material-symbols-outlined text-[16px] leading-none',
+                voiceLatencyMs != null && voiceLatencyMs >= 150
+                  ? 'text-error'
+                  : voiceLatencyMs != null && voiceLatencyMs >= 80
+                    ? 'text-dracula-orange'
+                    : 'text-dracula-green',
+              )}
+            >
+              {voiceLatencyMs != null && voiceLatencyMs >= 150
+                ? 'signal_cellular_alt_1_bar'
+                : voiceLatencyMs != null && voiceLatencyMs >= 80
+                  ? 'signal_cellular_alt_2_bar'
+                  : 'signal_cellular_alt'}
             </span>
             <button
               type="button"
               onClick={onVoiceReturnClick}
               className="min-w-0 flex-1 text-left"
             >
-              <p className="font-label-sm text-dracula-green leading-tight">Ses bağlı</p>
+              <p
+                className={cn(
+                  'font-label-sm leading-tight',
+                  voiceLatencyMs != null && voiceLatencyMs >= 150
+                    ? 'text-error'
+                    : voiceLatencyMs != null && voiceLatencyMs >= 80
+                      ? 'text-dracula-orange'
+                      : 'text-dracula-green',
+                )}
+              >
+                Ses bağlı
+                {voiceLatencyMs != null && (
+                  <span className="tabular-nums">
+                    {' '}
+                    · {voiceLatencyMs} ms ping
+                  </span>
+                )}
+              </p>
               <p className="font-label-sm text-on-surface truncate leading-tight">
                 {voiceChannelName}
+                {voiceLatencyMs != null && (
+                  <span className="text-on-surface-variant tabular-nums">
+                    {' '}
+                    · ~{Math.max(1, Math.round(voiceLatencyMs / 2))} ms gecikme
+                  </span>
+                )}
               </p>
             </button>
             <button

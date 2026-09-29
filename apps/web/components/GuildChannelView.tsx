@@ -705,6 +705,7 @@ export function GuildChannelView({
         noiseNote: voice.noiseNote,
         voiceConnected: inVoice,
         voiceChannelName: voiceChannel?.name ?? null,
+        voiceLatencyMs: inVoice ? voice.latencyMs : null,
         micVolume: voice.audioSettings.micVolume,
         outputVolume: voice.audioSettings.outputVolume,
         inputDeviceId: voice.audioSettings.inputDeviceId,

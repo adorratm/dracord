@@ -3,6 +3,7 @@
 import type { VoiceParticipant } from '@dracord/ui';
 import { SocketEvents } from '@dracord/sdk';
 import {
+  LocalTrack,
   Room,
   RoomEvent,
   Track,
@@ -51,6 +52,8 @@ interface VoiceSessionValue {
   voiceChannelId: string | null;
   voiceGuildId: string | null;
   connected: boolean;
+  /** WebRTC RTT (ping), ms */
+  latencyMs: number | null;
   muted: boolean;
   deafened: boolean;
   cameraEnabled: boolean;
@@ -135,6 +138,39 @@ function voiceAudioPublishOptions(kbps: number): TrackPublishOptions {
     audioPreset: { maxBitrate: audioBitrateToMaxBitrate(kbps) },
     dtx: false,
   };
+}
+
+/** Publisher PeerConnection üzerinden anlık RTT (ms). */
+async function readPublisherRttMs(room: Room): Promise<number | null> {
+  try {
+    for (const pub of room.localParticipant.trackPublications.values()) {
+      const track = pub.track;
+      if (!(track instanceof LocalTrack) || !track.sender) continue;
+      const report = await track.sender.getStats();
+      let pairMs: number | undefined;
+      let remoteMs: number | undefined;
+      report.forEach((stat) => {
+        if (stat.type === 'candidate-pair') {
+          const pair = stat as RTCIceCandidatePairStats & { selected?: boolean };
+          if (
+            typeof pair.currentRoundTripTime === 'number' &&
+            (pair.nominated || pair.selected)
+          ) {
+            pairMs = pair.currentRoundTripTime * 1000;
+          }
+        }
+        if (stat.type === 'remote-inbound-rtp') {
+          const rtt = (stat as { roundTripTime?: number }).roundTripTime;
+          if (typeof rtt === 'number') remoteMs = rtt * 1000;
+        }
+      });
+      const ms = pairMs ?? remoteMs;
+      if (ms != null && Number.isFinite(ms)) return Math.max(0, Math.round(ms));
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
 function applyDeafen(room: Room, deafened: boolean) {
@@ -225,6 +261,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const voicePasswordRef = useRef<string | undefined>(undefined);
 
   const [connected, setConnected] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
@@ -734,6 +771,26 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     applyRoomAudioSettings,
   ]);
 
+  useEffect(() => {
+    if (!connected) {
+      setLatencyMs(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      const room = roomRef.current;
+      if (!room || cancelled) return;
+      const ms = await readPublisherRttMs(room);
+      if (!cancelled && ms != null) setLatencyMs(ms);
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [connected, voiceChannelId]);
+
   /** Ctrl+F5 / yenileme sonrası aynı ses kanalına dön */
   useEffect(() => {
     if (!user) return;
@@ -1187,6 +1244,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceChannelId,
       voiceGuildId,
       connected,
+      latencyMs,
       muted,
       deafened,
       cameraEnabled,
@@ -1224,6 +1282,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceChannelId,
       voiceGuildId,
       connected,
+      latencyMs,
       muted,
       deafened,
       cameraEnabled,
