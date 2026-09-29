@@ -7,8 +7,11 @@ dist
 .next
 .turbo
 .env
-.env.local
+.env.*
+!.env.example
+!**/.env.example
 docker/livekit.yaml
+docker/livekit.prod.yaml
 *.log
 coverage
 .DS_Store

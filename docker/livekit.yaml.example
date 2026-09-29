@@ -5,9 +5,9 @@ rtc:
   # Local Docker: false. Cloud / public host: true
   # UYARI: node_ip: 127.0.0.1 KOYMA — Docker içindeki music-bot
   # medyayı SFU'ya iletemez; tarayıcıda track görünür ama ses gelmez.
-  # Docker Desktop + host tarayıcı + container bot için:
   use_external_ip: true
-# Copy to livekit.yaml and set keys to match LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env
+# Copy to livekit.yaml (gitignored) — keys must match .env LIVEKIT_*
+# Never commit livekit.yaml with real secrets (public repo).
 keys:
   APIdracorddevkey: secret_dracord_livekit_dev_key_change_me
 logging:

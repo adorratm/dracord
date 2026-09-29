@@ -21,6 +21,7 @@
     "docker:up:all": "docker compose -f docker/docker-compose.yml --env-file .env up -d --build",
     "docker:down": "docker compose -f docker/docker-compose.yml --env-file .env down",
     "docker:deploy": "powershell -ExecutionPolicy Bypass -File docker/rolling-deploy.ps1",
+    "docker:deploy:prod": "bash docker/rolling-deploy.sh",
     "search:reindex": "yarn workspace @dracord/api search:reindex"
   },
   "devDependencies": {

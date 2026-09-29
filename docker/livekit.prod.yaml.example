@@ -1,0 +1,23 @@
+# Production LiveKit config TEMPLATE — copy/generate on the server only.
+# DO NOT put real API keys in the public repository.
+#
+# On the server (preferred):
+#   bash docker/generate-livekit-prod.sh
+# Or manually:
+#   cp docker/livekit.prod.yaml.example docker/livekit.prod.yaml
+#   # edit keys to match LIVEKIT_API_KEY / LIVEKIT_API_SECRET in /opt/dracord/.env
+#
+# docker/livekit.prod.yaml is gitignored.
+
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true
+  # Uncomment and set if clients cannot connect (wrong advertised IP):
+  # node_ip: "YOUR.PUBLIC.IPV4"
+logging:
+  level: info
+keys:
+  # REPLACE — must match .env LIVEKIT_API_KEY: LIVEKIT_API_SECRET
+  REPLACE_WITH_LIVEKIT_API_KEY: REPLACE_WITH_LIVEKIT_API_SECRET_MIN_32_CHARS

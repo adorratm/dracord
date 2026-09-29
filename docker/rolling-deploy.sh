@@ -1,15 +1,38 @@
 #!/usr/bin/env bash
 # Zero-downtime rolling deploy for api/web/admin (Docker Compose).
 # Requires replicas >= 2 and docker-compose.zd.yml (no host port clash).
+#
+# Env:
+#   DRACORD_REPLICAS=2
+#   DRACORD_COMPOSE_PROD=1|0   include docker-compose.prod.yml (default: 1 if file exists)
+#   DRACORD_SKIP_BUILD=1       skip image build
+#   DRACORD_ROLL_MUSIC_BOT=1   recreate music-bot after roll (default 1)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE=(docker compose -f "$ROOT/docker/docker-compose.yml" -f "$ROOT/docker/docker-compose.zd.yml" --env-file "$ROOT/.env")
+PROD_FILE="$ROOT/docker/docker-compose.prod.yml"
+USE_PROD="${DRACORD_COMPOSE_PROD:-}"
+if [[ -z "$USE_PROD" ]]; then
+  if [[ -f "$PROD_FILE" ]]; then USE_PROD=1; else USE_PROD=0; fi
+fi
+
+COMPOSE_FILES=(
+  -f "$ROOT/docker/docker-compose.yml"
+  -f "$ROOT/docker/docker-compose.zd.yml"
+)
+if [[ "$USE_PROD" == "1" ]]; then
+  COMPOSE_FILES+=(-f "$PROD_FILE")
+fi
+
+COMPOSE=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ROOT/.env")
 REPLICAS="${DRACORD_REPLICAS:-2}"
 SERVICES=("${@:-api web admin}")
 
-echo "==> Building: ${SERVICES[*]}"
-"${COMPOSE[@]}" build "${SERVICES[@]}"
+echo "==> Compose: ${COMPOSE_FILES[*]}"
+if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
+  echo "==> Building: ${SERVICES[*]}"
+  "${COMPOSE[@]}" build "${SERVICES[@]}"
+fi
 
 roll_service() {
   local svc="$1"
@@ -44,5 +67,10 @@ roll_service() {
 for svc in "${SERVICES[@]}"; do
   roll_service "$svc"
 done
+
+if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then
+  echo "==> Recreating music-bot"
+  "${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot || true
+fi
 
 echo "Done."

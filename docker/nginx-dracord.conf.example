@@ -1,0 +1,193 @@
+# Nginx vhost example for Dracord on a shared Hetzner host.
+#
+# IMPORTANT — other sites must stay untouched:
+#   - Do NOT replace the default server or existing site confs
+#     (ttengamesstudio.com.tr, emrekilic.web.tr, kiliccoffeeroaster.com.tr, hydrorage.com.tr, …).
+#   - Only add/enable THIS file for dracord.com.tr (+ api / admin / rtc / www).
+#   - If dracord.com.tr currently points at another site (e.g. TTEN Games), remove
+#     `dracord.com.tr` from that site's server_name list first, then enable this.
+#
+# Public repo: this file has no secrets. TLS certs stay on the server via Certbot.
+
+# Install:
+#   sudo cp docker/nginx-dracord.conf.example /etc/nginx/sites-available/dracord.com.tr
+#   sudo ln -sf /etc/nginx/sites-available/dracord.com.tr /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d dracord.com.tr -d www.dracord.com.tr \
+#     -d api.dracord.com.tr -d admin.dracord.com.tr -d rtc.dracord.com.tr
+#
+# Compose prod binds (see docker-compose.prod.yml):
+#   web   127.0.0.1:13000
+#   admin 127.0.0.1:13001
+#   api   127.0.0.1:14000
+#   livekit signaling 127.0.0.1:17880
+#   livekit RTC 7881/tcp + 7882/udp (public; open in firewall)
+
+map $http_upgrade $dracord_connection_upgrade {
+  default upgrade;
+  '' close;
+}
+
+upstream dracord_web {
+  server 127.0.0.1:13000;
+  keepalive 32;
+}
+
+upstream dracord_api {
+  server 127.0.0.1:14000;
+  keepalive 32;
+}
+
+upstream dracord_admin {
+  server 127.0.0.1:13001;
+  keepalive 16;
+}
+
+upstream dracord_livekit {
+  server 127.0.0.1:17880;
+  keepalive 16;
+}
+
+# --- Apex ---
+server {
+  listen 80;
+  listen [::]:80;
+  server_name dracord.com.tr;
+
+  location /.well-known/acme-challenge/ {
+    root /var/www/html;
+  }
+
+  location / {
+    return 301 https://$host$request_uri;
+  }
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name dracord.com.tr;
+
+  # Managed by Certbot (placeholders until certbot runs):
+  # ssl_certificate     /etc/letsencrypt/live/dracord.com.tr/fullchain.pem;
+  # ssl_certificate_key /etc/letsencrypt/live/dracord.com.tr/privkey.pem;
+  # include /etc/letsencrypt/options-ssl-nginx.conf;
+  # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+  client_max_body_size 50m;
+
+  location / {
+    proxy_pass http://dracord_web;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $dracord_connection_upgrade;
+    proxy_read_timeout 60s;
+  }
+}
+
+# --- www → apex ---
+server {
+  listen 80;
+  listen [::]:80;
+  server_name www.dracord.com.tr;
+  return 301 https://dracord.com.tr$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name www.dracord.com.tr;
+  # ssl_certificate / ssl_certificate_key — same as apex after certbot
+  return 301 https://dracord.com.tr$request_uri;
+}
+
+# --- API ---
+server {
+  listen 80;
+  listen [::]:80;
+  server_name api.dracord.com.tr;
+  location /.well-known/acme-challenge/ { root /var/www/html; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name api.dracord.com.tr;
+  # ssl_* from certbot
+
+  client_max_body_size 50m;
+
+  location / {
+    proxy_pass http://dracord_api;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $dracord_connection_upgrade;
+    proxy_read_timeout 120s;
+  }
+}
+
+# --- Admin ---
+server {
+  listen 80;
+  listen [::]:80;
+  server_name admin.dracord.com.tr;
+  location /.well-known/acme-challenge/ { root /var/www/html; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name admin.dracord.com.tr;
+  # ssl_* from certbot
+
+  location / {
+    proxy_pass http://dracord_admin;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $dracord_connection_upgrade;
+  }
+}
+
+# --- LiveKit signaling (WSS) ---
+# RTC media uses host ports 7881/tcp and 7882/udp directly (not via Nginx).
+server {
+  listen 80;
+  listen [::]:80;
+  server_name rtc.dracord.com.tr;
+  location /.well-known/acme-challenge/ { root /var/www/html; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name rtc.dracord.com.tr;
+  # ssl_* from certbot
+
+  location / {
+    proxy_pass http://dracord_livekit;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $dracord_connection_upgrade;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+}

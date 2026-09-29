@@ -1,0 +1,82 @@
+# Production override for Hetzner (Nginx terminates TLS on host).
+# Does NOT bind 80/443 — other sites (ttengamesstudio, hydrorage, …) keep their Nginx vhosts.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml \
+#     -f docker/docker-compose.zd.yml \
+#     -f docker/docker-compose.prod.yml \
+#     --env-file .env up -d
+#
+# App traffic: Nginx → 127.0.0.1:{13000,13001,14000,17880}
+# Data ports are not published on the host.
+
+services:
+  postgres:
+    ports: !reset []
+
+  pgbouncer:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  elasticsearch:
+    ports: !reset []
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms512m -Xmx512m}
+
+  minio:
+    ports: !reset []
+
+  livekit:
+    command: ["--config", "/etc/livekit.yaml", "--bind", "0.0.0.0"]
+    volumes:
+      # Generated on server by docker/generate-livekit-prod.sh (gitignored; never commit).
+      - ./livekit.prod.yaml:/etc/livekit.yaml:ro
+    ports:
+      # Signaling (Nginx proxies wss → here)
+      - "127.0.0.1:17880:7880"
+      # RTC — must be reachable from clients (firewall allow)
+      - "7881:7881"
+      - "7882:7882/udp"
+
+  api:
+    ports:
+      - "127.0.0.1:14000:4000"
+    environment:
+      NODE_ENV: production
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rtc.dracord.com.tr}
+      MUSIC_BOT_LIVEKIT_URL: ws://livekit:7880
+      FRONTEND_URL: ${FRONTEND_URL:-https://dracord.com.tr}
+
+  music-bot:
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      API_URL: http://api:4000
+
+  web:
+    ports:
+      - "127.0.0.1:13000:3000"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dracord.com.tr}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-wss://rtc.dracord.com.tr}
+
+  admin:
+    ports:
+      - "127.0.0.1:13001:3000"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.admin
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dracord.com.tr}
+
+  # Never start Compose Caddy on shared Hetzner hosts (port clash with host Nginx).
+  caddy:
+    profiles: ["caddy-disabled"]
+    ports: !reset []
