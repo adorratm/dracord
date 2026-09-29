@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"on-primary-fixed-variant":"#593090","on-surface-variant":"#ccc3d3","primary-container":"#bd93f9","on-tertiary-fixed-variant":"#860f60","on-tertiary":"#620044","on-secondary-container":"#a7b7ed","primary":"#d7baff","error":"#ffb4ab","tertiary-fixed":"#ffd8e9","background":"#11131e","on-secondary":"#1d2e5c","surface-bright":"#373845","tertiary":"#ffafd7","on-primary-fixed":"#290055","inverse-primary":"#714aaa","surface-container-high":"#272935","surface":"#11131e","tertiary-container":"#fe78c5","on-error":"#690005","secondary":"#b5c5fc","inverse-surface":"#e1e1f1","on-primary":"#411478","surface-container-lowest":"#0b0e18","on-tertiary-container":"#770054","primary-fixed":"#eddcff","surface-dim":"#11131e","on-tertiary-fixed":"#3c0029","error-container":"#93000a","surface-container-low":"#191b26","primary-fixed-dim":"#d7baff","secondary-fixed":"#dbe1ff","on-error-container":"#ffdad6","tertiary-fixed-dim":"#ffafd7","surface-container-highest":"#323440","secondary-container":"#374776","on-surface":"#e1e1f1","surface-tint":"#d7baff","on-background":"#e1e1f1","secondary-fixed-dim":"#b5c5fc","surface-container":"#1d1f2b","on-primary-container":"#4e2484","inverse-on-surface":"#2e303c","surface-variant":"#323440","on-secondary-fixed-variant":"#354574","on-secondary-fixed":"#041846","outline-variant":"#4a4451","outline":"#968e9c"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"space-xl":"1.5rem","margin":"0rem","gutter":"1rem","space-sm":"0.5rem","space-xs":"0.25rem","space-lg":"1rem","space-md":"0.75rem"},fontFamily:{"label-md":["Inter"],"body-md":["Inter"],"code-inline":["Inter"],"headline-xl":["Inter"],"headline-lg":["Inter"],"headline-md":["Inter"],"body-lg":["Inter"],"label-sm":["Inter"],"body-sm":["Inter"]},fontSize:{"label-md":["0.75rem",{"lineHeight":"1rem","letterSpacing":"0.04em","fontWeight":"700"}],"body-md":["0.9375rem",{"lineHeight":"1.375rem","fontWeight":"400"}],"code-inline":["0.875rem",{"lineHeight":"1.25rem","fontWeight":"400"}],"headline-xl":["1.5rem",{"lineHeight":"1.875rem","fontWeight":"700"}],"headline-lg":["1.25rem",{"lineHeight":"1.625rem","fontWeight":"600"}],"headline-md":["1rem",{"lineHeight":"1.375rem","fontWeight":"600"}],"body-lg":["1rem",{"lineHeight":"1.5rem","fontWeight":"400"}],"label-sm":["0.6875rem",{"lineHeight":"0.875rem","letterSpacing":"0.02em","fontWeight":"600"}],"body-sm":["0.8125rem",{"lineHeight":"1.125rem","fontWeight":"400"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface select-none antialiased"><header class="fixed top-0 left-0 right-0 h-10 bg-surface-container-lowest z-50 flex items-center justify-between px-space-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-sm"><img alt="Dracula Discord Clyde Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1XS0UlKpPtDTzM9oFeTIVzOtz3BrK31wD2KxXiezEUr9Uye0ETd3vpyHGizsTUOlQ19isYaYD-xRktbI2FjcCEZVnUHQwIzSUu1Fcgm4IWkkJ0sfe668Euz7H93pc1W1rQzpnwKDGGZjHnP1GNwE9J_0iyXqC5Udjw_1FucIuWphKVmGTdeCMDAXGWkzSL6Fs7_JBmLgASkaZ8HdCow4nCzHQWPNrl3JkJX9PDCxhEYgYKc9yh3HjixaBg"/><span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Discord Dracula Edition</span></div><nav class="hidden md:flex items-center gap-space-sm" data-active-classes="bg-surface-container-high text-on-surface font-bold rounded-lg"><a aria-current="page" class="px-space-sm py-space-xs transition-colors bg-surface-container-high text-on-surface font-bold rounded-lg" data-path="server-chat" href="#">Servers</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="direct-messages" href="#">Direct Messages</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="voice-lounge" href="#">Voice</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="user-settings" href="#">Settings</a></nav><div class="flex items-center gap-space-md"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><div class="flex items-center"><button class="h-8 w-8 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">minimize</span></button><button class="h-8 w-8 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">check_box_outline_blank</span></button><button class="h-8 w-8 flex items-center justify-center text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-colors"><span class="material-symbols-outlined text-[16px]">close</span></button></div></div></header><aside class="fixed left-0 top-10 bottom-0 w-[72px] bg-surface-container-lowest z-40 flex flex-col items-center py-space-md gap-space-sm"><div class="relative group flex items-center justify-center w-full"><div class="absolute left-0 w-1 h-10 bg-primary rounded-r-full transition-all duration-200"></div><a class="w-12 h-12 rounded-2xl bg-surface-container-high hover:bg-primary-container text-on-surface hover:text-on-primary-container flex items-center justify-center transition-all duration-200 group-hover:rounded-xl shadow-md" data-path="direct-messages" href="#"><img alt="Dracula Discord Clyde Logo" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1XS0UlKpPtDTzM9oFeTIVzOtz3BrK31wD2KxXiezEUr9Uye0ETd3vpyHGizsTUOlQ19isYaYD-xRktbI2FjcCEZVnUHQwIzSUu1Fcgm4IWkkJ0sfe668Euz7H93pc1W1rQzpnwKDGGZjHnP1GNwE9J_0iyXqC5Udjw_1FucIuWphKVmGTdeCMDAXGWkzSL6Fs7_JBmLgASkaZ8HdCow4nCzHQWPNrl3JkJX9PDCxhEYgYKc9yh3HjixaBg"/></a></div><div class="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs"></div><div class="flex-1 flex flex-col items-center gap-space-sm w-full overflow-y-auto"><div class="relative group flex items-center justify-center w-full"><div class="absolute left-0 w-1 h-5 bg-on-surface rounded-r-full group-hover:h-8 transition-all"></div><a class="w-12 h-12 rounded-full hover:rounded-xl bg-secondary-container text-on-secondary-container hover:bg-primary hover:text-on-primary flex items-center justify-center font-headline-md text-headline-md transition-all duration-200" data-path="server-chat" href="#">DR</a></div><div class="relative group flex items-center justify-center w-full"><a class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-primary flex items-center justify-center font-headline-md text-headline-md hover:bg-primary-container hover:text-on-primary-container transition-all duration-200" data-path="server-chat" href="#"><span class="material-symbols-outlined">code</span></a></div><div class="relative group flex items-center justify-center w-full"><a class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-tertiary flex items-center justify-center font-headline-md text-headline-md hover:bg-tertiary-container hover:text-on-tertiary-container transition-all duration-200" data-path="voice-lounge" href="#"><span class="material-symbols-outlined">graphic_eq</span></a></div><div class="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs"></div><button class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-secondary hover:bg-secondary-container hover:text-on-secondary-container flex items-center justify-center transition-all duration-200"><span class="material-symbols-outlined">add</span></button><button class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-secondary hover:bg-secondary-container hover:text-on-secondary-container flex items-center justify-center transition-all duration-200"><span class="material-symbols-outlined">explore</span></button></div></aside><aside class="fixed left-[72px] top-10 bottom-0 w-60 bg-surface-container-low z-30 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col flex-1 min-h-0"><div class="h-12 px-space-md flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)] bg-surface-container-low cursor-pointer hover:bg-surface-container transition-colors"><span class="font-headline-md text-headline-md text-on-surface truncate">Dracula Realm</span><span class="material-symbols-outlined text-on-surface-variant text-[20px]">expand_more</span></div><div class="flex-1 overflow-y-auto px-space-sm py-space-md"><div class="px-space-sm mb-space-xs flex items-center justify-between text-on-surface-variant"><span class="font-label-sm text-label-sm uppercase font-bold tracking-wider">Text Channels</span><span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-on-surface">add</span></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-container-high text-on-surface font-bold rounded-lg"><a aria-current="page" class="flex items-center gap-space-xs px-space-sm py-space-xs transition-colors bg-surface-container-high text-on-surface font-bold rounded-lg" data-path="server-chat" href="#"><span class="font-body-md text-body-md text-outline">#</span><span class="font-body-sm text-body-sm truncate flex-1">general-chat</span></a><a aria-current="page" class="flex items-center gap-space-xs px-space-sm py-space-xs transition-colors bg-surface-container-high text-on-surface font-bold rounded-lg" data-path="server-chat" href="#"><span class="font-body-md text-body-md text-outline">#</span><span class="font-body-sm text-body-sm truncate flex-1">dracula-dev</span><span class="w-2 h-2 rounded-full bg-primary"></span></a><a aria-current="page" class="flex items-center gap-space-xs px-space-sm py-space-xs transition-colors bg-surface-container-high text-on-surface font-bold rounded-lg" data-path="server-chat" href="#"><span class="font-body-md text-body-md text-outline">#</span><span class="font-body-sm text-body-sm truncate flex-1">theme-releases</span></a></nav><div class="px-space-sm mt-space-md mb-space-xs flex items-center justify-between text-on-surface-variant"><span class="font-label-sm text-label-sm uppercase font-bold tracking-wider">Voice Channels</span><span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-on-surface">add</span></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-container-high text-on-surface font-bold rounded-lg"><a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#"><span class="material-symbols-outlined text-[18px] text-outline">volume_up</span><span class="font-body-sm text-body-sm truncate flex-1">Lounge (Spatial)</span></a><a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#"><span class="material-symbols-outlined text-[18px] text-outline">volume_up</span><span class="font-body-sm text-body-sm truncate flex-1">Night Stream</span></a></nav></div></div><div class="h-[52px] bg-surface-container-lowest px-space-sm flex items-center justify-between"><div class="flex items-center gap-space-xs min-w-0 cursor-pointer p-space-xs rounded-lg hover:bg-surface-container transition-colors flex-1"><div class="relative"><div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center font-headline-md text-headline-md text-on-secondary-container">VD</div><div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-container-lowest"></div></div><div class="flex flex-col min-w-0 leading-none"><span class="font-label-md text-label-md text-on-surface truncate">VampireDev</span><span class="font-label-sm text-label-sm text-on-surface-variant truncate">Online</span></div></div><div class="flex items-center text-on-surface-variant"><button class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">mic</span></button><button class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">headphones</span></button><a class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container hover:text-on-surface transition-colors" data-path="user-settings" href="#"><span class="material-symbols-outlined text-[18px]">settings</span></a></div></div></aside><div class="pl-[312px]"><main class="relative pt-10 min-h-screen bg-surface-container w-full"><div class="flex flex-col w-full h-[calc(100vh-40px)] select-none overflow-hidden">
+<div class="flex flex-1 w-full h-full min-h-0 bg-surface">
+<!-- Sub-Sidebar Channels (Left fixed-width panel) -->
+<aside class="w-60 flex-shrink-0 bg-surface-container-low flex flex-col justify-between shadow-sm select-none">
+<div class="flex flex-col flex-1 min-h-0">
+<!-- Server Header Dropdown -->
+<div class="h-12 px-space-md bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
+<div class="flex items-center gap-space-xs min-w-0">
+<span class="font-headline-md text-headline-md text-on-surface truncate">Dracula Developers</span>
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;" title="Verified Community">verified</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">expand_more</span>
+</div>
+<!-- Channel Tree Navigation -->
+<div class="flex-1 overflow-y-auto px-space-xs py-space-sm space-y-space-md">
+<!-- Category: Bilgilendirme -->
+<div>
+<div class="px-space-sm mb-space-xs flex items-center justify-between text-on-surface-variant hover:text-on-surface cursor-pointer group">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[12px] transition-transform group-hover:text-primary">expand_more</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider font-bold">📌 BİLGİLENDİRME</span>
+</div>
+</div>
+<div class="space-y-space-xs">
+<a class="group flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="font-headline-md text-headline-md text-outline">#</span>
+<span class="font-body-sm text-body-sm truncate flex-1">kurallar</span>
+</a>
+<a class="group flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="font-headline-md text-headline-md text-outline">#</span>
+<span class="font-body-sm text-body-sm truncate flex-1 font-semibold text-on-surface">duyurular</span>
+<span class="px-1.5 py-0.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-label-sm leading-none font-bold shadow-sm">2</span>
+</a>
+</div>
+</div>
+<!-- Category: Metin Kanalları -->
+<div>
+<div class="px-space-sm mb-space-xs flex items-center justify-between text-on-surface-variant hover:text-on-surface cursor-pointer group">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[12px] transition-transform group-hover:text-primary">expand_more</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider font-bold">💬 METİN KANALLARI</span>
+</div>
+<span class="material-symbols-outlined text-[14px] cursor-pointer hover:text-primary">add</span>
+</div>
+<div class="space-y-space-xs">
+<!-- Active Channel: #genel -->
+<div class="relative flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg bg-surface-container-high text-on-surface shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
+<div class="absolute -left-space-xs top-1.5 bottom-1.5 w-1 bg-primary rounded-r-full shadow-[0_0_8px_rgba(189,147,249,0.7)]"></div>
+<span class="font-headline-md text-headline-md text-primary">#</span>
+<span class="font-body-sm text-body-sm font-semibold truncate flex-1">genel</span>
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+</div>
+<a class="group flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="font-headline-md text-headline-md text-outline">#</span>
+<span class="font-body-sm text-body-sm truncate flex-1">yazılım-sohbet</span>
+</a>
+<a class="group flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="font-headline-md text-headline-md text-outline">#</span>
+<span class="font-body-sm text-body-sm truncate flex-1">tasarım-vitrini</span>
+</a>
+<a class="group flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="font-headline-md text-headline-md text-outline">#</span>
+<span class="font-body-sm text-body-sm truncate flex-1">bot-komutları</span>
+</a>
+</div>
+</div>
+<!-- Category: Ses Kanalları -->
+<div>
+<div class="px-space-sm mb-space-xs flex items-center justify-between text-on-surface-variant hover:text-on-surface cursor-pointer group">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[12px] transition-transform group-hover:text-primary">expand_more</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider font-bold">🔊 SES KANALLARI</span>
+</div>
+<span class="material-symbols-outlined text-[14px] cursor-pointer hover:text-primary">add</span>
+</div>
+<div class="space-y-space-xs">
+<!-- Active voice channel with 3 members connected -->
+<div>
+<a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px] text-outline">volume_up</span>
+<span class="font-body-sm text-body-sm truncate flex-1">Genel Ses</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">3/99</span>
+</a>
+<!-- Voice Sub-users connected -->
+<div class="pl-space-xl pr-space-xs py-space-xs space-y-1">
+<div class="flex items-center gap-space-xs py-0.5 px-space-xs rounded hover:bg-surface-container transition-colors">
+<div class="w-5 h-5 rounded-full bg-secondary-container flex items-center justify-center font-label-sm text-[10px] text-on-secondary-container">EK</div>
+<span class="font-body-sm text-[12px] text-tertiary truncate">EmreKilic</span>
+<span class="material-symbols-outlined text-[14px] text-primary ml-auto" style="font-variation-settings: 'FILL' 1;">mic</span>
+</div>
+<div class="flex items-center gap-space-xs py-0.5 px-space-xs rounded hover:bg-surface-container transition-colors">
+<div class="w-5 h-5 rounded-full bg-primary-container flex items-center justify-center font-label-sm text-[10px] text-on-primary">NV</div>
+<span class="font-body-sm text-[12px] text-primary truncate">NeonVamp</span>
+<span class="material-symbols-outlined text-[14px] text-outline ml-auto">mic_off</span>
+</div>
+<div class="flex items-center gap-space-xs py-0.5 px-space-xs rounded hover:bg-surface-container transition-colors">
+<div class="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center font-label-sm text-[10px] text-secondary">CG</div>
+<span class="font-body-sm text-[12px] text-secondary truncate">CyberGhost</span>
+</div>
+</div>
+</div>
+<a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px] text-outline">volume_up</span>
+<span class="font-body-sm text-body-sm truncate flex-1">Kodlama & Chill</span>
+</a>
+<a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px] text-outline">sports_esports</span>
+<span class="font-body-sm text-body-sm truncate flex-1">🎮 Oyun Odası</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Center Chat Area (#genel) -->
+<main class="flex-1 flex flex-col min-w-0 bg-surface-container relative">
+<!-- Top Channel Header Bar -->
+<header class="h-12 px-space-md flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.2)] bg-surface-container z-20 flex-shrink-0">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-lg text-headline-lg text-outline">#</span>
+<span class="font-headline-md text-headline-md text-on-surface font-bold">genel</span>
+</div>
+<div class="h-4 w-[1px] bg-surface-container-highest mx-space-xs"></div>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate hidden sm:block">
+            Yazılım ve Dracula temalı her şeyin konuşulduğu ana kanal
+          </p>
+</div>
+<!-- Top Right Action Controls -->
+<div class="flex items-center gap-space-sm flex-shrink-0">
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Bildirimler">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Sabitlenmiş Mesajlar">
+<span class="material-symbols-outlined text-[20px]">push_pin</span>
+</button>
+<button class="p-1 rounded text-primary hover:text-on-surface hover:bg-surface-container-high transition-colors" id="toggle-members" title="Üye Listesi">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">group</span>
+</button>
+<!-- Search Field Dracula Styled -->
+<div class="relative flex items-center ml-space-xs">
+<input class="h-7 w-36 lg:w-48 bg-surface-container-lowest text-on-surface font-body-sm text-body-sm placeholder-outline px-space-sm rounded transition-all focus:w-56 focus:outline-none focus:ring-1 focus:ring-primary shadow-inner" placeholder="Ara..." type="text"/>
+<span class="material-symbols-outlined text-[16px] text-outline absolute right-2 pointer-events-none">search</span>
+</div>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Yardım">
+<span class="material-symbols-outlined text-[20px]">help</span>
+</button>
+</div>
+</header>
+<!-- Message History Canvas -->
+<div class="flex-1 overflow-y-auto px-space-md py-space-lg space-y-space-lg flex flex-col justify-start">
+<!-- Welcome banner spacer / header block -->
+<div class="p-space-lg rounded-xl bg-surface-container-low shadow-sm relative overflow-hidden mb-space-md">
+<div class="absolute -right-8 -top-8 w-36 h-36 bg-primary-container/10 rounded-full blur-2xl pointer-events-none"></div>
+<div class="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-on-primary mb-space-sm shadow-md">
+<span class="material-symbols-outlined text-[28px]">tag</span>
+</div>
+<h2 class="font-headline-xl text-headline-xl text-on-surface mb-space-xs">#genel kanalına hoş geldiniz!</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Bu, Dracula Developers topluluğunun resmi genel sohbet başlangıcıdır. Hoş sohbetler dileriz.</p>
+</div>
+<!-- 1. Bot Message: DraculaBot Welcome Embed -->
+<div class="flex items-start gap-space-md group hover:bg-surface-container-high/40 p-space-xs -mx-space-xs rounded-lg transition-colors">
+<div class="relative flex-shrink-0 mt-0.5">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center font-headline-md text-headline-md text-on-primary shadow-sm">
+<span class="material-symbols-outlined text-[22px]">smart_toy</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-space-xs mb-1">
+<span class="font-headline-md text-headline-md text-primary font-bold">DraculaBot</span>
+<span class="px-1.5 py-0.2 rounded bg-primary-container text-on-primary-container font-label-sm text-[10px] font-black uppercase tracking-wider leading-tight">BOT</span>
+<span class="font-label-sm text-label-sm text-outline ml-space-xs">Bugün saat 14:02</span>
+</div>
+<!-- Dracula Rich Embed Card -->
+<div class="mt-space-xs max-w-xl bg-surface-container-low rounded-lg p-space-md shadow-md relative overflow-hidden pl-space-lg">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-container"></div>
+<div class="flex items-center justify-between mb-space-xs">
+<span class="font-label-md text-label-md text-primary uppercase font-bold tracking-wider">Topluluk Güncellemesi</span>
+<span class="material-symbols-outlined text-outline text-[18px]">verified</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface font-semibold mb-space-xs">🧛 Dracula Discord Theme v2.4 Yayımlandı!</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-space-md leading-relaxed">
+                Karanlık mod tutkunları için optimize edilmiş yeni renk paleti, geliştirilmiş syntax highlighting ve düşük gecikmeli spatial ses odaları şimdi aktif.
+              </p>
+<!-- Embed fields grid -->
+<div class="grid grid-cols-2 gap-space-sm mb-space-md bg-surface-container-lowest/60 p-space-sm rounded">
+<div>
+<span class="font-label-sm text-label-sm text-outline uppercase block font-semibold">Sürüm</span>
+<span class="font-code-inline text-code-inline text-secondary font-mono">v2.4.0-stable</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-outline uppercase block font-semibold">Aktif Geliştirici</span>
+<span class="font-body-sm text-body-sm text-tertiary">42 Mühendis</span>
+</div>
+</div>
+<!-- Embed Interactive Action Pill Buttons -->
+<div class="flex items-center gap-space-xs">
+<button class="px-space-md py-1 rounded bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md transition-colors shadow-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">download</span> Temayı İndir
+                </button>
+<button class="px-space-md py-1 rounded bg-surface-container-highest hover:bg-surface-bright text-on-surface font-label-md text-label-md transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">menu_book</span> Dokümantasyon
+                </button>
+</div>
+</div>
+<!-- Bot Message Reaction Pills -->
+<div class="flex items-center gap-1.5 mt-space-xs">
+<button class="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm transition-colors">
+<span>🦇</span> <span class="text-primary font-bold">14</span>
+</button>
+<button class="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm transition-colors">
+<span>🔥</span> <span class="text-tertiary font-bold">9</span>
+</button>
+</div>
+</div>
+</div>
+<!-- 2. User Message: EmreKilic with Code Snippet -->
+<div class="flex items-start gap-space-md group hover:bg-surface-container-high/40 p-space-xs -mx-space-xs rounded-lg transition-colors">
+<div class="relative flex-shrink-0 mt-0.5">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center font-headline-md text-headline-md text-on-secondary-container shadow-sm ring-2 ring-tertiary/40">
+              EK
+            </div>
+<div class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-primary ring-2 ring-surface-container"></div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-space-xs mb-1">
+<span class="font-headline-md text-headline-md text-tertiary font-bold">EmreKilic</span>
+<span class="px-1.5 py-0.2 rounded bg-tertiary/20 text-tertiary font-label-sm text-[10px] font-bold uppercase">👑 YÖNETİCİ</span>
+<span class="font-label-sm text-label-sm text-outline ml-space-xs">Bugün saat 14:07</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed mb-space-xs">
+              Selam herkese! Dracula temasını Discord masaüstü uygulamasına birebir uyarladık. Kod blokları ve syntax highlighting'e göz atın:
+            </p>
+<!-- Dracula Syntax Highlighting Code Block -->
+<div class="rounded-lg overflow-hidden bg-surface-container-lowest shadow-md max-w-2xl my-space-xs">
+<div class="px-space-md py-1.5 bg-surface-container-high flex items-center justify-between text-outline text-label-sm font-mono">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-error inline-block"></span>
+<span class="w-2.5 h-2.5 rounded-full bg-tertiary-container inline-block"></span>
+<span class="w-2.5 h-2.5 rounded-full bg-primary inline-block"></span>
+<span class="ml-space-xs font-semibold text-on-surface-variant">draculaThemeConfig.js</span>
+</div>
+<button class="hover:text-on-surface flex items-center gap-1 transition-colors" data-code="const draculaTheme = { background: '#282a36', currentLine: '#44475a', selection: '#44475a', foreground: '#f8f8f2', comment: '#6272a4', cyan: '#8be9fd', green: '#50fa7b', orange: '#ffb86c', pink: '#ff79c6', purple: '#bd93f9', red: '#ff5555', yellow: '#f1fa8c' }; console.log('Dracula Theme Loaded!');" onclick="navigator.clipboard?.writeText(this.dataset.code); this.innerText='Kopyalandı!';">
+<span class="material-symbols-outlined text-[14px]">content_copy</span> Kopyala
+                </button>
+</div>
+<pre class="p-space-md overflow-x-auto font-code-inline text-code-inline leading-relaxed text-on-surface font-mono select-text bg-surface-container-lowest"><code><span class="text-tertiary font-semibold">const</span> <span class="text-secondary">draculaTheme</span> = {
+  <span class="text-primary">background</span>: <span class="text-tertiary-fixed">'#282a36'</span>,
+  <span class="text-primary">currentLine</span>: <span class="text-tertiary-fixed">'#44475a'</span>,
+  <span class="text-primary">selection</span>: <span class="text-tertiary-fixed">'#44475a'</span>,
+  <span class="text-primary">foreground</span>: <span class="text-tertiary-fixed">'#f8f8f2'</span>,
+  <span class="text-primary">comment</span>: <span class="text-outline">'#6272a4'</span>,
+  <span class="text-primary">cyan</span>: <span class="text-secondary">'#8be9fd'</span>,
+  <span class="text-primary">green</span>: <span class="text-primary">'#50fa7b'</span>,
+  <span class="text-primary">orange</span>: <span class="text-tertiary">'#ffb86c'</span>,
+  <span class="text-primary">pink</span>: <span class="text-tertiary">'#ff79c6'</span>,
+  <span class="text-primary">purple</span>: <span class="text-primary-container">'#bd93f9'</span>,
+  <span class="text-primary">red</span>: <span class="text-error">'#ff5555'</span>,
+  <span class="text-primary">yellow</span>: <span class="text-tertiary-fixed-dim">'#f1fa8c'</span>
+};
+
+<span class="text-secondary">console</span>.<span class="text-primary-container">log</span>(<span class="text-tertiary-fixed">'Dracula Theme Loaded!'</span>);</code></pre>
+</div>
+<!-- Reaction Pills -->
+<div class="flex items-center gap-1.5 mt-space-xs">
+<button class="flex items-center gap-1 px-2.5 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-label-sm transition-colors shadow-sm">
+<span>🧛</span> <span class="text-primary font-bold">18</span>
+</button>
+<button class="flex items-center gap-1 px-2.5 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-label-sm transition-colors shadow-sm">
+<span>💻</span> <span class="text-secondary font-bold">7</span>
+</button>
+</div>
+</div>
+</div>
+<!-- 3. User Message: NeonVamp -->
+<div class="flex items-start gap-space-md group hover:bg-surface-container-high/40 p-space-xs -mx-space-xs rounded-lg transition-colors">
+<div class="relative flex-shrink-0 mt-0.5">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center font-headline-md text-headline-md text-on-primary font-bold shadow-sm">
+              NV
+            </div>
+<div class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-primary ring-2 ring-surface-container"></div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-space-xs mb-1">
+<span class="font-headline-md text-headline-md text-primary font-bold">NeonVamp</span>
+<span class="font-label-sm text-label-sm text-outline ml-space-xs">Bugün saat 14:11</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+              Harika görünüyor! Mor ve pembe tonları Discord'a çok yakışmış 🔥🧛
+            </p>
+<!-- Reaction Pills (Specified in Prompt) -->
+<div class="flex items-center gap-1.5 mt-space-xs">
+<button class="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-label-sm transition-colors">
+<span>❤️</span> <span class="text-tertiary font-bold">12</span>
+</button>
+<button class="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-label-sm transition-colors">
+<span>🧛</span> <span class="text-primary font-bold">8</span>
+</button>
+<button class="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-label-sm transition-colors">
+<span>🚀</span> <span class="text-secondary font-bold">5</span>
+</button>
+</div>
+</div>
+</div>
+<!-- 4. User Message: CyberGhost (With Reply Badge) -->
+<div class="flex flex-col group hover:bg-surface-container-high/40 p-space-xs -mx-space-xs rounded-lg transition-colors">
+<!-- Reply Indicator Banner -->
+<div class="flex items-center gap-space-xs pl-6 mb-1 text-on-surface-variant font-label-sm text-label-sm">
+<div class="w-4 h-2.5 border-l-2 border-t-2 border-outline/40 rounded-tl -mt-1"></div>
+<span class="text-outline">Cevaplanan:</span>
+<div class="w-4 h-4 rounded-full bg-primary-container text-[10px] text-on-primary flex items-center justify-center font-bold">NV</div>
+<span class="font-semibold text-primary">NeonVamp</span>
+<span class="truncate text-outline max-w-md">Harika görünüyor! Mor ve pembe tonları Discord'a çok...</span>
+</div>
+<div class="flex items-start gap-space-md">
+<div class="relative flex-shrink-0 mt-0.5">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center font-headline-md text-headline-md text-secondary font-bold shadow-sm">
+                CG
+              </div>
+<div class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-primary ring-2 ring-surface-container"></div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-space-xs mb-1">
+<span class="font-headline-md text-headline-md text-secondary font-bold">CyberGhost</span>
+<span class="font-label-sm text-label-sm text-outline ml-space-xs">Bugün saat 14:15</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">
+                Ses kanalında olan var mı?
+              </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Chat Input Bar -->
+<div class="px-space-md pb-space-lg pt-space-xs flex-shrink-0">
+<div class="bg-surface-container-high rounded-xl p-space-xs flex items-center gap-space-xs shadow-md focus-within:shadow-lg transition-shadow">
+<!-- Attachment Button -->
+<button class="w-9 h-9 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-highest transition-colors" title="Dosya Ekle">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+</button>
+<!-- Input Text Area -->
+<input class="flex-1 bg-transparent text-on-surface font-body-md text-body-md placeholder-outline px-space-xs focus:outline-none" placeholder="#genel kanalına mesaj gönder" type="text"/>
+<!-- Action Utilities (Gift, GIF, Sticker, Emoji) -->
+<div class="flex items-center gap-0.5 pr-space-xs">
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-tertiary hover:bg-surface-container-highest transition-colors" title="Nitro Hediye Et">
+<span class="material-symbols-outlined text-[20px]">featured_seasonal_and_gifts</span>
+</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-primary hover:bg-surface-container-highest transition-colors" title="GIF Gönder">
+<span class="material-symbols-outlined text-[20px]">gif_box</span>
+</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-secondary hover:bg-surface-container-highest transition-colors" title="Çıkartma Seç">
+<span class="material-symbols-outlined text-[20px]">sticker</span>
+</button>
+<!-- Emoji Picker in Dracula Cyan accent -->
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-secondary hover:scale-110 hover:bg-surface-container-highest transition-all" title="İfade Ekle">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">mood</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Right Sidebar (Active Members) -->
+<aside class="w-60 flex-shrink-0 bg-surface-container-low flex flex-col min-h-0 select-none shadow-sm hidden md:flex" id="member-sidebar">
+<div class="flex-1 overflow-y-auto px-space-md py-space-md space-y-space-lg">
+<!-- Role Category: 👑 YÖNETİCİ -->
+<div>
+<div class="font-label-sm text-label-sm uppercase font-bold text-outline tracking-wider mb-space-xs">
+            👑 YÖNETİCİ — 1
+          </div>
+<div class="space-y-space-xs">
+<div class="group flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center font-label-md text-label-md text-on-secondary-container">
+                  EK
+                </div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<span class="font-label-md text-label-md text-tertiary truncate block font-bold">EmreKilic</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant truncate block flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] text-secondary">code</span> Visual Studio Code
+                </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Role Category: 🔮 BOTLAR -->
+<div>
+<div class="font-label-sm text-label-sm uppercase font-bold text-outline tracking-wider mb-space-xs">
+            🔮 BOTLAR — 1
+          </div>
+<div class="space-y-space-xs">
+<div class="group flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[18px]">smart_toy</span>
+</div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<div class="flex items-center gap-1">
+<span class="font-label-md text-label-md text-primary truncate font-bold">DraculaBot</span>
+<span class="px-1 py-0.1 rounded bg-primary-container text-on-primary font-label-sm text-[9px] font-bold">BOT</span>
+</div>
+<span class="font-label-sm text-[11px] text-on-surface-variant truncate block">/yardım komutları dinliyor</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Role Category: ⚡ GELİŞTİRİCİLER -->
+<div>
+<div class="font-label-sm text-label-sm uppercase font-bold text-outline tracking-wider mb-space-xs">
+            ⚡ GELİŞTİRİCİLER — 2
+          </div>
+<div class="space-y-space-xs">
+<!-- NeonVamp -->
+<div class="group flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center font-label-md text-label-md text-on-primary font-bold">
+                  NV
+                </div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<span class="font-label-md text-label-md text-primary truncate block font-bold">NeonVamp</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant truncate block flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] text-tertiary">headphones</span> Spotify - Synthwave Boy
+                </span>
+</div>
+</div>
+<!-- CyberGhost -->
+<div class="group flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center font-label-md text-label-md text-secondary font-bold">
+                  CG
+                </div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<span class="font-label-md text-label-md text-secondary truncate block font-bold">CyberGhost</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant truncate block flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] text-primary">stadia_controller</span> Cyberpunk 2077
+                </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Role Category: ÇEVRİMDIŞI -->
+<div>
+<div class="font-label-sm text-label-sm uppercase font-bold text-outline tracking-wider mb-space-xs">
+            ÇEVRİMDIŞI — 18
+          </div>
+<div class="space-y-space-xs opacity-60">
+<div class="flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center font-label-md text-label-md text-outline">
+                  DX
+                </div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-outline ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<span class="font-label-md text-label-md text-outline truncate block font-medium">DarkXerox</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center font-label-md text-label-md text-outline">
+                  BL
+                </div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-outline ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<span class="font-label-md text-label-md text-outline truncate block font-medium">ByteLord</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm p-space-xs rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="relative flex-shrink-0">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center font-label-md text-label-md text-outline">
+                  VN
+                </div>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-outline ring-2 ring-surface-container-low"></div>
+</div>
+<div class="min-w-0 flex-1 leading-tight">
+<span class="font-label-md text-label-md text-outline truncate block font-medium">VoidNinja</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+<script>
+  // Member list toggle interaction for desktop ergonomics
+  const toggleBtn = document.getElementById('toggle-members');
+  const memberSidebar = document.getElementById('member-sidebar');
+  if (toggleBtn && memberSidebar) {
+    toggleBtn.addEventListener('click', () => {
+      memberSidebar.classList.toggle('hidden');
+      toggleBtn.classList.toggle('text-primary');
+      toggleBtn.classList.toggle('text-on-surface-variant');
+    });
+  }
+</script></main></div></body></html>

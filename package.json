@@ -1,0 +1,32 @@
+{
+  "name": "dracord",
+  "private": true,
+  "packageManager": "yarn@4.18.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "web": "yarn workspace @dracord/web dev",
+    "admin": "yarn workspace @dracord/admin dev",
+    "api": "yarn workspace @dracord/api start:dev",
+    "desktop": "yarn workspace @dracord/desktop dev",
+    "db:generate": "echo \"TypeORM: no client generation step\"",
+    "db:migrate": "echo \"TypeORM synchronize on boot (non-production)\"",
+    "db:seed": "yarn workspace @dracord/api db:seed",
+    "docker:up": "docker compose -f docker/docker-compose.yml --env-file .env up -d postgres pgbouncer redis livekit",
+    "docker:up:all": "docker compose -f docker/docker-compose.yml --env-file .env up -d --build",
+    "docker:down": "docker compose -f docker/docker-compose.yml --env-file .env down"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.4",
+    "typescript": "^6.0.3"
+  },
+  "volta": {
+    "node": "26.10.0",
+    "yarn": "4.18.1"
+  }
+}

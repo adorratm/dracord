@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS deps
+WORKDIR /app
+RUN corepack enable
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+COPY apps/api/package.json ./apps/api/
+COPY packages/types/package.json ./packages/types/
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/config/package.json ./packages/config/
+COPY packages/ui/package.json ./packages/ui/
+RUN yarn install --immutable || yarn install
+
+FROM deps AS build
+COPY packages/types ./packages/types
+COPY packages/sdk ./packages/sdk
+COPY packages/config ./packages/config
+COPY apps/api ./apps/api
+RUN yarn workspace @dracord/types build
+WORKDIR /app/apps/api
+RUN yarn build
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN corepack enable
+COPY --from=build /app/package.json /app/yarn.lock /app/.yarnrc.yml ./
+COPY --from=build /app/.yarn ./.yarn
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/api ./apps/api
+COPY --from=build /app/packages ./packages
+WORKDIR /app/apps/api
+EXPOSE 4000
+CMD ["node", "dist/main.js"]

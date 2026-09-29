@@ -1,0 +1,21 @@
+{
+  "name": "@dracord/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "echo \"Mobil uygulama henüz uygulanmadı — bkz. README.md\"",
+    "start": "expo start",
+    "lint": "echo ok",
+    "build": "echo ok"
+  },
+  "dependencies": {
+    "expo": "~57.0.25",
+    "react": "19.3.0",
+    "react-native": "0.87.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@dracord/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./tailwind": "./tailwind-preset.js",
+    "./tsconfig/base.json": "./tsconfig.base.json",
+    "./tsconfig/next.json": "./tsconfig.next.json"
+  },
+  "scripts": {
+    "build": "echo ok",
+    "lint": "echo ok"
+  }
+}

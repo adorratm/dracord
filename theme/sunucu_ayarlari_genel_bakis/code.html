@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-container-low": "#191b26", "surface-bright": "#373845", "error": "#ffb4ab", "surface-tint": "#d7baff", "tertiary": "#ffafd7", "inverse-surface": "#e1e1f1", "on-surface": "#e1e1f1", "outline-variant": "#4a4451", "on-secondary-fixed-variant": "#354574", "surface-container-high": "#272935", "on-primary": "#411478", "on-tertiary-fixed-variant": "#860f60", "secondary-fixed-dim": "#b5c5fc", "on-secondary-fixed": "#041846", "primary-fixed-dim": "#d7baff", "tertiary-fixed": "#ffd8e9", "surface": "#11131e", "on-secondary": "#1d2e5c", "primary-container": "#bd93f9", "on-secondary-container": "#a7b7ed", "on-tertiary-fixed": "#3c0029", "primary-fixed": "#eddcff", "inverse-primary": "#714aaa", "surface-variant": "#323440", "secondary": "#b5c5fc", "inverse-on-surface": "#2e303c", "error-container": "#93000a", "on-error-container": "#ffdad6", "tertiary-container": "#fe78c5", "on-tertiary-container": "#770054", "surface-container": "#1d1f2b", "primary": "#d7baff", "on-primary-container": "#4e2484", "background": "#11131e", "on-tertiary": "#620044", "outline": "#968e9c", "tertiary-fixed-dim": "#ffafd7", "on-background": "#e1e1f1", "surface-container-lowest": "#0b0e18", "secondary-container": "#374776", "secondary-fixed": "#dbe1ff", "on-error": "#690005", "on-primary-fixed": "#290055", "surface-dim": "#11131e", "on-surface-variant": "#ccc3d3", "surface-container-highest": "#323440", "on-primary-fixed-variant": "#593090" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "margin": "0rem", "space-xs": "0.25rem", "space-xl": "1.5rem", "space-lg": "1rem", "space-sm": "0.5rem", "gutter": "1rem", "space-md": "0.75rem" }, "fontFamily": { "headline-lg": ["Inter"], "body-md": ["Inter"], "headline-md": ["Inter"], "headline-xl": ["Inter"], "label-md": ["Inter"], "code-inline": ["Inter"], "body-lg": ["Inter"], "label-sm": ["Inter"], "body-sm": ["Inter"] }, "fontSize": { "headline-lg": ["1.25rem", { "lineHeight": "1.625rem", "fontWeight": "600" }], "body-md": ["0.9375rem", { "lineHeight": "1.375rem", "fontWeight": "400" }], "headline-md": ["1rem", { "lineHeight": "1.375rem", "fontWeight": "600" }], "headline-xl": ["1.5rem", { "lineHeight": "1.875rem", "fontWeight": "700" }], "label-md": ["0.75rem", { "lineHeight": "1rem", "letterSpacing": "0.04em", "fontWeight": "700" }], "code-inline": ["0.875rem", { "lineHeight": "1.25rem", "fontWeight": "400" }], "body-lg": ["1rem", { "lineHeight": "1.5rem", "fontWeight": "400" }], "label-sm": ["0.6875rem", { "lineHeight": "0.875rem", "letterSpacing": "0.02em", "fontWeight": "600" }], "body-sm": ["0.8125rem", { "lineHeight": "1.125rem", "fontWeight": "400" }] } } } };</script></head><body class="bg-surface font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-high z-40 flex flex-col justify-between overflow-y-auto px-space-md py-space-xl"><div class="flex flex-col gap-space-lg"><div class="px-space-md pb-space-sm"><div class="font-label-md text-label-md uppercase text-outline tracking-wider">Server Settings</div></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-variant text-on-surface font-headline-md"><a aria-current="page" class="flex items-center px-space-md py-space-sm rounded transition-colors bg-surface-variant text-on-surface font-headline-md" data-path="overview" href="#">Overview</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="roles" href="#">Roles</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="emoji" href="#">Emoji</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="stickers" href="#">Stickers</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="moderation" href="#">Moderation</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="audit-log" href="#">Audit Log</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="integrations" href="#">Integrations</a></nav><div class="h-px bg-surface-variant mx-space-md my-space-xs"></div><div class="px-space-md pb-space-sm"><div class="font-label-md text-label-md uppercase text-outline tracking-wider">User Settings</div></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-variant text-on-surface font-headline-md"><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="my-account" href="#">My Account</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="user-profile" href="#">Profiles</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="appearance" href="#">Appearance</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="voice-and-video" href="#">Voice & Video</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="notifications" href="#">Notifications</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="keybinds" href="#">Keybinds</a></nav><div class="h-px bg-surface-variant mx-space-md my-space-xs"></div><div class="px-space-md"><a class="flex items-center px-space-md py-space-sm rounded text-error hover:bg-error-container hover:text-on-error-container transition-colors font-body-md text-body-md" data-path="log-out" href="#">Log Out</a></div></div><div class="px-space-md pt-space-lg"><div class="font-label-sm text-label-sm text-outline">Dracula Desktop v2.4.1</div></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-container-high/90 backdrop-blur-xl z-30 flex items-center justify-between px-space-xl"><div class="flex items-center gap-space-md"><img alt="Brand logo. - Primary color: #bd93f9
+- Font: inter
+- Mode: dark
+- Roundness: rounded-md
+" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1VVstaYyeT2m-YZav5Sp9JzBaHxwvNAOIQTi-TRV9Sm7j-faxFFIiHGILD1tMdULaxZwy-UYdYmuZzX7OfSA8uQwoLY_WIbvyjd_HrjrU-w1qszoAcLXRec9TZaImEpc1bgoQdnO1qakdqDNcB9h6KxlkATam8KgWa8KIynWT4-BIJa4_9FXjXEljVHz_psOgWyDv57FhKnS8Z-FPOcxkF1TZQX6-gmmkL4yheXeuKbU_ygiC2BpSaJjd4"/><span class="font-headline-md text-headline-md text-on-surface tracking-wide">Discord Settings</span></div><div class="flex items-center gap-space-lg"><div class="flex flex-col items-center cursor-pointer group"><button class="w-9 h-9 rounded-full bg-surface-container-highest flex items-center justify-center text-outline group-hover:bg-surface-bright group-hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">close</span></button><span class="font-label-sm text-label-sm text-outline group-hover:text-on-surface mt-1">ESC</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="relative pt-16 w-full min-h-screen bg-surface px-space-xl py-space-xl"><div class="flex flex-col w-full">
+<div class="w-full max-w-5xl mx-auto pb-28">
+<!-- Header Meta & Status Strip -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-space-lg mb-space-xl">
+<div>
+<div class="flex items-center gap-space-sm font-label-md text-label-md uppercase tracking-wider text-outline mb-space-xs">
+<span>Sunucu Yönetimi</span>
+<span class="text-outline-variant">/</span>
+<span class="text-primary font-headline-md">Genel Bakış</span>
+</div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">Sunucu Genel Bakışı</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-0.5">Dracula Realm ana yapılandırma, bildirim protokolleri ve vitrin banner kontrolleri.</p>
+</div>
+<!-- Quick Metrics Pill Grid -->
+<div class="flex items-center gap-space-sm bg-surface-container-high px-space-md py-space-sm rounded-lg shadow-sm">
+<div class="flex items-center gap-2 pr-space-md border-r border-surface-variant">
+<div class="w-2.5 h-2.5 rounded-full bg-[#50fa7b] shadow-[0_0_8px_#50fa7b]"></div>
+<span class="font-label-md text-label-md text-on-surface">1,482 Çevrimiçi</span>
+</div>
+<div class="flex items-center gap-1.5 pl-space-xs text-tertiary">
+<span class="material-symbols-outlined text-[18px]">rocket_launch</span>
+<span class="font-label-md text-label-md">Seviye 3 Takviye</span>
+</div>
+</div>
+</div>
+<!-- Main Settings Matrix (Bento Layout) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl">
+<!-- LEFT COLUMN: Identity & Core Details (7 cols) -->
+<div class="lg:col-span-7 flex flex-col gap-space-xl">
+<!-- Server Identity Card (Icon + Name) -->
+<section class="bg-surface-container-high p-space-xl rounded-xl shadow-md flex flex-col gap-space-lg">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md uppercase tracking-wider text-outline">Temel Kimlik</span>
+<span class="font-label-sm text-label-sm text-primary bg-primary/10 px-2 py-0.5 rounded">ID: 89410294102</span>
+</div>
+<div class="flex flex-col sm:flex-row items-center sm:items-start gap-space-xl">
+<!-- Server Icon Upload Area -->
+<div class="relative group cursor-pointer flex-shrink-0">
+<div class="w-28 h-28 rounded-full bg-gradient-to-br from-primary-container via-surface-variant to-surface-container-lowest p-1 shadow-lg group-hover:shadow-primary/30 transition-all">
+<div class="w-full h-full rounded-full bg-surface-container-high flex flex-col items-center justify-center relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Dark gothic vampire crest badge for Dracula Realm, neon purple bats and cybernetic runes glowing on a matte charcoal obsidian shield, 8k render, isometric, sharp contrasts" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBtUZkNWA6BJ7-RFvLFWF8s0DFrYgY3VcLdB-xSUE9IkHhs4VwCYPPVAQ-lMOP19r1Whj1clL9uamOkQEk3GHIm_2i079uUyXH4eNvQlUqui1JFYabM73grEvCZOPcFbeKCslpD_CMlBBkacgGcT1sujRh_vYBBiPrkF7C4SUJioFR6CvkPIhS03Bj9ZKSODmjvbH6RCEhEI1evrgcCBqM_jEYSyC0VQKwAhETWXH-5YQJIOMZ3uL7Y')"></div>
+<div class="absolute inset-0 bg-surface-container-lowest/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-primary">
+<span class="material-symbols-outlined text-[26px]">upload</span>
+<span class="font-label-sm text-label-sm uppercase font-bold text-on-surface">Değiştir</span>
+</div>
+</div>
+</div>
+<button class="absolute -bottom-1 -right-1 bg-primary text-on-primary w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-surface-tint transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+</button>
+</div>
+<!-- Server Name & Recommendations -->
+<div class="flex flex-col flex-1 w-full gap-space-sm">
+<label class="font-label-md text-label-md uppercase text-on-surface font-semibold tracking-wide" for="server-name">
+                Sunucu Adı <span class="text-tertiary">*</span>
+</label>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest text-on-surface font-body-md text-body-md px-space-md py-space-sm rounded-lg outline-none focus:ring-2 focus:ring-primary transition-all pr-10" id="server-name" type="text" value="Dracula Realm"/>
+<span class="material-symbols-outlined absolute right-3 top-2.5 text-outline text-[18px]">verified</span>
+</div>
+<div class="flex items-center gap-space-xs text-outline font-label-sm text-label-sm mt-0.5">
+<span class="material-symbols-outlined text-[14px]">info</span>
+<span>Önerilen simge boyutu: en az 512x512 piksel (PNG, WEBP veya GIF).</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Notification Frequency Matrix -->
+<section class="bg-surface-container-high p-space-xl rounded-xl shadow-md flex flex-col gap-space-lg">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Varsayılan Bildirim Ayarları</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Yeni katılan üyelerin sunucudaki varsayılan uyarı sıklığını belirler.</p>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+<!-- Option 1: All Messages -->
+<label class="relative flex flex-col p-space-md rounded-lg bg-surface-container-lowest cursor-pointer hover:bg-surface-bright/40 transition-colors">
+<input class="peer sr-only" name="notification_level" type="radio"/>
+<div class="flex items-center justify-between mb-space-xs">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline peer-checked:text-primary">forum</span>
+<span class="font-headline-md text-headline-md text-on-surface">Tüm Mesajlar</span>
+</div>
+<div class="w-4 h-4 rounded-full border border-outline flex items-center justify-center peer-checked:border-primary peer-checked:bg-primary">
+<div class="w-1.5 h-1.5 rounded-full bg-on-primary"></div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-outline">Küçük ve samimi topluluklar için idealdir. Her yeni mesaj bildirim tetikler.</p>
+<div class="absolute inset-0 rounded-lg pointer-events-none peer-checked:outline peer-checked:outline-2 peer-checked:outline-primary"></div>
+</label>
+<!-- Option 2: Only @mentions (Active Dracula Default) -->
+<label class="relative flex flex-col p-space-md rounded-lg bg-surface-container-lowest cursor-pointer hover:bg-surface-bright/40 transition-colors">
+<input checked="" class="peer sr-only" name="notification_level" type="radio"/>
+<div class="flex items-center justify-between mb-space-xs">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">alternate_email</span>
+<span class="font-headline-md text-headline-md text-on-surface">Yalnızca @bahsetmeler</span>
+</div>
+<div class="w-4 h-4 rounded-full border border-primary bg-primary flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-on-primary"></div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Büyük ve hareketli sunucular için şiddetle önerilen Dracula standardı.</p>
+<div class="absolute inset-0 rounded-lg pointer-events-none peer-checked:outline peer-checked:outline-2 peer-checked:outline-primary"></div>
+</label>
+</div>
+</section>
+<!-- System & Welcome Dispatch Module -->
+<section class="bg-surface-container-high p-space-xl rounded-xl shadow-md flex flex-col gap-space-lg">
+<div class="flex items-start justify-between">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Sistem Mesajları Kanalı</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Üye katılımları, boost kutlamaları ve sistem günlüklerinin akacağı kanal.</p>
+</div>
+<span class="material-symbols-outlined text-primary">cell_tower</span>
+</div>
+<!-- Channel Selector Dropdown Mockup -->
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md uppercase text-outline">Etkin Kanal</label>
+<div class="relative">
+<button class="w-full bg-surface-container-lowest flex items-center justify-between px-space-md py-space-sm rounded-lg text-on-surface font-body-md text-body-md hover:bg-surface-bright/30 transition-colors" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[18px]">tag</span>
+<span class="font-code-inline text-code-inline text-on-surface">general-chat</span>
+<span class="text-label-sm font-label-sm bg-surface-variant px-1.5 py-0.5 rounded text-outline">Varsayılan</span>
+</div>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Feature Toggles List -->
+<div class="flex flex-col gap-space-md pt-space-xs">
+<!-- Toggle 1: Random Welcome Message -->
+<div class="flex items-center justify-between p-space-md rounded-lg bg-surface-container-lowest">
+<div class="flex flex-col pr-space-md">
+<span class="font-headline-md text-headline-md text-on-surface">Biri sunucuya katıldığında rastgele karşılama mesajı gönder</span>
+<span class="font-body-sm text-body-sm text-outline">Dracula bot şablonlarıyla yeni kullanıcılara sıcak ve karanlık bir selam verir.</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-bright peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface-container-lowest after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#50fa7b]"></div>
+</label>
+</div>
+<!-- Toggle 2: Server Boost Notification -->
+<div class="flex items-center justify-between p-space-md rounded-lg bg-surface-container-lowest">
+<div class="flex flex-col pr-space-md">
+<span class="font-headline-md text-headline-md text-on-surface">Biri bu sunucuyu takviye ettiğinde kutlama mesajı gönder</span>
+<span class="font-body-sm text-body-sm text-outline">Nitro takviye destekçilerine parıltılı mor teşekkür kristali fırlatır.</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-bright peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface-container-lowest after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#50fa7b]"></div>
+</label>
+</div>
+<!-- Toggle 3: Helpful Tips for New Users -->
+<div class="flex items-center justify-between p-space-md rounded-lg bg-surface-container-lowest">
+<div class="flex flex-col pr-space-md">
+<span class="font-headline-md text-headline-md text-on-surface">Yeni üyelere başlangıç ipuçları ve kuralları fısılda</span>
+<span class="font-body-sm text-body-sm text-outline">Rol alma ve kanalları keşfetme yönlendirmelerini gösterir.</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-bright peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface-container-lowest after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#50fa7b]"></div>
+</label>
+</div>
+</div>
+</section>
+</div>
+<!-- RIGHT COLUMN: Visual Branding & Server Boost Tier 3 (5 cols) -->
+<div class="lg:col-span-5 flex flex-col gap-space-xl">
+<!-- Server Banner & Level 3 Boost Spotlight -->
+<section class="bg-surface-container-high p-space-xl rounded-xl shadow-md flex flex-col gap-space-lg">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs text-tertiary">
+<span class="material-symbols-outlined text-[20px]">diamond</span>
+<span class="font-label-md text-label-md uppercase tracking-wider font-bold">Sunucu Afişi</span>
+</div>
+<span class="font-label-sm text-label-sm bg-tertiary-container/30 text-tertiary px-2 py-0.5 rounded-full font-bold">Seviye 3 Kilidi Açık</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Bu afiş kanal listenizin en üstünde ve sunucu davet bağlantılarında gösterilir.</p>
+<!-- Banner Preview Container -->
+<div class="relative w-full h-44 rounded-lg overflow-hidden group shadow-lg bg-surface-container-lowest">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="Cyberpunk gothic castle hall illuminated by ultraviolet neon torches, glowing purple runes on stone columns, mist rolling on floor, panoramic banner view, 16:9 cinematic aspect ratio, deep dark tones" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB_tP8YdXM285wnim8xLcC_spAaPdUZnwH__uAsT-wQiRu47R4FSUji7Fs62T_Z0FlZllMxa7dW18ete3iIX_vl1jXCkvFoYpm_lCVRTjie0Zgc7m9hrEx8X1jZONFB5U3XUI65Ii7RrusMMJKl2Lz7eUxYAqaYsYZbRTMXFArTsdcnLCXpLm3eWvmFsgJCArQZr-bRnNa7IkXLxYF_HIyghwkRqdyBrEcNO-P8ivGBJ2wxdqezsVGc')"></div>
+<!-- Dark Gradient Vignette Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-black/30"></div>
+<div class="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-[#50fa7b]"></span>
+<span class="font-label-md text-label-md text-on-surface drop-shadow-md">Canlı Afiş Önizleme</span>
+</div>
+<span class="font-label-sm text-label-sm bg-black/60 backdrop-blur-md text-on-surface px-2 py-1 rounded">1920x1080</span>
+</div>
+</div>
+<div class="flex items-center gap-space-md">
+<button class="flex-1 bg-surface-container-lowest hover:bg-surface-bright text-on-surface font-body-md text-body-md py-space-sm px-space-md rounded-lg flex items-center justify-center gap-2 transition-colors">
+<span class="material-symbols-outlined text-[18px]">photo_library</span>
+<span>Sunucu Afişini Değiştir</span>
+</button>
+<button class="bg-surface-container-lowest hover:bg-error-container hover:text-on-error-container text-outline p-space-sm rounded-lg transition-colors" title="Afişi Kaldır">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</section>
+<!-- Invite Splash Artwork Card -->
+<section class="bg-surface-container-high p-space-xl rounded-xl shadow-md flex flex-col gap-space-lg">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md uppercase tracking-wider text-outline">Davet Arka Planı</span>
+<span class="font-label-sm text-label-sm text-secondary bg-secondary-container/40 px-2 py-0.5 rounded">16:9 Görünüm</span>
+</div>
+<!-- Splash Art Thumbnail -->
+<div class="relative w-full h-32 rounded-lg overflow-hidden group shadow-inner bg-surface-container-lowest">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="Dark abstract geometric purple and indigo mesh with subtle neon vampire fangs emblem watermark, modern minimal Discord server splash, high contrast Dracula aesthetic" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBWJcmQ-XmHPwB5jIfPnbBnR5jicUGYpvt4FlC9P4pFax51aomTTL3ZlgI1n8Y3mV0YBUM2gLY1MJ-kDad5cp8tpRyIq89kiQgFB1Bi6bnDb8-gFWES2IxSau2jX07gL4cmQllFVNwc4ay61WiGFf0i4ykFrr40SgOVLh8GjI0SguKdJk9bvW74KQRcHFwjtn8O1_IgQODnlDGbCYCQSAlGcVvYxexSeb4ZRVcED3paHTpq9AAKHYjS')"></div>
+<div class="absolute inset-0 bg-surface-container-lowest/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="bg-surface-bright/90 text-on-surface font-label-md text-label-md px-3 py-1.5 rounded shadow">Görseli Yenile</button>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-outline">Tarayıcıda veya masaüstünde bir davet bağlantısı tıklandığında gösterilen özel arka plan.</p>
+</section>
+<!-- Server Inactive / AFK Channel Configuration -->
+<section class="bg-surface-container-high p-space-xl rounded-xl shadow-md flex flex-col gap-space-md">
+<h2 class="font-headline-md text-headline-md text-on-surface">AFK Kanalı & Zaman Aşımı</h2>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-sm text-label-sm text-outline uppercase">AFK Kanalı</label>
+<div class="bg-surface-container-lowest p-space-sm rounded-lg flex items-center justify-between text-on-surface cursor-pointer hover:bg-surface-bright/30 transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[18px]">volume_up</span>
+<span class="font-code-inline text-code-inline">💤｜Sessizler Mezarlığı</span>
+</div>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-sm text-label-sm text-outline uppercase">AFK Zaman Aşımı</label>
+<div class="bg-surface-container-lowest p-space-sm rounded-lg flex items-center justify-between text-on-surface cursor-pointer hover:bg-surface-bright/30 transition-colors">
+<span class="font-body-md text-body-md">15 Dakika</span>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- Danger Zone Footer Card -->
+<div class="mt-space-xl p-space-xl rounded-xl bg-error-container/20 flex flex-col sm:flex-row items-center justify-between gap-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded-full bg-error-container flex items-center justify-center text-on-error-container flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-error">Sunucuyu Sil</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Bu işlem geri alınamaz. Tüm roller, kanallar ve sohbet geçmişi sonsuza kadar yok olur.</p>
+</div>
+</div>
+<button class="bg-error text-on-error hover:bg-opacity-90 font-headline-md text-headline-md px-space-lg py-space-sm rounded-lg whitespace-nowrap shadow-sm active:scale-95 transition-all">
+        Sunucuyu Sil
+      </button>
+</div>
+</div>
+<!-- FLOATING UNCOMMITTED CHANGES BAR (Discord Style Bottom Dock) -->
+<div class="fixed bottom-6 left-72 right-0 px-space-xl flex justify-center z-50 pointer-events-none transition-all duration-300" id="save-bar">
+<div class="pointer-events-auto bg-surface-container-lowest text-on-surface px-space-xl py-space-md rounded-xl shadow-2xl flex items-center justify-between gap-space-xl w-full max-w-3xl transform translate-y-0 animate-bounce-subtle">
+<div class="flex items-center gap-space-md">
+<span class="material-symbols-outlined text-tertiary animate-pulse">crisis_alert</span>
+<span class="font-headline-md text-headline-md">Dikkat — Kaydedilmemiş değişiklikler var!</span>
+</div>
+<div class="flex items-center gap-space-md">
+<button class="font-headline-md text-headline-md text-on-surface-variant hover:text-on-surface hover:underline px-space-md py-space-xs transition-colors" id="btn-reset">
+          Sıfırla
+        </button>
+<button class="bg-[#50fa7b] hover:bg-[#43dc6b] text-[#11131e] font-headline-md text-headline-md px-space-lg py-space-sm rounded-lg shadow-md transition-all active:scale-95 flex items-center gap-1.5" id="btn-save">
+<span class="material-symbols-outlined text-[18px]">check</span>
+<span>Değişiklikleri Kaydet</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  (function() {
+    const saveBar = document.getElementById('save-bar');
+    const btnSave = document.getElementById('btn-save');
+    const btnReset = document.getElementById('btn-reset');
+    const serverInput = document.getElementById('server-name');
+
+    if (btnSave && saveBar) {
+      btnSave.addEventListener('click', function() {
+        const originalText = btnSave.innerHTML;
+        btnSave.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> <span>Kaydediliyor...</span>';
+        setTimeout(() => {
+          btnSave.innerHTML = '<span class="material-symbols-outlined text-[18px]">done_all</span> <span>Kaydedildi!</span>';
+          setTimeout(() => {
+            saveBar.style.opacity = '0';
+            saveBar.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+              btnSave.innerHTML = originalText;
+            }, 400);
+          }, 800);
+        }, 600);
+      });
+    }
+
+    if (btnReset && saveBar) {
+      btnReset.addEventListener('click', function() {
+        if (serverInput) serverInput.value = 'Dracula Realm';
+        saveBar.style.opacity = '0';
+        saveBar.style.transform = 'translateY(20px)';
+      });
+    }
+
+    if (serverInput && saveBar) {
+      serverInput.addEventListener('input', function() {
+        saveBar.style.opacity = '1';
+        saveBar.style.transform = 'translateY(0)';
+      });
+    }
+  })();
+</script></main></div></body></html>

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-container-low": "#191b26", "surface-bright": "#373845", "error": "#ffb4ab", "surface-tint": "#d7baff", "tertiary": "#ffafd7", "inverse-surface": "#e1e1f1", "on-surface": "#e1e1f1", "outline-variant": "#4a4451", "on-secondary-fixed-variant": "#354574", "surface-container-high": "#272935", "on-primary": "#411478", "on-tertiary-fixed-variant": "#860f60", "secondary-fixed-dim": "#b5c5fc", "on-secondary-fixed": "#041846", "primary-fixed-dim": "#d7baff", "tertiary-fixed": "#ffd8e9", "surface": "#11131e", "on-secondary": "#1d2e5c", "primary-container": "#bd93f9", "on-secondary-container": "#a7b7ed", "on-tertiary-fixed": "#3c0029", "primary-fixed": "#eddcff", "inverse-primary": "#714aaa", "surface-variant": "#323440", "secondary": "#b5c5fc", "inverse-on-surface": "#2e303c", "error-container": "#93000a", "on-error-container": "#ffdad6", "tertiary-container": "#fe78c5", "on-tertiary-container": "#770054", "surface-container": "#1d1f2b", "primary": "#d7baff", "on-primary-container": "#4e2484", "background": "#11131e", "on-tertiary": "#620044", "outline": "#968e9c", "tertiary-fixed-dim": "#ffafd7", "on-background": "#e1e1f1", "surface-container-lowest": "#0b0e18", "secondary-container": "#374776", "secondary-fixed": "#dbe1ff", "on-error": "#690005", "on-primary-fixed": "#290055", "surface-dim": "#11131e", "on-surface-variant": "#ccc3d3", "surface-container-highest": "#323440", "on-primary-fixed-variant": "#593090" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "margin": "0rem", "space-xs": "0.25rem", "space-xl": "1.5rem", "space-lg": "1rem", "space-sm": "0.5rem", "gutter": "1rem", "space-md": "0.75rem" }, "fontFamily": { "headline-lg": ["Inter"], "body-md": ["Inter"], "headline-md": ["Inter"], "headline-xl": ["Inter"], "label-md": ["Inter"], "code-inline": ["Inter"], "body-lg": ["Inter"], "label-sm": ["Inter"], "body-sm": ["Inter"] }, "fontSize": { "headline-lg": ["1.25rem", { "lineHeight": "1.625rem", "fontWeight": "600" }], "body-md": ["0.9375rem", { "lineHeight": "1.375rem", "fontWeight": "400" }], "headline-md": ["1rem", { "lineHeight": "1.375rem", "fontWeight": "600" }], "headline-xl": ["1.5rem", { "lineHeight": "1.875rem", "fontWeight": "700" }], "label-md": ["0.75rem", { "lineHeight": "1rem", "letterSpacing": "0.04em", "fontWeight": "700" }], "code-inline": ["0.875rem", { "lineHeight": "1.25rem", "fontWeight": "400" }], "body-lg": ["1rem", { "lineHeight": "1.5rem", "fontWeight": "400" }], "label-sm": ["0.6875rem", { "lineHeight": "0.875rem", "letterSpacing": "0.02em", "fontWeight": "600" }], "body-sm": ["0.8125rem", { "lineHeight": "1.125rem", "fontWeight": "400" }] } } } };</script></head><body class="bg-surface font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-high z-40 flex flex-col justify-between overflow-y-auto px-space-md py-space-xl"><div class="flex flex-col gap-space-lg"><div class="px-space-md pb-space-sm"><div class="font-label-md text-label-md uppercase text-outline tracking-wider">Server Settings</div></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-variant text-on-surface font-headline-md"><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="overview" href="#">Overview</a><a aria-current="page" class="flex items-center px-space-md py-space-sm rounded transition-colors bg-surface-variant text-on-surface font-headline-md" data-path="roles" href="#">Roles</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="emoji" href="#">Emoji</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="stickers" href="#">Stickers</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="moderation" href="#">Moderation</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="audit-log" href="#">Audit Log</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="integrations" href="#">Integrations</a></nav><div class="h-px bg-surface-variant mx-space-md my-space-xs"></div><div class="px-space-md pb-space-sm"><div class="font-label-md text-label-md uppercase text-outline tracking-wider">User Settings</div></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-variant text-on-surface font-headline-md"><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="my-account" href="#">My Account</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="user-profile" href="#">Profiles</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="appearance" href="#">Appearance</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="voice-and-video" href="#">Voice & Video</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="notifications" href="#">Notifications</a><a class="flex items-center px-space-md py-space-sm rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" data-path="keybinds" href="#">Keybinds</a></nav><div class="h-px bg-surface-variant mx-space-md my-space-xs"></div><div class="px-space-md"><a class="flex items-center px-space-md py-space-sm rounded text-error hover:bg-error-container hover:text-on-error-container transition-colors font-body-md text-body-md" data-path="log-out" href="#">Log Out</a></div></div><div class="px-space-md pt-space-lg"><div class="font-label-sm text-label-sm text-outline">Dracula Desktop v2.4.1</div></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-container-high/90 backdrop-blur-xl z-30 flex items-center justify-between px-space-xl"><div class="flex items-center gap-space-md"><img alt="Brand logo. - Primary color: #bd93f9
+- Font: inter
+- Mode: dark
+- Roundness: rounded-md
+" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1VVstaYyeT2m-YZav5Sp9JzBaHxwvNAOIQTi-TRV9Sm7j-faxFFIiHGILD1tMdULaxZwy-UYdYmuZzX7OfSA8uQwoLY_WIbvyjd_HrjrU-w1qszoAcLXRec9TZaImEpc1bgoQdnO1qakdqDNcB9h6KxlkATam8KgWa8KIynWT4-BIJa4_9FXjXEljVHz_psOgWyDv57FhKnS8Z-FPOcxkF1TZQX6-gmmkL4yheXeuKbU_ygiC2BpSaJjd4"/><span class="font-headline-md text-headline-md text-on-surface tracking-wide">Discord Settings</span></div><div class="flex items-center gap-space-lg"><div class="flex flex-col items-center cursor-pointer group"><button class="w-9 h-9 rounded-full bg-surface-container-highest flex items-center justify-center text-outline group-hover:bg-surface-bright group-hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">close</span></button><span class="font-label-sm text-label-sm text-outline group-hover:text-on-surface mt-1">ESC</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="relative pt-16 w-full min-h-screen bg-surface px-space-xl py-space-xl"><div class="flex flex-col w-full">
+<div class="flex flex-col gap-space-xl max-w-7xl mx-auto w-full pb-space-xl">
+<!-- Top Bar: Header and Primary Action -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-lg">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[28px]" style="font-variation-settings: 'FILL' 1;">shield_person</span>
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">Roller</h1>
+<span class="bg-surface-container-highest text-secondary font-label-sm text-label-sm px-2 py-0.5 rounded-full">6 Toplam Rol</span>
+</div>
+<p class="font-body-md text-body-md text-outline">Üyeleri ve izinleri organize etmek için rolleri kullanın. Varsayılan izinler hiyerarşiye tabidir.</p>
+</div>
+<div class="flex items-center gap-space-md">
+<button class="flex items-center gap-space-sm bg-primary-container hover:bg-primary text-on-primary font-headline-md text-headline-md px-space-lg py-space-sm rounded transition-all shadow-md active:scale-95" id="btn-create-role">
+<span class="material-symbols-outlined text-[20px]">add</span>
+<span>Rol Oluştur</span>
+</button>
+</div>
+</div>
+<!-- Search & Quick Filters -->
+<div class="flex flex-col sm:flex-row items-center justify-between gap-space-md bg-surface-container-low p-space-md rounded-lg">
+<div class="relative w-full sm:w-96 flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-outline text-[18px]">search</span>
+<input class="w-full bg-surface-container-highest text-on-surface placeholder:text-outline font-body-md text-body-md pl-10 pr-4 py-2 rounded focus:outline-none focus:bg-surface-bright transition-colors" id="role-search" placeholder="Rol ara..." type="text"/>
+</div>
+<div class="flex items-center gap-space-xs w-full sm:w-auto overflow-x-auto">
+<button class="bg-surface-container-highest text-on-surface font-label-md text-label-md px-space-md py-1.5 rounded hover:bg-surface-bright transition-colors">Tümü (6)</button>
+<button class="bg-surface-container text-outline hover:text-on-surface font-label-md text-label-md px-space-md py-1.5 rounded hover:bg-surface-container-highest transition-colors">Yönetici</button>
+<button class="bg-surface-container text-outline hover:text-on-surface font-label-md text-label-md px-space-md py-1.5 rounded hover:bg-surface-container-highest transition-colors">Özel Renkler</button>
+</div>
+</div>
+<!-- Main Workspace Split: Roles Table (Left) + Selected Role Inspector (Right) -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-space-xl items-start">
+<!-- Table & Roles Section -->
+<div class="xl:col-span-7 flex flex-col gap-space-md">
+<!-- Role Table Container -->
+<div class="bg-surface-container-low rounded-lg overflow-hidden shadow-lg flex flex-col">
+<!-- Table Header -->
+<div class="grid grid-cols-12 gap-space-md px-space-lg py-space-sm bg-surface-container-high text-outline font-label-md text-label-md tracking-wider uppercase select-none">
+<div class="col-span-5 flex items-center gap-space-xs">
+<span>Rol Adı</span>
+</div>
+<div class="col-span-3 text-center sm:text-left">
+<span>Üyeler</span>
+</div>
+<div class="col-span-3 hidden sm:block">
+<span>İzin Kapsamı</span>
+</div>
+<div class="col-span-4 sm:col-span-1 text-right">
+<span>İşlem</span>
+</div>
+</div>
+<!-- Roles Interactive List -->
+<div class="flex flex-col divide-y divide-surface-container" id="roles-table-body">
+<!-- Row 1: Moderator -->
+<div class="role-row group grid grid-cols-12 gap-space-md items-center px-space-lg py-space-md hover:bg-surface-container-high transition-colors cursor-pointer" data-color="#ffb86c" data-role="moderator">
+<div class="col-span-5 flex items-center gap-space-md min-w-0">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-on-surface cursor-grab">drag_indicator</span>
+<div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style="background-color: #ffb86c;"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-md text-headline-md text-on-surface truncate group-hover:text-primary-fixed-dim">Moderator</span>
+<span class="font-label-sm text-label-sm text-outline">Kanal & Kullanıcı Denetimi</span>
+</div>
+</div>
+<div class="col-span-3 flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[16px]">groups</span>
+<span class="font-body-md text-body-md text-on-surface">2 Üye</span>
+</div>
+<div class="col-span-3 hidden sm:flex items-center">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-secondary font-label-sm text-label-sm truncate">Tam Moderasyon</span>
+</div>
+<div class="col-span-4 sm:col-span-1 flex items-center justify-end gap-1">
+<button class="w-8 h-8 rounded hover:bg-surface-bright flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Dracula Theme Baker (Active / Selected) -->
+<div class="role-row group grid grid-cols-12 gap-space-md items-center px-space-lg py-space-md bg-surface-container-high hover:bg-surface-container-highest transition-colors cursor-pointer relative" data-color="#bd93f9" data-role="dracula-theme-baker">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-container"></div>
+<div class="col-span-5 flex items-center gap-space-md min-w-0">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-on-surface cursor-grab">drag_indicator</span>
+<div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style="background-color: #bd93f9;"></div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-md text-headline-md text-primary truncate">Dracula Theme Baker</span>
+<span class="material-symbols-outlined text-primary text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">Özel Botlar & Entegrasyon</span>
+</div>
+</div>
+<div class="col-span-3 flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[16px]">groups</span>
+<span class="font-body-md text-body-md text-on-surface">8 Üye</span>
+</div>
+<div class="col-span-3 hidden sm:flex items-center">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-primary font-label-sm text-label-sm truncate">Tema & Bot Yetkisi</span>
+</div>
+<div class="col-span-4 sm:col-span-1 flex items-center justify-end gap-1">
+<button class="w-8 h-8 rounded hover:bg-surface-bright flex items-center justify-center text-primary hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+</div>
+<!-- Row 3: Night Streamer -->
+<div class="role-row group grid grid-cols-12 gap-space-md items-center px-space-lg py-space-md hover:bg-surface-container-high transition-colors cursor-pointer" data-color="#ff79c6" data-role="night-streamer">
+<div class="col-span-5 flex items-center gap-space-md min-w-0">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-on-surface cursor-grab">drag_indicator</span>
+<div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style="background-color: #ff79c6;"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-md text-headline-md text-on-surface truncate group-hover:text-tertiary">Night Streamer</span>
+<span class="font-label-sm text-label-sm text-outline">Öncelikli Konuşmacı</span>
+</div>
+</div>
+<div class="col-span-3 flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[16px]">groups</span>
+<span class="font-body-md text-body-md text-on-surface">14 Üye</span>
+</div>
+<div class="col-span-3 hidden sm:flex items-center">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm truncate">Canlı Yayın & Ses</span>
+</div>
+<div class="col-span-4 sm:col-span-1 flex items-center justify-end gap-1">
+<button class="w-8 h-8 rounded hover:bg-surface-bright flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Row 4: Kernel Contributor -->
+<div class="role-row group grid grid-cols-12 gap-space-md items-center px-space-lg py-space-md hover:bg-surface-container-high transition-colors cursor-pointer" data-color="#8be9fd" data-role="kernel-contributor">
+<div class="col-span-5 flex items-center gap-space-md min-w-0">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-on-surface cursor-grab">drag_indicator</span>
+<div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style="background-color: #8be9fd;"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-md text-headline-md text-on-surface truncate group-hover:text-secondary">Kernel Contributor</span>
+<span class="font-label-sm text-label-sm text-outline">GitHub Webhook Erişimi</span>
+</div>
+</div>
+<div class="col-span-3 flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[16px]">groups</span>
+<span class="font-body-md text-body-md text-on-surface">6 Üye</span>
+</div>
+<div class="col-span-3 hidden sm:flex items-center">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-secondary font-label-sm text-label-sm truncate">Geliştirici Kanalları</span>
+</div>
+<div class="col-span-4 sm:col-span-1 flex items-center justify-end gap-1">
+<button class="w-8 h-8 rounded hover:bg-surface-bright flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Row 5: Beta Tester -->
+<div class="role-row group grid grid-cols-12 gap-space-md items-center px-space-lg py-space-md hover:bg-surface-container-high transition-colors cursor-pointer" data-color="#50fa7b" data-role="beta-tester">
+<div class="col-span-5 flex items-center gap-space-md min-w-0">
+<span class="material-symbols-outlined text-outline text-[16px] group-hover:text-on-surface cursor-grab">drag_indicator</span>
+<div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style="background-color: #50fa7b;"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-md text-headline-md text-on-surface truncate group-hover:text-on-surface-variant">Beta Tester</span>
+<span class="font-label-sm text-label-sm text-outline">Geri Bildirim Forumları</span>
+</div>
+</div>
+<div class="col-span-3 flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[16px]">groups</span>
+<span class="font-body-md text-body-md text-on-surface">24 Üye</span>
+</div>
+<div class="col-span-3 hidden sm:flex items-center">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm truncate">Erken Erişim</span>
+</div>
+<div class="col-span-4 sm:col-span-1 flex items-center justify-end gap-1">
+<button class="w-8 h-8 rounded hover:bg-surface-bright flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Row 6: @everyone -->
+<div class="role-row group grid grid-cols-12 gap-space-md items-center px-space-lg py-space-md hover:bg-surface-container-high transition-colors cursor-pointer" data-color="#6272a4" data-role="everyone">
+<div class="col-span-5 flex items-center gap-space-md min-w-0">
+<span class="material-symbols-outlined text-outline text-[16px] opacity-40">lock</span>
+<div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style="background-color: #6272a4;"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-md text-headline-md text-outline truncate">@everyone</span>
+<span class="font-label-sm text-label-sm text-outline">Temel Sunucu Katılımcısı</span>
+</div>
+</div>
+<div class="col-span-3 flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[16px]">groups</span>
+<span class="font-body-md text-body-md text-on-surface">128 Üye</span>
+</div>
+<div class="col-span-3 hidden sm:flex items-center">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-outline font-label-sm text-label-sm truncate">Varsayılan İzinler</span>
+</div>
+<div class="col-span-4 sm:col-span-1 flex items-center justify-end gap-1">
+<button class="w-8 h-8 rounded hover:bg-surface-bright flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Role Hierarchy Drag Tip -->
+<div class="flex items-center gap-space-sm p-space-md bg-surface-container rounded-lg text-outline">
+<span class="material-symbols-outlined text-[20px] text-primary">info</span>
+<span class="font-body-sm text-body-sm">
+            İzin hiyerarşisini güncellemek için rolleri yukarı ya da aşağı sürükleyin. Bir rol, yalnızca kendisinden alt sıradaki rollerin yetkilerini yönetebilir.
+          </span>
+</div>
+<!-- Activity Audit Log Insight (Inline Visual Asset) -->
+<div class="bg-surface-container-low rounded-lg p-space-lg flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-headline-md text-on-surface">Rol İzin Dağılımı</span>
+<span class="font-label-sm text-label-sm text-outline">Hiyerarşik Güç Skoru</span>
+</div>
+<!-- Synthetic Sparkline / Distribution Metric -->
+<div class="w-full flex flex-col gap-space-xs">
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden flex">
+<div class="h-full" style="width: 28%; background-color: #ffb86c;" title="Moderator: %28"></div>
+<div class="h-full" style="width: 24%; background-color: #bd93f9;" title="Dracula Theme Baker: %24"></div>
+<div class="h-full" style="width: 18%; background-color: #ff79c6;" title="Night Streamer: %18"></div>
+<div class="h-full" style="width: 14%; background-color: #8be9fd;" title="Kernel Contributor: %14"></div>
+<div class="h-full" style="width: 10%; background-color: #50fa7b;" title="Beta Tester: %10"></div>
+<div class="h-full" style="width: 6%; background-color: #6272a4;" title="@everyone: %6"></div>
+</div>
+<div class="flex flex-wrap items-center justify-between text-outline font-label-sm text-label-sm pt-1">
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background-color: #ffb86c;"></span>Mod (%28)</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background-color: #bd93f9;"></span>Baker (%24)</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background-color: #ff79c6;"></span>Streamer (%18)</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background-color: #8be9fd;"></span>Kernel (%14)</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background-color: #50fa7b;"></span>Tester (%10)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Detail & Customization Panel (Right Inspector) -->
+<div class="xl:col-span-5 flex flex-col gap-space-lg">
+<!-- Role Customization Box -->
+<div class="bg-surface-container-high rounded-xl p-space-xl flex flex-col gap-space-lg shadow-xl relative overflow-hidden">
+<!-- Top Accent Light -->
+<div class="absolute -top-12 -right-12 w-48 h-48 bg-primary-container/10 rounded-full blur-3xl pointer-events-none"></div>
+<!-- Inspector Header -->
+<div class="flex items-center justify-between pb-space-sm border-b border-surface-variant">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md uppercase text-outline tracking-wider">Rolü Düzenle</span>
+<span class="font-headline-lg text-headline-lg text-primary font-bold" id="inspector-title">Dracula Theme Baker</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="bg-primary/20 text-primary font-label-sm text-label-sm px-2.5 py-1 rounded-full uppercase tracking-wider font-bold">Aktif</span>
+</div>
+</div>
+<!-- Role Name Edit -->
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface uppercase tracking-wide">Rol Adı</label>
+<input class="w-full bg-surface-container text-on-surface font-body-md text-body-md px-space-md py-2.5 rounded focus:outline-none focus:ring-1 focus:ring-primary transition-all" id="input-role-name" type="text" value="Dracula Theme Baker"/>
+</div>
+<!-- Dracula Color Palette Swatches -->
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<label class="font-label-md text-label-md text-on-surface uppercase tracking-wide">Rol Rengi</label>
+<span class="font-code-inline text-code-inline text-primary" id="selected-hex-display">#bd93f9</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline">Kullanıcı adı ve sunucu rozetinde görüntülenecek Dracula tema tonunu seçin.</p>
+<div class="grid grid-cols-6 gap-space-sm pt-space-xs">
+<!-- Swatch 1: Dracula Purple (Selected) -->
+<button class="color-swatch aspect-square rounded-lg flex items-center justify-center transition-transform hover:scale-110 shadow-md ring-2 ring-primary ring-offset-2 ring-offset-surface-container-high" data-hex="#bd93f9" style="background-color: #bd93f9;" title="Dracula Purple (#bd93f9)">
+<span class="material-symbols-outlined text-surface-container-lowest text-[18px] font-bold">check</span>
+</button>
+<!-- Swatch 2: Dracula Pink -->
+<button class="color-swatch aspect-square rounded-lg flex items-center justify-center transition-transform hover:scale-110 shadow-md" data-hex="#ff79c6" style="background-color: #ff79c6;" title="Dracula Pink (#ff79c6)">
+<span class="material-symbols-outlined text-surface-container-lowest text-[18px] font-bold hidden">check</span>
+</button>
+<!-- Swatch 3: Dracula Cyan -->
+<button class="color-swatch aspect-square rounded-lg flex items-center justify-center transition-transform hover:scale-110 shadow-md" data-hex="#8be9fd" style="background-color: #8be9fd;" title="Dracula Cyan (#8be9fd)">
+<span class="material-symbols-outlined text-surface-container-lowest text-[18px] font-bold hidden">check</span>
+</button>
+<!-- Swatch 4: Dracula Green -->
+<button class="color-swatch aspect-square rounded-lg flex items-center justify-center transition-transform hover:scale-110 shadow-md" data-hex="#50fa7b" style="background-color: #50fa7b;" title="Dracula Green (#50fa7b)">
+<span class="material-symbols-outlined text-surface-container-lowest text-[18px] font-bold hidden">check</span>
+</button>
+<!-- Swatch 5: Dracula Orange -->
+<button class="color-swatch aspect-square rounded-lg flex items-center justify-center transition-transform hover:scale-110 shadow-md" data-hex="#ffb86c" style="background-color: #ffb86c;" title="Dracula Orange (#ffb86c)">
+<span class="material-symbols-outlined text-surface-container-lowest text-[18px] font-bold hidden">check</span>
+</button>
+<!-- Swatch 6: Dracula Yellow -->
+<button class="color-swatch aspect-square rounded-lg flex items-center justify-center transition-transform hover:scale-110 shadow-md" data-hex="#f1fa8c" style="background-color: #f1fa8c;" title="Dracula Yellow (#f1fa8c)">
+<span class="material-symbols-outlined text-surface-container-lowest text-[18px] font-bold hidden">check</span>
+</button>
+</div>
+</div>
+<!-- Feature Toggles / Permissions -->
+<div class="flex flex-col gap-space-md pt-space-xs">
+<!-- Toggle 1: Separate Display -->
+<div class="flex items-start justify-between gap-space-md p-space-md rounded-lg bg-surface-container">
+<div class="flex flex-col gap-0.5">
+<span class="font-headline-md text-headline-md text-on-surface">Rol üyelerini ayrı göster</span>
+<span class="font-body-sm text-body-sm text-outline">Çevrim içi olan diğer üyelerden farklı bir kategori başlığı altında listelenir.</span>
+</div>
+<button class="shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none" id="toggle-hoist" style="background-color: #50fa7b;">
+<div class="w-5 h-5 rounded-full bg-surface-container-lowest shadow-md transform translate-x-5 transition-transform duration-200 ease-in-out"></div>
+</button>
+</div>
+<!-- Toggle 2: Mention Permission -->
+<div class="flex items-start justify-between gap-space-md p-space-md rounded-lg bg-surface-container">
+<div class="flex flex-col gap-0.5">
+<span class="font-headline-md text-headline-md text-on-surface">Bahsedilmeye izin ver (@rol)</span>
+<span class="font-body-sm text-body-sm text-outline">Tüm sunucu üyelerinin bu rolden bildirim gönderecek şekilde bahsetmesine izin verir.</span>
+</div>
+<button class="shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none bg-surface-container-highest" id="toggle-mention">
+<div class="w-5 h-5 rounded-full bg-outline shadow-md transform translate-x-0 transition-transform duration-200 ease-in-out"></div>
+</button>
+</div>
+</div>
+<!-- Live Chat Bubble Preview Embed -->
+<div class="flex flex-col gap-space-xs pt-space-xs">
+<span class="font-label-md text-label-md text-outline uppercase tracking-wider">Sohbet Önizlemesi</span>
+<div class="bg-surface-container-lowest rounded-lg p-space-md flex items-start gap-space-md">
+<div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
+<span class="material-symbols-outlined text-[20px]">brush</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-md text-headline-md font-bold transition-colors" id="preview-user-name" style="color: #bd93f9;">
+                    vlad_tepes
+                  </span>
+<span class="px-1.5 py-0.2 rounded font-label-sm text-label-sm" id="preview-badge" style="background-color: rgba(189, 147, 249, 0.2); color: #bd93f9;">
+                    BAKER
+                  </span>
+<span class="font-label-sm text-label-sm text-outline">Bugün 19:42</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mt-0.5">
+                  Dracula temalı yeni kod sözdizimi paleti sunucuya başarıyla entegre edildi. Test kanallarından göz atabilirsiniz!
+                </p>
+</div>
+</div>
+</div>
+<!-- Inspector Action Buttons -->
+<div class="flex items-center justify-between pt-space-md mt-auto">
+<button class="font-body-md text-body-md text-error hover:underline flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+<span>Rolü Sil</span>
+</button>
+<div class="flex items-center gap-space-md">
+<button class="font-body-md text-body-md text-outline hover:text-on-surface px-space-md py-space-xs">
+                Sıfırla
+              </button>
+<button class="bg-primary hover:bg-primary-fixed-dim text-on-primary font-headline-md text-headline-md px-space-lg py-space-sm rounded transition-all shadow-md">
+                Değişiklikleri Kaydet
+              </button>
+</div>
+</div>
+</div>
+<!-- Integrated Bot / Webhook Permission Mini-Card -->
+<div class="bg-surface-container-low rounded-lg p-space-md flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[24px]">key</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">Gelişmiş İzin Matrisi</span>
+<span class="font-body-sm text-body-sm text-outline">Kanal bazlı 34 granular izni düzenle</span>
+</div>
+</div>
+<button class="px-space-md py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-on-surface font-body-sm text-body-sm transition-colors">
+            İncele
+          </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple micro-interactions for Role Management UI
+  (function() {
+    const swatches = document.querySelectorAll('.color-swatch');
+    const selectedHexDisplay = document.getElementById('selected-hex-display');
+    const previewUserName = document.getElementById('preview-user-name');
+    const previewBadge = document.getElementById('preview-badge');
+    const roleRows = document.querySelectorAll('.role-row');
+    const inspectorTitle = document.getElementById('inspector-title');
+    const inputRoleName = document.getElementById('input-role-name');
+    const toggleHoist = document.getElementById('toggle-hoist');
+    const toggleMention = document.getElementById('toggle-mention');
+
+    // Color Swatch Selection
+    swatches.forEach(swatch => {
+      swatch.addEventListener('click', () => {
+        const hex = swatch.getAttribute('data-hex');
+        
+        swatches.forEach(s => {
+          s.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-surface-container-high');
+          const checkIcon = s.querySelector('.material-symbols-outlined');
+          if (checkIcon) checkIcon.classList.add('hidden');
+        });
+
+        swatch.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-surface-container-high');
+        const icon = swatch.querySelector('.material-symbols-outlined');
+        if (icon) icon.classList.remove('hidden');
+
+        if (selectedHexDisplay) selectedHexDisplay.textContent = hex;
+        if (previewUserName) previewUserName.style.color = hex;
+        if (previewBadge) {
+          previewBadge.style.color = hex;
+          previewBadge.style.backgroundColor = hex + '26'; // 15% alpha
+        }
+      });
+    });
+
+    // Row selection highlights
+    roleRows.forEach(row => {
+      row.addEventListener('click', () => {
+        roleRows.forEach(r => {
+          r.classList.remove('bg-surface-container-high');
+          const borderIndicator = r.querySelector('.absolute.left-0');
+          if (borderIndicator) borderIndicator.remove();
+        });
+
+        row.classList.add('bg-surface-container-high');
+        
+        // Add left accent border dynamically
+        const indicator = document.createElement('div');
+        indicator.className = 'absolute left-0 top-0 bottom-0 w-1 bg-primary-container';
+        row.appendChild(indicator);
+
+        // Update inspector values
+        const titleEl = row.querySelector('.font-headline-md');
+        if (titleEl && inspectorTitle && inputRoleName) {
+          const roleName = titleEl.textContent.trim();
+          inspectorTitle.textContent = roleName;
+          inputRoleName.value = roleName;
+        }
+
+        const colorHex = row.getAttribute('data-color');
+        if (colorHex && previewUserName) {
+          previewUserName.style.color = colorHex;
+          if (selectedHexDisplay) selectedHexDisplay.textContent = colorHex;
+          if (previewBadge) {
+            previewBadge.style.color = colorHex;
+            previewBadge.style.backgroundColor = colorHex + '26';
+          }
+        }
+      });
+    });
+
+    // Live update role name in preview
+    if (inputRoleName) {
+      inputRoleName.addEventListener('input', (e) => {
+        if (inspectorTitle) inspectorTitle.textContent = e.target.value;
+      });
+    }
+
+    // Toggle Button Toggles
+    function setupToggle(button) {
+      if (!button) return;
+      button.addEventListener('click', () => {
+        const knob = button.querySelector('div');
+        const isGreen = button.style.backgroundColor === 'rgb(80, 250, 123)' || button.style.backgroundColor === '#50fa7b';
+        
+        if (isGreen) {
+          button.style.backgroundColor = '';
+          button.classList.add('bg-surface-container-highest');
+          knob.classList.remove('translate-x-5');
+          knob.classList.add('translate-x-0');
+          knob.classList.replace('bg-surface-container-lowest', 'bg-outline');
+        } else {
+          button.classList.remove('bg-surface-container-highest');
+          button.style.backgroundColor = '#50fa7b';
+          knob.classList.remove('translate-x-0');
+          knob.classList.add('translate-x-5');
+          knob.classList.replace('bg-outline', 'bg-surface-container-lowest');
+        }
+      });
+    }
+
+    setupToggle(toggleHoist);
+    setupToggle(toggleMention);
+
+    // Search filter interaction
+    const searchInput = document.getElementById('role-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        roleRows.forEach(row => {
+          const title = row.querySelector('.font-headline-md')?.textContent.toLowerCase() || '';
+          if (title.includes(query)) {
+            row.style.display = 'grid';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+      });
+    }
+  })();
+</script></main></div></body></html>

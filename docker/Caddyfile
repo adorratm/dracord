@@ -1,0 +1,19 @@
+dracord.com.tr {
+  reverse_proxy web:3000
+}
+
+www.dracord.com.tr {
+  redir https://dracord.com.tr{uri}
+}
+
+api.dracord.com.tr {
+  reverse_proxy api:4000
+}
+
+admin.dracord.com.tr {
+  reverse_proxy admin:3000
+}
+
+rtc.dracord.com.tr {
+  reverse_proxy livekit:7880
+}

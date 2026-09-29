@@ -1,0 +1,34 @@
+{
+  "name": "@dracord/web",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@dracord/config": "workspace:*",
+    "@dracord/sdk": "workspace:*",
+    "@dracord/types": "workspace:*",
+    "@dracord/ui": "workspace:*",
+    "@livekit/components-react": "^2.9.24",
+    "autoprefixer": "^10.6.1",
+    "denoise-voice-clarity": "0.2.2",
+    "livekit-client": "^2.22.3",
+    "next": "^16.3.6",
+    "postcss": "^8.5.28",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "~3.4.17",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/dom-mediacapture-record": "^1.0.22",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^6.0.3"
+  }
+}

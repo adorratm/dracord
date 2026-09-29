@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Dracord",
+    "slug": "dracord",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "scheme": "dracord",
+    "userInterfaceStyle": "dark",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dracord.mobile"
+    },
+    "android": {
+      "package": "com.dracord.mobile"
+    }
+  }
+}

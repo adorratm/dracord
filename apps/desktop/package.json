@@ -1,0 +1,52 @@
+{
+  "name": "@dracord/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "build": "electron-builder",
+    "lint": "echo ok"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.17.0"
+  },
+  "build": {
+    "appId": "com.dracord.desktop",
+    "productName": "Dracord",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.social-networking"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    },
+    "protocols": [
+      {
+        "name": "Dracord OAuth",
+        "schemes": [
+          "dracord"
+        ]
+      }
+    ]
+  }
+}

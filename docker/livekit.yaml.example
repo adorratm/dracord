@@ -1,0 +1,11 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # Local Docker: false. Cloud / public host: true
+  use_external_ip: false
+# Copy to livekit.yaml and set keys to match LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env
+keys:
+  APIdracorddevkey: secret_dracord_livekit_dev_key_change_me
+logging:
+  level: info
