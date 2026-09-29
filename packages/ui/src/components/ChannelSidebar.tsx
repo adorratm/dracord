@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { presenceDotClass, presenceLabelTr } from '../lib/presence';
+import { VolumeSlider } from './VolumeSlider';
 
 export type SidebarChannelType = 'text' | 'voice';
 
@@ -520,14 +521,12 @@ export function UserPanel({
                     {Math.round(micVolume * 100)}%
                   </span>
                 </div>
-                <input
-                  type="range"
+                <VolumeSlider
                   min={0}
                   max={200}
-                  step={1}
                   value={Math.round(micVolume * 100)}
-                  onChange={(e) => onMicVolumeChange?.(Number(e.target.value) / 100)}
-                  className="w-full accent-primary-container"
+                  aria-label="Giriş sesi"
+                  onChange={(v) => onMicVolumeChange?.(v / 100)}
                 />
               </div>
               {onNoiseClick && (
@@ -621,14 +620,12 @@ export function UserPanel({
                     {Math.round(outputVolume * 100)}%
                   </span>
                 </div>
-                <input
-                  type="range"
+                <VolumeSlider
                   min={0}
                   max={200}
-                  step={1}
                   value={Math.round(outputVolume * 100)}
-                  onChange={(e) => onOutputVolumeChange?.(Number(e.target.value) / 100)}
-                  className="w-full accent-primary-container"
+                  aria-label="Çıkış sesi"
+                  onChange={(v) => onOutputVolumeChange?.(v / 100)}
                 />
               </div>
               {(onVoiceSettingsClick || onSettingsClick) && (

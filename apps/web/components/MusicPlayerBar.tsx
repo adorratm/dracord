@@ -2,9 +2,11 @@
 
 import type { MusicQueueState } from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
-import { useCallback, useEffect, useState } from 'react';
+import { VolumeSlider } from '@dracord/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
+import { loadMusicBotVolume, saveMusicBotVolume } from '@/lib/participant-volumes';
 
 type Props = {
   guildId: string;
@@ -27,8 +29,11 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
   const voice = useVoiceSession();
   const voiceChannelId = voice.voiceChannelId;
   const [state, setState] = useState<MusicQueueState | null>(null);
-  const [localBotVol, setLocalBotVol] = useState(100);
+  const [localBotVol, setLocalBotVol] = useState(() =>
+    voice.getParticipantVolume(DRACORD_BOT_USER_ID),
+  );
   const [busy, setBusy] = useState(false);
+  const appliedServerVolRef = useRef<string | null>(null);
 
   const botInVoice = voice.participants.some((p) => p.id === DRACORD_BOT_USER_ID);
 
@@ -52,6 +57,7 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
   useEffect(() => {
     if (!voiceChannelId) {
       setState(null);
+      appliedServerVolRef.current = null;
       return;
     }
     void refresh();
@@ -63,35 +69,49 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
     setLocalBotVol(voice.getParticipantVolume(DRACORD_BOT_USER_ID));
   }, [voice, voiceChannelId, botInVoice]);
 
-  const control = async (
-    action: 'pause' | 'resume' | 'skip' | 'stop' | 'volume',
-    volume?: number,
-  ) => {
-    if (!voiceChannelId) return;
-    setBusy(true);
-    try {
-      const res = await client.controlMusic({
-        guildId,
-        voiceChannelId,
-        textChannelId: textChannelId ?? undefined,
-        action,
-        volume,
-      });
-      if (res.state) setState(res.state);
-      else if (action === 'stop') setState(null);
-      else void refresh();
-    } catch {
-      // ignore
-    } finally {
-      setBusy(false);
-    }
-  };
+  const control = useCallback(
+    async (
+      action: 'pause' | 'resume' | 'skip' | 'stop' | 'volume',
+      volume?: number,
+    ) => {
+      if (!voiceChannelId) return;
+      setBusy(true);
+      try {
+        const res = await client.controlMusic({
+          guildId,
+          voiceChannelId,
+          textChannelId: textChannelId ?? undefined,
+          action,
+          volume,
+        });
+        if (res.state) setState(res.state);
+        else if (action === 'stop') setState(null);
+        else void refresh();
+      } catch {
+        // ignore
+      } finally {
+        setBusy(false);
+      }
+    },
+    [client, guildId, voiceChannelId, textChannelId, refresh],
+  );
+
+  // Son kaydedilen sunucu bot sesini oturum açılınca uygula
+  useEffect(() => {
+    if (!voiceChannelId || !state) return;
+    if (appliedServerVolRef.current === voiceChannelId) return;
+    appliedServerVolRef.current = voiceChannelId;
+    const pref = loadMusicBotVolume();
+    if (pref == null) return;
+    if (pref === state.volume) return;
+    void control('volume', pref);
+  }, [voiceChannelId, state, control]);
 
   if (!voiceChannelId || (!state?.nowPlaying && !botInVoice)) return null;
 
   const track = state?.nowPlaying;
   const paused = Boolean(state?.paused);
-  const botVol = state?.volume ?? 80;
+  const botVol = state?.volume ?? loadMusicBotVolume() ?? 80;
   const duration = formatDuration(track?.durationSec);
   const thumb = track?.thumbnailUrl;
 
@@ -198,39 +218,31 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
         ) : null}
       </div>
 
-      <div className="px-space-sm sm:px-space-md pb-space-sm grid gap-space-xs sm:grid-cols-2 border-t border-surface-container-highest/80 pt-space-sm">
+      <div className="px-space-sm sm:px-space-md pb-space-sm grid gap-space-sm sm:grid-cols-2 border-t border-surface-container-highest/80 pt-space-sm">
         <label className="flex items-center gap-space-sm min-w-0">
           <span className="font-label-sm text-outline shrink-0 w-16">Bot sesi</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
+          <VolumeSlider
             value={botVol}
             disabled={busy}
-            className="flex-1 accent-primary-container"
-            onChange={(e) => {
-              const v = Number(e.target.value);
+            tone="primary"
+            aria-label="Bot sunucu ses seviyesi"
+            onChange={(v) => {
               setState((s) => (s ? { ...s, volume: v } : s));
             }}
-            onMouseUp={(e) => {
-              void control('volume', Number((e.target as HTMLInputElement).value));
-            }}
-            onTouchEnd={(e) => {
-              void control('volume', Number((e.target as HTMLInputElement).value));
+            onCommit={(v) => {
+              saveMusicBotVolume(v);
+              void control('volume', v);
             }}
           />
           <span className="font-label-sm text-outline w-8 text-right tabular-nums">{botVol}</span>
         </label>
         <label className="flex items-center gap-space-sm min-w-0">
           <span className="font-label-sm text-outline shrink-0 w-16">Senin</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
+          <VolumeSlider
             value={localBotVol}
-            className="flex-1 accent-secondary"
-            onChange={(e) => {
-              const v = Number(e.target.value);
+            tone="secondary"
+            aria-label="Bot yerel ses seviyesi"
+            onChange={(v) => {
               setLocalBotVol(v);
               voice.setParticipantVolume(DRACORD_BOT_USER_ID, v);
             }}

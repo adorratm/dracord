@@ -41,6 +41,10 @@ import {
   type VoiceAudioSettings,
   type VoiceBitrateKbps,
 } from '@/lib/voice-settings';
+import {
+  loadParticipantVolumes,
+  saveParticipantVolumes,
+} from '@/lib/participant-volumes';
 
 export interface ActiveScreenShare {
   identity: string;
@@ -283,6 +287,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   channelIdRef.current = voiceChannelId;
   guildIdRef.current = voiceGuildId;
   audioSettingsRef.current = audioSettings;
+
+  useEffect(() => {
+    const loaded = loadParticipantVolumes();
+    participantVolumesRef.current = new Map(Object.entries(loaded));
+    setParticipantVolumes(loaded);
+  }, []);
 
   const persistAudio = useCallback((next: VoiceAudioSettings) => {
     setAudioSettings(next);
@@ -590,7 +600,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       p.setVolume(audioSettingsRef.current.outputVolume * personal);
       sync();
     });
-    room.on(RoomEvent.ParticipantDisconnected, sync);
+    room.on(RoomEvent.ParticipantDisconnected, (p) => {
+      if (knownPeersRef.current.has(p.identity)) {
+        knownPeersRef.current.delete(p.identity);
+        if (!disposed && !intentionalLeaveRef.current) {
+          playUiTone('peer-leave');
+        }
+      }
+      sync();
+    });
     room.on(RoomEvent.TrackMuted, sync);
     room.on(RoomEvent.TrackUnmuted, sync);
     room.on(RoomEvent.ActiveSpeakersChanged, sync);
@@ -883,9 +901,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     (identity: string, volume: number) => {
       const v = Math.max(0, Math.min(100, Math.round(volume)));
       participantVolumesRef.current.set(identity, v);
-      setParticipantVolumes((prev) =>
-        prev[identity] === v ? prev : { ...prev, [identity]: v },
-      );
+      setParticipantVolumes((prev) => {
+        if (prev[identity] === v) return prev;
+        const next = { ...prev, [identity]: v };
+        saveParticipantVolumes(next);
+        return next;
+      });
       applyParticipantVolume(identity, v);
     },
     [applyParticipantVolume],

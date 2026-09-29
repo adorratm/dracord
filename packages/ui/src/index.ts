@@ -54,6 +54,9 @@ export type { FriendsHubProps, FriendsTab, FriendRow } from './components/Friend
 export { VoiceStage } from './components/VoiceStage';
 export type { VoiceStageProps, VoiceParticipant, VoiceStageScreenShare } from './components/VoiceStage';
 
+export { VolumeSlider } from './components/VolumeSlider';
+export type { VolumeSliderProps } from './components/VolumeSlider';
+
 export { SettingsShell } from './components/SettingsShell';
 export type { SettingsShellProps, SettingsNavItem, SettingsNavSection } from './components/SettingsShell';
 

@@ -913,17 +913,38 @@ export function MessageList({
     getItemKey: (index) => messages[index]?.id ?? String(index),
   });
 
-  // Viewport yüksekliğini izle (kısa liste spacer için)
+  const scrollToBottom = useCallback(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const last = messages.length - 1;
+    if (last >= 0) {
+      try {
+        virtualizer.scrollToIndex(last, { align: 'end', behavior: 'auto' });
+      } catch {
+        // ignore
+      }
+    }
+    el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      const next = parentRef.current;
+      if (next) next.scrollTop = next.scrollHeight;
+    });
+  }, [messages.length, virtualizer]);
+
+  // Viewport yüksekliğini izle — player açılınca da alta yapış
   useLayoutEffect(() => {
     const el = parentRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
       setParentHeight(el.clientHeight);
+      if (stickToBottomRef.current && !activeHighlightId) {
+        el.scrollTop = el.scrollHeight;
+      }
     });
     ro.observe(el);
     setParentHeight(el.clientHeight);
     return () => ro.disconnect();
-  }, []);
+  }, [activeHighlightId]);
 
   const checkLiveEdge = useCallback(() => {
     const el = parentRef.current;
@@ -949,6 +970,7 @@ export function MessageList({
     prevScrollKey.current = scrollKey;
     highlightDoneRef.current = null;
     setActiveHighlightId(null);
+    prevLenRef.current = 0;
 
     if (highlightMessageId) {
       stickToBottomRef.current = false;
@@ -959,27 +981,41 @@ export function MessageList({
 
     stickToBottomRef.current = true;
     setScrolledAway(false);
+    onLiveEdgeChange?.(true);
     requestAnimationFrame(() => {
-      const el = parentRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-      onLiveEdgeChange?.(true);
+      scrollToBottom();
+      requestAnimationFrame(() => scrollToBottom());
     });
-  }, [scrollKey, highlightMessageId, onLiveEdgeChange]);
+  }, [scrollKey, highlightMessageId, onLiveEdgeChange, scrollToBottom]);
 
-  // Canlı kenarda yeni mesaj
-  useEffect(() => {
-    const el = parentRef.current;
-    if (!el) return;
-    if (
-      !highlightMessageId &&
-      !activeHighlightId &&
-      stickToBottomRef.current &&
-      messages.length > prevLenRef.current
-    ) {
-      el.scrollTop = el.scrollHeight;
+  // Canlı kenarda yeni mesaj / ilk yükleme
+  useLayoutEffect(() => {
+    if (highlightMessageId || activeHighlightId) {
+      prevLenRef.current = messages.length;
+      return;
+    }
+    if (!stickToBottomRef.current) {
+      prevLenRef.current = messages.length;
+      return;
+    }
+    if (messages.length === 0) {
+      prevLenRef.current = 0;
+      return;
+    }
+    // Uzunluk arttı veya kanalda ilk dolu liste
+    if (messages.length !== prevLenRef.current || prevLenRef.current === 0) {
+      scrollToBottom();
     }
     prevLenRef.current = messages.length;
-  }, [messages.length, highlightMessageId, activeHighlightId]);
+  }, [messages.length, highlightMessageId, activeHighlightId, scrollToBottom, scrollKey]);
+
+  // Ölçüm / spacer değişince de alta yapış (embed, görsel, player)
+  const totalSizeForStick = virtualizer.getTotalSize();
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current || highlightMessageId || activeHighlightId) return;
+    const el = parentRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [totalSizeForStick, parentHeight, highlightMessageId, activeHighlightId]);
 
   // Arama: tek mesaja kaydır + kısa vurgu
   useEffect(() => {
@@ -1135,9 +1171,9 @@ export function MessageList({
             highlightDoneRef.current = null;
             onJumpToPresent?.();
             requestAnimationFrame(() => {
-              const el = parentRef.current;
-              if (el) el.scrollTop = el.scrollHeight;
+              scrollToBottom();
               onLiveEdgeChange?.(true);
+              requestAnimationFrame(() => scrollToBottom());
             });
           }}
           className="shrink-0 w-full h-9 px-space-md flex items-center justify-center gap-space-xs border-t border-primary-container/30 bg-primary-container text-on-primary-container font-label-sm hover:opacity-95 transition-opacity"

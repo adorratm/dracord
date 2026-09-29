@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
+import { VolumeSlider } from './VolumeSlider';
 
 export interface VoiceParticipant {
   id: string;
@@ -225,16 +226,10 @@ export function VoiceStage({
                         >
                           {vol === 0 ? 'volume_off' : 'volume_up'}
                         </span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
+                        <VolumeSlider
                           value={vol}
                           aria-label={`${p.displayName} ses seviyesi`}
-                          className="flex-1 min-w-0 h-1 accent-primary-container"
-                          onChange={(e) =>
-                            onParticipantVolumeChange?.(p.id, Number(e.target.value))
-                          }
+                          onChange={(v) => onParticipantVolumeChange?.(p.id, v)}
                         />
                         <span
                           className={cn(

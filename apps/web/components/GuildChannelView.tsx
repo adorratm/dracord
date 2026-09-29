@@ -10,6 +10,7 @@ import {
   MessageList,
   Modal,
   VoiceStage,
+  VolumeSlider,
   type MemberListGroup,
 } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
@@ -883,16 +884,10 @@ export function GuildChannelView({
                             <span className="material-symbols-outlined text-[16px] text-outline">
                               {vol === 0 ? 'volume_off' : 'volume_up'}
                             </span>
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
+                            <VolumeSlider
                               value={vol}
-                              className="flex-1 accent-primary-container"
                               aria-label={`${p.displayName} ses`}
-                              onChange={(e) =>
-                                voice.setParticipantVolume(p.id, Number(e.target.value))
-                              }
+                              onChange={(v) => voice.setParticipantVolume(p.id, v)}
                             />
                             <span className="font-label-sm text-outline w-7 text-right tabular-nums">
                               {vol}
