@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
+import { VOICE_BITRATE_PRESETS, type VoiceBitrateKbps } from '@/lib/voice-settings';
 
 function VolumeSlider({
   label,
@@ -84,7 +85,7 @@ export default function VoiceSettingsPage() {
       <div>
         <h2 className="font-headline-lg text-headline-lg text-on-surface">Ses ve Görüntü</h2>
         <p className="font-body-md text-body-md text-on-surface-variant mt-space-xs">
-          Mikrofon, kulaklık, kamera ve varsayılan aygıtları buradan yönet.
+          Mikrofon, kulaklık, kamera, ses kalitesi ve varsayılan aygıtları buradan yönet.
           Ayarlar bu tarayıcıda saklanır; ses kanalındayken anında uygulanır.
           Her kullanıcının sesini ayrıca ses sahnesindeki kaydırıcıdan ayarlayabilirsin.
         </p>
@@ -104,6 +105,36 @@ export default function VoiceSettingsPage() {
           value={voice.audioSettings.outputVolume}
           onChange={voice.setOutputVolume}
         />
+      </section>
+
+      <section className="rounded-xl bg-surface-container-low p-space-lg space-y-space-lg">
+        <h3 className="font-headline-md text-headline-md text-on-surface">Ses kalitesi</h3>
+        <p className="font-body-sm text-on-surface-variant">
+          Mikrofon yayın bitrate’i. Varsayılan en yüksek (320 kbps). Daha düşük değerler bant
+          genişliği tasarruf eder; tarayıcı yine de desteklediği üst sınıra kadar çıkar.
+        </p>
+        <label className="flex flex-col gap-space-xs">
+          <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-[18px]">high_quality</span>
+            Yayın kalitesi
+          </span>
+          <select
+            value={voice.audioSettings.audioBitrateKbps}
+            onChange={(e) => void voice.setAudioBitrate(Number(e.target.value) as VoiceBitrateKbps)}
+            className="h-10 px-space-sm rounded-lg bg-surface-container-highest text-on-surface font-body-sm outline-none"
+          >
+            {VOICE_BITRATE_PRESETS.map((kbps) => (
+              <option key={kbps} value={kbps}>
+                {kbps} kbps{kbps === 320 ? ' — En yüksek' : kbps === 32 ? ' — En düşük' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        {voice.connected && (
+          <p className="font-body-sm text-outline">
+            Değişiklik bu oturumda hemen uygulanır.
+          </p>
+        )}
       </section>
 
       <section className="rounded-xl bg-surface-container-low p-space-lg space-y-space-lg">

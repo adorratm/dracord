@@ -6,6 +6,7 @@ import {
   TrackPublishOptions,
   TrackSource,
 } from '@livekit/rtc-node';
+import { AudioEncoding } from '@livekit/rtc-ffi-bindings';
 import type { MusicQueueState, MusicTrack } from '@dracord/types';
 import * as api from './api';
 import { fetchMeta, logProcessLines, openPcmStream } from './ytdlp';
@@ -16,6 +17,14 @@ const CHANNELS = 1;
 const SAMPLES_PER_FRAME = 960;
 /** LiveKit AudioSource queue (ms) — sürekli PCM için geniş tut */
 const SOURCE_QUEUE_MS = 2000;
+
+const BITRATE_PRESETS = [320, 192, 160, 128, 64, 32] as const;
+
+function musicPublishBitrateBps(): bigint {
+  const raw = Number(process.env.MUSIC_AUDIO_BITRATE_KBPS ?? 320);
+  const kbps = BITRATE_PRESETS.includes(raw as (typeof BITRATE_PRESETS)[number]) ? raw : 320;
+  return BigInt(kbps * 1000);
+}
 
 type Session = {
   guildId: string;
@@ -103,8 +112,10 @@ export class MusicPlayer {
     // Müzik için DTX kapat — aksi halde kodlayıcı sessizlik sanıp ses kesilir
     options.dtx = false;
     options.red = false;
+    const bitrate = musicPublishBitrateBps();
+    options.audioEncoding = new AudioEncoding({ maxBitrate: bitrate });
     await room.localParticipant!.publishTrack(track, options);
-    console.log('Audio track published (dtx=false)');
+    console.log(`Audio track published (dtx=false, bitrate=${bitrate}bps)`);
 
     await api.presenceJoin(guildId, voiceChannelId).catch((e) => {
       console.warn('presence join failed', e);

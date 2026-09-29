@@ -5,10 +5,12 @@ import {
   Room,
   RoomEvent,
   Track,
+  type AudioCaptureOptions,
   type LocalAudioTrack,
   type LocalParticipant,
   type LocalTrackPublication,
   type RemoteParticipant,
+  type TrackPublishOptions,
 } from 'livekit-client';
 import {
   createContext,
@@ -29,10 +31,13 @@ import {
   saveActiveVoice,
 } from '@/lib/voice-session-storage';
 import {
+  audioBitrateToMaxBitrate,
   loadVoiceAudioSettings,
   micVolumeToPresenceDb,
+  normalizeBitrateKbps,
   saveVoiceAudioSettings,
   type VoiceAudioSettings,
+  type VoiceBitrateKbps,
 } from '@/lib/voice-settings';
 
 export interface ActiveScreenShare {
@@ -67,6 +72,7 @@ interface VoiceSessionValue {
   setVideoDevice: (deviceId: string) => Promise<void>;
   setMicVolume: (volume: number) => void;
   setOutputVolume: (volume: number) => void;
+  setAudioBitrate: (kbps: VoiceBitrateKbps) => Promise<void>;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
   join: (channelId: string, guildId: string) => void;
@@ -111,6 +117,23 @@ function getMicTrack(room: Room): LocalAudioTrack | undefined {
   const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
   const track = pub?.track;
   return track && track.kind === 'audio' ? (track as LocalAudioTrack) : undefined;
+}
+
+function voiceAudioCaptureOptions(settings: VoiceAudioSettings): AudioCaptureOptions {
+  return {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    sampleRate: 48000,
+    deviceId: settings.inputDeviceId || undefined,
+  };
+}
+
+function voiceAudioPublishOptions(kbps: number): TrackPublishOptions {
+  return {
+    audioPreset: { maxBitrate: audioBitrateToMaxBitrate(kbps) },
+    dtx: false,
+  };
 }
 
 function applyDeafen(room: Room, deafened: boolean) {
@@ -479,19 +502,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const guildId = voiceGuildId;
     let disposed = false;
     const settings = audioSettingsRef.current;
+    const audioPublish = voiceAudioPublishOptions(settings.audioBitrateKbps);
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
-      audioCaptureDefaults: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        deviceId: settings.inputDeviceId || undefined,
-      },
+      audioCaptureDefaults: voiceAudioCaptureOptions(settings),
       videoCaptureDefaults: {
         deviceId: settings.videoDeviceId || undefined,
         resolution: { width: 1280, height: 720, frameRate: 24 },
       },
+      publishDefaults: audioPublish,
       audioOutput: settings.outputDeviceId
         ? { deviceId: settings.outputDeviceId }
         : undefined,
@@ -607,7 +627,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         } catch {
           // kullanıcı jesti sonrası tekrar denenecek
         }
-        await room.localParticipant.setMicrophoneEnabled(true);
+        await room.localParticipant.setMicrophoneEnabled(
+          true,
+          voiceAudioCaptureOptions(audioSettingsRef.current),
+          voiceAudioPublishOptions(audioSettingsRef.current.audioBitrateKbps),
+        );
         try {
           await room.startAudio();
         } catch {
@@ -1009,6 +1033,42 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [persistAudio],
   );
 
+  const applyAudioBitrateToRoom = useCallback(
+    async (room: Room, kbps: VoiceBitrateKbps) => {
+      const publish = voiceAudioPublishOptions(kbps);
+      room.options.publishDefaults = {
+        ...room.options.publishDefaults,
+        ...publish,
+      };
+      const mic = getMicTrack(room);
+      if (!mic) return;
+      const wasMuted = mutedRef.current;
+      await room.localParticipant.unpublishTrack(mic, false);
+      await room.localParticipant.publishTrack(mic, publish);
+      if (wasMuted) {
+        await room.localParticipant.setMicrophoneEnabled(false);
+      }
+      await applyMicGainToTrack(mic, audioSettingsRef.current.micVolume).catch(() => undefined);
+    },
+    [applyMicGainToTrack],
+  );
+
+  const setAudioBitrate = useCallback(
+    async (kbps: VoiceBitrateKbps) => {
+      const audioBitrateKbps = normalizeBitrateKbps(kbps);
+      const next = { ...audioSettingsRef.current, audioBitrateKbps };
+      persistAudio(next);
+      const room = roomRef.current;
+      if (!room) return;
+      try {
+        await applyAudioBitrateToRoom(room, audioBitrateKbps);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Ses kalitesi uygulanamadı');
+      }
+    },
+    [persistAudio, applyAudioBitrateToRoom],
+  );
+
   const toggleNoiseCancellation = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
@@ -1119,6 +1179,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setVideoDevice,
       setMicVolume,
       setOutputVolume,
+      setAudioBitrate,
       setParticipantVolume,
       getParticipantVolume,
       join,
@@ -1155,6 +1216,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setVideoDevice,
       setMicVolume,
       setOutputVolume,
+      setAudioBitrate,
       setParticipantVolume,
       getParticipantVolume,
       join,

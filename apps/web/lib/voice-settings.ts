@@ -1,3 +1,8 @@
+/** Kullanıcının seçebileceği Opus bitrate’leri (kbps). Varsayılan en yüksek. */
+export const VOICE_BITRATE_PRESETS = [320, 192, 160, 128, 64, 32] as const;
+export type VoiceBitrateKbps = (typeof VOICE_BITRATE_PRESETS)[number];
+export const DEFAULT_AUDIO_BITRATE_KBPS: VoiceBitrateKbps = 320;
+
 export interface VoiceAudioSettings {
   /** Boş = sistem varsayılanı */
   inputDeviceId: string;
@@ -9,6 +14,8 @@ export interface VoiceAudioSettings {
   micVolume: number;
   /** 0–2 (0%–200%), varsayılan 1 */
   outputVolume: number;
+  /** Mikrofon yayın bitrate (kbps). Varsayılan 320. */
+  audioBitrateKbps: VoiceBitrateKbps;
 }
 
 export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
@@ -17,7 +24,21 @@ export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
   videoDeviceId: '',
   micVolume: 1,
   outputVolume: 1,
+  audioBitrateKbps: DEFAULT_AUDIO_BITRATE_KBPS,
 };
+
+export function normalizeBitrateKbps(value: unknown): VoiceBitrateKbps {
+  const n = typeof value === 'number' ? value : Number(value);
+  if ((VOICE_BITRATE_PRESETS as readonly number[]).includes(n)) {
+    return n as VoiceBitrateKbps;
+  }
+  return DEFAULT_AUDIO_BITRATE_KBPS;
+}
+
+/** LiveKit audioPreset.maxBitrate (bps). */
+export function audioBitrateToMaxBitrate(kbps: number): number {
+  return normalizeBitrateKbps(kbps) * 1000;
+}
 
 const STORAGE_KEY = 'dracord_voice_audio';
 
@@ -38,6 +59,7 @@ export function loadVoiceAudioSettings(): VoiceAudioSettings {
       videoDeviceId: typeof parsed.videoDeviceId === 'string' ? parsed.videoDeviceId : '',
       micVolume: clampVolume(parsed.micVolume ?? 1),
       outputVolume: clampVolume(parsed.outputVolume ?? 1),
+      audioBitrateKbps: normalizeBitrateKbps(parsed.audioBitrateKbps),
     };
   } catch {
     return { ...DEFAULT_VOICE_AUDIO };

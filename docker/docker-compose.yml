@@ -172,6 +172,7 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-APIdracorddevkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret_dracord_livekit_dev_key_change_me}
       MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:-dracord-music-dev}
+      MUSIC_AUDIO_BITRATE_KBPS: ${MUSIC_AUDIO_BITRATE_KBPS:-320}
       YTDLP_PATH: /usr/local/bin/yt-dlp
       FFMPEG_PATH: ffmpeg
     extra_hosts:

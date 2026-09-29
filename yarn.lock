@@ -1306,6 +1306,7 @@ __metadata:
   resolution: "@dracord/music-bot@workspace:apps/music-bot"
   dependencies:
     "@dracord/types": "workspace:*"
+    "@livekit/rtc-ffi-bindings": "npm:0.12.73"
     "@livekit/rtc-node": "npm:^0.13.18"
     "@types/node": "npm:^26.6.3"
     bullmq: "npm:^6.3.9"
