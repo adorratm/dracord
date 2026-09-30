@@ -143,6 +143,7 @@ export function VoiceStage({
   const screenVideoCbRef = useRef(screenShare?.videoRef);
   screenVideoCbRef.current = screenShare?.videoRef;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pinnedCameraId, setPinnedCameraId] = useState<string | null>(null);
   const [localChatW, setLocalChatW] = useState(chatPanelWidth);
   const [localPartW, setLocalPartW] = useState(participantsPanelWidth);
 
@@ -289,187 +290,264 @@ export function VoiceStage({
         )}
 
         <div className="flex-1 flex flex-col min-w-0 relative p-space-md gap-space-md">
-          {screenShare ? (
-            <div
-              ref={stageRef}
-              className={cn(
-                'flex-1 min-h-0 rounded-xl bg-black border border-surface-container-high overflow-hidden relative flex flex-col',
-                isFullscreen && 'rounded-none border-0',
-              )}
-            >
-              {shareOptions.length > 1 && (
-                <div className="absolute top-space-sm left-space-sm right-space-sm z-[2] flex flex-wrap gap-1.5 pointer-events-auto">
-                  {shareOptions.map((s) => {
-                    const active = s.identity === focusedId;
-                    return (
-                      <button
-                        key={s.identity}
-                        type="button"
-                        onClick={() => onFocusScreenShare?.(s.identity)}
-                        className={cn(
-                          'px-space-sm py-1 rounded-lg font-label-sm truncate max-w-[10rem] transition-colors',
-                          active
-                            ? 'bg-primary-container text-on-primary-container'
-                            : 'bg-black/65 text-white hover:bg-black/80',
-                        )}
-                      >
-                        {s.displayName}
-                        {s.isLocal ? ' (sen)' : ''}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <video
-                ref={setVideoRef}
-                className="flex-1 min-h-0 w-full h-full object-contain bg-black"
-                playsInline
-                autoPlay
-                muted={screenShare.isLocal}
-              />
-              <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1]">
-                {screenShare.displayName}
-                {screenShare.isLocal ? ' (sen)' : ''}
-              </div>
-              <button
-                type="button"
-                onClick={() => void toggleFullscreen()}
-                className="absolute right-space-sm bottom-space-sm z-[1] w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
-                aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
-                title={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
-              >
-                <span className="material-symbols-outlined text-[20px]">
-                  {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
-                </span>
-              </button>
-            </div>
-          ) : null}
+          {(() => {
+            const cameraParticipants = participants.filter((p) => p.camera);
+            const autoSpeaker =
+              !screenShare && cameraParticipants.length > 0
+                ? cameraParticipants.find((p) => p.speaking) ??
+                  cameraParticipants[0]
+                : null;
+            const featuredCameraId = screenShare
+              ? null
+              : pinnedCameraId && cameraParticipants.some((p) => p.id === pinnedCameraId)
+                ? pinnedCameraId
+                : autoSpeaker?.id ?? null;
+            const featuredCamera = featuredCameraId
+              ? participants.find((p) => p.id === featuredCameraId)
+              : null;
+            const showMainStage = Boolean(screenShare || featuredCamera);
+            const stripMode = showMainStage;
 
-          <div
-            className={cn(
-              'grid gap-space-md content-start overflow-y-auto',
-              screenShare
-                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 shrink-0 max-h-40'
-                : 'flex-1 grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
-            )}
-          >
-            {participants.map((p) => {
-              const isLocal = Boolean(localParticipantId && p.id === localParticipantId);
-              const vol = participantVolumes?.[p.id] ?? 100;
-              const showVolume = !isLocal && Boolean(onParticipantVolumeChange);
-              const isFocusedShare = Boolean(p.video && focusedId === p.id);
-              const canFocusShare = Boolean(p.video && onFocusScreenShare);
-
-              return (
-                <div
-                  key={p.id}
-                  role={canFocusShare ? 'button' : undefined}
-                  tabIndex={canFocusShare ? 0 : undefined}
-                  onClick={
-                    canFocusShare
-                      ? () => onFocusScreenShare?.(p.id)
-                      : undefined
-                  }
-                  onKeyDown={
-                    canFocusShare
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            onFocusScreenShare?.(p.id);
-                          }
-                        }
-                      : undefined
-                  }
-                  className={cn(
-                    'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-md relative overflow-hidden transition-shadow duration-200',
-                    screenShare ? 'aspect-auto py-space-sm min-h-[5.5rem]' : 'aspect-video',
-                    p.speaking && 'ring-2 ring-primary-container',
-                    isFocusedShare && 'ring-2 ring-primary',
-                    canFocusShare && 'cursor-pointer hover:bg-surface-container',
-                  )}
-                  title={canFocusShare ? 'Ekran paylaşımını göster' : undefined}
-                >
-                  {p.camera ? (
+            return (
+              <>
+                {screenShare ? (
+                  <div
+                    ref={stageRef}
+                    className={cn(
+                      'flex-1 min-h-0 rounded-xl bg-black border border-surface-container-high overflow-hidden relative flex flex-col',
+                      isFullscreen && 'rounded-none border-0',
+                    )}
+                  >
+                    {shareOptions.length > 1 && (
+                      <div className="absolute top-space-sm left-space-sm right-space-sm z-[2] flex flex-wrap gap-1.5 pointer-events-auto">
+                        {shareOptions.map((s) => {
+                          const active = s.identity === focusedId;
+                          return (
+                            <button
+                              key={s.identity}
+                              type="button"
+                              onClick={() => onFocusScreenShare?.(s.identity)}
+                              className={cn(
+                                'px-space-sm py-1 rounded-lg font-label-sm truncate max-w-[10rem] transition-colors',
+                                active
+                                  ? 'bg-primary-container text-on-primary-container'
+                                  : 'bg-black/65 text-white hover:bg-black/80',
+                              )}
+                            >
+                              {s.displayName}
+                              {s.isLocal ? ' (sen)' : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <video
-                      ref={(el) => onCameraVideoRef?.(p.id, el)}
-                      className="absolute inset-0 w-full h-full object-cover bg-black pointer-events-none"
+                      ref={setVideoRef}
+                      className="flex-1 min-h-0 w-full h-full object-contain bg-black"
+                      playsInline
+                      autoPlay
+                      muted={screenShare.isLocal}
+                    />
+                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1]">
+                      {screenShare.displayName}
+                      {screenShare.isLocal ? ' (sen)' : ''}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void toggleFullscreen()}
+                      className="absolute right-space-sm bottom-space-sm z-[1] w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
+                      aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+                      </span>
+                    </button>
+                  </div>
+                ) : featuredCamera ? (
+                  <div
+                    ref={stageRef}
+                    className={cn(
+                      'flex-1 min-h-0 rounded-xl bg-black border border-surface-container-high overflow-hidden relative flex flex-col',
+                      isFullscreen && 'rounded-none border-0',
+                    )}
+                  >
+                    <video
+                      ref={(el) => onCameraVideoRef?.(featuredCamera.id, el)}
+                      className="flex-1 min-h-0 w-full h-full object-contain bg-black"
                       playsInline
                       autoPlay
                       muted
                     />
-                  ) : (
-                    <Avatar displayName={p.displayName} imageUrl={p.avatarUrl} size="lg" statusRing={false} />
-                  )}
-                  <div
-                    className={cn(
-                      'absolute left-space-sm bottom-space-sm right-space-sm flex flex-col gap-1 min-w-0 z-[1]',
-                      p.camera && 'rounded-lg bg-black/55 px-space-sm py-1',
-                    )}
-                  >
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span
-                        className={cn(
-                          'font-body-sm text-body-sm truncate flex-1',
-                          p.camera ? 'text-white' : 'text-on-surface',
-                        )}
-                      >
-                        {p.displayName}
-                        {isLocal ? ' (sen)' : ''}
-                      </span>
-                      {p.muted && (
-                        <span className="material-symbols-outlined text-[16px] text-error shrink-0">
-                          mic_off
-                        </span>
-                      )}
-                      {p.video && (
-                        <span className="material-symbols-outlined text-[16px] text-primary-container shrink-0">
-                          present_to_all
-                        </span>
-                      )}
-                      {p.camera && (
-                        <span
-                          className={cn(
-                            'material-symbols-outlined text-[16px] shrink-0',
-                            p.camera ? 'text-white/80' : 'text-primary-container',
-                          )}
-                        >
-                          videocam
-                        </span>
-                      )}
+                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1]">
+                      {featuredCamera.displayName}
+                      {featuredCamera.id === localParticipantId ? ' (sen)' : ''}
+                      {pinnedCameraId === featuredCamera.id ? ' · sabit' : ''}
                     </div>
-                    {showVolume && (
-                      <label
-                        className="flex items-center gap-1.5 min-w-0"
-                        onClick={(e) => e.stopPropagation()}
+                    <div className="absolute right-space-sm bottom-space-sm z-[1] flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPinnedCameraId((cur) =>
+                            cur === featuredCamera.id ? null : featuredCamera.id,
+                          )
+                        }
+                        className="w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center"
+                        aria-label="Kamerayı sabitle"
+                        title="Sabitle / serbest"
                       >
-                        <span
-                          className={cn(
-                            'material-symbols-outlined text-[14px] shrink-0',
-                            p.camera ? 'text-white/70' : 'text-outline',
-                          )}
-                        >
-                          {vol === 0 ? 'volume_off' : 'volume_up'}
+                        <span className="material-symbols-outlined text-[20px]">
+                          {pinnedCameraId === featuredCamera.id ? 'keep' : 'keep_off'}
                         </span>
-                        <VolumeSlider
-                          value={vol}
-                          aria-label={`${p.displayName} ses seviyesi`}
-                          onChange={(v) => onParticipantVolumeChange?.(p.id, v)}
-                        />
-                        <span
-                          className={cn(
-                            'font-label-sm tabular-nums w-7 text-right shrink-0',
-                            p.camera ? 'text-white/70' : 'text-outline',
-                          )}
-                        >
-                          {vol}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void toggleFullscreen()}
+                        className="w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center"
+                        aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
                         </span>
-                      </label>
-                    )}
+                      </button>
+                    </div>
                   </div>
+                ) : null}
+
+                <div
+                  className={cn(
+                    'grid gap-space-md content-start overflow-y-auto p-0.5',
+                    stripMode
+                      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 shrink-0 max-h-52'
+                      : 'flex-1 grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
+                  )}
+                >
+                  {participants.map((p) => {
+                    const isLocal = Boolean(localParticipantId && p.id === localParticipantId);
+                    const vol = participantVolumes?.[p.id] ?? 100;
+                    const showVolume = !isLocal && Boolean(onParticipantVolumeChange);
+                    const isFocusedShare = Boolean(p.video && focusedId === p.id);
+                    const canFocusShare = Boolean(p.video && onFocusScreenShare);
+                    const isFeaturedCam = Boolean(featuredCameraId && p.id === featuredCameraId);
+                    const canFocusCam = Boolean(p.camera && !screenShare);
+
+                    return (
+                      <div
+                        key={p.id}
+                        role={canFocusShare || canFocusCam ? 'button' : undefined}
+                        tabIndex={canFocusShare || canFocusCam ? 0 : undefined}
+                        onClick={() => {
+                          if (canFocusShare) onFocusScreenShare?.(p.id);
+                          else if (canFocusCam) setPinnedCameraId(p.id);
+                        }}
+                        onKeyDown={
+                          canFocusShare || canFocusCam
+                            ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  if (canFocusShare) onFocusScreenShare?.(p.id);
+                                  else if (canFocusCam) setPinnedCameraId(p.id);
+                                }
+                              }
+                            : undefined
+                        }
+                        className={cn(
+                          'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-sm relative overflow-hidden transition-shadow duration-200 box-border',
+                          stripMode ? 'aspect-video min-h-[7rem]' : 'aspect-video',
+                          p.speaking && 'ring-2 ring-inset ring-primary-container',
+                          (isFocusedShare || isFeaturedCam) && 'ring-2 ring-inset ring-primary',
+                          (canFocusShare || canFocusCam) && 'cursor-pointer hover:bg-surface-container',
+                        )}
+                        title={
+                          canFocusShare
+                            ? 'Ekran paylaşımını göster'
+                            : canFocusCam
+                              ? 'Kamerayı büyük göster'
+                              : undefined
+                        }
+                      >
+                        {p.camera && !isFeaturedCam ? (
+                          <video
+                            ref={(el) => onCameraVideoRef?.(p.id, el)}
+                            className="absolute inset-0 w-full h-full object-cover bg-black pointer-events-none"
+                            playsInline
+                            autoPlay
+                            muted
+                          />
+                        ) : p.camera && isFeaturedCam ? (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <Avatar displayName={p.displayName} imageUrl={p.avatarUrl} size="lg" statusRing={false} />
+                          </div>
+                        ) : (
+                          <Avatar displayName={p.displayName} imageUrl={p.avatarUrl} size="lg" statusRing={false} />
+                        )}
+                        <div
+                          className={cn(
+                            'absolute left-space-sm bottom-space-sm right-space-sm flex flex-col gap-1 min-w-0 z-[1]',
+                            p.camera && 'rounded-lg bg-black/55 px-space-sm py-1',
+                          )}
+                        >
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span
+                              className={cn(
+                                'font-body-sm text-body-sm truncate flex-1',
+                                p.camera ? 'text-white' : 'text-on-surface',
+                              )}
+                            >
+                              {p.displayName}
+                              {isLocal ? ' (sen)' : ''}
+                            </span>
+                            {p.muted && (
+                              <span className="material-symbols-outlined text-[16px] text-error shrink-0">
+                                mic_off
+                              </span>
+                            )}
+                            {p.video && (
+                              <span className="material-symbols-outlined text-[16px] text-primary-container shrink-0">
+                                present_to_all
+                              </span>
+                            )}
+                            {p.camera && (
+                              <span className="material-symbols-outlined text-[16px] text-white/80 shrink-0">
+                                videocam
+                              </span>
+                            )}
+                          </div>
+                          {showVolume && (
+                            <label
+                              className="flex items-center gap-1.5 min-w-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span
+                                className={cn(
+                                  'material-symbols-outlined text-[14px] shrink-0',
+                                  p.camera ? 'text-white/70' : 'text-outline',
+                                )}
+                              >
+                                {vol === 0 ? 'volume_off' : 'volume_up'}
+                              </span>
+                              <VolumeSlider
+                                value={vol}
+                                aria-label={`${p.displayName} ses seviyesi`}
+                                onChange={(v) => onParticipantVolumeChange?.(p.id, v)}
+                              />
+                              <span
+                                className={cn(
+                                  'font-label-sm tabular-nums w-7 text-right shrink-0',
+                                  p.camera ? 'text-white/70' : 'text-outline',
+                                )}
+                              >
+                                {vol}
+                              </span>
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </>
+            );
+          })()}
           {stageOverlay}
         </div>
 

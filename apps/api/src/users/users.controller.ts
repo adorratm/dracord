@@ -117,7 +117,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  findOne(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.usersService.findById(id, req.user.sub);
   }
 }

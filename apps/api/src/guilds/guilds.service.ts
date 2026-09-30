@@ -415,7 +415,7 @@ export class GuildsService {
     return members
       .filter((m) => m.user)
       .map((m) => {
-        const pub = toPublicUser(m.user);
+        const pub = toPublicUser(m.user, { viewerId: userId });
         const roles = (m.roles ?? [])
           .map((mr) => mr.role)
           .filter((r): r is NonNullable<typeof r> => Boolean(r))

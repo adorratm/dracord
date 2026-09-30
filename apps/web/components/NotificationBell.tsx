@@ -88,7 +88,14 @@ export function NotificationBell() {
     void refresh();
     const sock = client.connectSocket();
     const onNotif = (n: NotificationDto) => {
-      if (prefs.notifications.mentionsOnly && n.type !== 'MENTION') return;
+      // mentionsOnly: FRIEND her zaman; DM/ANNOUNCEMENT filtre
+      if (
+        prefs.notifications.mentionsOnly &&
+        n.type !== 'MENTION' &&
+        n.type !== 'FRIEND'
+      ) {
+        return;
+      }
       if (prefs.notifications.quietHours && inQuietHours()) return;
 
       setItems((prev) => [n, ...prev.filter((x) => x.id !== n.id)].slice(0, 40));
@@ -200,7 +207,14 @@ export function NotificationBell() {
                 className="py-space-lg"
               />
             ) : (
-              items.map((n) => (
+              items
+                .filter(
+                  (n) =>
+                    !prefs.notifications.mentionsOnly ||
+                    n.type === 'MENTION' ||
+                    n.type === 'FRIEND',
+                )
+                .map((n) => (
                 <button
                   key={n.id}
                   type="button"
@@ -209,13 +223,28 @@ export function NotificationBell() {
                     !n.readAt ? 'bg-primary-container/10' : ''
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[20px] text-primary-container shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-[22px] text-primary-container shrink-0 mt-0.5">
                     {typeIcon(n.type)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-label-md text-on-surface truncate">{n.title}</p>
-                    <p className="font-body-sm text-on-surface-variant line-clamp-2">{n.body}</p>
-                    <p className="font-label-sm text-outline mt-0.5">
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <p className="font-label-md text-on-surface truncate flex-1">{n.title}</p>
+                      <span className="font-label-sm text-outline shrink-0">
+                        {n.type === 'FRIEND'
+                          ? 'Arkadaş'
+                          : n.type === 'MENTION'
+                            ? 'Bahsetme'
+                            : n.type === 'DM'
+                              ? 'DM'
+                              : n.type === 'ANNOUNCEMENT'
+                                ? 'Duyuru'
+                                : 'Sistem'}
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-on-surface-variant line-clamp-3 mt-0.5">
+                      {n.body}
+                    </p>
+                    <p className="font-label-sm text-outline mt-1">
                       {formatTime(n.createdAt, prefs.language.hour24, locale)}
                     </p>
                   </div>

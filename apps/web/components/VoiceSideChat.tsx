@@ -169,6 +169,10 @@ export function VoiceSideChat({
             onAttachFiles={(files) => void sendWithAttachments(files)}
             onSendMedia={(payload) => void sendMedia(payload)}
             spellCheck={prefs.messaging.spellcheck}
+            uploadStickerFile={async (file) => {
+              const uploaded = await client.uploadFile(file, 'stickers');
+              return { url: uploaded.url, contentType: uploaded.contentType };
+            }}
           />
         </div>
       )}

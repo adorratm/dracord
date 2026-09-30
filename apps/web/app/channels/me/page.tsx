@@ -1,7 +1,7 @@
 'use client';
 
 import type { FriendRow } from '@dracord/ui';
-import { FriendsHub } from '@dracord/ui';
+import { Avatar, FriendsHub } from '@dracord/ui';
 import type { ChannelSummary, PublicUser } from '@dracord/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -162,6 +162,33 @@ export default function FriendsHubPage() {
     void loadBlocked();
   }, [client, user, loadFriends, loadPending, loadBlocked]);
 
+  const dmIdsKey = dms.map((d) => d.id).join(',');
+
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const ids = dmIdsKey ? dmIdsKey.split(',') : [];
+    for (const id of ids) {
+      if (id) client.joinChannel(id);
+    }
+    const onCreate = (msg: { channelId: string; author?: { id?: string } }) => {
+      if (!msg?.channelId) return;
+      if (msg.author?.id === user.id) return;
+      setDms((prev) => {
+        if (!prev.some((d) => d.id === msg.channelId)) return prev;
+        return prev.map((ch) => {
+          if (ch.id !== msg.channelId) return ch;
+          const unreadCount = (ch.unreadCount ?? 0) + 1;
+          return { ...ch, unreadCount, unread: true };
+        });
+      });
+    };
+    sock.on('message:create', onCreate);
+    return () => {
+      sock.off('message:create', onCreate);
+    };
+  }, [client, user, dmIdsKey]);
+
   useEffect(() => {
     if (!addOpen || addQuery.trim().length < 2) {
       setAddResults([]);
@@ -219,13 +246,26 @@ export default function FriendsHubPage() {
                 onClick={() => openDmChannel(ch.id)}
                 className="w-full flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg hover:bg-surface-container text-left"
               >
-                <span className="material-symbols-outlined text-[18px] text-outline shrink-0">
-                  {ch.selfNotes ? 'sticky_note_2' : 'person'}
-                </span>
-                <span className="font-body-sm text-on-surface truncate flex-1">{ch.name}</span>
-                {ch.unread && (
-                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Okunmamış" />
+                {ch.selfNotes ? (
+                  <span className="material-symbols-outlined text-[22px] text-outline shrink-0 w-8 h-8 flex items-center justify-center">
+                    sticky_note_2
+                  </span>
+                ) : (
+                  <Avatar
+                    displayName={ch.name}
+                    imageUrl={ch.peerAvatarUrl}
+                    size="md"
+                    status={ch.peerStatus ?? undefined}
+                  />
                 )}
+                <span className="font-body-sm text-on-surface truncate flex-1">{ch.name}</span>
+                {(ch.unreadCount ?? 0) > 0 ? (
+                  <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-[11px] font-bold flex items-center justify-center">
+                    {ch.unreadCount! > 99 ? '99+' : ch.unreadCount}
+                  </span>
+                ) : ch.unread ? (
+                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Okunmamış" />
+                ) : null}
               </button>
             </li>
           ))

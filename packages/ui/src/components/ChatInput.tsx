@@ -8,6 +8,7 @@ import {
   EMOJI_CATEGORIES,
   STICKER_PACKS,
   emojiMatchesQuery,
+  isMediaUrl,
   mediaItemMatchesQuery,
   type MediaPackItem,
 } from '../lib/media-packs';
@@ -23,6 +24,7 @@ import {
   type StoredSticker,
 } from '../lib/sticker-store';
 import { Avatar } from './Avatar';
+import { VideoStickerTrimmer } from './VideoStickerTrimmer';
 export type ChatMediaPayload =
   | { type: 'gif'; url: string; label: string }
   | { type: 'sticker'; emoji: string }
@@ -75,6 +77,8 @@ export interface ChatInputProps {
   mentionChannels?: ChatMentionChannel[];
   /** Tarayıcı yazım denetimi */
   spellCheck?: boolean;
+  /** Videodan sticker: GIF’i S3’e yükle (yoksa data URL kaydedilir) */
+  uploadStickerFile?: (file: File) => Promise<{ url: string; contentType?: string }>;
   className?: string;
 }
 
@@ -119,11 +123,13 @@ function resolveStickerById(
       if (pack.id !== packId) continue;
       const s = pack.stickers.find((x) => x.id === stickerId);
       if (s) {
+        const image = isMediaUrl(s.value);
         return {
           id,
-          kind: 'emoji',
+          kind: image ? 'image' : 'emoji',
           value: s.value,
           label: s.label,
+          contentType: image ? 'image/gif' : undefined,
           createdAt: 0,
         };
       }
@@ -150,6 +156,7 @@ export function ChatInput({
   mentionUsers = [],
   mentionChannels = [],
   spellCheck = true,
+  uploadStickerFile,
   className,
 }: ChatInputProps) {
   const [value, setValue] = useState('');
@@ -163,6 +170,7 @@ export function ChatInput({
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [stickerError, setStickerError] = useState<string | null>(null);
+  const [videoTrimmerOpen, setVideoTrimmerOpen] = useState(false);
   const [mediaSearch, setMediaSearch] = useState('');
   const [remoteGifs, setRemoteGifs] = useState<GifSearchResult[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
@@ -491,7 +499,16 @@ export function ChatInput({
   const pickPackSticker = (packId: string, item: MediaPackItem) => {
     const id = packStickerId(packId, item.id);
     setRecentIds(pushRecentId(id));
-    onSendMedia?.({ type: 'sticker', emoji: item.value });
+    if (isMediaUrl(item.value)) {
+      onSendMedia?.({
+        type: 'sticker-image',
+        url: item.value,
+        label: item.label,
+        contentType: 'image/gif',
+      });
+    } else {
+      onSendMedia?.({ type: 'sticker', emoji: item.value });
+    }
     setPickerOpen(false);
   };
 
@@ -858,6 +875,17 @@ export function ChatInput({
                   </span>
                   Oluştur
                 </button>
+                <button
+                  type="button"
+                  className="h-7 px-space-sm rounded-full bg-surface-container-highest font-label-sm text-on-surface hover:bg-surface-bright flex items-center gap-1"
+                  onClick={() => setVideoTrimmerOpen(true)}
+                  title="Videodan sticker (max 15 sn)"
+                >
+                  <span className="material-symbols-outlined leading-none" style={{ fontSize: 14 }}>
+                    movie
+                  </span>
+                  Video
+                </button>
               </div>
               {stickerError && (
                 <p className="px-space-sm pt-space-xs font-label-sm text-error">{stickerError}</p>
@@ -909,11 +937,13 @@ export function ChatInput({
                       <div className="grid grid-cols-6 gap-space-sm">
                         {stickers.map((s) => {
                           const id = packStickerId(pack.id, s.id);
+                          const image = isMediaUrl(s.value);
                           const asStored: StoredSticker = {
                             id,
-                            kind: 'emoji',
+                            kind: image ? 'image' : 'emoji',
                             value: s.value,
                             label: s.label,
+                            contentType: image ? 'image/gif' : undefined,
                             createdAt: 0,
                           };
                           return (
@@ -921,10 +951,20 @@ export function ChatInput({
                               <button
                                 type="button"
                                 onClick={() => pickPackSticker(pack.id, s)}
-                                className="w-full h-full rounded-xl bg-surface-container-lowest hover:bg-surface-bright flex items-center justify-center text-3xl"
+                                className="w-full h-full rounded-xl bg-surface-container-lowest hover:bg-surface-bright flex items-center justify-center overflow-hidden"
                                 title={s.label}
                               >
-                                {s.value}
+                                {image ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={s.preview || s.value}
+                                    alt={s.label}
+                                    className="w-full h-full object-contain"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <span className="text-3xl leading-none">{s.value}</span>
+                                )}
                               </button>
                               <button
                                 type="button"
@@ -1236,6 +1276,34 @@ export function ChatInput({
           <span className="material-symbols-outlined text-[22px] leading-none">send</span>
         </button>
       </div>
+      <VideoStickerTrimmer
+        open={videoTrimmerOpen}
+        onClose={() => setVideoTrimmerOpen(false)}
+        onSaved={async ({ dataUrl, blob, label, contentType }) => {
+          try {
+            let value = dataUrl;
+            if (uploadStickerFile) {
+              const file = new File([blob], `${label || 'sticker'}.gif`, {
+                type: contentType || 'image/gif',
+              });
+              const uploaded = await uploadStickerFile(file);
+              value = uploaded.url;
+            }
+            addCustomSticker({
+              kind: 'image',
+              value,
+              label: label || 'Video sticker',
+              contentType: contentType || 'image/gif',
+            });
+            refreshStickerState();
+            setStickerSection('mine');
+            setTab('sticker');
+            setPickerOpen(true);
+          } catch (err) {
+            setStickerError(err instanceof Error ? err.message : 'Sticker kaydedilemedi');
+          }
+        }}
+      />
     </div>
   );
 }

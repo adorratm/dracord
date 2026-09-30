@@ -38,6 +38,9 @@ export type { RoleBadgeProps } from './components/RoleBadge';
 export { UserProfileCard } from './components/UserProfileCard';
 export type { UserProfileCardProps } from './components/UserProfileCard';
 
+export { VideoStickerTrimmer } from './components/VideoStickerTrimmer';
+export type { VideoStickerTrimmerProps } from './components/VideoStickerTrimmer';
+
 export { UserHoverCard } from './components/UserHoverCard';
 export type { UserHoverCardUser } from './components/UserHoverCard';
 

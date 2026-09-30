@@ -252,33 +252,163 @@ export const CURATED_GIFS: MediaPackItem[] = [
   },
 ];
 
-/** Large sticker-style emoji packs (sent as sticker messages). */
+/** Large sticker-style packs — emoji + animated GIF/WebP URLs. */
 export const STICKER_PACKS: { id: string; label: string; stickers: MediaPackItem[] }[] = [
   {
     id: 'dracula',
     label: 'Dracula',
-    stickers: ['🦇', '🧛', '🩸', '🌙', '🖤', '💜', '🔮', '🐺', '🕷️', '😈', '👻', '💀'].map(
-      (emoji, i) => ({
-        id: `dra-${i}`,
+    stickers: [
+      ...['🦇', '🧛', '🩸', '🌙', '🖤', '💜'].map((emoji, i) => ({
+        id: `dra-e-${i}`,
         label: emoji,
         value: emoji,
         kind: 'sticker' as const,
-      }),
-    ),
+      })),
+      {
+        id: 'dra-bat-spin',
+        label: 'Bat',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif',
+      },
+      {
+        id: 'dra-moon',
+        label: 'Ay',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/3oriO0OEd9QIDdllqo/giphy.gif',
+      },
+      {
+        id: 'dra-ghost',
+        label: 'Hayalet',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/14uQ3cOFteDaU/giphy.gif',
+      },
+      {
+        id: 'dra-sparkle',
+        label: 'Parıltı',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/l0MYC0LajbaPoEADu/giphy.gif',
+      },
+      {
+        id: 'dra-flame',
+        label: 'Alev',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif',
+      },
+      {
+        id: 'dra-heart',
+        label: 'Kalp',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+      },
+    ],
   },
   {
     id: 'react',
     label: 'Tepkiler',
-    stickers: ['🔥', '✨', '💯', '✅', '❌', '👏', '🙌', '❤️', '😂', '😮', '😢', '😡'].map(
-      (emoji, i) => ({
-        id: `re-${i}`,
+    stickers: [
+      ...['🔥', '✨', '💯', '✅', '👏', '❤️'].map((emoji, i) => ({
+        id: `re-e-${i}`,
         label: emoji,
         value: emoji,
         kind: 'sticker' as const,
-      }),
-    ),
+      })),
+      {
+        id: 're-clap',
+        label: 'Alkış',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/7rj2ZgEhHNtbK/giphy.gif',
+      },
+      {
+        id: 're-wow',
+        label: 'Wow',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/5VKbvrjxpVJCM/giphy.gif',
+      },
+      {
+        id: 're-party',
+        label: 'Parti',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+      },
+      {
+        id: 're-yes',
+        label: 'Evet',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif',
+      },
+      {
+        id: 're-no',
+        label: 'Hayır',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/12XMGIWtrFZBlu/giphy.gif',
+      },
+      {
+        id: 're-wave',
+        label: 'El salla',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif',
+      },
+    ],
+  },
+  {
+    id: 'motion',
+    label: 'Hareket',
+    stickers: [
+      {
+        id: 'mo-cat',
+        label: 'Kedi',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+      },
+      {
+        id: 'mo-typing',
+        label: 'Yazıyor',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/3o7bu3XilJ5BOiSGfc/giphy.gif',
+      },
+      {
+        id: 'mo-dance',
+        label: 'Dans',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+      },
+      {
+        id: 'mo-laugh',
+        label: 'Gül',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/10JhviFuU2gWD6/giphy.gif',
+      },
+      {
+        id: 'mo-cry',
+        label: 'Ağla',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/ROF8OQvDmxhdm/giphy.gif',
+      },
+      {
+        id: 'mo-thumb',
+        label: 'Beğen',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif',
+      },
+      {
+        id: 'mo-vampire',
+        label: 'Vampire',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/xT0xeJpnW6k61nz1Au/giphy.gif',
+      },
+      {
+        id: 'mo-spark',
+        label: 'Kıvılcım',
+        kind: 'sticker',
+        value: 'https://media.giphy.com/media/l0MYC0LajbaPoEADu/giphy.gif',
+      },
+    ],
   },
 ];
+
+export function isMediaUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value) || value.startsWith('data:image') || value.startsWith('/');
+}
 
 export function mediaItemMatchesQuery(item: { label: string; value: string }, query: string): boolean {
   const q = query.trim().toLocaleLowerCase('tr-TR');

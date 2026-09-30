@@ -7,6 +7,10 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     shareActivityStatus: true,
     dataCollection: false,
     personalizeAds: false,
+    showBio: true,
+    showSocialLinks: true,
+    showBanner: true,
+    showCustomStatus: true,
   },
   messaging: {
     whoCanDm: 'friends',

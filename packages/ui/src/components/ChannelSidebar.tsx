@@ -816,21 +816,31 @@ function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
       </div>
 
       {!isText && voiceMembers.length > 0 && (
-        <ul className="ml-6 flex flex-col gap-0.5">
+        <ul className="ml-5 flex flex-col gap-1 mt-0.5">
           {voiceMembers.map((m) => (
             <li
               key={m.id}
-              className="flex items-center gap-space-xs px-space-sm py-0.5 text-on-surface-variant"
+              className={cn(
+                'flex items-center gap-space-sm px-space-sm py-1 rounded-md text-on-surface-variant',
+                m.speaking && 'bg-primary-container/10',
+              )}
             >
-              <Avatar
-                displayName={m.displayName}
-                imageUrl={m.avatarUrl}
-                size="sm"
-                statusRing={false}
-              />
+              <div
+                className={cn(
+                  'rounded-full shrink-0',
+                  m.speaking && 'ring-2 ring-primary-container ring-offset-1 ring-offset-surface-container-low',
+                )}
+              >
+                <Avatar
+                  displayName={m.displayName}
+                  imageUrl={m.avatarUrl}
+                  size="md"
+                  statusRing={false}
+                />
+              </div>
               <span
                 className={cn(
-                  'font-label-sm text-label-sm truncate flex-1',
+                  'font-body-sm text-body-sm truncate flex-1',
                   m.speaking && 'text-primary-container font-semibold',
                 )}
               >
@@ -842,17 +852,17 @@ function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
                 </span>
               )}
               {m.muted && (
-                <span className="material-symbols-outlined text-[14px] text-error">mic_off</span>
+                <span className="material-symbols-outlined text-[16px] text-error">mic_off</span>
               )}
               {m.deafened && (
-                <span className="relative inline-flex w-[14px] h-[14px] text-error" aria-hidden>
+                <span className="relative inline-flex w-[16px] h-[16px] text-error" aria-hidden>
                   <span
                     className="material-symbols-outlined leading-none"
-                    style={{ fontSize: 14 }}
+                    style={{ fontSize: 16 }}
                   >
                     headphones
                   </span>
-                  <span className="absolute left-1/2 top-1/2 block w-[16px] h-[1.5px] -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] rounded-full bg-current" />
+                  <span className="absolute left-1/2 top-1/2 block w-[18px] h-[1.5px] -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] rounded-full bg-current" />
                 </span>
               )}
             </li>

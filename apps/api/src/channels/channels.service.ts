@@ -52,7 +52,7 @@ export class ChannelsService {
         c,
         {
           voiceMembers: c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
-          unread: c.type === ChannelType.TEXT ? unreadMap.get(c.id) : undefined,
+          unreadCount: c.type === ChannelType.TEXT ? unreadMap.get(c.id) : undefined,
           includeDenied: canManage,
         },
       ),
@@ -229,12 +229,12 @@ export class ChannelsService {
     return this.toSummary(channel, { includeDenied: true });
   }
 
-  /** TEXT kanallar için okunmamış bayrağı (en son mesaj ≠ lastRead). */
+  /** TEXT kanallar için okunmamış sayısı (lastRead sonrası mesajlar). */
   async unreadByChannelIds(
     userId: string,
     channelIds: string[],
-  ): Promise<Map<string, boolean>> {
-    const map = new Map<string, boolean>();
+  ): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
     if (channelIds.length === 0) return map;
 
     const states = await this.em.find(ChannelReadState, {
@@ -244,20 +244,27 @@ export class ChannelsService {
       states.map((s) => [s.channelId, s.lastReadMessageId] as const),
     );
 
-    const latestRows = (await this.em.query(
-      `SELECT DISTINCT ON ("channelId") "channelId", id
-       FROM messages
-       WHERE "channelId" = ANY($1) AND "deletedAt" IS NULL
-       ORDER BY "channelId", "createdAt" DESC`,
-      [channelIds],
-    )) as Array<{ channelId: string; id: string }>;
-
-    for (const row of latestRows) {
-      const readId = lastRead.get(row.channelId) ?? null;
-      map.set(row.channelId, !readId || readId !== row.id);
-    }
-    for (const id of channelIds) {
-      if (!map.has(id)) map.set(id, false);
+    for (const channelId of channelIds) {
+      const readId = lastRead.get(channelId) ?? null;
+      if (!readId) {
+        const rows = (await this.em.query(
+          `SELECT COUNT(*)::int AS c FROM messages
+           WHERE "channelId" = $1 AND "deletedAt" IS NULL`,
+          [channelId],
+        )) as Array<{ c: number }>;
+        map.set(channelId, Number(rows[0]?.c ?? 0));
+        continue;
+      }
+      const rows = (await this.em.query(
+        `SELECT COUNT(*)::int AS c FROM messages m
+         WHERE m."channelId" = $1 AND m."deletedAt" IS NULL
+           AND m."createdAt" > COALESCE(
+             (SELECT m2."createdAt" FROM messages m2 WHERE m2.id = $2),
+             '-infinity'::timestamptz
+           )`,
+        [channelId, readId],
+      )) as Array<{ c: number }>;
+      map.set(channelId, Number(rows[0]?.c ?? 0));
     }
     return map;
   }
@@ -274,10 +281,14 @@ export class ChannelsService {
     opts?: {
       voiceMembers?: VoiceMemberSummary[];
       unread?: boolean;
+      unreadCount?: number;
       includeDenied?: boolean;
     },
   ): ChannelSummary {
     const isVoice = channel.type === ChannelType.VOICE;
+    const unreadCount = opts?.unreadCount;
+    const unread =
+      opts?.unread ?? (unreadCount != null ? unreadCount > 0 : undefined);
     return {
       id: channel.id,
       guildId: channel.guildId,
@@ -287,7 +298,8 @@ export class ChannelsService {
       position: channel.position,
       topic: channel.topic ?? null,
       voiceMembers: opts?.voiceMembers,
-      unread: opts?.unread,
+      unread,
+      unreadCount,
       locked: isVoice ? Boolean(channel.locked) : undefined,
       hasPassword: isVoice ? Boolean(channel.passwordHash) : undefined,
       deniedUserIds:

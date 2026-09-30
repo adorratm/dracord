@@ -17,7 +17,7 @@ const FAVORITES_KEY = 'dracord:stickers:favorites';
 const RECENT_KEY = 'dracord:stickers:recent';
 const MAX_CUSTOM = 40;
 const MAX_RECENT = 24;
-const MAX_FILE_BYTES = 1_500_000;
+const MAX_FILE_BYTES = 3_000_000;
 
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -92,7 +92,7 @@ export function readImageFileAsSticker(file: File): Promise<Omit<StoredSticker, 
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      reject(new Error('Dosya 1.5 MB’dan küçük olmalı'));
+      reject(new Error('Dosya 3 MB’dan küçük olmalı'));
       return;
     }
     const reader = new FileReader();

@@ -247,18 +247,11 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         if (payload.type === 'sticker-image') {
           if (payload.url.startsWith('data:')) {
             const file = await dataUrlToFile(payload.url, payload.label || 'sticker');
-            const uploaded = await client.uploadFile(file, 'attachments');
-            await sendMessage('', [uploaded]);
+            const uploaded = await client.uploadFile(file, 'stickers');
+            await sendMessage(`sticker:${uploaded.url}`);
             return;
           }
-          const attachment: MessageAttachment = {
-            id: mediaId(),
-            url: payload.url,
-            filename: `${payload.label || 'sticker'}.gif`,
-            contentType: payload.contentType || 'image/gif',
-            size: 0,
-          };
-          await sendMessage('', [attachment]);
+          await sendMessage(`sticker:${payload.url}`);
           return;
         }
         const attachment: MessageAttachment = {

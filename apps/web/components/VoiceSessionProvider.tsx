@@ -1199,8 +1199,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         true,
         {
           audio: true,
-          resolution: { width: 1920, height: 1080, frameRate: 30 },
+          resolution: { width: 1920, height: 1080, frameRate: 60 },
           contentHint: 'detail',
+          maxBitrate: 6_000_000,
         },
         { simulcast: false },
       );

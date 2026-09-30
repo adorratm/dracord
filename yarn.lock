@@ -1343,6 +1343,7 @@ __metadata:
     "@tanstack/react-virtual": "npm:^3.14.13"
     "@types/react": "npm:^19.3.0"
     "@types/react-dom": "npm:^19.3.0"
+    gifenc: "npm:^1.0.3"
     typescript: "npm:^6.0.3"
   peerDependencies:
     react: ^18.0.0 || ^19.0.0
@@ -7215,6 +7216,13 @@ __metadata:
   version: 2.0.0
   resolution: "getenv@npm:2.0.0"
   checksum: 10c0/397ff641dd70cd78e414430258651e9a2228d3c5553a8cf15ae7840f75d3f10dfcb83f668f84829e84ea665b0fce2f08a9eddda3c9dcd7faa2d3da1c182c1854
+  languageName: node
+  linkType: hard
+
+"gifenc@npm:^1.0.3":
+  version: 1.0.3
+  resolution: "gifenc@npm:1.0.3"
+  checksum: 10c0/34fc6b2c66c305fc556cd2f475154ce2ad68384a52ceb8253b901c8c7d9c63f2c0a5d109ceb3cb46e44c2c6155009920a286cf08a621105863aa43468e345229
   languageName: node
   linkType: hard
 

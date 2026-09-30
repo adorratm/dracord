@@ -16,6 +16,8 @@ import { Session } from '@/database/entities/session.entity';
 import { User } from '@/database/entities/user.entity';
 import { FriendshipStatus } from '@/database/enums';
 import { SearchIndexerService } from '@/search/search-indexer.service';
+import { NotificationsService } from '@/notifications/notifications.service';
+import { NotificationsRealtimeService } from '@/notifications/notifications-realtime.service';
 import { mergeClientSettings } from './client-settings';
 import * as bcrypt from 'bcrypt';
 
@@ -35,20 +37,22 @@ export class UsersService {
   constructor(
     private readonly em: EntityManager,
     private readonly indexer: SearchIndexerService,
+    private readonly notifications: NotificationsService,
+    private readonly notificationsRealtime: NotificationsRealtimeService,
   ) {}
 
-  async findById(id: string): Promise<PublicUser> {
+  async findById(id: string, viewerId?: string): Promise<PublicUser> {
     const user = await this.em.findOne(User, { where: { id } });
     if (!user) throw new NotFoundException('User not found');
-    return toPublicUser(user);
+    return toPublicUser(user, { viewerId });
   }
 
-  async findByUsername(username: string): Promise<PublicUser> {
+  async findByUsername(username: string, viewerId?: string): Promise<PublicUser> {
     const user = await this.em.findOne(User, {
       where: { username: username.toLowerCase() },
     });
     if (!user) throw new NotFoundException('User not found');
-    return toPublicUser(user);
+    return toPublicUser(user, { viewerId });
   }
 
   async search(query: string, limit = 20): Promise<PublicUser[]> {
@@ -71,7 +75,7 @@ export class UsersService {
       relations: { user: true, friend: true },
     });
     return rows.map((row) =>
-      toPublicUser(row.userId === userId ? row.friend : row.user),
+      toPublicUser(row.userId === userId ? row.friend : row.user, { viewerId: userId }),
     );
   }
 
@@ -80,7 +84,7 @@ export class UsersService {
       where: { userId, status: FriendshipStatus.BLOCKED },
       relations: { friend: true },
     });
-    return rows.filter((r) => r.friend).map((r) => toPublicUser(r.friend));
+    return rows.filter((r) => r.friend).map((r) => toPublicUser(r.friend, { viewerId: userId }));
   }
 
   async listPendingFriends(userId: string): Promise<{
@@ -98,8 +102,12 @@ export class UsersService {
       }),
     ]);
     return {
-      incoming: incomingRows.filter((r) => r.user).map((r) => toPublicUser(r.user)),
-      outgoing: outgoingRows.filter((r) => r.friend).map((r) => toPublicUser(r.friend)),
+      incoming: incomingRows
+        .filter((r) => r.user)
+        .map((r) => toPublicUser(r.user, { viewerId: userId })),
+      outgoing: outgoingRows
+        .filter((r) => r.friend)
+        .map((r) => toPublicUser(r.friend, { viewerId: userId })),
     };
   }
 
@@ -146,6 +154,18 @@ export class UsersService {
     if (reverse?.status === FriendshipStatus.PENDING) {
       reverse.status = FriendshipStatus.ACCEPTED;
       await this.em.save(Friendship, reverse);
+      const me = await this.em.findOne(User, { where: { id: userId } });
+      const created = await this.notifications.createMany([
+        {
+          userId: targetId,
+          type: 'FRIEND',
+          title: 'Arkadaşlık kabul edildi',
+          body: `${me?.displayName ?? 'Birisi'} arkadaşlık isteğini kabul etti`,
+          link: '/channels/@me?tab=friends',
+          actorId: userId,
+        },
+      ]);
+      this.notificationsRealtime.emitMany(created);
       return { ok: true, status: 'ACCEPTED' };
     }
     if (reverse?.status === FriendshipStatus.ACCEPTED) {
@@ -160,6 +180,18 @@ export class UsersService {
         status: FriendshipStatus.PENDING,
       }),
     );
+    const me = await this.em.findOne(User, { where: { id: userId } });
+    const created = await this.notifications.createMany([
+      {
+        userId: targetId,
+        type: 'FRIEND',
+        title: 'Yeni arkadaşlık isteği',
+        body: `${me?.displayName ?? 'Birisi'} sana arkadaşlık isteği gönderdi`,
+        link: '/channels/@me?tab=pending',
+        actorId: userId,
+      },
+    ]);
+    this.notificationsRealtime.emitMany(created);
     return { ok: true, status: 'PENDING' };
   }
 
@@ -175,6 +207,18 @@ export class UsersService {
     await this.assertNotBlocked(userId, fromUserId);
     row.status = FriendshipStatus.ACCEPTED;
     await this.em.save(Friendship, row);
+    const me = await this.em.findOne(User, { where: { id: userId } });
+    const created = await this.notifications.createMany([
+      {
+        userId: fromUserId,
+        type: 'FRIEND',
+        title: 'Arkadaşlık kabul edildi',
+        body: `${me?.displayName ?? 'Birisi'} arkadaşlık isteğini kabul etti`,
+        link: '/channels/@me?tab=friends',
+        actorId: userId,
+      },
+    ]);
+    this.notificationsRealtime.emitMany(created);
     return { ok: true };
   }
 

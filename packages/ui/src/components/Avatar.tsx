@@ -7,7 +7,7 @@ import { presenceDotClass } from '../lib/presence';
 export interface AvatarProps {
   displayName: string;
   imageUrl?: string | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   status?: PresenceStatus;
   statusRing?: boolean;
   className?: string;
@@ -17,6 +17,7 @@ const sizeMap = {
   sm: { box: 'w-5 h-5', text: 'text-[10px]', dot: 'w-2 h-2 ring-1' },
   md: { box: 'w-8 h-8', text: 'text-headline-md', dot: 'w-2.5 h-2.5 ring-2' },
   lg: { box: 'w-12 h-12', text: 'text-headline-lg', dot: 'w-3 h-3 ring-2' },
+  xl: { box: 'w-24 h-24', text: 'text-2xl', dot: 'w-4 h-4 ring-[3px]' },
 };
 
 function initialsFromName(name: string): string {

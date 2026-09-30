@@ -59,14 +59,20 @@ export function buildSidebarCategories(
         name: ch.name,
         type: ch.type === 'VOICE' ? 'voice' : 'text',
         active: ch.id === activeChannelId,
-        unread: Boolean(ch.unread) && ch.id !== activeChannelId,
+        unread: Boolean(ch.unread || (ch.unreadCount ?? 0) > 0) && ch.id !== activeChannelId,
         locked: Boolean(ch.locked),
+        badgeCount:
+          ch.type === 'TEXT' && ch.id !== activeChannelId
+            ? (ch.unreadCount ?? (ch.unread ? 1 : 0)) || undefined
+            : undefined,
         voiceMembers: voiceMembers?.map((m) => ({
           id: m.id,
           displayName: m.displayName,
           avatarUrl: m.avatarUrl,
           muted: m.muted,
           deafened: m.deafened,
+          speaking: m.speaking,
+          isBot: m.isBot,
         })),
         onClick: () => onChannelClick(ch),
         onContextMenu: extras?.onEditChannel

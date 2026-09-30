@@ -51,7 +51,8 @@ export function GuildChannelView({
 }: GuildChannelViewProps) {
   const router = useRouter();
   const { user, client, setUser } = useAuth();
-  const { guilds, guild, channels, loading, reload, patchGuild } = useGuildNav(guildId);
+  const { guilds, guild, channels, loading, reload, patchGuild, patchChannelUnread } =
+    useGuildNav(guildId);
   const channel = channels.find((c) => c.id === channelId);
   const isVoiceView = channel?.type === 'VOICE';
   const channelPending = !channel && (loading || channels.length === 0);
@@ -238,7 +239,8 @@ export function GuildChannelView({
     setPinsOpen(false);
     if (!channelId || isVoiceView) return;
     void client.markChannelRead(channelId).catch(() => undefined);
-  }, [channelId, client, isVoiceView]);
+    patchChannelUnread(channelId, 0, true);
+  }, [channelId, client, isVoiceView, patchChannelUnread]);
 
   useEffect(() => {
     if (!pinsOpen || !channelId) return;
@@ -316,6 +318,26 @@ export function GuildChannelView({
     };
   }, [client, guildId, user, voice.voiceChannelId]);
 
+  // Tüm metin kanallarına join + okunmamış sayaç (aktif kanal hariç)
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const textIds = channels.filter((c) => c.type === 'TEXT').map((c) => c.id);
+    for (const id of textIds) client.joinChannel(id);
+
+    const onCreate = (msg: { channelId: string; author?: { id?: string } }) => {
+      if (!msg?.channelId) return;
+      if (msg.channelId === channelId) return;
+      if (msg.author?.id === user.id) return;
+      if (!textIds.includes(msg.channelId)) return;
+      patchChannelUnread(msg.channelId, 1);
+    };
+    sock.on(SocketEvents.MESSAGE_CREATE, onCreate);
+    return () => {
+      sock.off(SocketEvents.MESSAGE_CREATE, onCreate);
+    };
+  }, [client, user, channels, channelId, patchChannelUnread]);
+
   // Otomatik yeniden bağlanma yok: yalnızca kullanıcı ses kanalına tıklayınca / katıla basınca join.
   // (Önceki effect leave sonrası sayfada kalınca tekrar join ediyordu.)
 
@@ -343,6 +365,8 @@ export function GuildChannelView({
         avatarUrl: p.avatarUrl ?? null,
         muted: p.muted,
         deafened: false,
+        speaking: Boolean(p.speaking),
+        isBot: Boolean((p as { isBot?: boolean }).isBot),
       })),
     }));
   }, [voice.voiceChannelId, voice.participants, user]);
@@ -956,6 +980,10 @@ export function GuildChannelView({
     mentionUsers,
     mentionChannels,
     spellCheck: prefs.messaging.spellcheck,
+    uploadStickerFile: async (file: File) => {
+      const uploaded = await client.uploadFile(file, 'stickers');
+      return { url: uploaded.url, contentType: uploaded.contentType };
+    },
   };
 
   if (loading && !guild) {
@@ -2099,8 +2127,11 @@ export function GuildChannelView({
           bannerColor: profileUser?.bannerColor,
           bio: profileUser?.bio,
           status: profileUser?.status,
+          customStatus: profileUser?.customStatus,
           isBot: profileUser?.isBot,
           roles: profileUser?.roles,
+          socialLinks: profileUser?.socialLinks,
+          accentColor: profileUser?.accentColor,
         }}
         actions={
           profileUser && profileUser.id !== user?.id

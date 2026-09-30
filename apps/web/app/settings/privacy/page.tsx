@@ -74,6 +74,30 @@ export default function PrivacySettingsPage() {
           sekmesine git.
         </p>
       </SettingsSection>
+      <SettingsSection title="Profil görünürlüğü">
+        <SettingsToggle
+          label="Biyografi göster"
+          description="Başkaları profilinde bio’nu görebilsin."
+          checked={prefs.privacy.showBio !== false}
+          onChange={(v) => setSection('privacy', { showBio: v })}
+        />
+        <SettingsToggle
+          label="Sosyal bağlantıları göster"
+          checked={prefs.privacy.showSocialLinks !== false}
+          onChange={(v) => setSection('privacy', { showSocialLinks: v })}
+        />
+        <SettingsToggle
+          label="Banner göster"
+          checked={prefs.privacy.showBanner !== false}
+          onChange={(v) => setSection('privacy', { showBanner: v })}
+        />
+        <SettingsToggle
+          label="Özel durum göster"
+          description="Özel durum metnini başkaları görebilsin."
+          checked={prefs.privacy.showCustomStatus !== false}
+          onChange={(v) => setSection('privacy', { showCustomStatus: v })}
+        />
+      </SettingsSection>
       <SettingsSection title="Veri">
         <SettingsToggle
           label="Kullanım verisi toplama"

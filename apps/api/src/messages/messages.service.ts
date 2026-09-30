@@ -713,7 +713,9 @@ export class MessagesService {
           userId: u.id,
           type: 'MENTION',
           title: `${authorName} seni etiketledi`,
-          body: snippet,
+          body: channel?.name
+            ? `#${channel.name}: ${snippet}`
+            : snippet,
           link: linkBase,
           actorId: authorId,
           guildId: channel?.guildId ?? null,
@@ -787,7 +789,7 @@ export class MessagesService {
         inputs.push({
           userId: m.userId,
           type: 'DM',
-          title: authorName,
+          title: `${authorName} sana mesaj gönderdi`,
           body: snippet,
           link: linkBase,
           actorId: authorId,

@@ -150,15 +150,35 @@ function stickerGlyph(content: string): string {
   return t;
 }
 
+function isStickerMediaUrl(value: string): boolean {
+  return (
+    /^https?:\/\//i.test(value) ||
+    value.startsWith('data:image') ||
+    value.startsWith('/')
+  );
+}
+
 function renderMessageContent(
   content: string,
   mentionNames: string[],
   channelNames: string[],
 ): ReactNode {
   if (isStickerOnly(content)) {
+    const glyph = stickerGlyph(content);
+    if (isStickerMediaUrl(glyph)) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={glyph}
+          alt="sticker"
+          className="max-w-[160px] max-h-[160px] w-auto h-auto object-contain select-none"
+          loading="lazy"
+        />
+      );
+    }
     return (
       <span className="text-5xl leading-none select-none" role="img" aria-label="sticker">
-        {stickerGlyph(content)}
+        {glyph}
       </span>
     );
   }

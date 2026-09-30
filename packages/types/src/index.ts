@@ -82,6 +82,7 @@ export interface VoiceMemberSummary {
   muted?: boolean;
   deafened?: boolean;
   isBot?: boolean;
+  speaking?: boolean;
 }
 
 /** Müzik kuyruk parçası */
@@ -147,9 +148,15 @@ export interface ChannelSummary {
   voiceMembers?: VoiceMemberSummary[];
   /** Görüntüleyen için okunmamış mesaj var mı */
   unread?: boolean;
+  /** Okunmamış mesaj sayısı (TEXT / DM) */
+  unreadCount?: number;
   lastReadMessageId?: string | null;
   /** Self-DM (notlar) kanalı */
   selfNotes?: boolean;
+  /** DM karşı taraf */
+  peerUserId?: string | null;
+  peerAvatarUrl?: string | null;
+  peerStatus?: PresenceStatus | null;
   /** Ses kanalı kilitli mi */
   locked?: boolean;
   /** Şifre var mı (hash asla gönderilmez) */
@@ -388,6 +395,11 @@ export interface ClientSettings {
     shareActivityStatus: boolean;
     dataCollection: boolean;
     personalizeAds: boolean;
+    /** Profil alan görünürlüğü (başkalarına) — varsayılan true */
+    showBio?: boolean;
+    showSocialLinks?: boolean;
+    showBanner?: boolean;
+    showCustomStatus?: boolean;
   };
   messaging: {
     whoCanDm: DmPrivacyLevel;

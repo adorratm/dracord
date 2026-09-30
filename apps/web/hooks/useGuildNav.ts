@@ -75,6 +75,32 @@ export function useGuildNav(guildId: string | undefined) {
     [guildId, channels],
   );
 
+  /** Okunmamış sayacı: absolute=true ise count değerine set, değilse delta ekle */
+  const patchChannelUnread = useCallback(
+    (targetChannelId: string, countOrDelta: number, absolute = false) => {
+      setChannels((prev) => {
+        const next = prev.map((ch) => {
+          if (ch.id !== targetChannelId) return ch;
+          const unreadCount = Math.max(
+            0,
+            absolute ? countOrDelta : (ch.unreadCount ?? 0) + countOrDelta,
+          );
+          return { ...ch, unreadCount, unread: unreadCount > 0 };
+        });
+        if (guildId) {
+          const hit = readCache(guildId);
+          writeCache(guildId, {
+            guilds: hit?.guilds ?? guilds,
+            guild: hit?.guild ?? guild,
+            channels: next,
+          });
+        }
+        return next;
+      });
+    },
+    [guildId, guilds, guild],
+  );
+
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -100,5 +126,5 @@ export function useGuildNav(guildId: string | undefined) {
     };
   }, [client, guildId, user, applySnapshot]);
 
-  return { guilds, guild, channels, loading, reload, patchGuild };
+  return { guilds, guild, channels, loading, reload, patchGuild, patchChannelUnread };
 }

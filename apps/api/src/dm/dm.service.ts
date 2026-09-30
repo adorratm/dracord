@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ChannelSummary } from '@dracord/types';
+import type { ChannelSummary, PresenceStatus } from '@dracord/types';
 import { EntityManager, In } from 'typeorm';
 import { ChannelsService } from '@/channels/channels.service';
 import { Channel } from '@/database/entities/channel.entity';
@@ -147,6 +147,13 @@ export class DmService {
           channel,
           isSelfNotes ? 'Notlarım' : (peer?.user?.displayName ?? channel.name),
           isSelfNotes,
+          peer?.user
+            ? {
+                peerUserId: peer.user.id,
+                peerAvatarUrl: peer.user.avatarUrl,
+                peerStatus: peer.user.status,
+              }
+            : undefined,
         ),
       );
     }
@@ -154,7 +161,10 @@ export class DmService {
       userId,
       channelRows.map((c) => c.id),
     );
-    return out.map((s) => ({ ...s, unread: unreadMap.get(s.id) ?? false }));
+    return out.map((s) => {
+      const count = unreadMap.get(s.id) ?? 0;
+      return { ...s, unread: count > 0, unreadCount: count };
+    });
   }
 
   private async assertDmAllowed(fromUserId: string, other: User): Promise<void> {
@@ -198,6 +208,11 @@ export class DmService {
     channel: Channel,
     displayName: string,
     selfNotes = false,
+    peer?: {
+      peerUserId: string;
+      peerAvatarUrl: string | null;
+      peerStatus: PresenceStatus;
+    },
   ): ChannelSummary {
     return {
       id: channel.id,
@@ -208,6 +223,9 @@ export class DmService {
       position: channel.position,
       topic: channel.topic,
       selfNotes: selfNotes || undefined,
+      peerUserId: peer?.peerUserId,
+      peerAvatarUrl: peer?.peerAvatarUrl,
+      peerStatus: peer?.peerStatus,
     };
   }
 }

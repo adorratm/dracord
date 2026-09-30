@@ -291,6 +291,10 @@ function DmChatInner({
           loadFeaturedGifs={loadFeaturedGifs}
           mentionUsers={friends}
           spellCheck={prefs.messaging.spellcheck}
+          uploadStickerFile={async (file) => {
+            const uploaded = await client.uploadFile(file, 'stickers');
+            return { url: uploaded.url, contentType: uploaded.contentType };
+          }}
         />
       </div>
 

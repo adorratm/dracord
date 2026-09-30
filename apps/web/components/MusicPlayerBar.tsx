@@ -10,11 +10,11 @@ import { loadMusicBotVolume, saveMusicBotVolume } from '@/lib/participant-volume
 
 type Props = {
   guildId: string;
-  /** Metin kanalı (bot yanıtları için, opsiyonel) */
   textChannelId?: string | null;
-  /** compact: ses sahnesi altı; default: sohbet üstü önizleme */
   variant?: 'chat' | 'stage';
 };
+
+const SIZE_KEY = 'dracord:music-bar-size';
 
 function formatDuration(sec?: number | null) {
   if (sec == null || !Number.isFinite(sec) || sec < 0) return null;
@@ -22,6 +22,17 @@ function formatDuration(sec?: number | null) {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, '0')}`;
+}
+
+function loadExpanded(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const v = localStorage.getItem(SIZE_KEY);
+    if (v === 'compact') return false;
+    return true;
+  } catch {
+    return true;
+  }
 }
 
 export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Props) {
@@ -33,7 +44,12 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
     voice.getParticipantVolume(DRACORD_BOT_USER_ID),
   );
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const appliedServerVolRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setExpanded(loadExpanded());
+  }, []);
 
   const botInVoice = voice.participants.some((p) => p.id === DRACORD_BOT_USER_ID);
 
@@ -96,7 +112,6 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
     [client, guildId, voiceChannelId, textChannelId, refresh],
   );
 
-  // Son kaydedilen sunucu bot sesini oturum açılınca uygula
   useEffect(() => {
     if (!voiceChannelId || !state) return;
     if (appliedServerVolRef.current === voiceChannelId) return;
@@ -107,6 +122,18 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
     void control('volume', pref);
   }, [voiceChannelId, state, control]);
 
+  const toggleSize = () => {
+    setExpanded((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(SIZE_KEY, next ? 'expanded' : 'compact');
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   if (!voiceChannelId || (!state?.nowPlaying && !botInVoice)) return null;
 
   const track = state?.nowPlaying;
@@ -114,6 +141,53 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
   const botVol = state?.volume ?? loadMusicBotVolume() ?? 80;
   const duration = formatDuration(track?.durationSec);
   const thumb = track?.thumbnailUrl;
+
+  if (!expanded) {
+    return (
+      <div
+        className={
+          variant === 'stage'
+            ? 'shrink-0 mx-space-md mb-space-sm rounded-lg border border-surface-container-highest bg-surface-container-high px-space-sm py-1.5 flex items-center gap-2 min-h-10'
+            : 'shrink-0 mx-space-md mb-space-sm rounded-lg border border-primary-container/30 bg-surface-container-high px-space-sm py-1.5 flex items-center gap-2 min-h-10'
+        }
+      >
+        <button
+          type="button"
+          disabled={busy || !track}
+          className="w-8 h-8 rounded-md bg-primary-container text-on-primary-container disabled:opacity-40 flex items-center justify-center shrink-0"
+          onClick={() => void control(paused ? 'resume' : 'pause')}
+          aria-label={paused ? 'Oynat' : 'Duraklat'}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {paused ? 'play_arrow' : 'pause'}
+          </span>
+        </button>
+        <p className="font-body-sm text-on-surface truncate flex-1 min-w-0">
+          {track?.title ?? 'Dracord-Bot'}
+        </p>
+        <label className="hidden sm:flex items-center gap-1 w-28 shrink-0">
+          <VolumeSlider
+            value={localBotVol}
+            tone="secondary"
+            aria-label="Bot yerel ses"
+            onChange={(v) => {
+              setLocalBotVol(v);
+              voice.setParticipantVolume(DRACORD_BOT_USER_ID, v);
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="w-8 h-8 rounded-md text-outline hover:bg-surface-bright flex items-center justify-center shrink-0"
+          onClick={toggleSize}
+          aria-label="Büyüt"
+          title="Genişlet"
+        >
+          <span className="material-symbols-outlined text-[18px]">unfold_more</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -123,51 +197,60 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
           : 'shrink-0 mx-space-md mb-space-sm rounded-xl border border-primary-container/30 bg-surface-container-high overflow-hidden shadow-bar'
       }
     >
-      <div className="flex gap-space-sm min-w-0 p-space-sm sm:p-space-md">
-        <div className="relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-surface-container-highest border border-surface-container-highest">
-          {thumb ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={thumb}
-              alt=""
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary-container text-[32px]">
-                album
-              </span>
-            </div>
-          )}
-          {paused && (
-            <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
-              <span className="material-symbols-outlined text-white text-[22px]">pause</span>
-            </div>
-          )}
-        </div>
+      <div className="flex items-start justify-between gap-2 px-space-sm pt-space-sm">
+        <div className="flex gap-space-sm min-w-0 flex-1 p-space-sm sm:p-space-md pt-0">
+          <div className="relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-surface-container-highest border border-surface-container-highest">
+            {thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={thumb}
+                alt=""
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary-container text-[32px]">
+                  album
+                </span>
+              </div>
+            )}
+            {paused && (
+              <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                <span className="material-symbols-outlined text-white text-[22px]">pause</span>
+              </div>
+            )}
+          </div>
 
-        <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-          <p className="font-label-sm text-primary-container uppercase tracking-wide">
-            {paused ? 'Duraklatıldı' : track ? 'Şimdi çalıyor' : 'Dracord-Bot'}
-          </p>
-          <p className="font-body-md text-on-surface truncate font-medium">
-            {track ? track.title : 'Ses kanalında hazır'}
-          </p>
-          <p className="font-label-sm text-outline truncate">
-            {track
-              ? [
-                  track.requestedByName ? `İsteyen: ${track.requestedByName}` : null,
-                  duration,
-                  state && state.queue.length > 0
-                    ? `Kuyruk: ${state.queue.length}`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-              : 'Parça bekleniyor'}
-          </p>
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+            <p className="font-label-sm text-primary-container uppercase tracking-wide">
+              {paused ? 'Duraklatıldı' : track ? 'Şimdi çalıyor' : 'Dracord-Bot'}
+            </p>
+            <p className="font-body-md text-on-surface truncate font-medium">
+              {track ? track.title : 'Ses kanalında hazır'}
+            </p>
+            <p className="font-label-sm text-outline truncate">
+              {track
+                ? [
+                    track.requestedByName ? `İsteyen: ${track.requestedByName}` : null,
+                    duration,
+                    state && state.queue.length > 0 ? `Kuyruk: ${state.queue.length}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : 'Parça bekleniyor'}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          className="w-8 h-8 rounded-md text-outline hover:bg-surface-bright flex items-center justify-center shrink-0 mt-1"
+          onClick={toggleSize}
+          aria-label="Küçült"
+          title="İnce çubuk"
+        >
+          <span className="material-symbols-outlined text-[18px]">unfold_less</span>
+        </button>
       </div>
 
       <div className="px-space-sm sm:px-space-md pb-space-sm flex flex-wrap items-center gap-1.5">
@@ -175,19 +258,17 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
           type="button"
           disabled={busy || !track}
           className="h-9 px-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-40 flex items-center gap-1 font-label-sm"
-          title={paused ? 'Devam ettir' : 'Duraklat'}
           onClick={() => void control(paused ? 'resume' : 'pause')}
         >
           <span className="material-symbols-outlined text-[20px]">
             {paused ? 'play_arrow' : 'pause'}
           </span>
-          <span className="hidden xs:inline sm:inline">{paused ? 'Oynat' : 'Duraklat'}</span>
+          <span className="hidden sm:inline">{paused ? 'Oynat' : 'Duraklat'}</span>
         </button>
         <button
           type="button"
           disabled={busy || !track}
           className="h-9 px-space-sm rounded-lg bg-surface-container-highest text-on-surface hover:bg-surface-bright disabled:opacity-40 flex items-center gap-1 font-label-sm"
-          title="Sonraki parçaya atla"
           onClick={() => void control('skip')}
         >
           <span className="material-symbols-outlined text-[20px]">skip_next</span>
@@ -197,7 +278,6 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
           type="button"
           disabled={busy}
           className="h-9 px-space-sm rounded-lg bg-error/15 text-error hover:bg-error/25 disabled:opacity-40 flex items-center gap-1 font-label-sm"
-          title="Çalmayı durdur ve kuyruğu temizle"
           onClick={() => void control('stop')}
         >
           <span className="material-symbols-outlined text-[20px]">stop</span>
@@ -211,7 +291,6 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
             className={`h-9 px-space-sm rounded-lg text-outline hover:bg-surface-bright flex items-center gap-1 font-label-sm ml-auto ${
               track.url.startsWith('http') ? '' : 'pointer-events-none opacity-40'
             }`}
-            title="Kaynağı aç"
           >
             <span className="material-symbols-outlined text-[18px]">open_in_new</span>
           </a>
