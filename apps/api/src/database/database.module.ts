@@ -54,7 +54,10 @@ const entities = [
         type: 'postgres' as const,
         url: config.getOrThrow<string>('DATABASE_URL'),
         entities,
-        synchronize: config.get<string>('NODE_ENV') !== 'production',
+        // Prod default: false. First boot: set DATABASE_SYNCHRONIZE=true once, then remove.
+        synchronize:
+          config.get<string>('DATABASE_SYNCHRONIZE') === 'true' ||
+          config.get<string>('NODE_ENV') !== 'production',
       }),
     }),
   ],
