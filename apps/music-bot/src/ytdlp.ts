@@ -24,15 +24,24 @@ export type CookiesInfo = {
 /** Başarılı çıkan player_client */
 let workingExtractorArgs: string | null = null;
 let workingImpersonate = false;
+let workingSkipCookies = false;
 let cookiesResolved: CookiesInfo | null = null;
 
-const FALLBACK_CLIENTS = [
-  'youtube:player_client=android_vr,android',
-  'youtube:player_client=android',
+/** Cookie varken oturumu kullanan client’lar (android_* cookie’yi yok sayıp bot duvarına düşer) */
+const COOKIE_CLIENTS = [
+  'youtube:player_client=tv',
   'youtube:player_client=tv_embedded',
-  'youtube:player_client=ios',
+  'youtube:player_client=web_embedded',
   'youtube:player_client=web_safari',
   'youtube:player_client=mweb',
+  'youtube:player_client=web',
+];
+
+/** Cookie’siz denenecek client’lar */
+const ANON_CLIENTS = [
+  'youtube:player_client=android_vr,android',
+  'youtube:player_client=android',
+  'youtube:player_client=ios',
 ];
 
 export function ytdlpBin() {
@@ -181,10 +190,26 @@ type RunOpts = {
   impersonate?: boolean;
   /** web/mweb için JS challenge */
   needJs?: boolean;
+  /** android denemelerinde bozuk cookie’yi atla */
+  skipCookies?: boolean;
 };
+
+function resolveProxy(): string | null {
+  return (
+    process.env.YTDLP_PROXY?.trim() ||
+    process.env.HTTPS_PROXY?.trim() ||
+    process.env.HTTP_PROXY?.trim() ||
+    null
+  );
+}
 
 function buildCommonArgs(opts: RunOpts): string[] {
   const args: string[] = ['--no-playlist', '--no-warnings'];
+
+  const proxy = resolveProxy();
+  if (proxy) {
+    args.push('--proxy', proxy);
+  }
 
   if (opts.needJs) {
     args.push('--js-runtimes', process.env.YTDLP_JS_RUNTIMES?.trim() || 'node');
@@ -204,9 +229,11 @@ function buildCommonArgs(opts: RunOpts): string[] {
     args.push('--impersonate', browser);
   }
 
-  const cookies = ensureCookiesFile();
-  if (cookies && hasUsableCookiesFile(cookies)) {
-    args.push('--cookies', cookies);
+  if (!opts.skipCookies) {
+    const cookies = ensureCookiesFile();
+    if (cookies && hasUsableCookiesFile(cookies)) {
+      args.push('--cookies', cookies);
+    }
   }
 
   if (opts.extractorArgs) {
@@ -217,10 +244,17 @@ function buildCommonArgs(opts: RunOpts): string[] {
 }
 
 function clientStrategies(): RunOpts[] {
+  const hasCookies = Boolean(ensureCookiesFile() && cookiesStatus().loaded);
   const forced = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
+
+  // Cookie varken tv/web* önce; android sonda veya cookie’siz
+  const preferred = hasCookies
+    ? [...COOKIE_CLIENTS, ...ANON_CLIENTS]
+    : [...ANON_CLIENTS, ...COOKIE_CLIENTS];
+
   const clients = [
     ...(forced ? [forced] : []),
-    ...FALLBACK_CLIENTS,
+    ...preferred,
     ...(workingExtractorArgs ? [workingExtractorArgs] : []),
   ];
   const seen = new Set<string>();
@@ -230,7 +264,6 @@ function clientStrategies(): RunOpts[] {
     return true;
   });
 
-  // Başarılı client’ı başa al
   if (workingExtractorArgs && unique.includes(workingExtractorArgs)) {
     unique.splice(unique.indexOf(workingExtractorArgs), 1);
     unique.unshift(workingExtractorArgs);
@@ -238,9 +271,21 @@ function clientStrategies(): RunOpts[] {
 
   const out: RunOpts[] = [];
   for (const extractorArgs of unique) {
-    const needJs = /player_client=(web|mweb|web_safari)/.test(extractorArgs);
-    out.push({ extractorArgs, needJs });
-    out.push({ extractorArgs, needJs, impersonate: true });
+    const needJs = /player_client=(web|mweb|web_safari)\b/.test(extractorArgs);
+    const isAndroid = /player_client=android/.test(extractorArgs);
+
+    if (hasCookies) {
+      out.push({ extractorArgs, needJs });
+      out.push({ extractorArgs, needJs, impersonate: true });
+      // android + cookie bazen daha kötü; cookie’siz de dene
+      if (isAndroid) {
+        out.push({ extractorArgs, needJs, skipCookies: true });
+        out.push({ extractorArgs, needJs, impersonate: true, skipCookies: true });
+      }
+    } else {
+      out.push({ extractorArgs, needJs, skipCookies: true });
+      out.push({ extractorArgs, needJs, impersonate: true, skipCookies: true });
+    }
   }
   return out;
 }
@@ -270,6 +315,7 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
   ensureCookiesFile();
   let lastErr = 'yt-dlp failed';
   const strategies = clientStrategies();
+  const proxy = resolveProxy();
 
   for (const opts of strategies) {
     const args = ['-j', ...buildCommonArgs(opts), source];
@@ -280,6 +326,7 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
         const j = JSON.parse(line) as YtMeta;
         workingExtractorArgs = opts.extractorArgs;
         workingImpersonate = Boolean(opts.impersonate);
+        workingSkipCookies = Boolean(opts.skipCookies);
         return j;
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);
@@ -288,7 +335,7 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
     }
     lastErr = summarizeYtdlpError(err) || `yt-dlp failed (${code})`;
     console.warn(
-      `[yt-dlp] meta fail (${opts.extractorArgs}${opts.impersonate ? '+impersonate' : ''}${opts.needJs ? '+js' : ''}): ${lastErr}`,
+      `[yt-dlp] meta fail (${opts.extractorArgs}${opts.impersonate ? '+impersonate' : ''}${opts.needJs ? '+js' : ''}${opts.skipCookies ? '+nocookie' : ''}): ${lastErr}`,
     );
     if (!isBotOrAuthError(lastErr) && !/unable to extract|requested format|nsig|sabr/i.test(lastErr)) {
       break;
@@ -299,9 +346,11 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
   if (c.loaded && !c.hasLoginHints) {
     lastErr +=
       ' — cookie dosyasında LOGIN_INFO/PSID yok; incognito + robots.txt ile yeniden export et.';
-  } else if (c.loaded) {
+  } else if (c.loaded && !proxy) {
     lastErr +=
-      ' — cookie yüklü ama YouTube reddetti (datacenter IP / süresi dolmuş oturum). Cookie’yi yenile.';
+      ' — cookie geçerli ama Hetzner IP bot sayılıyor. .env → YTDLP_PROXY=http://user:pass@residential-proxy:port ekle.';
+  } else if (c.loaded && proxy) {
+    lastErr += ' — cookie+proxy ile de reddedildi; proxy residential mi kontrol et / cookie yenile.';
   }
 
   throw new Error(lastErr);
@@ -312,14 +361,16 @@ export function openPcmStream(source: string): {
   ytdlp: ReturnType<typeof spawn>;
 } {
   ensureCookiesFile();
+  const hasCookies = cookiesStatus().loaded;
   const extractorArgs =
     workingExtractorArgs ||
     process.env.YTDLP_EXTRACTOR_ARGS?.trim() ||
-    FALLBACK_CLIENTS[0]!;
+    (hasCookies ? COOKIE_CLIENTS[0]! : ANON_CLIENTS[0]!);
   const opts: RunOpts = {
     extractorArgs,
     impersonate: workingImpersonate || process.env.YTDLP_IMPERSONATE === '1',
-    needJs: /player_client=(web|mweb|web_safari)/.test(extractorArgs),
+    needJs: /player_client=(web|mweb|web_safari)\b/.test(extractorArgs),
+    skipCookies: workingSkipCookies,
   };
 
   const ytdlp = spawn(

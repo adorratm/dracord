@@ -226,9 +226,14 @@ export class MusicPlayer {
     } catch (e) {
       console.error('resolve failed', e);
       let msg = (e as Error).message.slice(0, 160);
-      if (!cookiesStatus().loaded && /not a bot|Sign in|cookies/i.test(msg)) {
-        msg =
-          'YouTube cookie yapılandırılmamış. Sunucu .env → YTDLP_COOKIES_B64 ekle (scripts/encode-youtube-cookies.ps1), music-bot recreate.';
+      if (/not a bot|Sign in|cookies|LOGIN_REQUIRED/i.test(msg)) {
+        if (!cookiesStatus().loaded) {
+          msg =
+            'YouTube cookie yok. .env → YTDLP_COOKIES_B64 (scripts/encode-youtube-cookies.ps1), music-bot recreate.';
+        } else if (!process.env.YTDLP_PROXY?.trim()) {
+          msg =
+            'YouTube Hetzner IP’yi bot sayıyor (cookie yüklü). Residential proxy: .env → YTDLP_PROXY=http://user:pass@host:port';
+        }
       }
       if (session.textChannelId) {
         await api

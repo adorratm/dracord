@@ -154,11 +154,12 @@ services:
       MUSIC_AUDIO_BITRATE_KBPS: ${MUSIC_AUDIO_BITRATE_KBPS:-320}
       YTDLP_PATH: yt-dlp
       FFMPEG_PATH: ffmpeg
-      # mweb/web PO token ister — android* kullan; cookies dosya veya YTDLP_COOKIES_B64
+      # Cookie varken tv/web_embedded oturumu kullanır; android_* cookie’yi yok sayabilir
       YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-/cookies/youtube.txt}
-      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=android_vr,android}
+      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=tv,web_embedded}
       YTDLP_COOKIES_B64: ${YTDLP_COOKIES_B64:-}
       YTDLP_IMPERSONATE: ${YTDLP_IMPERSONATE:-1}
+      YTDLP_PROXY: ${YTDLP_PROXY:-}
     volumes:
       # Host'ta yoksa boş dosya oluşturun: touch docker/data/youtube-cookies.txt
       - ${YTDLP_COOKIES_HOST_PATH:-../docker/data/youtube-cookies.txt}:/cookies/youtube.txt:ro

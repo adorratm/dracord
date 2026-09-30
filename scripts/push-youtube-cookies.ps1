@@ -58,7 +58,7 @@ open(path, "wb").write(raw)
 os.chmod(path, 0o600)
 print(f"wrote {path} bytes={len(raw)}")
 PY
-grep -q '^YTDLP_EXTRACTOR_ARGS=' "$ENVF" || echo 'YTDLP_EXTRACTOR_ARGS=youtube:player_client=android_vr,android' >> "$ENVF"
+grep -q '^YTDLP_EXTRACTOR_ARGS=' "$ENVF" || echo 'YTDLP_EXTRACTOR_ARGS=youtube:player_client=tv,web_embedded' >> "$ENVF"
 grep -q '^YTDLP_IMPERSONATE=' "$ENVF" || echo 'YTDLP_IMPERSONATE=1' >> "$ENVF"
 rm -f "$LINE_FILE"
 cd /opt/dracord

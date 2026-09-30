@@ -28,6 +28,17 @@ async function main() {
   if (process.env.YTDLP_IMPERSONATE === '1') {
     console.log('yt-dlp impersonate: enabled');
   }
+  const proxy =
+    process.env.YTDLP_PROXY?.trim() ||
+    process.env.HTTPS_PROXY?.trim() ||
+    process.env.HTTP_PROXY?.trim();
+  if (proxy) {
+    console.log(`yt-dlp proxy: ${proxy.replace(/:[^:@/]+@/, ':****@')}`);
+  } else {
+    console.warn(
+      'yt-dlp proxy: none — Hetzner gibi datacenter IP’de cookie yetmeyebilir. YTDLP_PROXY (residential) önerilir.',
+    );
+  }
   const player = new MusicPlayer();
 
   const worker = new Worker<MusicJobPayload>(
