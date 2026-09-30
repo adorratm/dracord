@@ -433,13 +433,44 @@ export function GuildChannelView({
       const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
       if (!chId || !canManageChannels) return;
       try {
-        await client.denyVoiceUser(chId, targetUserId);
+        const updated = await client.denyVoiceUser(chId, targetUserId);
+        setChannelDeniedIds(updated.deniedUserIds ?? []);
         await reload();
       } catch (err) {
         setDmError(err instanceof Error ? err.message : 'Oda engeli eklenemedi');
       }
     },
     [voice.voiceChannelId, isVoiceView, channelId, canManageChannels, client, reload],
+  );
+
+  /** Ses odası engelini kaldır — API hemen uygulanır */
+  const allowFromVoice = useCallback(
+    async (targetUserId: string, channelOverrideId?: string) => {
+      const chId =
+        channelOverrideId ??
+        voice.voiceChannelId ??
+        (isVoiceView ? channelId : null) ??
+        channelModal?.channel?.id ??
+        null;
+      if (!chId || !canManageChannels) return;
+      try {
+        const updated = await client.allowVoiceUser(chId, targetUserId);
+        setChannelDeniedIds(updated.deniedUserIds ?? []);
+        await reload();
+        setDmError(null);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Engel kaldırılamadı');
+      }
+    },
+    [
+      voice.voiceChannelId,
+      isVoiceView,
+      channelId,
+      channelModal?.channel?.id,
+      canManageChannels,
+      client,
+      reload,
+    ],
   );
 
   const blockMember = useCallback(
@@ -454,6 +485,14 @@ export function GuildChannelView({
     },
     [user, client],
   );
+
+  /** Aktif ses kanalındaki oda engelleri (yetkiliye görünür) */
+  const activeVoiceDeniedIds = useMemo(() => {
+    const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+    if (!chId) return channelDeniedIds;
+    const ch = channels.find((c) => c.id === chId);
+    return ch?.deniedUserIds ?? channelDeniedIds;
+  }, [voice.voiceChannelId, isVoiceView, channelId, channels, channelDeniedIds]);
 
   const memberGroups: MemberListGroup[] = useMemo(() => {
     const voiceList = inVoice
@@ -477,12 +516,20 @@ export function GuildChannelView({
             });
           }
           if (!isSelf && canManageChannels) {
-            actions.push({
-              id: 'deny-voice',
-              label: 'Ses odasından engelle',
-              danger: true,
-              onSelect: () => void denyFromVoice(p.id),
-            });
+            if (activeVoiceDeniedIds.includes(p.id)) {
+              actions.push({
+                id: 'allow-voice',
+                label: 'Ses odası engelini kaldır',
+                onSelect: () => void allowFromVoice(p.id),
+              });
+            } else {
+              actions.push({
+                id: 'deny-voice',
+                label: 'Ses odasından engelle',
+                danger: true,
+                onSelect: () => void denyFromVoice(p.id),
+              });
+            }
           }
           return {
             id: p.id,
@@ -496,6 +543,40 @@ export function GuildChannelView({
           };
         })
       : [];
+
+    const deniedOnlyMembers: MemberListGroup['members'] =
+      canManageChannels && activeVoiceDeniedIds.length > 0
+        ? activeVoiceDeniedIds
+            .filter((id) => !voice.participants.some((p) => p.id === id))
+            .map((id) => {
+              const m = guildMembers.find((g) => g.id === id);
+              return {
+                id,
+                displayName: m?.displayName ?? `Kullanıcı ${id.slice(0, 6)}`,
+                avatarUrl: m?.avatarUrl,
+                status: (m?.status ?? 'OFFLINE') as MemberListGroup['members'][number]['status'],
+                isBot: Boolean(m?.isBot),
+                subtitle: 'Odaya girişi engelli',
+                contextActions: [
+                  {
+                    id: 'allow-voice',
+                    label: 'Ses odası engelini kaldır',
+                    onSelect: () => void allowFromVoice(id),
+                  },
+                  ...(m && !m.isBot
+                    ? [
+                        {
+                          id: 'dm',
+                          label: 'Mesaj gönder',
+                          onSelect: () => void openMemberDm(id, Boolean(m.isBot)),
+                        } satisfies MemberListAction,
+                      ]
+                    : []),
+                ],
+              };
+            })
+        : [];
+
     return [
       {
         id: 'voice',
@@ -517,12 +598,22 @@ export function GuildChannelView({
                 ]
               : [],
       },
+      ...(deniedOnlyMembers.length > 0
+        ? [
+            {
+              id: 'voice-denied',
+              label: 'Odadan engellenenler',
+              members: deniedOnlyMembers,
+            } satisfies MemberListGroup,
+          ]
+        : []),
       {
         id: 'members',
         label: 'Üyeler',
         members: guildMembers.map((m) => {
           const isSelf = m.id === user?.id;
           const isBot = Boolean(m.isBot);
+          const denied = activeVoiceDeniedIds.includes(m.id);
           const actions: MemberListAction[] = [];
           if (!isSelf) {
             actions.push({
@@ -539,13 +630,33 @@ export function GuildChannelView({
               onSelect: () => void blockMember(m.id),
             });
           }
+          if (!isSelf && canManageChannels && (inVoice || isVoiceView)) {
+            if (denied) {
+              actions.push({
+                id: 'allow-voice',
+                label: 'Ses odası engelini kaldır',
+                onSelect: () => void allowFromVoice(m.id),
+              });
+            } else {
+              actions.push({
+                id: 'deny-voice',
+                label: 'Ses odasından engelle',
+                danger: true,
+                onSelect: () => void denyFromVoice(m.id),
+              });
+            }
+          }
           return {
             id: m.id,
             displayName: m.displayName,
             avatarUrl: m.avatarUrl,
             status: m.status,
             isBot,
-            subtitle: isSelf ? 'Notlarım' : 'Tıkla: DM · Sağ tık: menü',
+            subtitle: isSelf
+              ? 'Notlarım'
+              : denied
+                ? 'Odaya girişi engelli · Sağ tık: menü'
+                : 'Tıkla: DM · Sağ tık: menü',
             onClick: () => void openMemberDm(m.id, isBot),
             contextActions: actions.length ? actions : undefined,
           };
@@ -555,12 +666,15 @@ export function GuildChannelView({
   }, [
     user,
     inVoice,
+    isVoiceView,
     voice.participants,
     guildMembers,
     openMemberDm,
     canManageChannels,
     denyFromVoice,
+    allowFromVoice,
     blockMember,
+    activeVoiceDeniedIds,
   ]);
 
   const saveChannel = useCallback(async () => {
@@ -1469,9 +1583,9 @@ export function GuildChannelView({
                       </span>
                       <button
                         type="button"
-                        className="font-label-sm text-primary-container hover:underline"
+                        className="font-label-sm text-primary-container hover:underline shrink-0"
                         onClick={() =>
-                          setChannelDeniedIds((prev) => prev.filter((x) => x !== id))
+                          void allowFromVoice(id, channelModal.channel?.id)
                         }
                       >
                         İzin ver
@@ -1481,6 +1595,13 @@ export function GuildChannelView({
                 })}
               </div>
             )}
+            {channelModal?.mode === 'edit' &&
+              channelModal.channel?.type === 'VOICE' &&
+              channelDeniedIds.length === 0 && (
+                <p className="font-body-sm text-outline">
+                  Bu odadan engellenmiş kullanıcı yok.
+                </p>
+              )}
           </div>
         )}
       </Modal>
