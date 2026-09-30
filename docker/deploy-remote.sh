@@ -54,7 +54,7 @@ docker compose \
   -f docker/docker-compose.zd.yml \
   -f docker/docker-compose.prod.yml \
   --env-file .env \
-  up -d postgres pgbouncer redis elasticsearch livekit minio
+  up -d postgres pgbouncer redis elasticsearch livekit
 
 if ! bash docker/rolling-deploy.sh api web admin; then
   echo "==> Rolling deploy failed — attempting stack recover (replicas + edge)"

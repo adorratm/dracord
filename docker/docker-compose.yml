@@ -90,20 +90,6 @@ services:
       - internal
       - public
 
-  minio:
-    image: localstack/localstack:3
-    restart: unless-stopped
-    environment:
-      SERVICES: s3
-      DEFAULT_REGION: ${S3_REGION:-us-east-1}
-    volumes:
-      - minio_data:/var/lib/localstack
-    ports:
-      - "9000:4566"
-    networks:
-      - internal
-      - public
-
   api:
     build:
       context: ..
@@ -119,12 +105,7 @@ services:
       LIVEKIT_URL: ws://livekit:7880
       LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
       MUSIC_BOT_LIVEKIT_URL: ws://host.docker.internal:7880
-      S3_ENDPOINT: http://minio:4566
-      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000/dracord}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_BUCKET: ${S3_BUCKET:-dracord}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-test}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-test}
+      # S3_* yalnızca .env (AWS). LocalStack/MinIO yok.
       PORT: "4000"
       MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:-dracord-music-dev}
       MUSIC_BOT_ENABLED: ${MUSIC_BOT_ENABLED:-true}
@@ -136,8 +117,6 @@ services:
       elasticsearch:
         condition: service_healthy
       livekit:
-        condition: service_started
-      minio:
         condition: service_started
     ports:
       - "4000:4000"
@@ -277,7 +256,6 @@ volumes:
   postgres_data:
   redis_data:
   elasticsearch_data:
-  minio_data:
   caddy_data:
   caddy_config:
 

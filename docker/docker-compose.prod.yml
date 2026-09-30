@@ -25,9 +25,6 @@ services:
       xpack.security.http.ssl.enabled: "false"
       ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms512m -Xmx512m}
 
-  minio:
-    ports: !reset []
-
   livekit:
     command: ["--config", "/etc/livekit.yaml", "--bind", "0.0.0.0"]
     volumes:
@@ -53,6 +50,15 @@ services:
       LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rtc.dracord.com.tr}
       MUSIC_BOT_LIVEKIT_URL: ws://livekit:7880
       FRONTEND_URL: ${FRONTEND_URL:-https://dracord.com.tr}
+    depends_on: !reset
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      livekit:
+        condition: service_started
 
   music-bot:
     environment:

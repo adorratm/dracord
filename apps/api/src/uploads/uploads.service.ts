@@ -23,7 +23,8 @@ export class UploadsService {
   private bucketReady: Promise<void> | null = null;
 
   constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('S3_ENDPOINT');
+    const endpointRaw = this.config.get<string>('S3_ENDPOINT')?.trim();
+    const endpoint = endpointRaw || undefined;
     const region = this.config.get<string>('S3_REGION') ?? 'us-east-1';
     const accessKey = this.config.get<string>('S3_ACCESS_KEY');
     const secretKey = this.config.get<string>('S3_SECRET_KEY');
@@ -36,7 +37,7 @@ export class UploadsService {
     if (accessKey && secretKey) {
       this.client = new S3Client({
         region,
-        endpoint: endpoint || undefined,
+        endpoint,
         forcePathStyle: Boolean(endpoint),
         credentials: {
           accessKeyId: accessKey,
