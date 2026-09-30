@@ -10,11 +10,17 @@ const QUEUE = 'dracord-music';
 async function main() {
   console.log('Dracord music-bot starting…');
   const cookies = cookiesStatus();
-  console.log(
-    cookies.loaded
-      ? `YouTube cookies: loaded (${cookies.path})`
-      : `YouTube cookies: MISSING — bot check likely (${cookies.path ?? 'YTDLP_COOKIES_FILE unset'})`,
-  );
+  if (cookies.loaded) {
+    console.log(`YouTube cookies: loaded (${cookies.path})`);
+  } else {
+    console.warn(
+      'YouTube cookies: MISSING — datacenter IP bot duvarı aşılmaz. ' +
+        'YTDLP_COOKIES_B64 veya YTDLP_COOKIES_FILE ayarla (scripts/encode-youtube-cookies.ps1).',
+    );
+  }
+  if (process.env.YTDLP_IMPERSONATE === '1') {
+    console.log('yt-dlp impersonate: enabled');
+  }
   const player = new MusicPlayer();
 
   const worker = new Worker<MusicJobPayload>(

@@ -152,11 +152,13 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret_dracord_livekit_dev_key_change_me}
       MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:-dracord-music-dev}
       MUSIC_AUDIO_BITRATE_KBPS: ${MUSIC_AUDIO_BITRATE_KBPS:-320}
-      YTDLP_PATH: /usr/local/bin/yt-dlp
+      YTDLP_PATH: yt-dlp
       FFMPEG_PATH: ffmpeg
-      # YouTube bot duvarı: Netscape cookies.txt mount edin (aşağıdaki volume)
+      # mweb/web PO token ister — android* kullan; cookies dosya veya YTDLP_COOKIES_B64
       YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-/cookies/youtube.txt}
-      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=android,ios,mweb}
+      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=android_vr,android}
+      YTDLP_COOKIES_B64: ${YTDLP_COOKIES_B64:-}
+      YTDLP_IMPERSONATE: ${YTDLP_IMPERSONATE:-1}
     volumes:
       # Host'ta yoksa boş dosya oluşturun: touch docker/data/youtube-cookies.txt
       - ${YTDLP_COOKIES_HOST_PATH:-../docker/data/youtube-cookies.txt}:/cookies/youtube.txt:ro

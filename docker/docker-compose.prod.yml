@@ -65,7 +65,9 @@ services:
       LIVEKIT_URL: ws://livekit:7880
       API_URL: http://api:4000
       YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-/cookies/youtube.txt}
-      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=android,ios,mweb}
+      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=android_vr,android}
+      YTDLP_COOKIES_B64: ${YTDLP_COOKIES_B64:-}
+      YTDLP_IMPERSONATE: ${YTDLP_IMPERSONATE:-1}
     volumes:
       - ${YTDLP_COOKIES_HOST_PATH:-/opt/dracord/secrets/youtube-cookies.txt}:/cookies/youtube.txt:ro
 
