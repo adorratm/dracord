@@ -824,12 +824,15 @@ export function GuildChannelView({
           screenShare={
             voice.activeScreenShare
               ? {
+                  identity: voice.activeScreenShare.identity,
                   displayName: voice.activeScreenShare.displayName,
                   isLocal: voice.activeScreenShare.isLocal,
                   videoRef: voice.setScreenVideoElement,
                 }
               : null
           }
+          screenShares={voice.availableScreenShares}
+          onFocusScreenShare={voice.focusScreenShare}
           participantsDrawerOpen={participantsOpen}
           chatDrawerOpen={chatOpen}
           onToggleMute={() => void voice.toggleMute()}

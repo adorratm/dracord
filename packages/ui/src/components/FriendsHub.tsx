@@ -18,6 +18,7 @@ export interface FriendRow {
   onAccept?: () => void;
   onDecline?: () => void;
   onMessage?: () => void;
+  onUnblock?: () => void;
   onClick?: () => void;
 }
 
@@ -92,6 +93,17 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
           <span className="material-symbols-outlined text-[20px]">chat</span>
         </button>
       )}
+      {tab === 'blocked' && friend.onUnblock && (
+        <button
+          type="button"
+          onClick={friend.onUnblock}
+          className="shrink-0 h-9 px-space-md rounded-full bg-surface-container-highest hover:bg-primary-container text-on-surface hover:text-on-primary-container font-label-sm transition-colors"
+          aria-label="Engeli kaldır"
+          title="Engeli kaldır"
+        >
+          Engeli kaldır
+        </button>
+      )}
     </div>
   );
 }
@@ -143,7 +155,9 @@ export function FriendsHub({
 
       <div className="flex-1 overflow-y-auto py-space-md space-y-0.5">
         {list.length === 0 ? (
-          emptyState ?? (
+          tab === 'online' && emptyState ? (
+            emptyState
+          ) : (
             <p className="px-space-md text-outline font-body-md text-body-md">
               {tab === 'online' && 'Çevrimiçi arkadaş yok.'}
               {tab === 'pending' && 'Bekleyen istek yok.'}

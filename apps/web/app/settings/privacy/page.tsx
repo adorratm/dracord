@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import {
   SettingsPage,
@@ -65,6 +66,13 @@ export default function PrivacySettingsPage() {
           checked={prefs.privacy.shareActivityStatus}
           onChange={(v) => setSection('privacy', { shareActivityStatus: v })}
         />
+        <p className="font-body-sm text-body-sm text-on-surface-variant px-1 pt-space-sm">
+          Engellenen kullanıcıları yönetmek için{' '}
+          <Link href="/channels/me" className="text-primary-container hover:underline">
+            Arkadaşlar → Engellenen
+          </Link>{' '}
+          sekmesine git.
+        </p>
       </SettingsSection>
       <SettingsSection title="Veri">
         <SettingsToggle

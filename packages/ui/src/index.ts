@@ -52,7 +52,12 @@ export { FriendsHub } from './components/FriendsHub';
 export type { FriendsHubProps, FriendsTab, FriendRow } from './components/FriendsHub';
 
 export { VoiceStage } from './components/VoiceStage';
-export type { VoiceStageProps, VoiceParticipant, VoiceStageScreenShare } from './components/VoiceStage';
+export type {
+  VoiceStageProps,
+  VoiceParticipant,
+  VoiceStageScreenShare,
+  VoiceStageScreenShareOption,
+} from './components/VoiceStage';
 
 export { VolumeSlider } from './components/VolumeSlider';
 export type { VolumeSliderProps } from './components/VolumeSlider';

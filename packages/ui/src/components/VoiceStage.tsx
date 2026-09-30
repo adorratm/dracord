@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { VolumeSlider } from './VolumeSlider';
@@ -18,9 +18,16 @@ export interface VoiceParticipant {
 }
 
 export interface VoiceStageScreenShare {
+  identity?: string;
   displayName: string;
   isLocal?: boolean;
   videoRef: (el: HTMLVideoElement | null) => void;
+}
+
+export interface VoiceStageScreenShareOption {
+  identity: string;
+  displayName: string;
+  isLocal?: boolean;
 }
 
 export interface VoiceStageProps {
@@ -32,12 +39,16 @@ export interface VoiceStageProps {
   participantVolumes?: Record<string, number>;
   onParticipantVolumeChange?: (participantId: string, volume: number) => void;
   onCameraVideoRef?: (participantId: string, el: HTMLVideoElement | null) => void;
+  /** Ekran paylaşan katılımcıya tıklanınca o yayını odakla */
+  onFocusScreenShare?: (identity: string) => void;
   rtcConnected?: boolean;
   muted?: boolean;
   deafened?: boolean;
   cameraEnabled?: boolean;
   screenSharing?: boolean;
   screenShare?: VoiceStageScreenShare | null;
+  /** Odadaki tüm ekran paylaşımları (çoklu seçim) */
+  screenShares?: VoiceStageScreenShareOption[];
   participantsDrawerOpen?: boolean;
   chatDrawerOpen?: boolean;
   onToggleMute?: () => void;
@@ -60,12 +71,14 @@ export function VoiceStage({
   participantVolumes,
   onParticipantVolumeChange,
   onCameraVideoRef,
+  onFocusScreenShare,
   rtcConnected = true,
   muted,
   deafened,
   cameraEnabled,
   screenSharing,
   screenShare,
+  screenShares = [],
   participantsDrawerOpen,
   chatDrawerOpen,
   onToggleMute,
@@ -80,6 +93,63 @@ export function VoiceStage({
   participantsPanel,
   className,
 }: VoiceStageProps) {
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const screenVideoCbRef = useRef(screenShare?.videoRef);
+  screenVideoCbRef.current = screenShare?.videoRef;
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFs = () => {
+      const node = stageRef.current;
+      setIsFullscreen(Boolean(node && document.fullscreenElement === node));
+    };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  // Stabil callback — her render'da yeni ref flicker yaratır
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoElRef.current = el;
+    screenVideoCbRef.current?.(el);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const box = stageRef.current;
+    if (!box) return;
+    try {
+      if (document.fullscreenElement === box) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      await box.requestFullscreen();
+    } catch {
+      // iOS / kısıtlı ortam: video üzerinden dene
+      const v = videoElRef.current as HTMLVideoElement & {
+        webkitEnterFullscreen?: () => void;
+      };
+      try {
+        v?.webkitEnterFullscreen?.();
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const focusedId = screenShare?.identity;
+  const shareOptions = screenShares.length > 0 ? screenShares : screenShare
+    ? [
+        {
+          identity: screenShare.identity ?? 'active',
+          displayName: screenShare.displayName,
+          isLocal: screenShare.isLocal,
+        },
+      ]
+    : [];
+
   return (
     <div className={cn('flex flex-col flex-1 min-h-0 bg-surface relative', className)}>
       <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-high shrink-0">
@@ -131,18 +201,58 @@ export function VoiceStage({
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 flex flex-col min-w-0 relative p-space-md gap-space-md">
           {screenShare ? (
-            <div className="flex-1 min-h-0 rounded-xl bg-black/80 border border-surface-container-high overflow-hidden relative flex items-center justify-center">
+            <div
+              ref={stageRef}
+              className={cn(
+                'flex-1 min-h-0 rounded-xl bg-black border border-surface-container-high overflow-hidden relative flex flex-col',
+                isFullscreen && 'rounded-none border-0',
+              )}
+            >
+              {shareOptions.length > 1 && (
+                <div className="absolute top-space-sm left-space-sm right-space-sm z-[2] flex flex-wrap gap-1.5 pointer-events-auto">
+                  {shareOptions.map((s) => {
+                    const active = s.identity === focusedId;
+                    return (
+                      <button
+                        key={s.identity}
+                        type="button"
+                        onClick={() => onFocusScreenShare?.(s.identity)}
+                        className={cn(
+                          'px-space-sm py-1 rounded-lg font-label-sm truncate max-w-[10rem] transition-colors',
+                          active
+                            ? 'bg-primary-container text-on-primary-container'
+                            : 'bg-black/65 text-white hover:bg-black/80',
+                        )}
+                      >
+                        {s.displayName}
+                        {s.isLocal ? ' (sen)' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <video
-                ref={screenShare.videoRef}
-                className="max-w-full max-h-full w-full h-full object-contain bg-black"
+                ref={setVideoRef}
+                className="flex-1 min-h-0 w-full h-full object-contain bg-black"
                 playsInline
                 autoPlay
                 muted={screenShare.isLocal}
               />
-              <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm">
+              <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1]">
                 {screenShare.displayName}
                 {screenShare.isLocal ? ' (sen)' : ''}
               </div>
+              <button
+                type="button"
+                onClick={() => void toggleFullscreen()}
+                className="absolute right-space-sm bottom-space-sm z-[1] w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
+                aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+                title={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+                </span>
+              </button>
             </div>
           ) : null}
 
@@ -158,20 +268,42 @@ export function VoiceStage({
               const isLocal = Boolean(localParticipantId && p.id === localParticipantId);
               const vol = participantVolumes?.[p.id] ?? 100;
               const showVolume = !isLocal && Boolean(onParticipantVolumeChange);
+              const isFocusedShare = Boolean(p.video && focusedId === p.id);
+              const canFocusShare = Boolean(p.video && onFocusScreenShare);
 
               return (
                 <div
                   key={p.id}
+                  role={canFocusShare ? 'button' : undefined}
+                  tabIndex={canFocusShare ? 0 : undefined}
+                  onClick={
+                    canFocusShare
+                      ? () => onFocusScreenShare?.(p.id)
+                      : undefined
+                  }
+                  onKeyDown={
+                    canFocusShare
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onFocusScreenShare?.(p.id);
+                          }
+                        }
+                      : undefined
+                  }
                   className={cn(
                     'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-md relative overflow-hidden transition-shadow duration-200',
                     screenShare ? 'aspect-auto py-space-sm min-h-[5.5rem]' : 'aspect-video',
                     p.speaking && 'ring-2 ring-primary-container',
+                    isFocusedShare && 'ring-2 ring-primary',
+                    canFocusShare && 'cursor-pointer hover:bg-surface-container',
                   )}
+                  title={canFocusShare ? 'Ekran paylaşımını göster' : undefined}
                 >
                   {p.camera ? (
                     <video
                       ref={(el) => onCameraVideoRef?.(p.id, el)}
-                      className="absolute inset-0 w-full h-full object-cover bg-black"
+                      className="absolute inset-0 w-full h-full object-cover bg-black pointer-events-none"
                       playsInline
                       autoPlay
                       muted
@@ -217,7 +349,10 @@ export function VoiceStage({
                       )}
                     </div>
                     {showVolume && (
-                      <label className="flex items-center gap-1.5 min-w-0">
+                      <label
+                        className="flex items-center gap-1.5 min-w-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <span
                           className={cn(
                             'material-symbols-outlined text-[14px] shrink-0',

@@ -7,11 +7,13 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoQuality,
   type AudioCaptureOptions,
   type LocalAudioTrack,
   type LocalParticipant,
   type LocalTrackPublication,
   type RemoteParticipant,
+  type RemoteTrackPublication,
   type TrackPublishOptions,
 } from 'livekit-client';
 import {
@@ -63,6 +65,9 @@ interface VoiceSessionValue {
   cameraEnabled: boolean;
   screenSharing: boolean;
   activeScreenShare: ActiveScreenShare | null;
+  /** Odadaki tüm aktif ekran paylaşımları */
+  availableScreenShares: ActiveScreenShare[];
+  focusScreenShare: (identity: string) => void;
   setScreenVideoElement: (el: HTMLVideoElement | null) => void;
   setCameraVideoElement: (identity: string, el: HTMLVideoElement | null) => void;
   participants: VoiceParticipant[];
@@ -253,6 +258,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const knownPeersRef = useRef(new Set<string>());
   const screenTrackRef = useRef<Track | null>(null);
   const screenVideoElRef = useRef<HTMLVideoElement | null>(null);
+  /** Kullanıcının seçtiği ekran paylaşımı (null = otomatik) */
+  const focusedScreenShareIdRef = useRef<string | null>(null);
+  const activeScreenShareIdRef = useRef<string | null>(null);
   const cameraTracksRef = useRef<Map<string, Track>>(new Map());
   const cameraElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const mutedRef = useRef(false);
@@ -271,6 +279,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [activeScreenShare, setActiveScreenShare] = useState<ActiveScreenShare | null>(null);
+  const [availableScreenShares, setAvailableScreenShares] = useState<ActiveScreenShare[]>([]);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [participantVolumes, setParticipantVolumes] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
@@ -391,6 +400,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
     }
     screenTrackRef.current = null;
+    activeScreenShareIdRef.current = null;
     setActiveScreenShare(null);
   }, []);
 
@@ -470,24 +480,61 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [attachCameraEl],
   );
 
+  const listScreenShares = useCallback((room: Room): ActiveScreenShare[] => {
+    const out: ActiveScreenShare[] = [];
+    const localPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    if (localPub?.track) {
+      out.push({
+        identity: room.localParticipant.identity,
+        displayName: room.localParticipant.name || room.localParticipant.identity,
+        isLocal: true,
+      });
+    }
+    for (const p of room.remoteParticipants.values()) {
+      const pub = p.getTrackPublication(Track.Source.ScreenShare);
+      if (pub?.track) {
+        out.push({
+          identity: p.identity,
+          displayName: p.name || p.identity,
+          isLocal: false,
+        });
+      }
+    }
+    return out;
+  }, []);
+
   const bindScreenShareTrack = useCallback(
     (track: Track | null, identity: string, displayName: string, isLocal: boolean) => {
       const el = screenVideoElRef.current;
-      if (screenTrackRef.current && el) {
+      const prev = screenTrackRef.current;
+
+      // Aynı track + aynı kişi → yeniden attach etme (flicker kaynağı)
+      if (track && prev === track && activeScreenShareIdRef.current === identity) {
+        setActiveScreenShare({ identity, displayName, isLocal });
+        return;
+      }
+
+      if (prev && el && prev !== track) {
         try {
-          screenTrackRef.current.detach(el);
+          prev.detach(el);
         } catch {
           // ignore
         }
       }
+
       screenTrackRef.current = track;
       if (!track) {
+        activeScreenShareIdRef.current = null;
         setActiveScreenShare(null);
         return;
       }
+
+      activeScreenShareIdRef.current = identity;
       setActiveScreenShare({ identity, displayName, isLocal });
       if (el) {
-        track.attach(el);
+        if (prev !== track) {
+          track.attach(el);
+        }
         el.playsInline = true;
         el.autoplay = true;
         el.muted = isLocal;
@@ -500,6 +547,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const setScreenVideoElement = useCallback((el: HTMLVideoElement | null) => {
     const prev = screenVideoElRef.current;
     const track = screenTrackRef.current;
+    if (prev === el) return;
     if (prev && track) {
       try {
         track.detach(prev);
@@ -512,34 +560,67 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       track.attach(el);
       el.playsInline = true;
       el.autoplay = true;
+      el.muted = activeScreenShareIdRef.current === roomRef.current?.localParticipant.identity;
       void el.play().catch(() => undefined);
     }
   }, []);
 
-  const pickPreferredScreenShare = useCallback(
+  /** Odadaki paylaşımları senkronize et; kullanıcı seçimini koru; gereksiz rebind yapma */
+  const applyScreenShareView = useCallback(
     (room: Room) => {
-      const localPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
-      if (localPub?.track) {
-        bindScreenShareTrack(
-          localPub.track,
-          room.localParticipant.identity,
-          room.localParticipant.name || room.localParticipant.identity,
-          true,
-        );
-        setScreenSharing(true);
+      const shares = listScreenShares(room);
+      setAvailableScreenShares(shares);
+      setScreenSharing(shares.some((s) => s.isLocal));
+
+      if (shares.length === 0) {
+        focusedScreenShareIdRef.current = null;
+        if (screenTrackRef.current) clearScreenShareView();
         return;
       }
-      for (const p of room.remoteParticipants.values()) {
-        const pub = p.getTrackPublication(Track.Source.ScreenShare);
-        if (pub?.track) {
-          bindScreenShareTrack(pub.track, p.identity, p.name || p.identity, false);
-          return;
+
+      let focusId = focusedScreenShareIdRef.current;
+      if (!focusId || !shares.some((s) => s.identity === focusId)) {
+        const current = activeScreenShareIdRef.current;
+        if (current && shares.some((s) => s.identity === current)) {
+          focusId = current;
+        } else {
+          // Yerelden ziyade uzak paylaşımı tercih et (kendi ekranın ikinci planda)
+          focusId = shares.find((s) => !s.isLocal)?.identity ?? shares[0]!.identity;
+        }
+        focusedScreenShareIdRef.current = focusId;
+      }
+
+      const share = shares.find((s) => s.identity === focusId) ?? shares[0]!;
+      let track: Track | null = null;
+      if (share.isLocal) {
+        track = room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track ?? null;
+      } else {
+        const p = room.remoteParticipants.get(share.identity);
+        const pub = p?.getTrackPublication(Track.Source.ScreenShare) as
+          | RemoteTrackPublication
+          | undefined;
+        track = pub?.track ?? null;
+        if (pub) {
+          try {
+            pub.setVideoQuality(VideoQuality.HIGH);
+          } catch {
+            // ignore
+          }
         }
       }
-      clearScreenShareView();
-      setScreenSharing(Boolean(localPub?.track));
+      bindScreenShareTrack(track, share.identity, share.displayName, share.isLocal);
     },
-    [bindScreenShareTrack, clearScreenShareView],
+    [bindScreenShareTrack, clearScreenShareView, listScreenShares],
+  );
+
+  const focusScreenShare = useCallback(
+    (identity: string) => {
+      const room = roomRef.current;
+      if (!room) return;
+      focusedScreenShareIdRef.current = identity;
+      applyScreenShareView(room);
+    },
+    [applyScreenShareView],
   );
 
   useEffect(() => {
@@ -570,23 +651,32 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     clarityRef.current = null;
     micGainRef.current = null;
     knownPeersRef.current = new Set();
+    focusedScreenShareIdRef.current = null;
+    activeScreenShareIdRef.current = null;
     setMuted(false);
     setDeafened(false);
     deafenedRef.current = false;
     setCameraEnabled(false);
+    setAvailableScreenShares([]);
     setError(null);
     setNoiseCancellation(false);
     setNoiseNote(null);
 
-    const sync = () => {
+    const syncMedia = () => {
       if (!disposed) {
-        refreshParticipants(room, mutedRef.current);
-        pickPreferredScreenShare(room);
+        applyScreenShareView(room);
         syncCameraTracks(room);
       }
     };
+    const syncParticipants = () => {
+      if (!disposed) refreshParticipants(room, mutedRef.current);
+    };
+    const syncAll = () => {
+      syncParticipants();
+      syncMedia();
+    };
 
-    room.on(RoomEvent.Connected, sync);
+    room.on(RoomEvent.Connected, syncAll);
     room.on(RoomEvent.Disconnected, () => {
       if (!disposed) setConnected(false);
     });
@@ -598,7 +688,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (deafenedRef.current) applyDeafen(room, true);
       const personal = (participantVolumesRef.current.get(p.identity) ?? 100) / 100;
       p.setVolume(audioSettingsRef.current.outputVolume * personal);
-      sync();
+      syncAll();
     });
     room.on(RoomEvent.ParticipantDisconnected, (p) => {
       if (knownPeersRef.current.has(p.identity)) {
@@ -607,11 +697,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           playUiTone('peer-leave');
         }
       }
-      sync();
+      syncAll();
     });
-    room.on(RoomEvent.TrackMuted, sync);
-    room.on(RoomEvent.TrackUnmuted, sync);
-    room.on(RoomEvent.ActiveSpeakersChanged, sync);
+    room.on(RoomEvent.TrackMuted, syncAll);
+    room.on(RoomEvent.TrackUnmuted, syncAll);
+    // Konuşma halkası — ekran track'ini yeniden bağlama (flicker)
+    room.on(RoomEvent.ActiveSpeakersChanged, syncParticipants);
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       if (deafenedRef.current && publication.kind === 'audio') {
         publication.setEnabled(false);
@@ -621,7 +712,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         const personal = (participantVolumesRef.current.get(participant.identity) ?? 100) / 100;
         const level = Math.max(0, Math.min(2, audioSettingsRef.current.outputVolume * personal));
         participant.setVolume(level);
-        // Explicit attach — bazı ortamlarda otomatik oynatma sessiz kalabiliyor
         try {
           const attached = track.attach();
           const els = Array.isArray(attached) ? attached : [attached];
@@ -637,19 +727,38 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
         void room.startAudio().catch(() => undefined);
       }
-      sync();
+      if (publication.source === Track.Source.ScreenShare) {
+        try {
+          (publication as RemoteTrackPublication).setVideoQuality?.(VideoQuality.HIGH);
+        } catch {
+          // ignore
+        }
+      }
+      syncAll();
     });
     room.on(RoomEvent.TrackUnsubscribed, (track, publication) => {
+      if (publication.source === Track.Source.ScreenShare) {
+        // Sadece bu video el'inden ayır; global detach flicker yaratır
+        const el = screenVideoElRef.current;
+        if (el && screenTrackRef.current === track) {
+          try {
+            track.detach(el);
+          } catch {
+            // ignore
+          }
+          screenTrackRef.current = null;
+        }
+        syncAll();
+        return;
+      }
+      if (publication.source === Track.Source.Camera) {
+        syncAll();
+        return;
+      }
       try {
         track.detach();
       } catch {
         // ignore
-      }
-      if (
-        publication.source === Track.Source.ScreenShare ||
-        publication.source === Track.Source.Camera
-      ) {
-        sync();
       }
     });
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
@@ -660,12 +769,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     room.on(RoomEvent.LocalTrackPublished, (publication: LocalTrackPublication) => {
       if (publication.source === Track.Source.ScreenShare) setScreenSharing(true);
       if (publication.source === Track.Source.Camera) setCameraEnabled(true);
-      sync();
+      syncAll();
     });
     room.on(RoomEvent.LocalTrackUnpublished, (publication: LocalTrackPublication) => {
       if (publication.source === Track.Source.ScreenShare) setScreenSharing(false);
       if (publication.source === Track.Source.Camera) setCameraEnabled(false);
-      sync();
+      syncAll();
     });
 
     void (async () => {
@@ -782,7 +891,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     client,
     user,
     refreshParticipants,
-    pickPreferredScreenShare,
+    applyScreenShareView,
     syncCameraTracks,
     clearScreenShareView,
     clearCameraViews,
@@ -850,6 +959,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     setError(null);
     setScreenSharing(false);
     setCameraEnabled(false);
+    setAvailableScreenShares([]);
+    focusedScreenShareIdRef.current = null;
     clearScreenShareView();
     clearCameraViews();
     if (channelId) {
@@ -986,7 +1097,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       try {
         await room.localParticipant.setScreenShareEnabled(false);
         setScreenSharing(false);
-        pickPreferredScreenShare(room);
+        applyScreenShareView(room);
         refreshParticipants(room, mutedRef.current);
       } catch (err) {
         setError(screenShareErrorMessage(err));
@@ -995,13 +1106,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await room.localParticipant.setScreenShareEnabled(true, {
-        audio: true,
-        resolution: { width: 1920, height: 1080, frameRate: 30 },
-        contentHint: 'detail',
-      });
+      await room.localParticipant.setScreenShareEnabled(
+        true,
+        {
+          audio: true,
+          resolution: { width: 1920, height: 1080, frameRate: 30 },
+          contentHint: 'detail',
+        },
+        { simulcast: false },
+      );
       setScreenSharing(true);
-      pickPreferredScreenShare(room);
+      // Kendi paylaşımını otomatik odakla
+      focusedScreenShareIdRef.current = room.localParticipant.identity;
+      applyScreenShareView(room);
       refreshParticipants(room, mutedRef.current);
     } catch (err) {
       setScreenSharing(false);
@@ -1012,7 +1129,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, [screenSharing, refreshParticipants, pickPreferredScreenShare]);
+  }, [screenSharing, refreshParticipants, applyScreenShareView]);
 
   const toggleCamera = useCallback(async () => {
     const room = roomRef.current;
@@ -1271,6 +1388,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cameraEnabled,
       screenSharing,
       activeScreenShare,
+      availableScreenShares,
+      focusScreenShare,
       setScreenVideoElement,
       setCameraVideoElement,
       participants,
@@ -1309,6 +1428,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cameraEnabled,
       screenSharing,
       activeScreenShare,
+      availableScreenShares,
+      focusScreenShare,
       setScreenVideoElement,
       setCameraVideoElement,
       participants,

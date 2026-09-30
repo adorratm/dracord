@@ -16,6 +16,7 @@ export default function FriendsHubPage() {
   const { user, client } = useAuth();
   const { guilds } = useGuildNav(undefined);
   const [friends, setFriends] = useState<FriendRow[]>([]);
+  const [blocked, setBlocked] = useState<FriendRow[]>([]);
   const [dms, setDms] = useState<ChannelSummary[]>([]);
   const [dmError, setDmError] = useState<string | null>(null);
 
@@ -31,6 +32,32 @@ export default function FriendsHubPage() {
     },
     [client, router],
   );
+
+  const loadBlocked = useCallback(async () => {
+    try {
+      const list = await client.listBlocked();
+      setBlocked(
+        list.map((f) => ({
+          id: f.id,
+          displayName: f.displayName,
+          avatarUrl: f.avatarUrl,
+          subtitle: 'Engellendi',
+          onUnblock: () => {
+            void (async () => {
+              try {
+                await client.unblockUser(f.id);
+                setBlocked((prev) => prev.filter((b) => b.id !== f.id));
+              } catch (err) {
+                setDmError(err instanceof Error ? err.message : 'Engel kaldırılamadı');
+              }
+            })();
+          },
+        })),
+      );
+    } catch {
+      setBlocked([]);
+    }
+  }, [client]);
 
   useEffect(() => {
     if (!user) return;
@@ -56,7 +83,8 @@ export default function FriendsHubPage() {
       .catch(() => {
         setFriends([]);
       });
-  }, [client, user, openDm]);
+    void loadBlocked();
+  }, [client, user, openDm, loadBlocked]);
 
   return (
     <RequireAuth>
@@ -112,7 +140,7 @@ export default function FriendsHubPage() {
           <FriendsHub
             friends={friends}
             pending={[]}
-            blocked={[]}
+            blocked={blocked}
             emptyState={
               <DracoEmpty
                 mood="peek"
