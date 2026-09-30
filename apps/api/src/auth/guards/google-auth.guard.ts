@@ -5,11 +5,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { isAdminOAuthIntent } from '@/auth/admin-emails';
 
 /**
  * Google OAuth failures (redirect_uri_mismatch, missing email, etc.) must not
- * surface as opaque 500 HTML — send the user back to the frontend login page.
+ * surface as opaque 500 HTML — send the user back to the correct app login page.
  */
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
@@ -17,13 +18,23 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     super();
   }
 
+  getAuthenticateOptions(context: ExecutionContext) {
+    const req = context.switchToHttp().getRequest<Request>();
+    // Callback already carries Google's state — don't overwrite.
+    if (req.query?.code) {
+      return {};
+    }
+    const intent = String(req.query?.intent ?? 'web').toLowerCase();
+    return { state: intent === 'admin' ? 'admin' : 'web' };
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const res = context.switchToHttp().getResponse<Response>();
+    const req = context.switchToHttp().getRequest<Request>();
     try {
       return (await super.canActivate(context)) as boolean;
     } catch (err) {
-      this.redirectToLogin(res, err);
-      // Prevent Nest from overwriting the redirect with ForbiddenException.
+      this.redirectToLogin(res, req, err);
       throw new UnauthorizedException(
         err instanceof Error ? err.message : 'Google auth failed',
       );
@@ -37,12 +48,14 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     return user;
   }
 
-  private redirectToLogin(res: Response, err: unknown) {
+  private redirectToLogin(res: Response, req: Request, err: unknown) {
     if (res.headersSent) return;
-    const frontend =
-      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
-    const url = new URL('/login', frontend);
-    url.searchParams.set('error', 'google_oauth');
+    const admin = isAdminOAuthIntent(req.query?.state ?? req.query?.intent);
+    const appBase = admin
+      ? (this.config.get<string>('ADMIN_URL') ?? 'http://localhost:3001')
+      : (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000');
+    const url = new URL('/login', appBase);
+    url.searchParams.set('error', admin ? 'admin_denied' : 'google_oauth');
     const msg = err instanceof Error ? err.message : 'failed';
     url.searchParams.set('reason', msg.slice(0, 160));
     res.redirect(url.toString());

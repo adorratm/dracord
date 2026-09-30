@@ -25,8 +25,10 @@ RUN --mount=type=cache,id=dracord-yarn,target=/root/.yarn/berry/cache \
 FROM deps AS build
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_LIVEKIT_URL
+ARG NEXT_PUBLIC_SITE_URL=https://dracord.com.tr
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_LIVEKIT_URL=$NEXT_PUBLIC_LIVEKIT_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY packages ./packages
 COPY apps/web ./apps/web
 RUN yarn workspace @dracord/types build \

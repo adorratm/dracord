@@ -15,13 +15,32 @@ const inter = Inter({
   display: 'swap',
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://dracord.com.tr';
+
+const siteDescription =
+  'Dracord: Dracula temalı topluluk sohbeti. Metin kanalları, sesli odalar, roller, arkadaşlar ve maskot Draco ile sunucunu kur.';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
-    default: 'Dracord',
+    default: 'Dracord — Dracula temalı topluluk sohbeti',
     template: '%s · Dracord',
   },
-  description: 'Dracula temalı topluluk sohbeti — metin, ses ve arkadaşlar.',
+  description: siteDescription,
   applicationName: 'Dracord',
+  keywords: [
+    'Dracord',
+    'sohbet',
+    'sesli sohbet',
+    'sunucu',
+    'Discord alternatifi',
+    'Dracula',
+    'Draco',
+    'topluluk',
+  ],
+  authors: [{ name: 'Dracord' }],
+  creator: 'Dracord',
   icons: {
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
@@ -29,17 +48,21 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: '/apple-icon', type: 'image/png' }],
   },
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     type: 'website',
     locale: 'tr_TR',
+    url: siteUrl,
     siteName: 'Dracord',
-    title: 'Dracord',
-    description: 'Dracula temalı topluluk sohbeti — metin, ses ve arkadaşlar.',
+    title: 'Dracord — Topluluğun için yeni bir zindan',
+    description: siteDescription,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Dracord',
-    description: 'Dracula temalı topluluk sohbeti — metin, ses ve arkadaşlar.',
+    title: 'Dracord — Topluluğun için yeni bir zindan',
+    description: siteDescription,
   },
 };
 

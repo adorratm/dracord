@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { toPublicUser } from '@/common/user.mapper';
@@ -22,6 +22,7 @@ import type { GoogleProfile } from '@/auth/strategies/google.strategy';
 import { GoogleAuthGuard } from '@/auth/guards/google-auth.guard';
 import { GoogleOAuthRedirectFilter } from '@/auth/filters/google-oauth-redirect.filter';
 import { JwtRefreshAuthGuard } from '@/auth/guards/jwt-refresh-auth.guard';
+import { isAdminOAuthIntent } from '@/auth/admin-emails';
 
 @Controller('auth')
 export class AuthController {
@@ -34,6 +35,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: { sub: string }) {
     const row = await this.authService.getUserById(user.sub);
+    return toPublicUser(row);
+  }
+
+  /** Admin paneli oturum doğrulama — yalnızca ADMIN_EMAILS allowlist */
+  @Get('admin/me')
+  @UseGuards(JwtAuthGuard)
+  async adminMe(@CurrentUser() user: { sub: string }) {
+    const row = await this.authService.assertAdminUser(user.sub);
     return toPublicUser(row);
   }
 
@@ -76,21 +85,25 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   @UseFilters(GoogleOAuthRedirectFilter)
   async googleCallback(
-    @Req() req: { user: GoogleProfile },
+    @Req() req: Request & { user: GoogleProfile },
     @Res() res: Response,
   ) {
-    const frontend =
-      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const adminIntent = isAdminOAuthIntent(req.query?.state);
+    const appBase = adminIntent
+      ? (this.config.get<string>('ADMIN_URL') ?? 'http://localhost:3001')
+      : (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000');
     try {
-      const result = await this.authService.googleCallback(req.user);
+      const result = await this.authService.googleCallback(req.user, {
+        admin: adminIntent,
+      });
       this.setRefreshCookie(res, result.refreshToken);
-      const redirectUrl = new URL('/auth/callback', frontend);
+      const redirectUrl = new URL('/auth/callback', appBase);
       redirectUrl.searchParams.set('accessToken', result.accessToken);
       redirectUrl.searchParams.set('refreshToken', result.refreshToken);
       res.redirect(redirectUrl.toString());
     } catch (err) {
-      const url = new URL('/login', frontend);
-      url.searchParams.set('error', 'google_oauth');
+      const url = new URL('/login', appBase);
+      url.searchParams.set('error', adminIntent ? 'admin_denied' : 'google_oauth');
       url.searchParams.set(
         'reason',
         err instanceof Error ? err.message.slice(0, 160) : 'callback_failed',

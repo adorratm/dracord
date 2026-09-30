@@ -21,7 +21,8 @@ import {
 interface AuthContextValue {
   user: PublicUser | null;
   ready: boolean;
-  loginDev: (username?: string) => Promise<void>;
+  setUser: (user: PublicUser | null) => void;
+  loginWithGoogle: () => void;
   logout: () => void;
 }
 
@@ -43,8 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.setToken(access);
     if (storedUser) setUser(storedUser);
     try {
-      const me = await client.getMe();
+      const me = await client.getAdminMe();
       setUser(me);
+      persistSession(access, undefined, me);
     } catch {
       clearSession();
       client.setToken(null);
@@ -58,15 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void hydrate();
   }, [hydrate]);
 
-  const loginDev = useCallback(
-    async (username?: string) => {
-      const result = await client.loginDev(username);
-      persistSession(result.accessToken, result.refreshToken, result.user);
-      client.setToken(result.accessToken);
-      setUser(result.user);
-    },
-    [client],
-  );
+  const loginWithGoogle = useCallback(() => {
+    window.location.href = client.getGoogleLoginUrl('admin');
+  }, [client]);
 
   const logout = useCallback(() => {
     clearSession();
@@ -75,8 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [client]);
 
   const value = useMemo(
-    () => ({ user, ready, loginDev, logout }),
-    [user, ready, loginDev, logout],
+    () => ({ user, ready, setUser, loginWithGoogle, logout }),
+    [user, ready, loginWithGoogle, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

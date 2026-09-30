@@ -18,7 +18,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (ready && !user && pathname !== '/login') {
+    if (ready && !user && pathname !== '/login' && !pathname.startsWith('/auth/')) {
       router.replace('/login');
     }
   }, [ready, user, pathname, router]);

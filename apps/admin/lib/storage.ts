@@ -27,11 +27,13 @@ export function getStoredUser(): PublicUser | null {
 
 export function persistSession(
   accessToken: string,
-  refreshToken: string,
+  refreshToken: string | null | undefined,
   user: PublicUser,
 ): void {
   localStorage.setItem(ACCESS_KEY, accessToken);
-  localStorage.setItem(REFRESH_KEY, refreshToken);
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_KEY, refreshToken);
+  }
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 

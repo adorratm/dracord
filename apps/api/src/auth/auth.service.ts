@@ -18,6 +18,10 @@ import { AuthProvider, UserStatus } from '@/database/enums';
 import type { AppleAuthDto } from '@/auth/dto/apple-auth.dto';
 import type { DevLoginDto } from '@/auth/dto/dev-login.dto';
 import type { GoogleProfile } from '@/auth/strategies/google.strategy';
+import {
+  isAdminEmail,
+  parseAdminEmails,
+} from '@/auth/admin-emails';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +30,18 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
+
+  assertAdminEmail(email: string | null | undefined): void {
+    if (!isAdminEmail(this.config, email)) {
+      throw new UnauthorizedException(
+        'Bu hesap admin paneline giriş yapamaz',
+      );
+    }
+  }
+
+  listAdminEmails(): string[] {
+    return parseAdminEmails(this.config);
+  }
 
   async devLogin(dto: DevLoginDto): Promise<AuthTokens & { user: User }> {
     const usernameRaw = dto.username?.trim() || 'vampiredev';
@@ -220,8 +236,20 @@ export class AuthService {
     });
   }
 
-  async googleCallback(profile: GoogleProfile): Promise<AuthTokens & { user: User }> {
+  async googleCallback(
+    profile: GoogleProfile,
+    options?: { admin?: boolean },
+  ): Promise<AuthTokens & { user: User }> {
+    if (options?.admin) {
+      this.assertAdminEmail(profile.email);
+    }
     return this.loginWithOAuthProfile(AuthProvider.GOOGLE, profile);
+  }
+
+  async assertAdminUser(userId: string): Promise<User> {
+    const user = await this.getUserById(userId);
+    this.assertAdminEmail(user.email);
+    return user;
   }
 
   async refreshTokens(

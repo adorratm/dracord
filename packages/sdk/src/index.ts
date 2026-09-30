@@ -204,8 +204,16 @@ export class DracordClient {
     });
   }
 
-  getGoogleLoginUrl() {
-    return `${this.baseUrl}/auth/google`;
+  getGoogleLoginUrl(intent: 'web' | 'admin' = 'web') {
+    const url = new URL(`${this.baseUrl}/auth/google`);
+    if (intent === 'admin') {
+      url.searchParams.set('intent', 'admin');
+    }
+    return url.toString();
+  }
+
+  async getAdminMe(): Promise<PublicUser> {
+    return this.request('/auth/admin/me');
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
