@@ -79,7 +79,7 @@ interface VoiceSessionValue {
   audioInputDevices: MediaDeviceInfo[];
   audioOutputDevices: MediaDeviceInfo[];
   videoInputDevices: MediaDeviceInfo[];
-  refreshAudioDevices: () => Promise<void>;
+  refreshAudioDevices: (requestPermissions?: boolean) => Promise<void>;
   setInputDevice: (deviceId: string) => Promise<void>;
   setOutputDevice: (deviceId: string) => Promise<void>;
   setVideoDevice: (deviceId: string) => Promise<void>;
@@ -224,6 +224,60 @@ function screenShareErrorMessage(err: unknown): string {
   return msg || 'Ekran paylaşımı başarısız';
 }
 
+function micPermissionErrorMessage(err: unknown): string {
+  const name =
+    err && typeof err === 'object' && 'name' in err
+      ? String((err as { name?: string }).name)
+      : '';
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'Mikrofon izni gerekli. Tarayıcı ayarlarından Dracord için mikrofonu aç, sonra ses odasına tekrar gir.';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'Mikrofon bulunamadı. Bir mikrofon bağla ve tekrar dene.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'Mikrofon başka bir uygulama tarafından kullanılıyor olabilir.';
+  }
+  return err instanceof Error ? err.message : 'Mikrofon izni alınamadı';
+}
+
+/** Ses odasına girmeden önce mikrofon izni — reddedilirse işlem devam etmesin */
+async function ensureMicrophonePermission(): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Bu tarayıcı mikrofon erişimini desteklemiyor');
+  }
+
+  try {
+    const status = await navigator.permissions?.query?.({
+      name: 'microphone' as PermissionName,
+    });
+    if (status?.state === 'denied') {
+      throw Object.assign(new Error('Mikrofon izni reddedildi'), {
+        name: 'NotAllowedError',
+      });
+    }
+    if (status?.state === 'granted') return;
+  } catch (err) {
+    // permissions API yoksa / desteklenmiyorsa getUserMedia'ya düş
+    if (
+      err &&
+      typeof err === 'object' &&
+      'name' in err &&
+      (err as { name: string }).name === 'NotAllowedError'
+    ) {
+      throw err;
+    }
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: false,
+  });
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+}
+
 function cameraErrorMessage(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
   const msg = err instanceof Error ? err.message : String(err);
@@ -309,12 +363,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     saveVoiceAudioSettings(next);
   }, []);
 
-  const refreshAudioDevices = useCallback(async () => {
+  const refreshAudioDevices = useCallback(async (requestPermissions = false) => {
+    // requestPermissions=true yalnızca kullanıcı ses ayarlarında yenile dediğinde
+    // video için asla burada izin isteme — kamera açılınca istenir
     try {
       const [inputs, outputs, videos] = await Promise.all([
-        Room.getLocalDevices('audioinput', true),
-        Room.getLocalDevices('audiooutput', true),
-        Room.getLocalDevices('videoinput', true),
+        Room.getLocalDevices('audioinput', requestPermissions),
+        Room.getLocalDevices('audiooutput', false),
+        Room.getLocalDevices('videoinput', false),
       ]);
       setAudioInputDevices(inputs);
       setAudioOutputDevices(outputs);
@@ -326,14 +382,21 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Cihaz listesi: yalnızca giriş yapılmışsa ve izin istemeden
   useEffect(() => {
-    void refreshAudioDevices();
-    const onChange = () => void refreshAudioDevices();
+    if (!user) {
+      setAudioInputDevices([]);
+      setAudioOutputDevices([]);
+      setVideoInputDevices([]);
+      return;
+    }
+    void refreshAudioDevices(false);
+    const onChange = () => void refreshAudioDevices(false);
     navigator.mediaDevices?.addEventListener?.('devicechange', onChange);
     return () => {
       navigator.mediaDevices?.removeEventListener?.('devicechange', onChange);
     };
-  }, [refreshAudioDevices]);
+  }, [user, refreshAudioDevices]);
 
   const applyMicGainToTrack = useCallback(async (mic: LocalAudioTrack, volume: number) => {
     if (deepFilterActiveRef.current) {
@@ -779,6 +842,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
+        // Önce mikrofon izni — reddedilirse odaya hiç girme
+        try {
+          await ensureMicrophonePermission();
+        } catch (permErr) {
+          throw new Error(micPermissionErrorMessage(permErr));
+        }
+
         const password = voicePasswordRef.current;
         const { token, url } = await client.getVoiceToken(channelId, password);
         const livekitUrl =
@@ -794,17 +864,23 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         } catch {
           // kullanıcı jesti sonrası tekrar denenecek
         }
-        await room.localParticipant.setMicrophoneEnabled(
-          true,
-          voiceAudioCaptureOptions(audioSettingsRef.current),
-          voiceAudioPublishOptions(audioSettingsRef.current.audioBitrateKbps),
-        );
+        try {
+          await room.localParticipant.setMicrophoneEnabled(
+            true,
+            voiceAudioCaptureOptions(audioSettingsRef.current),
+            voiceAudioPublishOptions(audioSettingsRef.current.audioBitrateKbps),
+          );
+        } catch (micErr) {
+          room.disconnect();
+          throw new Error(micPermissionErrorMessage(micErr));
+        }
         try {
           await room.startAudio();
         } catch {
           // ignore
         }
         await applyRoomAudioSettings(room, audioSettingsRef.current);
+        void refreshAudioDevices(false);
         try {
           await client.joinVoiceState(channelId, {
             muted: false,
@@ -896,6 +972,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     clearScreenShareView,
     clearCameraViews,
     applyRoomAudioSettings,
+    refreshAudioDevices,
   ]);
 
   useEffect(() => {
