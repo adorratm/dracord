@@ -38,11 +38,15 @@ export class UploadsService {
       this.client = new S3Client({
         region,
         endpoint,
+        // Gerçek AWS'te path-style kapalı; LocalStack/MinIO için endpoint varken açık
         forcePathStyle: Boolean(endpoint),
         credentials: {
           accessKeyId: accessKey,
           secretAccessKey: secretKey,
         },
+        // SDK v3.729+ boş gövde CRC32'yi presign URL'ye gömer → tarayıcı PUT "failed to fetch"
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
       });
     } else {
       this.client = null;
