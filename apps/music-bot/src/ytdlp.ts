@@ -9,6 +9,8 @@ export type YtMeta = {
   webpage_url?: string;
   duration?: number;
   thumbnail?: string;
+  /** Ev relay’den gelen doğrudan CDN URL — sunucuda yt-dlp gerekmez */
+  stream_url?: string;
 };
 
 export type CookiesInfo = {
@@ -25,6 +27,8 @@ export type CookiesInfo = {
 let workingExtractorArgs: string | null = null;
 let workingImpersonate = false;
 let workingSkipCookies = false;
+/** Relay’den gelen stream; openPcmStream ffmpeg ile doğrudan açar */
+let workingStreamUrl: string | null = null;
 let cookiesResolved: CookiesInfo | null = null;
 
 /** Cookie varken oturumu kullanan client’lar (android_* cookie’yi yok sayıp bot duvarına düşer) */
@@ -310,12 +314,72 @@ function runYtdlp(args: string[]): Promise<{ code: number | null; out: string; e
   });
 }
 
-/** Metadata (JSON) — bot duvarında tüm client fallback’leri dene */
+function relayBase(): string | null {
+  const u = process.env.YTDLP_RELAY_URL?.trim();
+  return u ? u.replace(/\/$/, '') : null;
+}
+
+async function fetchMetaViaRelay(source: string): Promise<YtMeta> {
+  const base = relayBase();
+  if (!base) throw new Error('no relay');
+  const secret = process.env.YTDLP_RELAY_SECRET?.trim() || '';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (secret) {
+    headers.Authorization = `Bearer ${secret}`;
+    headers['X-Relay-Secret'] = secret;
+  }
+  const res = await fetch(`${base}/resolve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ url: source }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const text = await res.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok) {
+    throw new Error(String(body.error || text || `relay HTTP ${res.status}`).slice(0, 200));
+  }
+  const streamUrl = typeof body.stream_url === 'string' ? body.stream_url : null;
+  if (!streamUrl) throw new Error('relay stream_url yok');
+  workingStreamUrl = streamUrl;
+  workingExtractorArgs = null;
+  return {
+    title: String(body.title || 'Unknown'),
+    webpage_url: typeof body.webpage_url === 'string' ? body.webpage_url : source,
+    duration: typeof body.duration === 'number' ? body.duration : undefined,
+    thumbnail: typeof body.thumbnail === 'string' ? body.thumbnail : undefined,
+    stream_url: streamUrl,
+  };
+}
+
+/** Metadata (JSON) — önce relay (ev IP), yoksa yerel yt-dlp + fallback’ler */
 export async function fetchMeta(source: string): Promise<YtMeta> {
   ensureCookiesFile();
+  workingStreamUrl = null;
+  const proxy = resolveProxy();
+  const relay = relayBase();
+
+  // Ev PC relay: Hetzner bot duvarını atlar (CDN URL sunucuda çalınır)
+  if (relay) {
+    try {
+      const meta = await fetchMetaViaRelay(source);
+      console.log(`[yt-dlp] resolved via relay (${relay})`);
+      return meta;
+    } catch (e) {
+      console.warn(`[yt-dlp] relay fail: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
   let lastErr = 'yt-dlp failed';
   const strategies = clientStrategies();
-  const proxy = resolveProxy();
 
   for (const opts of strategies) {
     const args = ['-j', ...buildCommonArgs(opts), source];
@@ -327,6 +391,7 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
         workingExtractorArgs = opts.extractorArgs;
         workingImpersonate = Boolean(opts.impersonate);
         workingSkipCookies = Boolean(opts.skipCookies);
+        workingStreamUrl = null;
         return j;
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);
@@ -346,11 +411,13 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
   if (c.loaded && !c.hasLoginHints) {
     lastErr +=
       ' — cookie dosyasında LOGIN_INFO/PSID yok; incognito + robots.txt ile yeniden export et.';
-  } else if (c.loaded && !proxy) {
+  } else if (c.loaded && !proxy && !relay) {
     lastErr +=
-      ' — cookie geçerli ama Hetzner IP bot sayılıyor. .env → YTDLP_PROXY=http://user:pass@residential-proxy:port ekle.';
+      ' — Hetzner IP bot. YTDLP_PROXY (residential) veya ev PC relay: scripts/start-yt-relay.ps1 + YTDLP_RELAY_URL.';
   } else if (c.loaded && proxy) {
-    lastErr += ' — cookie+proxy ile de reddedildi; proxy residential mi kontrol et / cookie yenile.';
+    lastErr += ' — cookie+proxy ile de reddedildi; proxy residential mi / cookie yenile.';
+  } else if (c.loaded && relay) {
+    lastErr += ' — yerel + relay başarısız; evde relay çalışıyor mu / cookie taze mi bak.';
   }
 
   throw new Error(lastErr);
@@ -358,9 +425,45 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
 
 export function openPcmStream(source: string): {
   ffmpeg: ReturnType<typeof spawn>;
-  ytdlp: ReturnType<typeof spawn>;
+  ytdlp: ReturnType<typeof spawn> | null;
 } {
   ensureCookiesFile();
+  const ignorePipeErr = () => undefined;
+
+  // Relay CDN URL — yt-dlp’siz doğrudan ffmpeg
+  if (workingStreamUrl) {
+    const ffmpeg = spawn(
+      ffmpegBin(),
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-reconnect',
+        '1',
+        '-reconnect_streamed',
+        '1',
+        '-reconnect_delay_max',
+        '5',
+        '-i',
+        workingStreamUrl,
+        '-f',
+        's16le',
+        '-acodec',
+        'pcm_s16le',
+        '-ac',
+        '1',
+        '-ar',
+        '48000',
+        'pipe:1',
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    ffmpeg.stdout?.on('error', ignorePipeErr);
+    ffmpeg.on('error', ignorePipeErr);
+    ffmpeg.stderr?.on('data', () => undefined);
+    return { ffmpeg, ytdlp: null };
+  }
+
   const hasCookies = cookiesStatus().loaded;
   const extractorArgs =
     workingExtractorArgs ||
@@ -401,7 +504,6 @@ export function openPcmStream(source: string): {
   );
 
   ytdlp.stdout!.pipe(ffmpeg.stdin!);
-  const ignorePipeErr = () => undefined;
   ytdlp.stdout?.on('error', ignorePipeErr);
   ffmpeg.stdin?.on('error', ignorePipeErr);
   ffmpeg.stdout?.on('error', ignorePipeErr);

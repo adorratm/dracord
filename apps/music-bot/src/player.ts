@@ -230,9 +230,9 @@ export class MusicPlayer {
         if (!cookiesStatus().loaded) {
           msg =
             'YouTube cookie yok. .env → YTDLP_COOKIES_B64 (scripts/encode-youtube-cookies.ps1), music-bot recreate.';
-        } else if (!process.env.YTDLP_PROXY?.trim()) {
+        } else if (!process.env.YTDLP_PROXY?.trim() && !process.env.YTDLP_RELAY_URL?.trim()) {
           msg =
-            'YouTube Hetzner IP’yi bot sayıyor (cookie yüklü). Residential proxy: .env → YTDLP_PROXY=http://user:pass@host:port';
+            'Hetzner IP bot. YTDLP_PROXY=... veya ev PC: scripts/start-yt-relay.ps1 + YTDLP_RELAY_URL';
         }
       }
       if (session.textChannelId) {
@@ -249,7 +249,7 @@ export class MusicPlayer {
     }
 
     const { ffmpeg, ytdlp } = openPcmStream(source);
-    logProcessLines(ytdlp, 'yt-dlp');
+    if (ytdlp) logProcessLines(ytdlp, 'yt-dlp');
     logProcessLines(ffmpeg, 'ffmpeg');
 
     let stopped = false;
@@ -257,7 +257,7 @@ export class MusicPlayer {
       if (stopped) return;
       stopped = true;
       try {
-        ytdlp.kill('SIGKILL');
+        ytdlp?.kill('SIGKILL');
       } catch {
         /* ignore */
       }

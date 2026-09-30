@@ -34,9 +34,13 @@ async function main() {
     process.env.HTTP_PROXY?.trim();
   if (proxy) {
     console.log(`yt-dlp proxy: ${proxy.replace(/:[^:@/]+@/, ':****@')}`);
-  } else {
+  }
+  const relay = process.env.YTDLP_RELAY_URL?.trim();
+  if (relay) {
+    console.log(`yt-dlp relay: ${relay}`);
+  } else if (!proxy) {
     console.warn(
-      'yt-dlp proxy: none — Hetzner gibi datacenter IP’de cookie yetmeyebilir. YTDLP_PROXY (residential) önerilir.',
+      'yt-dlp proxy/relay yok — Hetzner’de cookie yetmeyebilir. YTDLP_PROXY veya scripts/start-yt-relay.ps1',
     );
   }
   const player = new MusicPlayer();
