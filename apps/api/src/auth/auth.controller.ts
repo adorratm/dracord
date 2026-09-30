@@ -6,9 +6,9 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -19,6 +19,8 @@ import { AppleAuthDto } from '@/auth/dto/apple-auth.dto';
 import { DevLoginDto } from '@/auth/dto/dev-login.dto';
 import { RefreshTokenDto } from '@/auth/dto/refresh-token.dto';
 import type { GoogleProfile } from '@/auth/strategies/google.strategy';
+import { GoogleAuthGuard } from '@/auth/guards/google-auth.guard';
+import { GoogleOAuthRedirectFilter } from '@/auth/filters/google-oauth-redirect.filter';
 import { JwtRefreshAuthGuard } from '@/auth/guards/jwt-refresh-auth.guard';
 
 @Controller('auth')
@@ -64,24 +66,37 @@ export class AuthController {
   }
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
+  @UseFilters(GoogleOAuthRedirectFilter)
   googleAuth() {
     return { message: 'Redirecting to Google OAuth' };
   }
 
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
+  @UseFilters(GoogleOAuthRedirectFilter)
   async googleCallback(
     @Req() req: { user: GoogleProfile },
     @Res() res: Response,
   ) {
-    const result = await this.authService.googleCallback(req.user);
-    this.setRefreshCookie(res, result.refreshToken);
-    const frontend = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
-    const redirectUrl = new URL('/auth/callback', frontend);
-    redirectUrl.searchParams.set('accessToken', result.accessToken);
-    redirectUrl.searchParams.set('refreshToken', result.refreshToken);
-    res.redirect(redirectUrl.toString());
+    const frontend =
+      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    try {
+      const result = await this.authService.googleCallback(req.user);
+      this.setRefreshCookie(res, result.refreshToken);
+      const redirectUrl = new URL('/auth/callback', frontend);
+      redirectUrl.searchParams.set('accessToken', result.accessToken);
+      redirectUrl.searchParams.set('refreshToken', result.refreshToken);
+      res.redirect(redirectUrl.toString());
+    } catch (err) {
+      const url = new URL('/login', frontend);
+      url.searchParams.set('error', 'google_oauth');
+      url.searchParams.set(
+        'reason',
+        err instanceof Error ? err.message.slice(0, 160) : 'callback_failed',
+      );
+      res.redirect(url.toString());
+    }
   }
 
   @Post('refresh')

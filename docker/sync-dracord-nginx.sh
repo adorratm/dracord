@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Wire Dracord edge into shared Docker Nginx (ttengamesstudio-nginx).
+#
+# SAFETY (shared Hetzner — 5 sites):
+#   - Only writes conf.d/dracord.conf — never touches kiliccoffee / portfolio / default.
+#   - Never run kiliccofferoaster deploy/recover-nginx.sh from a Dracord deploy.
+#   - Only connects docker-edge-1 / docker-livekit-1 to the TTEN network.
+#   - Other stacks: always use their own --env-file; never leave empty
+#     POSTGRES_PASSWORD exported in the shell (compose prefers shell over .env).
+#
 # Usage:
 #   bash docker/sync-dracord-nginx.sh http    # no TLS yet (ACME-friendly)
 #   bash docker/sync-dracord-nginx.sh https   # requires certs under live/dracord.com.tr
@@ -42,8 +50,16 @@ connect_alias() {
     echo "  SKIP $ctn (missing)"
     return 0
   fi
-  # Reconnect with stable DNS alias for nginx upstreams
-  docker network disconnect "$NETWORK" "$ctn" 2>/dev/null || true
+  # Prefer keep existing attachment; only reconnect when alias DNS is missing.
+  if docker network inspect "$NETWORK" --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null \
+    | grep -qw "$ctn"; then
+    if docker exec "$NGINX_CTN" getent hosts "$alias" >/dev/null 2>&1; then
+      echo "  OK  $ctn on $NETWORK (alias $alias)"
+      return 0
+    fi
+    echo "  .. reconnect $ctn for alias $alias"
+    docker network disconnect "$NETWORK" "$ctn" 2>/dev/null || true
+  fi
   docker network connect --alias "$alias" "$NETWORK" "$ctn"
   echo "  OK  $ctn → $NETWORK as $alias"
 }

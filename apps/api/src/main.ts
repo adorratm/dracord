@@ -23,6 +23,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  // Nginx / Caddy terminate TLS — required for secure cookies + correct OAuth URLs
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
