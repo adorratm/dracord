@@ -11,7 +11,14 @@ async function main() {
   console.log('Dracord music-bot starting…');
   const cookies = cookiesStatus();
   if (cookies.loaded) {
-    console.log(`YouTube cookies: loaded (${cookies.path})`);
+    console.log(
+      `YouTube cookies: loaded (${cookies.source} → ${cookies.path}, rows=${cookies.lineCount}, loginHints=${cookies.hasLoginHints})`,
+    );
+    if (!cookies.hasLoginHints) {
+      console.warn(
+        'YouTube cookies: LOGIN_INFO/PSID yok — oturum cookie’si eksik. Incognito→youtube.com/robots.txt→export ile yenile.',
+      );
+    }
   } else {
     console.warn(
       'YouTube cookies: MISSING — datacenter IP bot duvarı aşılmaz. ' +

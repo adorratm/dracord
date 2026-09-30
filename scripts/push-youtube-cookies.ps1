@@ -40,9 +40,24 @@ set -euo pipefail
 ENVF=/opt/dracord/.env
 LINE_FILE=/tmp/dracord-cookies.b64.line
 LINE=$(cat "$LINE_FILE")
+# .env B64
 grep -v '^YTDLP_COOKIES_B64=' "$ENVF" > "$ENVF.tmp" || true
 printf '%s\n' "$LINE" >> "$ENVF.tmp"
 mv "$ENVF.tmp" "$ENVF"
+# Mount edilen dosyayı da güncelle (eski stub B64'ü ezmesin)
+mkdir -p /opt/dracord/secrets
+python3 - <<'PY'
+import base64, os, re
+env = open("/opt/dracord/.env", encoding="utf-8", errors="ignore").read()
+m = re.search(r"^YTDLP_COOKIES_B64=(.+)$", env, re.M)
+if not m:
+    raise SystemExit("no B64 in .env")
+raw = base64.b64decode(m.group(1).strip())
+path = "/opt/dracord/secrets/youtube-cookies.txt"
+open(path, "wb").write(raw)
+os.chmod(path, 0o600)
+print(f"wrote {path} bytes={len(raw)}")
+PY
 grep -q '^YTDLP_EXTRACTOR_ARGS=' "$ENVF" || echo 'YTDLP_EXTRACTOR_ARGS=youtube:player_client=android_vr,android' >> "$ENVF"
 grep -q '^YTDLP_IMPERSONATE=' "$ENVF" || echo 'YTDLP_IMPERSONATE=1' >> "$ENVF"
 rm -f "$LINE_FILE"

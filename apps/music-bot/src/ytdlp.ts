@@ -11,14 +11,28 @@ export type YtMeta = {
   thumbnail?: string;
 };
 
-/** Başarılı çıkan player_client — sonraki isteklerde ilk dene */
-let workingExtractorArgs: string | null = null;
+export type CookiesInfo = {
+  path: string | null;
+  loaded: boolean;
+  source: 'b64' | 'file' | null;
+  /** Netscape satır sayısı (yorum hariç) */
+  lineCount: number;
+  /** LOGIN_INFO / PSID var mı — değer yazılmaz */
+  hasLoginHints: boolean;
+};
 
-const DEFAULT_CLIENT_STRATEGIES = [
+/** Başarılı çıkan player_client */
+let workingExtractorArgs: string | null = null;
+let workingImpersonate = false;
+let cookiesResolved: CookiesInfo | null = null;
+
+const FALLBACK_CLIENTS = [
   'youtube:player_client=android_vr,android',
   'youtube:player_client=android',
   'youtube:player_client=tv_embedded',
   'youtube:player_client=ios',
+  'youtube:player_client=web_safari',
+  'youtube:player_client=mweb',
 ];
 
 export function ytdlpBin() {
@@ -29,52 +43,108 @@ export function ffmpegBin() {
   return process.env.FFMPEG_PATH || 'ffmpeg';
 }
 
-/**
- * Cookie kaynağı:
- * 1) YTDLP_COOKIES_FILE yolu
- * 2) YTDLP_COOKIES_B64 (sunucu .env'e yapıştırılabilir — volume gerekmez)
- */
-export function ensureCookiesFile(): string | null {
-  const existing = process.env.YTDLP_COOKIES_FILE?.trim();
-  if (existing && hasUsableCookiesFile(existing)) return existing;
-
-  const b64 = process.env.YTDLP_COOKIES_B64?.trim();
-  if (!b64) {
-    if (existing && existsSync(existing)) return null; // boş stub
-    return null;
-  }
-
-  try {
-    const raw = Buffer.from(b64.replace(/\s+/g, ''), 'base64').toString('utf8');
-    if (!raw.includes('\t')) {
-      console.warn('YTDLP_COOKIES_B64 decoded but looks empty/invalid');
-      return null;
-    }
-    const dir = join(tmpdir(), 'dracord');
-    mkdirSync(dir, { recursive: true });
-    const path = join(dir, 'youtube-cookies.txt');
-    writeFileSync(path, raw, { mode: 0o600 });
-    process.env.YTDLP_COOKIES_FILE = path;
-    return path;
-  } catch (e) {
-    console.warn('YTDLP_COOKIES_B64 write failed', e);
-    return null;
-  }
+function inspectCookiesText(text: string): { lineCount: number; hasLoginHints: boolean } {
+  const data = text.split(/\r?\n/).filter((line) => {
+    const t = line.trim();
+    return t.length > 0 && !t.startsWith('#') && t.includes('\t');
+  });
+  const blob = data.join('\n');
+  const hasLoginHints =
+    /\bLOGIN_INFO\b/.test(blob) ||
+    /\b__Secure-1PSID\b/.test(blob) ||
+    /\b__Secure-3PSID\b/.test(blob) ||
+    /\bSID\b/.test(blob);
+  return { lineCount: data.length, hasLoginHints };
 }
 
-export function cookiesStatus(): { path: string | null; loaded: boolean } {
-  const path = ensureCookiesFile() ?? process.env.YTDLP_COOKIES_FILE?.trim() ?? null;
-  return { path, loaded: Boolean(path && hasUsableCookiesFile(path)) };
+function writeCookiesTemp(raw: string): string {
+  const dir = join(tmpdir(), 'dracord');
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, 'youtube-cookies.txt');
+  writeFileSync(path, raw, { mode: 0o600 });
+  return path;
+}
+
+/**
+ * Cookie önceliği:
+ * 1) YTDLP_COOKIES_B64 (sunucu .env — mount’taki eski stub’ı ezer)
+ * 2) YTDLP_COOKIES_FILE
+ */
+export function ensureCookiesFile(): string | null {
+  if (cookiesResolved?.path && hasUsableCookiesFile(cookiesResolved.path)) {
+    return cookiesResolved.path;
+  }
+
+  const b64 = process.env.YTDLP_COOKIES_B64?.trim();
+  if (b64) {
+    try {
+      const raw = Buffer.from(b64.replace(/\s+/g, ''), 'base64').toString('utf8');
+      const info = inspectCookiesText(raw);
+      if (info.lineCount === 0) {
+        console.warn('YTDLP_COOKIES_B64 decoded but no cookie rows');
+      } else {
+        const path = writeCookiesTemp(raw);
+        process.env.YTDLP_COOKIES_FILE = path;
+        cookiesResolved = {
+          path,
+          loaded: true,
+          source: 'b64',
+          lineCount: info.lineCount,
+          hasLoginHints: info.hasLoginHints,
+        };
+        return path;
+      }
+    } catch (e) {
+      console.warn('YTDLP_COOKIES_B64 write failed', e);
+    }
+  }
+
+  const existing = process.env.YTDLP_COOKIES_FILE?.trim();
+  if (existing && hasUsableCookiesFile(existing)) {
+    try {
+      const text = readFileSync(existing, 'utf8');
+      const info = inspectCookiesText(text);
+      cookiesResolved = {
+        path: existing,
+        loaded: true,
+        source: 'file',
+        lineCount: info.lineCount,
+        hasLoginHints: info.hasLoginHints,
+      };
+      return existing;
+    } catch {
+      return existing;
+    }
+  }
+
+  cookiesResolved = {
+    path: existing || null,
+    loaded: false,
+    source: null,
+    lineCount: 0,
+    hasLoginHints: false,
+  };
+  return null;
+}
+
+export function cookiesStatus(): CookiesInfo {
+  ensureCookiesFile();
+  return (
+    cookiesResolved ?? {
+      path: null,
+      loaded: false,
+      source: null,
+      lineCount: 0,
+      hasLoginHints: false,
+    }
+  );
 }
 
 function hasUsableCookiesFile(path: string): boolean {
   if (!existsSync(path)) return false;
   try {
     const text = readFileSync(path, 'utf8');
-    return text.split('\n').some((line) => {
-      const t = line.trim();
-      return t.length > 0 && !t.startsWith('#') && t.includes('\t');
-    });
+    return inspectCookiesText(text).lineCount > 0;
   } catch {
     return false;
   }
@@ -109,22 +179,27 @@ export function summarizeYtdlpError(err: string): string {
 type RunOpts = {
   extractorArgs: string;
   impersonate?: boolean;
+  /** web/mweb için JS challenge */
+  needJs?: boolean;
 };
 
 function buildCommonArgs(opts: RunOpts): string[] {
   const args: string[] = ['--no-playlist', '--no-warnings'];
 
-  const jsRuntimes = process.env.YTDLP_JS_RUNTIMES?.trim();
-  if (jsRuntimes) {
-    args.push('--js-runtimes', jsRuntimes);
+  if (opts.needJs) {
+    args.push('--js-runtimes', process.env.YTDLP_JS_RUNTIMES?.trim() || 'node');
+    args.push(
+      '--remote-components',
+      process.env.YTDLP_REMOTE_COMPONENTS?.trim() || 'ejs:github',
+    );
+  } else {
+    const jsRuntimes = process.env.YTDLP_JS_RUNTIMES?.trim();
+    if (jsRuntimes) args.push('--js-runtimes', jsRuntimes);
+    const remoteComponents = process.env.YTDLP_REMOTE_COMPONENTS?.trim();
+    if (remoteComponents) args.push('--remote-components', remoteComponents);
   }
 
-  const remoteComponents = process.env.YTDLP_REMOTE_COMPONENTS?.trim();
-  if (remoteComponents) {
-    args.push('--remote-components', remoteComponents);
-  }
-
-  if (opts.impersonate || process.env.YTDLP_IMPERSONATE === '1') {
+  if (opts.impersonate) {
     const browser = process.env.YTDLP_IMPERSONATE_BROWSER?.trim() || 'chrome';
     args.push('--impersonate', browser);
   }
@@ -143,25 +218,29 @@ function buildCommonArgs(opts: RunOpts): string[] {
 
 function clientStrategies(): RunOpts[] {
   const forced = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
-  if (forced) {
-    return [
-      { extractorArgs: forced },
-      { extractorArgs: forced, impersonate: true },
-    ];
-  }
+  const clients = [
+    ...(forced ? [forced] : []),
+    ...FALLBACK_CLIENTS,
+    ...(workingExtractorArgs ? [workingExtractorArgs] : []),
+  ];
+  const seen = new Set<string>();
+  const unique = clients.filter((c) => {
+    if (!c || seen.has(c)) return false;
+    seen.add(c);
+    return true;
+  });
 
-  const list = [...DEFAULT_CLIENT_STRATEGIES];
-  if (workingExtractorArgs && !list.includes(workingExtractorArgs)) {
-    list.unshift(workingExtractorArgs);
-  } else if (workingExtractorArgs) {
-    list.splice(list.indexOf(workingExtractorArgs), 1);
-    list.unshift(workingExtractorArgs);
+  // Başarılı client’ı başa al
+  if (workingExtractorArgs && unique.includes(workingExtractorArgs)) {
+    unique.splice(unique.indexOf(workingExtractorArgs), 1);
+    unique.unshift(workingExtractorArgs);
   }
 
   const out: RunOpts[] = [];
-  for (const extractorArgs of list) {
-    out.push({ extractorArgs });
-    out.push({ extractorArgs, impersonate: true });
+  for (const extractorArgs of unique) {
+    const needJs = /player_client=(web|mweb|web_safari)/.test(extractorArgs);
+    out.push({ extractorArgs, needJs });
+    out.push({ extractorArgs, needJs, impersonate: true });
   }
   return out;
 }
@@ -186,12 +265,13 @@ function runYtdlp(args: string[]): Promise<{ code: number | null; out: string; e
   });
 }
 
-/** Metadata (JSON) — arama veya URL; bot duvarında client fallback */
+/** Metadata (JSON) — bot duvarında tüm client fallback’leri dene */
 export async function fetchMeta(source: string): Promise<YtMeta> {
   ensureCookiesFile();
   let lastErr = 'yt-dlp failed';
+  const strategies = clientStrategies();
 
-  for (const opts of clientStrategies()) {
+  for (const opts of strategies) {
     const args = ['-j', ...buildCommonArgs(opts), source];
     const { code, out, err } = await runYtdlp(args);
     if (code === 0 && out.trim()) {
@@ -199,7 +279,7 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
         const line = out.trim().split('\n')[0]!;
         const j = JSON.parse(line) as YtMeta;
         workingExtractorArgs = opts.extractorArgs;
-        if (opts.impersonate) process.env.YTDLP_IMPERSONATE = '1';
+        workingImpersonate = Boolean(opts.impersonate);
         return j;
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);
@@ -207,43 +287,44 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
       }
     }
     lastErr = summarizeYtdlpError(err) || `yt-dlp failed (${code})`;
-    console.warn(`[yt-dlp] meta fail (${opts.extractorArgs}${opts.impersonate ? '+impersonate' : ''}): ${lastErr}`);
-    if (!isBotOrAuthError(lastErr) && !/unable to extract|requested format/i.test(lastErr)) {
-      // Ağ / video yok gibi hatalarda diğer client'ları deneme
+    console.warn(
+      `[yt-dlp] meta fail (${opts.extractorArgs}${opts.impersonate ? '+impersonate' : ''}${opts.needJs ? '+js' : ''}): ${lastErr}`,
+    );
+    if (!isBotOrAuthError(lastErr) && !/unable to extract|requested format|nsig|sabr/i.test(lastErr)) {
       break;
     }
+  }
+
+  const c = cookiesStatus();
+  if (c.loaded && !c.hasLoginHints) {
+    lastErr +=
+      ' — cookie dosyasında LOGIN_INFO/PSID yok; incognito + robots.txt ile yeniden export et.';
+  } else if (c.loaded) {
+    lastErr +=
+      ' — cookie yüklü ama YouTube reddetti (datacenter IP / süresi dolmuş oturum). Cookie’yi yenile.';
   }
 
   throw new Error(lastErr);
 }
 
-/**
- * yt-dlp audio → ffmpeg s16le 48kHz mono PCM stream.
- */
 export function openPcmStream(source: string): {
   ffmpeg: ReturnType<typeof spawn>;
   ytdlp: ReturnType<typeof spawn>;
 } {
   ensureCookiesFile();
+  const extractorArgs =
+    workingExtractorArgs ||
+    process.env.YTDLP_EXTRACTOR_ARGS?.trim() ||
+    FALLBACK_CLIENTS[0]!;
   const opts: RunOpts = {
-    extractorArgs:
-      workingExtractorArgs ||
-      process.env.YTDLP_EXTRACTOR_ARGS?.trim() ||
-      DEFAULT_CLIENT_STRATEGIES[0]!,
-    impersonate: process.env.YTDLP_IMPERSONATE === '1',
+    extractorArgs,
+    impersonate: workingImpersonate || process.env.YTDLP_IMPERSONATE === '1',
+    needJs: /player_client=(web|mweb|web_safari)/.test(extractorArgs),
   };
 
   const ytdlp = spawn(
     ytdlpBin(),
-    [
-      '-f',
-      'bestaudio/best',
-      '-o',
-      '-',
-      '--quiet',
-      ...buildCommonArgs(opts),
-      source,
-    ],
+    ['-f', 'bestaudio/best', '-o', '-', '--quiet', ...buildCommonArgs(opts), source],
     { stdio: ['ignore', 'pipe', 'pipe'] },
   );
 
