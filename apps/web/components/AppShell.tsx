@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { AppTour } from '@/components/AppTour';
-import { MobileDrawer } from '@/components/MobileDrawer';
 import { NotificationBell } from '@/components/NotificationBell';
 
 const LAST_CHANNEL_KEY = 'dracord:last-channel';
@@ -221,20 +220,24 @@ export function AppShell({
             <ServerRail {...serverRailProps} className="h-full" />
           </div>
         )}
+        {/* Mobil: sunucu rayı ana alanı daraltır (push); diğer menüler overlay kalır */}
+        {showServerRail && serversOpen && (
+          <div className="md:hidden flex h-full shrink-0 relative z-10 border-r border-surface-container-high">
+            <ServerRail {...serverRailProps} className="h-full" />
+          </div>
+        )}
         <div className="flex flex-1 min-w-0 min-h-0 overflow-visible" data-tour="chat">
           {children}
         </div>
       </div>
 
-      {showServerRail && (
-        <MobileDrawer
-          open={serversOpen}
-          onClose={() => setServersOpen(false)}
-          side="left"
-          title="Sunucular"
-        >
-          <ServerRail {...serverRailProps} className="w-full h-full" />
-        </MobileDrawer>
+      {showServerRail && serversOpen && (
+        <button
+          type="button"
+          className="md:hidden fixed inset-0 z-[5] bg-transparent"
+          aria-label="Sunucu menüsünü kapat"
+          onClick={() => setServersOpen(false)}
+        />
       )}
 
       <AppTour />

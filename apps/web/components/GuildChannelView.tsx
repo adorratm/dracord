@@ -3,6 +3,7 @@
 import type { ChannelSummary, PublicUser, VoiceMemberSummary, VoiceStatePayload } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import {
+  Avatar,
   ChannelSidebar,
   ChatInput,
   ConfirmDialog,
@@ -12,6 +13,7 @@ import {
   UserProfileCard,
   VoiceStage,
   VolumeSlider,
+  presenceLabelTr,
   type MemberListGroup,
   type MemberListAction,
 } from '@dracord/ui';
@@ -23,6 +25,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { DracoEmpty } from '@/components/Draco';
 import { openMessageSearch } from '@/components/GlobalSearch';
 import { MobileDrawer } from '@/components/MobileDrawer';
+import { VoiceSideChat } from '@/components/VoiceSideChat';
 import { buildSidebarCategories } from '@/lib/channels';
 import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
@@ -87,6 +90,9 @@ export function GuildChannelView({
 
   const [participantsOpen, setParticipantsOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [voiceChatChannelId, setVoiceChatChannelId] = useState<string | null>(null);
+  const [voiceChatWidth, setVoiceChatWidth] = useState(340);
+  const [voicePartsWidth, setVoicePartsWidth] = useState(288);
   const [voiceMembersByChannel, setVoiceMembersByChannel] = useState<
     Record<string, VoiceMemberSummary[]>
   >({});
@@ -374,12 +380,17 @@ export function GuildChannelView({
       try {
         const ch = await client.openDm(memberId);
         setMembersOpen(false);
+        if (isVoiceView && voice.voiceChannelId === channelId) {
+          setChatOpen(true);
+          setVoiceChatChannelId(ch.id);
+          return;
+        }
         router.push(`/channels/me/${ch.id}`);
       } catch (err) {
         setDmError(err instanceof Error ? err.message : 'DM açılamadı');
       }
     },
-    [client, router],
+    [client, router, isVoiceView, voice.voiceChannelId, channelId],
   );
 
   const joinVoiceChannel = useCallback(
@@ -574,10 +585,23 @@ export function GuildChannelView({
           return {
             id: p.id,
             displayName: p.displayName,
-            avatarUrl: p.avatarUrl,
-            status: 'ONLINE' as const,
+            username: guildMembers.find((g) => g.id === p.id)?.username,
+            avatarUrl:
+              p.avatarUrl ||
+              guildMembers.find((g) => g.id === p.id)?.avatarUrl ||
+              (p.id === user?.id ? user.avatarUrl : null),
+            bannerUrl: guildMembers.find((g) => g.id === p.id)?.bannerUrl,
+            bannerColor: guildMembers.find((g) => g.id === p.id)?.bannerColor,
+            bio: guildMembers.find((g) => g.id === p.id)?.bio,
+            socialLinks: guildMembers.find((g) => g.id === p.id)?.socialLinks,
+            roles: guildMembers.find((g) => g.id === p.id)?.roles,
+            status: guildMembers.find((g) => g.id === p.id)?.status ?? ('ONLINE' as const),
+            customStatus: guildMembers.find((g) => g.id === p.id)?.customStatus,
             isBot,
-            subtitle: isSelf ? undefined : 'Tıkla: DM · Sağ tık: menü',
+            subtitle: presenceLabelTr(
+              guildMembers.find((g) => g.id === p.id)?.status ?? 'ONLINE',
+              guildMembers.find((g) => g.id === p.id)?.customStatus,
+            ),
             onClick: () => void openMemberDm(p.id, isBot),
             contextActions: actions.length ? actions : undefined,
           };
@@ -595,8 +619,11 @@ export function GuildChannelView({
                 displayName: m?.displayName ?? `Kullanıcı ${id.slice(0, 6)}`,
                 avatarUrl: m?.avatarUrl,
                 status: (m?.status ?? 'OFFLINE') as MemberListGroup['members'][number]['status'],
+                customStatus: m?.customStatus,
                 isBot: Boolean(m?.isBot),
-                subtitle: 'Odaya girişi engelli',
+                subtitle: m
+                  ? presenceLabelTr(m.status, m.customStatus)
+                  : 'Odaya girişi engelli',
                 contextActions: [
                   {
                     id: 'allow-voice',
@@ -631,8 +658,9 @@ export function GuildChannelView({
                     displayName: user.displayName,
                     avatarUrl: user.avatarUrl,
                     status: user.status,
+                    customStatus: user.customStatus,
                     isBot: Boolean(user.isBot),
-                    subtitle: 'Notlarım / DM',
+                    subtitle: presenceLabelTr(user.status, user.customStatus),
                     onClick: () => void openMemberDm(user.id, Boolean(user.isBot)),
                   },
                 ]
@@ -712,8 +740,15 @@ export function GuildChannelView({
           return {
             id: m.id,
             displayName: m.displayName,
+            username: m.username,
             avatarUrl: m.avatarUrl,
+            bannerUrl: m.bannerUrl,
+            bannerColor: m.bannerColor,
+            bio: m.bio,
+            socialLinks: m.socialLinks,
+            roles: m.roles,
             status: m.status,
+            customStatus: m.customStatus,
             isBot,
             roleColor: topRole?.color,
             badges: (m.roles ?? [])
@@ -724,11 +759,9 @@ export function GuildChannelView({
                 color: r.color,
                 label: r.name,
               })),
-            subtitle: isSelf
-              ? 'Notlarım'
-              : denied
-                ? 'Odaya girişi engelli · Sağ tık: menü'
-                : 'Tıkla: profil · Sağ tık: menü',
+            subtitle: denied
+              ? `Engelli · ${presenceLabelTr(m.status, m.customStatus)}`
+              : presenceLabelTr(m.status, m.customStatus),
             onClick: () => setProfileUser(m),
             contextActions: actions.length ? actions : undefined,
           };
@@ -1059,7 +1092,15 @@ export function GuildChannelView({
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
           <VoiceStage
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
-          participants={voice.participants}
+          participants={voice.participants.map((p) => {
+            const m = guildMembers.find((g) => g.id === p.id);
+            return {
+              ...p,
+              avatarUrl:
+                p.avatarUrl || m?.avatarUrl || (p.id === user?.id ? user.avatarUrl : null),
+              displayName: p.displayName || m?.displayName || p.id,
+            };
+          })}
           localParticipantId={user?.id}
           participantVolumes={voice.participantVolumes}
           onParticipantVolumeChange={voice.setParticipantVolume}
@@ -1083,6 +1124,10 @@ export function GuildChannelView({
           onFocusScreenShare={voice.focusScreenShare}
           participantsDrawerOpen={participantsOpen}
           chatDrawerOpen={chatOpen}
+          chatPanelWidth={voiceChatWidth}
+          onChatPanelWidthChange={setVoiceChatWidth}
+          participantsPanelWidth={voicePartsWidth}
+          onParticipantsPanelWidthChange={setVoicePartsWidth}
           onToggleMute={() => void voice.toggleMute()}
           onToggleDeafen={() => void voice.toggleDeafen()}
           onToggleCamera={() => void voice.toggleCamera()}
@@ -1091,7 +1136,16 @@ export function GuildChannelView({
             leaveVoiceAndMaybeNavigate();
           }}
           onToggleParticipants={() => setParticipantsOpen((v) => !v)}
-          onToggleChat={() => setChatOpen((v) => !v)}
+          onToggleChat={() => {
+            setChatOpen((v) => {
+              const next = !v;
+              if (next && !voiceChatChannelId) {
+                const text = channels.find((c) => c.type === 'TEXT');
+                if (text) setVoiceChatChannelId(text.id);
+              }
+              return next;
+            });
+          }}
           stageOverlay={
             voice.error ? (
               <div className="flex flex-col gap-space-sm px-space-md">
@@ -1102,12 +1156,23 @@ export function GuildChannelView({
           participantsPanel={
             participantsOpen ? (
               <div className="flex flex-col h-full min-h-0">
-                <div className="px-space-md py-space-sm border-b border-surface-container-high">
+                <div className="px-space-md py-space-sm border-b border-surface-container-high flex items-center justify-between gap-2">
                   <p className="font-label-sm text-outline uppercase tracking-wide">Sestekiler</p>
+                  <button
+                    type="button"
+                    className="h-7 w-7 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container"
+                    aria-label="Üyeleri kapat"
+                    onClick={() => setParticipantsOpen(false)}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
                 </div>
                 <ul className="flex-1 overflow-y-auto p-space-sm space-y-space-sm">
                   {voice.participants.map((p) => {
                     const isLocal = p.id === user?.id;
+                    const m = guildMembers.find((g) => g.id === p.id);
+                    const avatarUrl =
+                      p.avatarUrl || m?.avatarUrl || (isLocal ? user?.avatarUrl : null);
                     const vol = voice.participantVolumes[p.id] ?? 100;
                     return (
                       <li
@@ -1115,6 +1180,12 @@ export function GuildChannelView({
                         className="rounded-lg bg-surface-container px-space-sm py-space-sm"
                       >
                         <div className="flex items-center gap-space-sm min-w-0">
+                          <Avatar
+                            displayName={p.displayName}
+                            imageUrl={avatarUrl}
+                            size="sm"
+                            statusRing={false}
+                          />
                           <span className="font-body-sm text-on-surface truncate flex-1">
                             {p.displayName}
                             {isLocal ? ' (sen)' : ''}
@@ -1149,7 +1220,7 @@ export function GuildChannelView({
                     );
                   })}
                 </ul>
-                <div className="border-t border-surface-container-high min-h-0 max-h-[40%] overflow-y-auto">
+                <div className="border-t border-surface-container-high min-h-0 max-h-[45%] overflow-y-auto">
                   <MemberList groups={memberGroups} className="w-full" />
                 </div>
               </div>
@@ -1157,18 +1228,17 @@ export function GuildChannelView({
           }
           chatPanel={
             chatOpen ? (
-              <div className="flex flex-col h-full min-h-0">
-                <div className="flex-1 min-h-0 px-space-md py-space-sm">
-                  <p className="font-body-sm text-on-surface-variant">
-                    Metin sohbeti için bir metin kanalına geçebilirsin — ses bağlantın kopmaz.
-                  </p>
-                </div>
-                <MusicPlayerBar
-                  guildId={guildId}
-                  textChannelId={channels.find((c) => c.type === 'TEXT')?.id ?? null}
-                  variant="chat"
-                />
-              </div>
+              <VoiceSideChat
+                guildId={guildId}
+                textChannels={channels.filter((c) => c.type === 'TEXT')}
+                channelId={voiceChatChannelId}
+                onChannelIdChange={setVoiceChatChannelId}
+                onClose={() => setChatOpen(false)}
+                onOpenDm={() => {
+                  setParticipantsOpen(true);
+                  setDmError('Üye listesinden birine tıklayarak DM aç');
+                }}
+              />
             ) : undefined
           }
         />
@@ -1314,6 +1384,10 @@ export function GuildChannelView({
                 canManageMessages,
                 guildId,
                 developerMode: prefs.developer.developerMode,
+                onAuthorClick: (author) => {
+                  const m = guildMembers.find((g) => g.id === author.id);
+                  setProfileUser(m ?? author);
+                },
                 onEdit: (m) => setEditMessageTarget({ id: m.id, content: m.content }),
                 onDelete: (m) =>
                   setDeleteMessageTarget({

@@ -99,6 +99,16 @@ interface VoiceSessionValue {
 
 const VoiceSessionContext = createContext<VoiceSessionValue | null>(null);
 
+function avatarFromParticipant(p: { metadata?: string }): string | null {
+  if (!p.metadata) return null;
+  try {
+    const parsed = JSON.parse(p.metadata) as { avatarUrl?: string | null };
+    return parsed.avatarUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function participantFromRemote(p: RemoteParticipant): VoiceParticipant {
   const audioPub = p.getTrackPublication(Track.Source.Microphone);
   const cameraPub = p.getTrackPublication(Track.Source.Camera);
@@ -106,6 +116,7 @@ function participantFromRemote(p: RemoteParticipant): VoiceParticipant {
   return {
     id: p.identity,
     displayName: p.name || p.identity,
+    avatarUrl: avatarFromParticipant(p),
     muted: audioPub?.isMuted ?? !p.isMicrophoneEnabled,
     speaking: p.isSpeaking,
     camera: Boolean(cameraPub?.track && !cameraPub.isMuted),
@@ -119,6 +130,7 @@ function participantFromLocal(p: LocalParticipant, muted: boolean): VoicePartici
   return {
     id: p.identity,
     displayName: p.name || p.identity,
+    avatarUrl: avatarFromParticipant(p),
     muted,
     speaking: p.isSpeaking,
     camera: Boolean(cameraPub?.track && !cameraPub.isMuted),

@@ -1,10 +1,11 @@
 'use client';
 
-import type { MemberRoleSummary, PresenceStatus, RoleProfileBgKey } from '@dracord/types';
+import type { MemberRoleSummary, PresenceStatus, RoleProfileBgKey, SocialLinks } from '@dracord/types';
 import { useEffect } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
+import { SocialLinksRow } from './SocialLinksRow';
 import { presenceLabelTr } from '../lib/presence';
 
 export interface UserProfileCardProps {
@@ -21,6 +22,7 @@ export interface UserProfileCardProps {
     status?: PresenceStatus;
     isBot?: boolean;
     roles?: MemberRoleSummary[];
+    socialLinks?: SocialLinks | null;
   };
   actions?: Array<{ id: string; label: string; danger?: boolean; onClick: () => void }>;
 }
@@ -117,6 +119,7 @@ export function UserProfileCard({ open, onClose, user, actions = [] }: UserProfi
                 {user.bio}
               </p>
             )}
+            <SocialLinksRow links={user.socialLinks} className="mt-space-sm" />
             {topRoles.length > 0 && (
               <div className="mt-space-md">
                 <p className="font-label-sm text-outline uppercase tracking-wider mb-space-xs">Roller</p>

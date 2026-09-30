@@ -38,6 +38,12 @@ export type { RoleBadgeProps } from './components/RoleBadge';
 export { UserProfileCard } from './components/UserProfileCard';
 export type { UserProfileCardProps } from './components/UserProfileCard';
 
+export { UserHoverCard } from './components/UserHoverCard';
+export type { UserHoverCardUser } from './components/UserHoverCard';
+
+export { SocialLinksRow, SOCIAL_LINK_KEYS, socialEntries } from './components/SocialLinksRow';
+export type { SocialLinkKey } from './components/SocialLinksRow';
+
 export { MessageList, MessageItem } from './components/MessageList';
 export type { MessageListProps, MessageItemProps, MessageItemActions } from './components/MessageList';
 

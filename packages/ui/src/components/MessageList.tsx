@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageDto } from '@dracord/types';
+import type { MessageDto, PublicUser } from '@dracord/types';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   useCallback,
@@ -16,6 +16,7 @@ import { contentHasSelfMention, tokenizeMessageContent } from '../lib/mentions';
 import { Avatar } from './Avatar';
 import { MessageAttachmentView } from './MessageAttachmentView';
 import { MessageEmbedView } from './MessageEmbedView';
+import { UserHoverCard } from './UserHoverCard';
 
 export interface MessageItemActions {
   currentUserId?: string | null;
@@ -40,6 +41,8 @@ export interface MessageItemActions {
   onReport?: (message: MessageDto) => void;
   /** Geliştirici modu: ID kopyala */
   developerMode?: boolean;
+  /** Yazar adına tıklanınca */
+  onAuthorClick?: (author: PublicUser) => void;
 }
 
 export interface MessageItemProps {
@@ -369,9 +372,16 @@ export function MessageItem({
         ) : (
           <>
             <header className="flex items-baseline gap-space-sm flex-wrap">
-              <span className="font-headline-md text-headline-md hover:underline cursor-pointer" style={author.bannerColor ? { color: author.bannerColor } : { color: '#bd93f9' }}>
-                {author.displayName}
-              </span>
+              <UserHoverCard user={author}>
+                <button
+                  type="button"
+                  className="font-headline-md text-headline-md hover:underline cursor-pointer"
+                  style={author.bannerColor ? { color: author.bannerColor } : { color: '#bd93f9' }}
+                  onClick={() => actions?.onAuthorClick?.(author)}
+                >
+                  {author.displayName}
+                </button>
+              </UserHoverCard>
               <time className="font-label-sm text-label-sm text-outline" dateTime={message.createdAt}>{formatTimestamp(message.createdAt, hour24, locale)}</time>
               {message.updatedAt && <span className="font-label-sm text-label-sm text-outline">(düzenlendi)</span>}
               {message.pinnedAt && (

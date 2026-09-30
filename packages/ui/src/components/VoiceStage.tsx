@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { VolumeSlider } from './VolumeSlider';
@@ -61,7 +61,48 @@ export interface VoiceStageProps {
   stageOverlay?: ReactNode;
   chatPanel?: ReactNode;
   participantsPanel?: ReactNode;
+  /** Desktop sohbet paneli genişliği (px) */
+  chatPanelWidth?: number;
+  onChatPanelWidthChange?: (width: number) => void;
+  /** Desktop kullanıcı paneli genişliği (px) */
+  participantsPanelWidth?: number;
+  onParticipantsPanelWidthChange?: (width: number) => void;
   className?: string;
+}
+
+function usePanelResize(
+  width: number,
+  onChange: ((w: number) => void) | undefined,
+  min: number,
+  max: number,
+) {
+  const startRef = useRef<{ x: number; w: number } | null>(null);
+
+  const onPointerDown = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!onChange) return;
+      e.preventDefault();
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      startRef.current = { x: e.clientX, w: width };
+    },
+    [onChange, width],
+  );
+
+  const onPointerMove = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!onChange || !startRef.current) return;
+      const dx = e.clientX - startRef.current.x;
+      const next = Math.min(max, Math.max(min, startRef.current.w + dx));
+      onChange(next);
+    },
+    [onChange, min, max],
+  );
+
+  const onPointerUp = useCallback(() => {
+    startRef.current = null;
+  }, []);
+
+  return { onPointerDown, onPointerMove, onPointerUp };
 }
 
 export function VoiceStage({
@@ -91,6 +132,10 @@ export function VoiceStage({
   stageOverlay,
   chatPanel,
   participantsPanel,
+  chatPanelWidth = 340,
+  onChatPanelWidthChange,
+  participantsPanelWidth = 288,
+  onParticipantsPanelWidthChange,
   className,
 }: VoiceStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +143,28 @@ export function VoiceStage({
   const screenVideoCbRef = useRef(screenShare?.videoRef);
   screenVideoCbRef.current = screenShare?.videoRef;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [localChatW, setLocalChatW] = useState(chatPanelWidth);
+  const [localPartW, setLocalPartW] = useState(participantsPanelWidth);
+
+  useEffect(() => setLocalChatW(chatPanelWidth), [chatPanelWidth]);
+  useEffect(() => setLocalPartW(participantsPanelWidth), [participantsPanelWidth]);
+
+  const setChatW = useCallback(
+    (w: number) => {
+      setLocalChatW(w);
+      onChatPanelWidthChange?.(w);
+    },
+    [onChatPanelWidthChange],
+  );
+  const setPartW = useCallback(
+    (w: number) => {
+      setLocalPartW(w);
+      onParticipantsPanelWidthChange?.(w);
+    },
+    [onParticipantsPanelWidthChange],
+  );
+
+  const chatResize = usePanelResize(localChatW, setChatW, 240, 560);
 
   useEffect(() => {
     const onFs = () => {
@@ -108,7 +175,6 @@ export function VoiceStage({
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
 
-  // Stabil callback — her render'da yeni ref flicker yaratır
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
     videoElRef.current = el;
     screenVideoCbRef.current?.(el);
@@ -127,7 +193,6 @@ export function VoiceStage({
       }
       await box.requestFullscreen();
     } catch {
-      // iOS / kısıtlı ortam: video üzerinden dene
       const v = videoElRef.current as HTMLVideoElement & {
         webkitEnterFullscreen?: () => void;
       };
@@ -150,6 +215,9 @@ export function VoiceStage({
       ]
     : [];
 
+  const showChat = Boolean(chatDrawerOpen && chatPanel);
+  const showParts = Boolean(participantsDrawerOpen && participantsPanel);
+
   return (
     <div className={cn('flex flex-col flex-1 min-h-0 bg-surface relative', className)}>
       <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-high shrink-0">
@@ -171,19 +239,6 @@ export function VoiceStage({
           )}
           <button
             type="button"
-            onClick={onToggleParticipants}
-            className={cn(
-              'w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-200',
-              participantsDrawerOpen
-                ? 'bg-surface-container-high text-on-surface'
-                : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
-            )}
-            aria-label="Katılımcılar"
-          >
-            <span className="material-symbols-outlined text-[20px]">group</span>
-          </button>
-          <button
-            type="button"
             onClick={onToggleChat}
             className={cn(
               'w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-200',
@@ -192,13 +247,47 @@ export function VoiceStage({
                 : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
             )}
             aria-label="Sohbet"
+            aria-pressed={chatDrawerOpen}
           >
             <span className="material-symbols-outlined text-[20px]">chat</span>
+          </button>
+          <button
+            type="button"
+            onClick={onToggleParticipants}
+            className={cn(
+              'w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-200',
+              participantsDrawerOpen
+                ? 'bg-surface-container-high text-on-surface'
+                : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
+            )}
+            aria-label="Katılımcılar"
+            aria-pressed={participantsDrawerOpen}
+          >
+            <span className="material-symbols-outlined text-[20px]">group</span>
           </button>
         </div>
       </div>
 
       <div className="flex flex-1 min-h-0">
+        {/* Metin solda */}
+        {showChat && (
+          <aside
+            className="relative border-r border-surface-container-high bg-surface-container shrink-0 flex flex-col min-h-0 w-full max-w-[90vw] md:max-w-none"
+            style={{ width: localChatW }}
+          >
+            {chatPanel}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Sohbet genişliği"
+              className="hidden md:block absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-container/40 z-10"
+              onPointerDown={chatResize.onPointerDown}
+              onPointerMove={chatResize.onPointerMove}
+              onPointerUp={chatResize.onPointerUp}
+            />
+          </aside>
+        )}
+
         <div className="flex-1 flex flex-col min-w-0 relative p-space-md gap-space-md">
           {screenShare ? (
             <div
@@ -384,14 +473,36 @@ export function VoiceStage({
           {stageOverlay}
         </div>
 
-        {participantsDrawerOpen && participantsPanel && (
-          <aside className="w-72 border-l border-surface-container-high bg-surface-container-low shrink-0 overflow-y-auto">
+        {/* Kullanıcılar sağda */}
+        {showParts && (
+          <aside
+            className="relative border-l border-surface-container-high bg-surface-container-low shrink-0 overflow-hidden flex flex-col min-h-0 w-full max-w-[90vw] md:max-w-none"
+            style={{ width: localPartW }}
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Üye paneli genişliği"
+              className="hidden md:block absolute top-0 left-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-container/40 z-10"
+              onPointerDown={(e) => {
+                // sola sürükleyince genişlesin
+                const startX = e.clientX;
+                const startW = localPartW;
+                const target = e.target as HTMLElement;
+                target.setPointerCapture?.(e.pointerId);
+                const move = (ev: PointerEvent) => {
+                  const dx = startX - ev.clientX;
+                  setPartW(Math.min(420, Math.max(200, startW + dx)));
+                };
+                const up = () => {
+                  window.removeEventListener('pointermove', move);
+                  window.removeEventListener('pointerup', up);
+                };
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+              }}
+            />
             {participantsPanel}
-          </aside>
-        )}
-        {chatDrawerOpen && chatPanel && (
-          <aside className="w-80 border-l border-surface-container-high bg-surface-container shrink-0 flex flex-col min-h-0">
-            {chatPanel}
           </aside>
         )}
       </div>

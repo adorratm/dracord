@@ -7,6 +7,14 @@ export interface SocialLinks {
   twitter?: string;
   github?: string;
   discord?: string;
+  youtube?: string;
+  instagram?: string;
+  twitch?: string;
+  linkedin?: string;
+  steam?: string;
+  spotify?: string;
+  tiktok?: string;
+  facebook?: string;
 }
 
 export interface PublicUser {

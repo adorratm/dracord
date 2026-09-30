@@ -1,11 +1,12 @@
 'use client';
 
-import type { PresenceStatus } from '@dracord/types';
+import type { PresenceStatus, SocialLinks, MemberRoleSummary } from '@dracord/types';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
+import { UserHoverCard } from './UserHoverCard';
 
 export interface MemberListAction {
   id: string;
@@ -17,13 +18,20 @@ export interface MemberListAction {
 export interface MemberListMember {
   id: string;
   displayName: string;
+  username?: string;
   avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  bannerColor?: string | null;
+  bio?: string | null;
   status: PresenceStatus;
+  customStatus?: string | null;
+  socialLinks?: SocialLinks | null;
   roleColor?: string;
   subtitle?: string;
   isBot?: boolean;
   /** Animasyonlu rol rozetleri */
   badges?: Array<{ id: string; badgeKey?: string | null; color?: string; label?: string }>;
+  roles?: MemberRoleSummary[];
   onClick?: () => void;
   /** @deprecated Tek aksiyon — yerine contextActions kullan */
   onContextMenu?: () => void;
@@ -145,56 +153,73 @@ export function MemberList({ groups, className }: MemberListProps) {
               const hasMenu = resolveActions(member).length > 0;
               return (
                 <li key={member.id}>
-                  <button
-                    type="button"
-                    onClick={member.onClick}
-                    onContextMenu={(e) => openMenu(e, member)}
-                    aria-haspopup={hasMenu ? 'menu' : undefined}
-                    aria-expanded={menu?.memberId === member.id}
-                    aria-controls={menu?.memberId === member.id ? menuId : undefined}
-                    className={cn(
-                      'w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group',
-                      menu?.memberId === member.id && 'bg-surface-container',
-                    )}
+                  <UserHoverCard
+                    user={{
+                      id: member.id,
+                      displayName: member.displayName,
+                      username: member.username,
+                      avatarUrl: member.avatarUrl,
+                      bannerUrl: member.bannerUrl,
+                      bannerColor: member.bannerColor,
+                      bio: member.bio,
+                      status: member.status,
+                      customStatus: member.customStatus,
+                      isBot: member.isBot,
+                      socialLinks: member.socialLinks,
+                      roles: member.roles,
+                    }}
                   >
-                    <Avatar
-                      displayName={member.displayName}
-                      imageUrl={member.avatarUrl}
-                      size="md"
-                      status={member.status}
-                    />
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className="font-body-sm text-body-sm truncate"
-                          style={member.roleColor ? { color: member.roleColor } : undefined}
-                        >
-                          {member.displayName}
+                    <button
+                      type="button"
+                      onClick={member.onClick}
+                      onContextMenu={(e) => openMenu(e, member)}
+                      aria-haspopup={hasMenu ? 'menu' : undefined}
+                      aria-expanded={menu?.memberId === member.id}
+                      aria-controls={menu?.memberId === member.id ? menuId : undefined}
+                      className={cn(
+                        'w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group',
+                        menu?.memberId === member.id && 'bg-surface-container',
+                      )}
+                    >
+                      <Avatar
+                        displayName={member.displayName}
+                        imageUrl={member.avatarUrl}
+                        size="md"
+                        status={member.status}
+                      />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="font-body-sm text-body-sm truncate"
+                            style={member.roleColor ? { color: member.roleColor } : undefined}
+                          >
+                            {member.displayName}
+                          </span>
+                          {member.isBot && (
+                            <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
+                              BOT
+                            </span>
+                          )}
+                          {(member.badges ?? [])
+                            .filter((b) => b.badgeKey && b.badgeKey !== 'none')
+                            .slice(0, 2)
+                            .map((b) => (
+                              <RoleBadge
+                                key={b.id}
+                                badgeKey={b.badgeKey}
+                                color={b.color}
+                                size="sm"
+                              />
+                            ))}
                         </span>
-                        {member.isBot && (
-                          <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
-                            BOT
+                        {member.subtitle && (
+                          <span className="font-label-sm text-label-sm text-outline truncate">
+                            {member.subtitle}
                           </span>
                         )}
-                        {(member.badges ?? [])
-                          .filter((b) => b.badgeKey && b.badgeKey !== 'none')
-                          .slice(0, 2)
-                          .map((b) => (
-                            <RoleBadge
-                              key={b.id}
-                              badgeKey={b.badgeKey}
-                              color={b.color}
-                              size="sm"
-                            />
-                          ))}
-                      </span>
-                      {member.subtitle && (
-                        <span className="font-label-sm text-label-sm text-outline truncate">
-                          {member.subtitle}
-                        </span>
-                      )}
-                    </div>
-                  </button>
+                      </div>
+                    </button>
+                  </UserHoverCard>
                 </li>
               );
             })}

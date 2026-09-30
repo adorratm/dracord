@@ -42,6 +42,10 @@ export class VoiceService {
     const token = new AccessToken(apiKey, apiSecret, {
       identity: userId,
       name: user.displayName,
+      metadata: JSON.stringify({
+        avatarUrl: user.avatarUrl ?? null,
+        username: user.username,
+      }),
     });
     token.addGrant({
       roomJoin: true,

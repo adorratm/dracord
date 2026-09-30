@@ -1,5 +1,7 @@
 'use client';
 
+import type { SocialLinks } from '@dracord/types';
+import { SOCIAL_LINK_KEYS, type SocialLinkKey } from '@dracord/ui';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAccessToken, getRefreshToken, persistSession } from '@/lib/storage';
@@ -13,6 +15,27 @@ function normalizeUsername(raw: string): string {
     .slice(0, 32);
 }
 
+const SOCIAL_LABELS: Record<SocialLinkKey, string> = {
+  website: 'Website',
+  twitter: 'X / Twitter',
+  github: 'GitHub',
+  discord: 'Discord',
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  twitch: 'Twitch',
+  linkedin: 'LinkedIn',
+  steam: 'Steam',
+  spotify: 'Spotify',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+};
+
+const emptySocial = (): Record<SocialLinkKey, string> => {
+  const o = {} as Record<SocialLinkKey, string>;
+  for (const k of SOCIAL_LINK_KEYS) o[k] = '';
+  return o;
+};
+
 export default function ProfileSettingsPage() {
   const { user, client, setUser } = useAuth();
   const [displayName, setDisplayName] = useState('');
@@ -21,9 +44,7 @@ export default function ProfileSettingsPage() {
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [bio, setBio] = useState('');
   const [accentColor, setAccentColor] = useState('#bd93f9');
-  const [website, setWebsite] = useState('');
-  const [github, setGithub] = useState('');
-  const [twitter, setTwitter] = useState('');
+  const [social, setSocial] = useState<Record<SocialLinkKey, string>>(emptySocial);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +56,12 @@ export default function ProfileSettingsPage() {
     setUsernameAvailable(null);
     setBio(user.bio ?? '');
     setAccentColor(user.accentColor ?? user.bannerColor ?? '#bd93f9');
-    setWebsite(user.socialLinks?.website ?? '');
-    setGithub(user.socialLinks?.github ?? '');
-    setTwitter(user.socialLinks?.twitter ?? '');
+    const next = emptySocial();
+    const links = user.socialLinks ?? {};
+    for (const k of SOCIAL_LINK_KEYS) {
+      next[k] = links[k] ?? '';
+    }
+    setSocial(next);
   }, [user]);
 
   useEffect(() => {
@@ -81,16 +105,18 @@ export default function ProfileSettingsPage() {
         throw new Error('Bu kullanıcı adı alınmış');
       }
 
+      const socialLinks: SocialLinks = {};
+      for (const k of SOCIAL_LINK_KEYS) {
+        const v = social[k]?.trim();
+        if (v) socialLinks[k] = v;
+      }
+
       let updated = await client.updateProfile({
         displayName,
         bio,
         accentColor,
         bannerColor: accentColor,
-        socialLinks: {
-          website: website || undefined,
-          github: github || undefined,
-          twitter: twitter || undefined,
-        },
+        socialLinks,
       });
 
       if (usernameChanged) {
@@ -263,31 +289,21 @@ export default function ProfileSettingsPage() {
         />
       </label>
 
-      <div className="grid gap-space-md sm:grid-cols-3">
-        <label className="flex flex-col gap-space-xs">
-          <span className="font-label-sm text-on-surface-variant">Website</span>
-          <input
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-space-xs">
-          <span className="font-label-sm text-on-surface-variant">GitHub</span>
-          <input
-            value={github}
-            onChange={(e) => setGithub(e.target.value)}
-            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-space-xs">
-          <span className="font-label-sm text-on-surface-variant">Twitter / X</span>
-          <input
-            value={twitter}
-            onChange={(e) => setTwitter(e.target.value)}
-            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
-          />
-        </label>
+      <div>
+        <p className="font-label-sm text-on-surface-variant mb-space-sm">Sosyal bağlantılar</p>
+        <div className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-3">
+          {SOCIAL_LINK_KEYS.map((key) => (
+            <label key={key} className="flex flex-col gap-space-xs">
+              <span className="font-label-sm text-on-surface-variant">{SOCIAL_LABELS[key]}</span>
+              <input
+                value={social[key]}
+                onChange={(e) => setSocial((prev) => ({ ...prev, [key]: e.target.value }))}
+                placeholder="URL veya kullanıcı adı"
+                className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
       {message && <p className="text-dracula-green font-body-sm">{message}</p>}
