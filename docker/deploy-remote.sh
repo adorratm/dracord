@@ -20,6 +20,13 @@ if grep -qE 'JWT_ACCESS_SECRET=change-me|LIVEKIT_API_SECRET=secret_dracord_livek
   exit 1
 fi
 
+# YouTube müzik botu: cookie yoksa bot duvarı kaçınılmaz
+if ! grep -qE '^YTDLP_COOKIES_B64=.+' .env \
+  && { [[ ! -f /opt/dracord/secrets/youtube-cookies.txt ]] || ! grep -q $'\t' /opt/dracord/secrets/youtube-cookies.txt 2>/dev/null; }; then
+  echo "==> UYARI: YTDLP_COOKIES_B64 / youtube-cookies.txt yok — YouTube çalma bot check ile düşer." >&2
+  echo "    PC: scripts/encode-youtube-cookies.ps1 && scripts/push-youtube-cookies.ps1" >&2
+fi
+
 if [[ "${DRACORD_SKIP_GIT:-0}" != "1" ]]; then
   echo "==> Sync $DEPLOY_PATH (branch=$BRANCH)"
   git fetch --prune origin

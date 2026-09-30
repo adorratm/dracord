@@ -9,7 +9,7 @@ import {
 import { AudioEncoding } from '@livekit/rtc-ffi-bindings';
 import type { MusicQueueState, MusicTrack } from '@dracord/types';
 import * as api from './api';
-import { fetchMeta, logProcessLines, openPcmStream } from './ytdlp';
+import { cookiesStatus, fetchMeta, logProcessLines, openPcmStream } from './ytdlp';
 
 const SAMPLE_RATE = 48000;
 const CHANNELS = 1;
@@ -225,12 +225,14 @@ export class MusicPlayer {
         .catch((e) => console.warn('track meta update failed', e));
     } catch (e) {
       console.error('resolve failed', e);
+      let msg = (e as Error).message.slice(0, 160);
+      if (!cookiesStatus().loaded && /not a bot|Sign in|cookies/i.test(msg)) {
+        msg =
+          'YouTube cookie yapılandırılmamış. Sunucu .env → YTDLP_COOKIES_B64 ekle (scripts/encode-youtube-cookies.ps1), music-bot recreate.';
+      }
       if (session.textChannelId) {
         await api
-          .announce(
-            session.textChannelId,
-            `❌ Çalınamadı: **${track.title}** — ${(e as Error).message.slice(0, 120)}`,
-          )
+          .announce(session.textChannelId, `❌ Çalınamadı: **${track.title}** — ${msg}`)
           .catch(() => undefined);
       }
       await api.trackEnded({
