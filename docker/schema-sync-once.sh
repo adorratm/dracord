@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# One-shot TypeORM schema sync for empty prod DB (creates accounts/users/…).
-# Usage on server:
+# Create TypeORM tables on an empty prod Postgres (bypasses PgBouncer — DDL needs direct PG).
+#
+# Why .env NODE_ENV=development alone failed:
+#   docker-compose.prod.yml used to force NODE_ENV=production on the api service,
+#   and DATABASE_URL points at pgbouncer (schema sync/DDL often fails there).
+#
+# Usage:
 #   bash docker/schema-sync-once.sh
-# After success, remove DATABASE_SYNCHRONIZE from .env (script does this).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,6 +18,17 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# Load secrets without printing
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
+
+PGUSER="${POSTGRES_USER:-dracord}"
+PGDB="${POSTGRES_DB:-dracord}"
+PGPASS="${POSTGRES_PASSWORD:-dracord}"
+DIRECT_URL="postgres://${PGUSER}:${PGPASS}@postgres:5432/${PGDB}"
+
 COMPOSE=(docker compose
   -f docker/docker-compose.yml
   -f docker/docker-compose.zd.yml
@@ -21,35 +36,41 @@ COMPOSE=(docker compose
   --env-file "$ENV_FILE"
 )
 
-echo "==> Enable DATABASE_SYNCHRONIZE=true (temporary)"
-if grep -q '^DATABASE_SYNCHRONIZE=' "$ENV_FILE"; then
-  sed -i.bak 's/^DATABASE_SYNCHRONIZE=.*/DATABASE_SYNCHRONIZE=true/' "$ENV_FILE"
+echo "==> One-shot API boot: NODE_ENV=development + direct postgres (not pgbouncer)"
+# run blocks until we stop it; timeout after sync window
+set +e
+timeout 45 "${COMPOSE[@]}" run --rm --no-deps \
+  -e NODE_ENV=development \
+  -e DATABASE_SYNCHRONIZE=true \
+  -e DATABASE_URL="$DIRECT_URL" \
+  api
+rc=$?
+set -e
+echo "    run exit=$rc (124=timeout expected after sync)"
+
+echo "==> Tables:"
+"${COMPOSE[@]}" exec -T postgres \
+  psql -U "$PGUSER" -d "$PGDB" -c '\dt' | head -50
+
+if ! "${COMPOSE[@]}" exec -T postgres \
+  psql -U "$PGUSER" -d "$PGDB" -tAc "SELECT to_regclass('public.accounts');" | grep -q accounts; then
+  echo "!! accounts table still missing — check api logs above" >&2
+  exit 1
+fi
+
+echo "==> Restore production api replicas"
+# Ensure .env is production again
+if grep -q '^NODE_ENV=' "$ENV_FILE"; then
+  sed -i.bak 's/^NODE_ENV=.*/NODE_ENV=production/' "$ENV_FILE"
 else
-  printf '\nDATABASE_SYNCHRONIZE=true\n' >> "$ENV_FILE"
+  echo 'NODE_ENV=production' >> "$ENV_FILE"
+fi
+if grep -q '^DATABASE_SYNCHRONIZE=' "$ENV_FILE"; then
+  sed -i.bak 's/^DATABASE_SYNCHRONIZE=.*/DATABASE_SYNCHRONIZE=false/' "$ENV_FILE"
+else
+  echo 'DATABASE_SYNCHRONIZE=false' >> "$ENV_FILE"
 fi
 
 REPLICAS="${DRACORD_REPLICAS:-2}"
-echo "==> Recreate api (schema sync on boot)"
 "${COMPOSE[@]}" up -d --no-deps --force-recreate --scale "api=$REPLICAS" api
-
-echo "==> Wait for healthy"
-for _ in $(seq 1 60); do
-  h="$("${COMPOSE[@]}" ps api 2>/dev/null | grep -c '(healthy)' || true)"
-  if [[ "${h:-0}" -ge 1 ]]; then
-    break
-  fi
-  sleep 2
-done
-
-echo "==> Verify accounts table"
-"${COMPOSE[@]}" exec -T postgres \
-  psql -U "${POSTGRES_USER:-dracord}" -d "${POSTGRES_DB:-dracord}" \
-  -c '\dt accounts' || \
-"${COMPOSE[@]}" exec -T postgres \
-  psql -U postgres -d dracord -c '\dt accounts' || true
-
-echo "==> Disable DATABASE_SYNCHRONIZE"
-sed -i.bak 's/^DATABASE_SYNCHRONIZE=.*/DATABASE_SYNCHRONIZE=false/' "$ENV_FILE"
-"${COMPOSE[@]}" up -d --no-deps --force-recreate --scale "api=$REPLICAS" api
-
-echo "Done. Google login should work now."
+echo "Done. Retry Google login."
