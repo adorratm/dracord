@@ -1,26 +1,15 @@
 #!/usr/bin/env node
 /**
- * Ev PC’sinde çalıştır — Hetzner’deki music-bot YouTube’u buradan çözer.
+ * Ev PC YouTube relay — Hetzner hic YouTube'a dokunmaz.
+ * /resolve → metadata + kisa omurlu /audio/<token>
+ * /audio/<token> → yt-dlp ses baytlari (ev IP + cookie)
  *
- * Kurulum (Windows):
- *   1) yt-dlp + ffmpeg PATH’te olsun (winget install yt-dlp.yt-dlp)
- *   2) youtube-cookies.txt proje kökünde (encode script’ten önce export)
- *   3) node scripts/yt-resolve-relay.mjs
- *   4) cloudflared tunnel (veya port forward):
- *        cloudflared tunnel --url http://127.0.0.1:8791
- *   5) Sunucu .env:
- *        YTDLP_RELAY_URL=https://xxxx.trycloudflare.com
- *        YTDLP_RELAY_SECRET=uzun-rastgele-string
- *      music-bot recreate
- *
- * Env:
- *   YTDLP_RELAY_PORT=8791
- *   YTDLP_RELAY_SECRET=...
- *   YTDLP_COOKIES_FILE=./youtube-cookies.txt
- *   YTDLP_PATH=yt-dlp
+ *   powershell -ExecutionPolicy Bypass -File scripts/start-yt-relay.ps1
+ *   cloudflared tunnel --url http://127.0.0.1:8791
  */
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -30,6 +19,17 @@ const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
 const COOKIES =
   process.env.YTDLP_COOKIES_FILE ||
   resolve(process.cwd(), 'youtube-cookies.txt');
+const TOKEN_TTL_MS = 20 * 60 * 1000;
+
+/** @type {Map<string, { url: string; expires: number }>} */
+const tokens = new Map();
+
+function purgeTokens() {
+  const now = Date.now();
+  for (const [k, v] of tokens) {
+    if (v.expires < now) tokens.delete(k);
+  }
+}
 
 function runYtdlp(args) {
   return new Promise((resolvePromise) => {
@@ -47,50 +47,44 @@ function runYtdlp(args) {
   });
 }
 
+/** PC'de kanitlanan kombinasyon: cookies + impersonate; extractor-args zorlama */
 function buildArgs(extra, url) {
   const args = ['--no-playlist', '--no-warnings', ...extra];
-  if (existsSync(COOKIES)) {
-    args.push('--cookies', COOKIES);
+  if (existsSync(COOKIES)) args.push('--cookies', COOKIES);
+  // Varsayilan impersonate acik (YTDLP_IMPERSONATE=0 ile kapat)
+  if (process.env.YTDLP_IMPERSONATE !== '0') {
+    args.push('--impersonate', process.env.YTDLP_IMPERSONATE_BROWSER || 'chrome');
   }
   const extractor = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
   if (extractor) args.push('--extractor-args', extractor);
-  if (process.env.YTDLP_IMPERSONATE === '1') {
-    args.push('--impersonate', process.env.YTDLP_IMPERSONATE_BROWSER || 'chrome');
-  }
   args.push(url);
   return args;
 }
 
-async function resolveUrl(url) {
+function summarizeErr(err) {
+  const line = (err || '')
+    .split(/\r?\n/)
+    .reverse()
+    .find((l) => /ERROR:|Sign in|bot|reload/i.test(l));
+  return (line || err || 'yt-dlp failed').replace(/^ERROR:\s*/i, '').slice(0, 240);
+}
+
+async function resolveMeta(url) {
   const metaRes = await runYtdlp(buildArgs(['-j', '-f', 'bestaudio/best'], url));
   if (metaRes.code !== 0 || !metaRes.out.trim()) {
-    const msg = (metaRes.err || metaRes.out || 'yt-dlp failed').split(/\r?\n/).reverse().find((l) => /ERROR:|Sign in|bot/i.test(l)) || metaRes.err.slice(0, 200);
-    throw new Error(msg.replace(/^ERROR:\s*/i, '').slice(0, 240));
+    throw new Error(summarizeErr(metaRes.err));
   }
   const j = JSON.parse(metaRes.out.trim().split('\n')[0]);
-  let streamUrl = typeof j.url === 'string' ? j.url : null;
-  if (!streamUrl && Array.isArray(j.requested_formats)) {
-    const audio = j.requested_formats.find((f) => f.acodec && f.acodec !== 'none' && f.url);
-    streamUrl = audio?.url || j.requested_formats[0]?.url || null;
-  }
-  if (!streamUrl && Array.isArray(j.formats)) {
-    const audio = [...j.formats]
-      .reverse()
-      .find((f) => f.url && f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'));
-    streamUrl = audio?.url || null;
-  }
-  if (!streamUrl) {
-    const g = await runYtdlp(buildArgs(['-g', '-f', 'bestaudio/best'], url));
-    streamUrl = g.out.trim().split(/\r?\n/).filter(Boolean).pop() || null;
-  }
-  if (!streamUrl) throw new Error('stream URL alınamadı');
-
+  purgeTokens();
+  const token = randomBytes(16).toString('hex');
+  tokens.set(token, { url, expires: Date.now() + TOKEN_TTL_MS });
   return {
     title: j.title || 'Unknown',
     webpage_url: j.webpage_url || url,
     duration: typeof j.duration === 'number' ? j.duration : undefined,
     thumbnail: j.thumbnail || j.thumbnails?.at?.(-1)?.url,
-    stream_url: streamUrl,
+    // Sunucu bu yolu ceker; YouTube CDN'ye Hetzner gitmez
+    stream_path: `/audio/${token}`,
   };
 }
 
@@ -114,16 +108,66 @@ function authOk(req) {
   const h = req.headers.authorization || '';
   const bearer = h.startsWith('Bearer ') ? h.slice(7) : '';
   const alt = req.headers['x-relay-secret'] || '';
-  return bearer === SECRET || alt === SECRET;
+  const q = new URL(req.url || '/', 'http://127.0.0.1').searchParams.get('secret') || '';
+  return bearer === SECRET || alt === SECRET || q === SECRET;
+}
+
+function pipeAudio(res, sourceUrl) {
+  const args = buildArgs(['-f', 'bestaudio/best', '-o', '-', '--quiet'], sourceUrl);
+  const child = spawn(YTDLP, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  res.writeHead(200, {
+    'Content-Type': 'application/octet-stream',
+    'Cache-Control': 'no-store',
+  });
+  child.stdout.pipe(res);
+  let err = '';
+  child.stderr.on('data', (d) => {
+    err += d.toString();
+  });
+  const kill = () => {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      /* ignore */
+    }
+  };
+  res.on('close', kill);
+  child.on('close', (code) => {
+    if (code && code !== 0 && !res.headersSent) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: summarizeErr(err) }));
+    } else if (!res.writableEnded) {
+      res.end();
+    }
+  });
+  child.on('error', (e) => {
+    if (!res.headersSent) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: e.message }));
+    } else {
+      res.destroy();
+    }
+  });
 }
 
 const server = createServer(async (req, res) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (req.method === 'GET' && req.url === '/health') {
-    res.end(JSON.stringify({ ok: true, cookies: existsSync(COOKIES) }));
+  const u = new URL(req.url || '/', `http://127.0.0.1:${PORT}`);
+
+  if (req.method === 'GET' && u.pathname === '/health') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(
+      JSON.stringify({
+        ok: true,
+        cookies: existsSync(COOKIES),
+        tokens: tokens.size,
+        mode: 'audio-proxy',
+      }),
+    );
     return;
   }
-  if (req.method === 'POST' && (req.url === '/resolve' || req.url === '/')) {
+
+  if (req.method === 'POST' && (u.pathname === '/resolve' || u.pathname === '/')) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     if (!authOk(req)) {
       res.statusCode = 401;
       res.end(JSON.stringify({ error: 'unauthorized' }));
@@ -137,8 +181,8 @@ const server = createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'url required' }));
         return;
       }
-      const data = await resolveUrl(url);
-      console.log(`[ok] ${data.title}`);
+      const data = await resolveMeta(url);
+      console.log(`[ok] ${data.title} → ${data.stream_path}`);
       res.end(JSON.stringify(data));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -148,12 +192,36 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+
+  const audioMatch = u.pathname.match(/^\/audio\/([a-f0-9]+)$/i);
+  if (req.method === 'GET' && audioMatch) {
+    if (!authOk(req)) {
+      res.statusCode = 401;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    purgeTokens();
+    const entry = tokens.get(audioMatch[1]);
+    if (!entry) {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ error: 'token expired or unknown — resolve again' }));
+      return;
+    }
+    console.log(`[audio] ${entry.url}`);
+    pipeAudio(res, entry.url);
+    return;
+  }
+
   res.statusCode = 404;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify({ error: 'not found' }));
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`yt-resolve-relay http://127.0.0.1:${PORT}`);
-  console.log(`cookies: ${existsSync(COOKIES) ? COOKIES : 'MISSING — export youtube-cookies.txt'}`);
-  if (!SECRET) console.warn('UYARI: YTDLP_RELAY_SECRET boş — herkese açık kalır');
+  console.log(`yt-resolve-relay http://127.0.0.1:${PORT} (audio-proxy mode)`);
+  console.log(`cookies: ${existsSync(COOKIES) ? COOKIES : 'MISSING'}`);
+  console.log(`yt-dlp: ${YTDLP}`);
+  if (!SECRET) console.warn('UYARI: YTDLP_RELAY_SECRET bos');
 });

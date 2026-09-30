@@ -347,8 +347,18 @@ async function fetchMetaViaRelay(source: string): Promise<YtMeta> {
   if (!res.ok) {
     throw new Error(String(body.error || text || `relay HTTP ${res.status}`).slice(0, 200));
   }
-  const streamUrl = typeof body.stream_url === 'string' ? body.stream_url : null;
-  if (!streamUrl) throw new Error('relay stream_url yok');
+
+  // Yeni: stream_path (ev proxy). Eski: stream_url (CDN — Hetzner'de kırılır)
+  const streamPath = typeof body.stream_path === 'string' ? body.stream_path : null;
+  let streamUrl: string | null = null;
+  if (streamPath) {
+    const q = secret ? `?secret=${encodeURIComponent(secret)}` : '';
+    streamUrl = `${base}${streamPath.startsWith('/') ? '' : '/'}${streamPath}${q}`;
+  } else if (typeof body.stream_url === 'string') {
+    streamUrl = body.stream_url;
+  }
+  if (!streamUrl) throw new Error('relay stream_path/stream_url yok — ev relay guncelle');
+
   workingStreamUrl = streamUrl;
   workingExtractorArgs = null;
   return {
@@ -360,21 +370,30 @@ async function fetchMetaViaRelay(source: string): Promise<YtMeta> {
   };
 }
 
-/** Metadata (JSON) — önce relay (ev IP), yoksa yerel yt-dlp + fallback’ler */
+function looksLikeYoutube(source: string): boolean {
+  return /youtube\.com|youtu\.be|youtubei/i.test(source) || /^[a-zA-Z0-9_-]{11}$/.test(source.trim());
+}
+
+/** Metadata — relay varsa YouTube icin yereli deneme (yaniltici bot hatasi olmasin) */
 export async function fetchMeta(source: string): Promise<YtMeta> {
   ensureCookiesFile();
   workingStreamUrl = null;
   const proxy = resolveProxy();
   const relay = relayBase();
 
-  // Ev PC relay: Hetzner bot duvarını atlar (CDN URL sunucuda çalınır)
   if (relay) {
     try {
       const meta = await fetchMetaViaRelay(source);
-      console.log(`[yt-dlp] resolved via relay (${relay})`);
+      console.log(`[yt-dlp] resolved via relay audio-proxy (${relay})`);
       return meta;
     } catch (e) {
-      console.warn(`[yt-dlp] relay fail: ${e instanceof Error ? e.message : e}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[yt-dlp] relay fail: ${msg}`);
+      if (looksLikeYoutube(source)) {
+        throw new Error(
+          `Ev relay basarisiz: ${msg.slice(0, 120)} — PC'de start-yt-relay + cloudflared acik mi? URL/secret .env'de dogru mu?`,
+        );
+      }
     }
   }
 
@@ -413,11 +432,9 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
       ' — cookie dosyasında LOGIN_INFO/PSID yok; incognito + robots.txt ile yeniden export et.';
   } else if (c.loaded && !proxy && !relay) {
     lastErr +=
-      ' — Hetzner IP bot. YTDLP_PROXY (residential) veya ev PC relay: scripts/start-yt-relay.ps1 + YTDLP_RELAY_URL.';
+      ' — Hetzner YouTube engelli. Ev relay (scripts/start-yt-relay.ps1) veya YTDLP_PROXY gerekli.';
   } else if (c.loaded && proxy) {
     lastErr += ' — cookie+proxy ile de reddedildi; proxy residential mi / cookie yenile.';
-  } else if (c.loaded && relay) {
-    lastErr += ' — yerel + relay başarısız; evde relay çalışıyor mu / cookie taze mi bak.';
   }
 
   throw new Error(lastErr);

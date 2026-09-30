@@ -230,9 +230,9 @@ export class MusicPlayer {
         if (!cookiesStatus().loaded) {
           msg =
             'YouTube cookie yok. .env → YTDLP_COOKIES_B64 (scripts/encode-youtube-cookies.ps1), music-bot recreate.';
-        } else if (!process.env.YTDLP_PROXY?.trim() && !process.env.YTDLP_RELAY_URL?.trim()) {
+        } else if (!process.env.YTDLP_RELAY_URL?.trim() && !process.env.YTDLP_PROXY?.trim()) {
           msg =
-            'Hetzner IP bot. YTDLP_PROXY=... veya ev PC: scripts/start-yt-relay.ps1 + YTDLP_RELAY_URL';
+            'Hetzner YouTube engelli. Ev PC relay (start-yt-relay.ps1 + cloudflared) veya residential YTDLP_PROXY sart.';
         }
       }
       if (session.textChannelId) {
