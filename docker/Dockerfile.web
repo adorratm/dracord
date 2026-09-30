@@ -38,6 +38,8 @@ FROM node:current-alpine3.23 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+# Next binds to HOSTNAME; Docker sets it to the container id → 127.0.0.1 healthchecks fail.
+ENV HOSTNAME=0.0.0.0
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /app/apps/web/public ./apps/web/public

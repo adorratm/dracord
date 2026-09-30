@@ -1,14 +1,12 @@
 # Nginx vhost example for Dracord on a shared Hetzner host.
 #
-# IMPORTANT — on this host public traffic is usually Docker Nginx
+# IMPORTANT — on this host public traffic is Docker Nginx
 #   (`ttengamesstudio-nginx`), NOT systemd `nginx.service`.
-#   Host `/etc/nginx/sites-enabled` may only have leftover portfolio/hydrorage
-#   stubs; `systemctl reload nginx` will fail if the unit is inactive — that is OK.
-#   Site routing lives in:
-#     /opt/ttengamesstudio/docker/nginx/…  and container conf.d/
-#   Recover with (from kiliccoffee/TTEN deploy tree):
-#     bash /opt/kiliccofferoaster/deploy/recover-nginx.sh
-#     bash /opt/kiliccofferoaster/deploy/sync-tten-nginx.sh https
+#   Primary install path:
+#     bash docker/sync-dracord-nginx.sh http
+#     # certbot for dracord.com.tr (+ api/admin/rtc/www)
+#     bash docker/sync-dracord-nginx.sh https
+#   Without that vhost, https://dracord.com.tr falls through to TTEN default_server.
 #
 # IMPORTANT — other sites must stay untouched:
 #   - Do NOT replace the default server or existing site confs

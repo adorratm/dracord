@@ -1,10 +1,11 @@
-# Production override for Hetzner (Nginx terminates TLS on host).
+# Production override for Hetzner (Nginx terminates TLS on host / Docker Nginx).
 # Does NOT bind 80/443 — other sites keep their Nginx vhosts.
 #
 # Replicas: api/web/admin MUST NOT publish host ports (all would fight for :14000).
 # `edge` (Caddy) listens on 127.0.0.1:{13000,13001,14000} and LB's to Docker DNS.
+# Also joins TTEN docker network as `dracord-edge` for ttengamesstudio-nginx.
 #
-# Host Nginx → 127.0.0.1:13000/13001/14000/17880 → edge / livekit
+# Public routing: bash docker/sync-dracord-nginx.sh http|https
 
 services:
   postgres:
@@ -35,6 +36,11 @@ services:
       - "127.0.0.1:17880:7880"
       - "7881:7881"
       - "7882:7882/udp"
+    networks:
+      public:
+      tten_edge:
+        aliases:
+          - dracord-livekit
 
   # No host ports — scaled replicas share Docker DNS name only
   api:
@@ -56,6 +62,8 @@ services:
     ports: !reset []
     expose:
       - "3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
@@ -67,6 +75,8 @@ services:
     ports: !reset []
     expose:
       - "3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
     build:
       context: ..
       dockerfile: docker/Dockerfile.admin
@@ -74,8 +84,6 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dracord.com.tr}
 
   # Loopback edge LB — one listener per port, upstream = all replicas
-  # depends_on: service_started (not healthy) so `up --no-deps edge` stays simple;
-  # rolling-deploy waits for healthy replicas before starting edge.
   edge:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -90,9 +98,18 @@ services:
     volumes:
       - ./Caddyfile.edge:/etc/caddy/Caddyfile:ro
     networks:
-      - public
+      public:
+      tten_edge:
+        aliases:
+          - dracord-edge
 
-  # Host Nginx owns 80/443 — never start Compose Caddy profile
+  # Host/Docker Nginx owns 80/443 — never start Compose Caddy profile
   caddy:
     profiles: ["caddy-disabled"]
     ports: !reset []
+
+networks:
+  # Shared with ttengamesstudio-nginx (kiliccoffee / portfolio pattern)
+  tten_edge:
+    name: ${DRACORD_TTEN_NETWORK:-ttengamesstudio_ttengamesstudio-network}
+    external: true

@@ -69,4 +69,14 @@ curl -fsS -o /dev/null -w "web %{http_code}\n" http://127.0.0.1:13000/health || 
 curl -fsS -o /dev/null -w "api %{http_code}\n" http://127.0.0.1:14000/health/ready || true
 curl -fsS -o /dev/null -w "admin %{http_code}\n" http://127.0.0.1:13001/health || true
 
+# Public routing is Docker Nginx — ensure edge is on TTEN network + vhost present
+if [[ "${DRACORD_SYNC_NGINX:-1}" == "1" ]]; then
+  echo "==> Sync Dracord → ttengamesstudio-nginx"
+  if docker exec ttengamesstudio-nginx test -f /etc/letsencrypt/live/dracord.com.tr/fullchain.pem 2>/dev/null; then
+    bash docker/sync-dracord-nginx.sh https || bash docker/sync-dracord-nginx.sh http || true
+  else
+    bash docker/sync-dracord-nginx.sh http || true
+  fi
+fi
+
 echo "==> Deploy finished"
