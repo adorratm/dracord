@@ -7,6 +7,7 @@ import {
   SettingsNote,
 } from '@/components/settings/SettingsControls';
 import { useUserPreferences } from '@/lib/user-preferences';
+import Link from 'next/link';
 
 export default function NotificationsSettingsPage() {
   const { prefs, setSection } = useUserPreferences();
@@ -31,8 +32,8 @@ export default function NotificationsSettingsPage() {
     >
       <SettingsSection title="Masaüstü">
         <SettingsToggle
-          label="Masaüstü bildirimleri"
-          description="Sekme arka plandayken sistem bildirimi göster."
+          label="Tarayıcı / masaüstü bildirimleri"
+          description="Sekme arka plandayken sistem bildirimi göster. İlk açılışta tarayıcı izni istenir."
           checked={prefs.notifications.desktopEnabled}
           onChange={(v) => void toggleDesktop(v)}
         />
@@ -50,7 +51,7 @@ export default function NotificationsSettingsPage() {
       <SettingsSection title="Filtreler">
         <SettingsToggle
           label="Yalnızca bahsetmeler"
-          description="Sadece @bahsetme türündeki bildirimleri al."
+          description="Sadece @bahsetme ve arkadaşlık isteklerini al."
           checked={prefs.notifications.mentionsOnly}
           onChange={(v) => setSection('notifications', { mentionsOnly: v })}
         />
@@ -60,6 +61,15 @@ export default function NotificationsSettingsPage() {
           checked={prefs.notifications.quietHours}
           onChange={(v) => setSection('notifications', { quietHours: v })}
         />
+      </SettingsSection>
+      <SettingsSection title="Yönetim">
+        <p className="font-body-sm text-on-surface-variant px-1">
+          Okunmamış bildirimleri, sessize alınan kullanıcı/sunucuları ve geçmişi{' '}
+          <Link href="/notifications" className="text-primary-container hover:underline">
+            Bildirimler
+          </Link>{' '}
+          sayfasından yönetebilirsin.
+        </p>
       </SettingsSection>
       <SettingsSection>
         <SettingsNote>

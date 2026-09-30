@@ -24,6 +24,9 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     unreadBadge: true,
     mentionsOnly: false,
     quietHours: false,
+    mutedUserIds: [],
+    mutedChannelIds: [],
+    mutedGuildIds: [],
   },
   accessibility: {
     reducedMotion: false,

@@ -3,6 +3,7 @@
 import type { FriendRow } from '@dracord/ui';
 import { Avatar, FriendsHub } from '@dracord/ui';
 import type { ChannelSummary, PublicUser } from '@dracord/types';
+import { SocketEvents } from '@dracord/sdk';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
@@ -161,6 +162,24 @@ export default function FriendsHubPage() {
     void loadPending();
     void loadBlocked();
   }, [client, user, loadFriends, loadPending, loadBlocked]);
+
+  // Canlı presence: arkadaş listesi status güncelle
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const onPresence = (payload: {
+      userId: string;
+      status: PublicUser['status'];
+    }) => {
+      setFriends((prev) =>
+        prev.map((f) => (f.id === payload.userId ? { ...f, status: payload.status } : f)),
+      );
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+    };
+  }, [client, user]);
 
   const dmIdsKey = dms.map((d) => d.id).join(',');
 

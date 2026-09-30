@@ -236,6 +236,8 @@ export class GuildsService {
       iconUrl?: string | null;
       bannerUrl?: string | null;
       discoverable?: boolean;
+      afkChannelId?: string | null;
+      afkTimeoutMinutes?: number;
     },
   ): Promise<GuildSummary> {
     await this.ensureMember(guildId, userId);
@@ -244,7 +246,7 @@ export class GuildsService {
 
     const touchesIdentity =
       data.name != null || data.iconUrl !== undefined || data.bannerUrl !== undefined;
-    if (touchesIdentity) {
+    if (touchesIdentity || data.afkChannelId !== undefined || data.afkTimeoutMinutes !== undefined) {
       await this.requirePermission(guildId, userId, PERM_MANAGE_GUILD);
     }
     if (data.discoverable !== undefined) {
@@ -258,6 +260,11 @@ export class GuildsService {
     }
     if (data.iconUrl !== undefined) guild.iconUrl = data.iconUrl;
     if (data.bannerUrl !== undefined) guild.bannerUrl = data.bannerUrl;
+    if (data.afkChannelId !== undefined) guild.afkChannelId = data.afkChannelId;
+    if (data.afkTimeoutMinutes !== undefined) {
+      const mins = Math.max(0, Math.min(120, Math.floor(data.afkTimeoutMinutes)));
+      guild.afkTimeoutMinutes = mins;
+    }
     await this.em.save(Guild, guild);
     void this.indexer.indexGuild(guild).catch(() => undefined);
     return this.toSummary(guild);
@@ -499,6 +506,8 @@ export class GuildsService {
       bannerUrl: guild.bannerUrl ?? null,
       ownerId: guild.ownerId,
       discoverable: guild.discoverable,
+      afkChannelId: guild.afkChannelId ?? null,
+      afkTimeoutMinutes: guild.afkTimeoutMinutes ?? 0,
     };
   }
 

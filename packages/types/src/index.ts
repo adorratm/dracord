@@ -135,6 +135,10 @@ export interface GuildSummary {
   ownerId: string;
   discoverable?: boolean;
   memberCount?: number;
+  /** AFK ses kanalı */
+  afkChannelId?: string | null;
+  /** Konuşmadan sonra AFK’ya taşıma (dakika); 0 = kapalı */
+  afkTimeoutMinutes?: number;
 }
 
 export interface ChannelSummary {
@@ -413,6 +417,10 @@ export interface ClientSettings {
     unreadBadge: boolean;
     mentionsOnly: boolean;
     quietHours: boolean;
+    /** Sessize alınan kullanıcı / kanal / sunucu id’leri */
+    mutedUserIds?: string[];
+    mutedChannelIds?: string[];
+    mutedGuildIds?: string[];
   };
   accessibility: {
     reducedMotion: boolean;

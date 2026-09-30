@@ -96,6 +96,9 @@ export function NotificationBell() {
       ) {
         return;
       }
+      if (n.actorId && (prefs.notifications.mutedUserIds ?? []).includes(n.actorId)) return;
+      if (n.channelId && (prefs.notifications.mutedChannelIds ?? []).includes(n.channelId)) return;
+      if (n.guildId && (prefs.notifications.mutedGuildIds ?? []).includes(n.guildId)) return;
       if (prefs.notifications.quietHours && inQuietHours()) return;
 
       setItems((prev) => [n, ...prev.filter((x) => x.id !== n.id)].slice(0, 40));
@@ -185,43 +188,66 @@ export function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-[min(100vw-1.5rem,22rem)] max-h-[70vh] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[80] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-surface-container-highest">
+          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-surface-container-highest gap-2">
             <p className="font-headline-md text-on-surface">Bildirimler</p>
-            {unread > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              {unread > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void markAll()}
+                  className="font-label-sm text-primary-container hover:underline"
+                >
+                  Tümünü oku
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => void markAll()}
-                className="font-label-sm text-primary-container hover:underline"
+                onClick={() => {
+                  setOpen(false);
+                  router.push('/notifications');
+                }}
+                className="font-label-sm text-outline hover:text-on-surface hover:underline"
               >
-                Tümünü okundu işaretle
+                Tümü
               </button>
-            )}
+            </div>
           </div>
           <div className="overflow-y-auto flex-1 min-h-0">
-            {items.length === 0 ? (
-              <DracoEmpty
-                mood="sleep"
-                size={72}
-                title="Henüz bildirim yok"
-                description="Draco uyuyor — birisi seni etiketleyince uyanır."
-                className="py-space-lg"
-              />
-            ) : (
-              items
-                .filter(
-                  (n) =>
-                    !prefs.notifications.mentionsOnly ||
-                    n.type === 'MENTION' ||
-                    n.type === 'FRIEND',
-                )
-                .map((n) => (
+            {(() => {
+              const mutedUsers = new Set(prefs.notifications.mutedUserIds ?? []);
+              const mutedChannels = new Set(prefs.notifications.mutedChannelIds ?? []);
+              const mutedGuilds = new Set(prefs.notifications.mutedGuildIds ?? []);
+              const visible = items.filter((n) => {
+                if (n.readAt) return false;
+                if (
+                  prefs.notifications.mentionsOnly &&
+                  n.type !== 'MENTION' &&
+                  n.type !== 'FRIEND'
+                ) {
+                  return false;
+                }
+                if (n.actorId && mutedUsers.has(n.actorId)) return false;
+                if (n.channelId && mutedChannels.has(n.channelId)) return false;
+                if (n.guildId && mutedGuilds.has(n.guildId)) return false;
+                return true;
+              });
+              if (visible.length === 0) {
+                return (
+                  <DracoEmpty
+                    mood="sleep"
+                    size={72}
+                    title="Okunmamış bildirim yok"
+                    description="Tümünü yönetmek için “Tümü”ne git."
+                    className="py-space-lg"
+                  />
+                );
+              }
+              return visible.map((n) => (
                 <button
                   key={n.id}
                   type="button"
                   onClick={() => void openItem(n)}
-                  className={`w-full text-left px-space-md py-space-sm flex gap-space-sm hover:bg-surface-bright border-b border-surface-container-highest/60 ${
-                    !n.readAt ? 'bg-primary-container/10' : ''
-                  }`}
+                  className="w-full text-left px-space-md py-space-sm flex gap-space-sm hover:bg-surface-bright border-b border-surface-container-highest/60 bg-primary-container/10"
                 >
                   <span className="material-symbols-outlined text-[22px] text-primary-container shrink-0 mt-0.5">
                     {typeIcon(n.type)}
@@ -249,8 +275,8 @@ export function NotificationBell() {
                     </p>
                   </div>
                 </button>
-              ))
-            )}
+              ));
+            })()}
           </div>
         </div>
       )}

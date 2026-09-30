@@ -99,13 +99,22 @@ interface VoiceSessionValue {
 
 const VoiceSessionContext = createContext<VoiceSessionValue | null>(null);
 
-function avatarFromParticipant(p: { metadata?: string }): string | null {
-  if (!p.metadata) return null;
+function metaFromParticipant(p: { metadata?: string }): {
+  avatarUrl: string | null;
+  isBot: boolean;
+} {
+  if (!p.metadata) return { avatarUrl: null, isBot: false };
   try {
-    const parsed = JSON.parse(p.metadata) as { avatarUrl?: string | null };
-    return parsed.avatarUrl ?? null;
+    const parsed = JSON.parse(p.metadata) as {
+      avatarUrl?: string | null;
+      isBot?: boolean;
+    };
+    return {
+      avatarUrl: parsed.avatarUrl ?? null,
+      isBot: Boolean(parsed.isBot),
+    };
   } catch {
-    return null;
+    return { avatarUrl: null, isBot: false };
   }
 }
 
@@ -113,28 +122,32 @@ function participantFromRemote(p: RemoteParticipant): VoiceParticipant {
   const audioPub = p.getTrackPublication(Track.Source.Microphone);
   const cameraPub = p.getTrackPublication(Track.Source.Camera);
   const screenPub = p.getTrackPublication(Track.Source.ScreenShare);
+  const meta = metaFromParticipant(p);
   return {
     id: p.identity,
     displayName: p.name || p.identity,
-    avatarUrl: avatarFromParticipant(p),
+    avatarUrl: meta.avatarUrl,
     muted: audioPub?.isMuted ?? !p.isMicrophoneEnabled,
     speaking: p.isSpeaking,
     camera: Boolean(cameraPub?.track && !cameraPub.isMuted),
     video: Boolean(screenPub?.track),
+    isBot: meta.isBot || p.identity === 'system-dracord-bot',
   };
 }
 
 function participantFromLocal(p: LocalParticipant, muted: boolean): VoiceParticipant {
   const cameraPub = p.getTrackPublication(Track.Source.Camera);
   const screenPub = p.getTrackPublication(Track.Source.ScreenShare);
+  const meta = metaFromParticipant(p);
   return {
     id: p.identity,
     displayName: p.name || p.identity,
-    avatarUrl: avatarFromParticipant(p),
+    avatarUrl: meta.avatarUrl,
     muted,
     speaking: p.isSpeaking,
     camera: Boolean(cameraPub?.track && !cameraPub.isMuted),
     video: Boolean(screenPub?.track),
+    isBot: meta.isBot,
   };
 }
 

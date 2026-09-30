@@ -138,7 +138,7 @@ export function MemberList({ groups, className }: MemberListProps) {
   return (
     <aside
       className={cn(
-        'w-60 bg-surface-container-low flex flex-col min-h-0 overflow-y-auto py-space-md px-space-sm shrink-0',
+        'w-full min-w-0 bg-surface-container-low flex flex-col min-h-0 overflow-y-auto py-space-md px-space-sm shrink-0',
         className,
       )}
       aria-label="Üye listesi"
@@ -177,7 +177,7 @@ export function MemberList({ groups, className }: MemberListProps) {
                       aria-expanded={menu?.memberId === member.id}
                       aria-controls={menu?.memberId === member.id ? menuId : undefined}
                       className={cn(
-                        'w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group',
+                        'w-full max-w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group min-w-0',
                         menu?.memberId === member.id && 'bg-surface-container',
                       )}
                     >

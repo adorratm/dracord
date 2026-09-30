@@ -185,6 +185,16 @@ function renderMessageContent(
 
   const tokens = tokenizeMessageContent(content, { mentionNames, channelNames });
   return tokens.map((t, i) => {
+    if (t.type === 'slash') {
+      return (
+        <span
+          key={i}
+          className="inline text-secondary-container bg-secondary-container/15 rounded px-1 font-medium"
+        >
+          {t.value}
+        </span>
+      );
+    }
     if (t.type === 'mention' || t.type === 'channel') {
       return (
         <span
@@ -479,7 +489,15 @@ export function MessageItem({
       </div>
 
       {actions && (
-        <div className={cn('absolute right-space-sm -top-3 transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-50', menuOpen || reactPickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100')}>
+        <div
+          className={cn(
+            'absolute right-space-sm transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-20 pointer-events-none [&_button]:pointer-events-auto',
+            sticker ? 'bottom-1 top-auto' : '-top-3',
+            menuOpen || reactPickerOpen
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+          )}
+        >
           {!isHeading &&
             QUICK_EMOJIS.slice(0, 3).map((emoji) => (
               <button
@@ -1162,8 +1180,9 @@ export function MessageList({
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 className={cn(
-                  'hover:z-30 focus-within:z-40 [&:has([data-menu-open])]:z-50',
-                  highlighted && 'bg-primary-container/20 rounded-lg',
+                  'hover:z-30 focus-within:z-40 [&:has([data-menu-open])]:z-50 transition-[background-color,box-shadow] duration-300',
+                  highlighted &&
+                    'bg-primary-container/25 ring-2 ring-inset ring-primary-container/60 rounded-lg shadow-[inset_0_0_0_1px_rgba(189,147,249,0.35)]',
                 )}
                 style={{
                   position: 'absolute',
@@ -1192,29 +1211,31 @@ export function MessageList({
       </div>
 
       {showJump && (
-        <button
-          type="button"
-          onClick={() => {
-            stickToBottomRef.current = true;
-            setScrolledAway(false);
-            setActiveHighlightId(null);
-            highlightDoneRef.current = null;
-            onJumpToPresent?.();
-            requestAnimationFrame(() => {
-              scrollToBottom();
-              onLiveEdgeChange?.(true);
-              requestAnimationFrame(() => scrollToBottom());
-            });
-          }}
-          className="shrink-0 w-full h-9 px-space-md flex items-center justify-center gap-space-xs border-t border-primary-container/30 bg-primary-container text-on-primary-container font-label-sm hover:opacity-95 transition-opacity"
-        >
-          <span className="material-symbols-outlined text-[16px] leading-none">
-            keyboard_double_arrow_down
-          </span>
-          {pendingNewCount > 0
-            ? `${pendingNewCount} yeni mesaj · Günümüze git`
-            : 'Günümüze git'}
-        </button>
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-space-md">
+          <button
+            type="button"
+            onClick={() => {
+              stickToBottomRef.current = true;
+              setScrolledAway(false);
+              setActiveHighlightId(null);
+              highlightDoneRef.current = null;
+              onJumpToPresent?.();
+              requestAnimationFrame(() => {
+                scrollToBottom();
+                onLiveEdgeChange?.(true);
+                requestAnimationFrame(() => scrollToBottom());
+              });
+            }}
+            className="pointer-events-auto h-9 px-4 rounded-full flex items-center justify-center gap-space-xs border border-surface-container-highest bg-surface-container-high/95 text-on-surface font-label-sm shadow-float backdrop-blur-sm hover:bg-surface-bright hover:border-primary-container/50 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[16px] leading-none text-primary-container">
+              keyboard_double_arrow_down
+            </span>
+            {pendingNewCount > 0
+              ? `${pendingNewCount} yeni mesaj · Günümüze git`
+              : 'Günümüze git'}
+          </button>
+        </div>
       )}
     </div>
   );

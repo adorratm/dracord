@@ -12,6 +12,7 @@ import {
   mediaItemMatchesQuery,
   type MediaPackItem,
 } from '../lib/media-packs';
+import { filterBotSlashCommands, type BotSlashCommand } from '../lib/bot-slash-commands';
 import {
   addCustomSticker,
   loadCustomStickers,
@@ -90,13 +91,20 @@ function packStickerId(packId: string, stickerId: string) {
 }
 
 type MentionTrigger = {
-  kind: 'user' | 'channel';
+  kind: 'user' | 'channel' | 'slash';
   start: number;
   query: string;
 };
 
 function detectMentionTrigger(text: string, caret: number): MentionTrigger | null {
   const before = text.slice(0, caret);
+  // Slash komut: satır başında /
+  const slash = before.match(/(?:^|\n)\/([a-zA-Z0-9çğıöşüÇĞİÖŞÜ_-]*)$/u);
+  if (slash && slash.index != null) {
+    const query = slash[1] ?? '';
+    const start = caret - query.length - 1;
+    return { kind: 'slash', start, query };
+  }
   const match = before.match(/(?:^|[\s])([@#])([a-zA-Z0-9_.-]*)$/);
   if (!match || match.index == null) return null;
   const token = match[1]!;
@@ -300,8 +308,17 @@ export function ChatInput({
       .slice(0, 12);
   }, [mention, mentionChannels]);
 
+  const slashOptions = useMemo(() => {
+    if (mention?.kind !== 'slash') return [] as BotSlashCommand[];
+    return filterBotSlashCommands(mention.query).slice(0, 10);
+  }, [mention]);
+
   const mentionOptionsCount =
-    mention?.kind === 'user' ? mentionUserOptions.length : mentionChannelOptions.length;
+    mention?.kind === 'user'
+      ? mentionUserOptions.length
+      : mention?.kind === 'channel'
+        ? mentionChannelOptions.length
+        : slashOptions.length;
 
   useEffect(() => {
     setMentionIndex(0);
@@ -312,13 +329,14 @@ export function ChatInput({
       if (!mention) return;
       const before = value.slice(0, mention.start);
       const after = value.slice(mention.start + 1 + mention.query.length);
-      const next = `${before}${token} ${after.replace(/^\s*/, '')}`;
+      const spacer = mention.kind === 'slash' && !token.endsWith(' ') ? ' ' : ' ';
+      const next = `${before}${token}${spacer}${after.replace(/^\s*/, '')}`;
       setValue(next);
       setMention(null);
       requestAnimationFrame(() => {
         const el = textareaRef.current;
         if (!el) return;
-        const pos = before.length + token.length + 1;
+        const pos = before.length + token.length + spacer.length;
         el.focus();
         el.setSelectionRange(pos, pos);
         resizeTextarea();
@@ -363,6 +381,13 @@ export function ChatInput({
           </span>
         );
       }
+      if (t.type === 'slash') {
+        return (
+          <span key={i} className="text-secondary-container bg-secondary-container/25 rounded-[2px]">
+            {t.value}
+          </span>
+        );
+      }
       if (t.type === 'url') {
         return (
           <span key={i} className="text-primary-container underline underline-offset-2">
@@ -396,9 +421,12 @@ export function ChatInput({
         if (mention.kind === 'user') {
           const opt = mentionUserOptions[mentionIndex];
           if (opt) insertMention(`@${opt.username}`);
-        } else {
+        } else if (mention.kind === 'channel') {
           const opt = mentionChannelOptions[mentionIndex];
           if (opt) insertMention(`#${opt.name}`);
+        } else if (mention.kind === 'slash') {
+          const opt = slashOptions[mentionIndex];
+          if (opt) insertMention(`/${opt.name}${opt.argRequired ? ' ' : ''}`);
         }
         return;
       }
@@ -709,14 +737,14 @@ export function ChatInput({
           {tab === 'emoji' && (
             <div className="flex flex-col max-h-64">
               {!mediaSearch.trim() && (
-                <div className="flex gap-1 px-space-sm py-space-xs overflow-x-auto border-b border-surface-container-highest">
+                <div className="flex gap-1 px-space-sm py-space-xs overflow-x-auto overflow-y-hidden shrink-0 border-b border-surface-container-highest [scrollbar-width:thin] [-ms-overflow-style:auto]">
                   {EMOJI_CATEGORIES.map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => setEmojiCat(c.id)}
                       className={cn(
-                        'h-7 px-space-sm rounded-full font-label-sm whitespace-nowrap',
+                        'h-7 px-space-sm rounded-full font-label-sm whitespace-nowrap shrink-0',
                         emojiCat === c.id
                           ? 'bg-primary-container text-on-primary-container'
                           : 'text-on-surface-variant hover:bg-surface-bright',
@@ -727,7 +755,7 @@ export function ChatInput({
                   ))}
                 </div>
               )}
-              <div className="p-space-sm overflow-y-auto grid grid-cols-8 gap-1">
+              <div className="p-space-sm overflow-y-auto max-h-52 grid grid-cols-8 gap-1">
                 {activeEmojis.length === 0 ? (
                   <p className="col-span-8 font-label-sm text-outline text-center py-space-md">
                     Sonuç bulunamadı
@@ -832,7 +860,7 @@ export function ChatInput({
 
           {tab === 'sticker' && (
             <div className="flex flex-col max-h-72">
-              <div className="flex gap-1 px-space-sm py-space-xs overflow-x-auto border-b border-surface-container-highest items-center">
+              <div className="flex gap-1 px-space-sm py-space-xs overflow-x-auto overflow-y-hidden shrink-0 border-b border-surface-container-highest items-center [scrollbar-width:thin]">
                 {(
                   [
                     ['recent', 'Son'],
@@ -846,7 +874,7 @@ export function ChatInput({
                     type="button"
                     onClick={() => setStickerSection(id)}
                     className={cn(
-                      'h-7 px-space-sm rounded-full font-label-sm whitespace-nowrap',
+                      'h-7 px-space-sm rounded-full font-label-sm whitespace-nowrap shrink-0',
                       stickerSection === id
                         ? 'bg-primary-container text-on-primary-container'
                         : 'text-on-surface-variant hover:bg-surface-bright',
@@ -1007,10 +1035,15 @@ export function ChatInput({
         <div className="absolute bottom-full left-space-md right-space-md mb-2 z-30 max-w-sm rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
           <div className="px-space-sm py-space-xs border-b border-surface-container-highest flex items-center gap-space-xs">
             <span className="material-symbols-outlined text-[16px] text-outline leading-none">
-              search
+              {mention.kind === 'slash' ? 'smart_toy' : 'search'}
             </span>
             <span className="font-label-sm text-outline truncate">
-              {mention.kind === 'user' ? 'Kullanıcı etiketle' : 'Kanal etiketle'} · {mention.query || '…'}
+              {mention.kind === 'user'
+                ? 'Kullanıcı etiketle'
+                : mention.kind === 'channel'
+                  ? 'Kanal etiketle'
+                  : 'Bot komutları'}{' '}
+              · {mention.query || '…'}
             </span>
           </div>
           <ul className="max-h-56 overflow-y-auto py-1">
@@ -1055,26 +1088,61 @@ export function ChatInput({
                     </button>
                   </li>
                 ))
-              : mentionChannelOptions.map((c, i) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      className={cn(
-                        'w-full flex items-center gap-space-sm px-space-sm py-2 text-left',
-                        i === mentionIndex
-                          ? 'bg-primary-container/20 text-on-surface'
-                          : 'hover:bg-surface-bright text-on-surface',
-                      )}
-                      onMouseEnter={() => setMentionIndex(i)}
-                      onClick={() => insertMention(`#${c.name}`)}
-                    >
-                      <span className="w-8 h-8 shrink-0 rounded-lg bg-surface-container-lowest text-outline inline-flex items-center justify-center">
-                        <span className="font-headline-md leading-none">#</span>
-                      </span>
-                      <span className="font-label-md truncate self-center">{c.name}</span>
-                    </button>
-                  </li>
-                ))}
+              : mention.kind === 'channel'
+                ? mentionChannelOptions.map((c, i) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        className={cn(
+                          'w-full flex items-center gap-space-sm px-space-sm py-2 text-left',
+                          i === mentionIndex
+                            ? 'bg-primary-container/20 text-on-surface'
+                            : 'hover:bg-surface-bright text-on-surface',
+                        )}
+                        onMouseEnter={() => setMentionIndex(i)}
+                        onClick={() => insertMention(`#${c.name}`)}
+                      >
+                        <span className="w-8 h-8 shrink-0 rounded-lg bg-surface-container-lowest text-outline inline-flex items-center justify-center">
+                          <span className="font-headline-md leading-none">#</span>
+                        </span>
+                        <span className="font-label-md truncate self-center">{c.name}</span>
+                      </button>
+                    </li>
+                  ))
+                : slashOptions.map((c, i) => (
+                    <li key={c.name}>
+                      <button
+                        type="button"
+                        className={cn(
+                          'w-full flex items-start gap-space-sm px-space-sm py-2 text-left',
+                          i === mentionIndex
+                            ? 'bg-primary-container/20 text-on-surface'
+                            : 'hover:bg-surface-bright text-on-surface',
+                        )}
+                        onMouseEnter={() => setMentionIndex(i)}
+                        onClick={() =>
+                          insertMention(`/${c.name}${c.argRequired ? ' ' : ''}`)
+                        }
+                      >
+                        <span className="w-8 h-8 shrink-0 rounded-lg bg-secondary-container/25 text-secondary-container inline-flex items-center justify-center mt-0.5">
+                          <span className="font-label-md">/</span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-label-md truncate">
+                            /{c.name}
+                            {c.aliases?.length ? (
+                              <span className="text-outline font-label-sm">
+                                {' '}
+                                · {c.aliases.map((a) => `/${a}`).join(' ')}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="font-label-sm text-outline truncate">{c.description}</p>
+                          <p className="font-label-sm text-outline/80 truncate">{c.usage}</p>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
           </ul>
         </div>
       )}

@@ -15,6 +15,7 @@ export interface VoiceParticipant {
   video?: boolean;
   /** Kamera (webcam) açık */
   camera?: boolean;
+  isBot?: boolean;
 }
 
 export interface VoiceStageScreenShare {
@@ -452,9 +453,12 @@ export function VoiceStage({
                         }
                         className={cn(
                           'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-sm relative overflow-hidden transition-shadow duration-200 box-border',
-                          stripMode ? 'aspect-video min-h-[7rem]' : 'aspect-video',
+                          stripMode
+                            ? 'aspect-video min-h-[7rem] sm:min-h-[8.5rem]'
+                            : 'aspect-video min-h-[9rem] sm:min-h-0',
                           p.speaking && 'ring-2 ring-inset ring-primary-container',
                           (isFocusedShare || isFeaturedCam) && 'ring-2 ring-inset ring-primary',
+                          p.isBot && 'ring-1 ring-inset ring-secondary-container/60',
                           (canFocusShare || canFocusCam) && 'cursor-pointer hover:bg-surface-container',
                         )}
                         title={
@@ -496,6 +500,11 @@ export function VoiceStage({
                               {p.displayName}
                               {isLocal ? ' (sen)' : ''}
                             </span>
+                            {p.isBot && (
+                              <span className="h-4 px-1 rounded bg-primary text-on-primary text-[9px] font-bold uppercase shrink-0">
+                                Bot
+                              </span>
+                            )}
                             {p.muted && (
                               <span className="material-symbols-outlined text-[16px] text-error shrink-0">
                                 mic_off
@@ -522,12 +531,17 @@ export function VoiceStage({
                                   'material-symbols-outlined text-[14px] shrink-0',
                                   p.camera ? 'text-white/70' : 'text-outline',
                                 )}
+                                title={p.isBot ? 'Bot yerel sesi (senin)' : 'Kullanıcı sesi'}
                               >
-                                {vol === 0 ? 'volume_off' : 'volume_up'}
+                                {vol === 0 ? 'volume_off' : p.isBot ? 'smart_toy' : 'volume_up'}
                               </span>
                               <VolumeSlider
                                 value={vol}
-                                aria-label={`${p.displayName} ses seviyesi`}
+                                aria-label={
+                                  p.isBot
+                                    ? `${p.displayName} yerel ses (senin)`
+                                    : `${p.displayName} ses seviyesi`
+                                }
                                 onChange={(v) => onParticipantVolumeChange?.(p.id, v)}
                               />
                               <span

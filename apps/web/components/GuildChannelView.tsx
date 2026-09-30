@@ -19,7 +19,7 @@ import {
 } from '@dracord/ui';
 import type { RoleDto } from '@dracord/types';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell, rememberChannel } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
 import { DracoEmpty } from '@/components/Draco';
@@ -82,6 +82,8 @@ export function GuildChannelView({
   } = useChatChannel(isVoiceView ? undefined : channelId, aroundMessageId);
   const voice = useVoiceSession();
   const { prefs } = useUserPreferences();
+  const lastSpokeAtRef = useRef(Date.now());
+  const afkMovingRef = useRef(false);
 
   const voiceChannel = channels.find((c) => c.id === voice.voiceChannelId);
   const inVoice = Boolean(voice.voiceChannelId);
@@ -204,6 +206,46 @@ export function GuildChannelView({
       .then(setGuildRoles)
       .catch(() => setGuildRoles([]));
   }, [client, guildId, user]);
+
+  // Canlı presence: sayfa geçişlerinde stale OFFLINE kalmasın
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const onPresence = (payload: {
+      userId: string;
+      status: PublicUser['status'];
+      customStatus?: string | null;
+    }) => {
+      setGuildMembers((prev) =>
+        prev.map((m) =>
+          m.id === payload.userId
+            ? {
+                ...m,
+                status: payload.status,
+                customStatus:
+                  payload.customStatus !== undefined ? payload.customStatus : m.customStatus,
+              }
+            : m,
+        ),
+      );
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+    };
+  }, [client, user]);
+
+  // Kendi status'umuzu üye listesinde canlı tut
+  useEffect(() => {
+    if (!user) return;
+    setGuildMembers((prev) =>
+      prev.map((m) =>
+        m.id === user.id
+          ? { ...m, status: user.status, customStatus: user.customStatus }
+          : m,
+      ),
+    );
+  }, [user?.id, user?.status, user?.customStatus]);
 
   useEffect(() => {
     if (!guildId || !user) return;
@@ -338,8 +380,69 @@ export function GuildChannelView({
     };
   }, [client, user, channels, channelId, patchChannelUnread]);
 
-  // Otomatik yeniden bağlanma yok: yalnızca kullanıcı ses kanalına tıklayınca / katıla basınca join.
-  // (Önceki effect leave sonrası sayfada kalınca tekrar join ediyordu.)
+  // AFK kanalı: konuşma yoksa süre dolunca AFK’ya taşı + mute/deafen
+  useEffect(() => {
+    const afkId = guild?.afkChannelId;
+    const timeoutMin = guild?.afkTimeoutMinutes ?? 0;
+    if (!afkId || timeoutMin <= 0 || !voice.voiceChannelId || !voice.connected || !user) {
+      return;
+    }
+
+    const self = voice.participants.find((p) => p.id === user.id);
+    if (self?.speaking) {
+      lastSpokeAtRef.current = Date.now();
+    }
+
+    const tick = window.setInterval(() => {
+      if (afkMovingRef.current) return;
+      if (voice.voiceChannelId === afkId) return;
+      const idleMs = Date.now() - lastSpokeAtRef.current;
+      if (idleMs < timeoutMin * 60_000) return;
+      afkMovingRef.current = true;
+      void (async () => {
+        try {
+          if (!voice.muted) await voice.toggleMute();
+          if (!voice.deafened) await voice.toggleDeafen();
+          voice.join(afkId, guildId);
+          router.push(`/channels/${guildId}/${afkId}`);
+        } finally {
+          window.setTimeout(() => {
+            afkMovingRef.current = false;
+          }, 2000);
+        }
+      })();
+    }, 5000);
+
+    return () => window.clearInterval(tick);
+  }, [
+    guild?.afkChannelId,
+    guild?.afkTimeoutMinutes,
+    voice,
+    user,
+    guildId,
+    router,
+  ]);
+
+  // AFK’dan başka kanala geçince mute/deafen kaldır
+  useEffect(() => {
+    const afkId = guild?.afkChannelId;
+    if (!afkId || !voice.voiceChannelId || !voice.connected) return;
+    if (voice.voiceChannelId === afkId) return;
+    const prev = sessionStorage.getItem('dracord:was-afk');
+    if (prev === '1') {
+      sessionStorage.removeItem('dracord:was-afk');
+      void (async () => {
+        if (voice.muted) await voice.toggleMute();
+        if (voice.deafened) await voice.toggleDeafen();
+      })();
+    }
+  }, [guild?.afkChannelId, voice.voiceChannelId, voice.connected, voice]);
+
+  useEffect(() => {
+    if (guild?.afkChannelId && voice.voiceChannelId === guild.afkChannelId) {
+      sessionStorage.setItem('dracord:was-afk', '1');
+    }
+  }, [guild?.afkChannelId, voice.voiceChannelId]);
 
   useEffect(() => {
     if (!voice.voiceChannelId) {
@@ -359,17 +462,20 @@ export function GuildChannelView({
     }
     setVoiceMembersByChannel((prev) => ({
       ...prev,
-      [voice.voiceChannelId!]: voice.participants.map((p) => ({
-        id: p.id,
-        displayName: p.displayName,
-        avatarUrl: p.avatarUrl ?? null,
-        muted: p.muted,
-        deafened: false,
-        speaking: Boolean(p.speaking),
-        isBot: Boolean((p as { isBot?: boolean }).isBot),
-      })),
+      [voice.voiceChannelId!]: voice.participants.map((p) => {
+        const m = guildMembers.find((g) => g.id === p.id);
+        return {
+          id: p.id,
+          displayName: p.displayName || m?.displayName || p.id,
+          avatarUrl: p.avatarUrl || m?.avatarUrl || null,
+          muted: p.muted,
+          deafened: false,
+          speaking: Boolean(p.speaking),
+          isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot),
+        };
+      }),
     }));
-  }, [voice.voiceChannelId, voice.participants, user]);
+  }, [voice.voiceChannelId, voice.participants, user, guildMembers]);
 
   const leaveVoiceAndMaybeNavigate = useCallback(() => {
     const leftId = voice.leave();
@@ -1108,7 +1214,8 @@ export function GuildChannelView({
         aria-label="Kanallar"
         onClick={() => setChannelsOpen(true)}
         style={
-          !isVoiceView && !showingVoiceStage && !channelPending && !channelMissing
+          channelsOpen ||
+          (!isVoiceView && !showingVoiceStage && !channelPending && !channelMissing)
             ? { display: 'none' }
             : undefined
         }
@@ -1127,6 +1234,7 @@ export function GuildChannelView({
               avatarUrl:
                 p.avatarUrl || m?.avatarUrl || (p.id === user?.id ? user.avatarUrl : null),
               displayName: p.displayName || m?.displayName || p.id,
+              isBot: Boolean(p.isBot || m?.isBot),
             };
           })}
           localParticipantId={user?.id}
@@ -1205,7 +1313,7 @@ export function GuildChannelView({
                     return (
                       <li
                         key={p.id}
-                        className="rounded-lg bg-surface-container px-space-sm py-space-sm"
+                        className="w-full rounded-lg bg-surface-container px-space-sm py-space-sm box-border"
                       >
                         <div className="flex items-center gap-space-sm min-w-0">
                           <Avatar
@@ -1496,7 +1604,7 @@ export function GuildChannelView({
 
       {!showingVoiceStage && (
         <>
-          <MemberList groups={memberGroups} className="hidden lg:flex" />
+          <MemberList groups={memberGroups} className="hidden lg:flex lg:w-64" />
           <MobileDrawer
             open={membersOpen}
             onClose={() => setMembersOpen(false)}

@@ -6,7 +6,7 @@ import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { presenceLabelTr } from '../lib/presence';
 
-export type FriendsTab = 'online' | 'pending' | 'blocked';
+export type FriendsTab = 'online' | 'offline' | 'pending' | 'blocked';
 
 export interface FriendRow {
   id: string;
@@ -36,9 +36,14 @@ export interface FriendsHubProps {
 
 const TABS: { id: FriendsTab; label: string }[] = [
   { id: 'online', label: 'Çevrimiçi' },
+  { id: 'offline', label: 'Çevrimdışı' },
   { id: 'pending', label: 'Bekleyen' },
   { id: 'blocked', label: 'Engellenen' },
 ];
+
+function isOnlineStatus(status?: PresenceStatus) {
+  return status === 'ONLINE' || status === 'IDLE' || status === 'DND';
+}
 
 function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) {
   return (
@@ -59,7 +64,11 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
           <span className="font-headline-md text-headline-md text-on-surface truncate">{friend.displayName}</span>
           <span className="font-body-sm text-body-sm text-on-surface-variant truncate">
             {friend.subtitle ??
-              (friend.status ? presenceLabelTr(friend.status) : tab === 'pending' ? 'Arkadaşlık isteği' : '')}
+              (friend.status
+                ? presenceLabelTr(friend.status)
+                : tab === 'pending'
+                  ? 'Arkadaşlık isteği'
+                  : '')}
           </span>
         </div>
       </button>
@@ -93,7 +102,7 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
           İptal
         </button>
       )}
-      {tab === 'online' && (
+      {(tab === 'online' || tab === 'offline') && (
         <button
           type="button"
           onClick={friend.onMessage}
@@ -135,8 +144,17 @@ export function FriendsHub({
     onTabChange?.(next);
   };
 
+  const online = friends.filter((f) => isOnlineStatus(f.status));
+  const offline = friends.filter((f) => !isOnlineStatus(f.status));
+
   const list =
-    tab === 'online' ? friends : tab === 'pending' ? pending : blocked;
+    tab === 'online'
+      ? online
+      : tab === 'offline'
+        ? offline
+        : tab === 'pending'
+          ? pending
+          : blocked;
 
   return (
     <div className={cn('flex flex-col flex-1 min-h-0 bg-surface-container', className)}>
@@ -145,20 +163,22 @@ export function FriendsHub({
         {headerAction}
       </div>
 
-      <div className="flex gap-space-md px-space-md pt-space-md border-b border-surface-container-high">
+      <div className="flex gap-space-md px-space-md pt-space-md border-b border-surface-container-high overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setActiveTab(t.id)}
             className={cn(
-              'pb-space-sm font-headline-md text-headline-md border-b-2 transition-colors',
+              'pb-space-sm font-headline-md text-headline-md border-b-2 transition-colors whitespace-nowrap shrink-0',
               tab === t.id
                 ? 'border-primary-container text-on-surface'
                 : 'border-transparent text-on-surface-variant hover:text-on-surface',
             )}
           >
             {t.label}
+            {t.id === 'online' ? ` (${online.length})` : ''}
+            {t.id === 'offline' ? ` (${offline.length})` : ''}
           </button>
         ))}
       </div>
@@ -170,6 +190,7 @@ export function FriendsHub({
           ) : (
             <p className="px-space-md text-outline font-body-md text-body-md">
               {tab === 'online' && 'Çevrimiçi arkadaş yok.'}
+              {tab === 'offline' && 'Çevrimdışı arkadaş yok.'}
               {tab === 'pending' && 'Bekleyen istek yok.'}
               {tab === 'blocked' && 'Engellenen kullanıcı yok.'}
             </p>

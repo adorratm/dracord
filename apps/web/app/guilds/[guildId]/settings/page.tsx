@@ -313,6 +313,75 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 {busy ? 'Kaydediliyor…' : 'Kaydet'}
               </button>
 
+              <div className="rounded-xl border border-surface-container-highest bg-surface-container-low p-space-md space-y-space-sm">
+                <h3 className="font-headline-md text-on-surface">AFK kanalı</h3>
+                <p className="font-body-sm text-on-surface-variant">
+                  Uzun süre konuşmayan kullanıcılar otomatik AFK kanalına taşınır ve susturulur.
+                  AFK’dan başka bir ses kanalına geçince mikrofon/kulaklık açılır.
+                </p>
+                <label className="flex flex-col gap-space-xs">
+                  <span className="font-label-sm text-on-surface-variant">AFK ses kanalı</span>
+                  <select
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                    value={detail?.afkChannelId ?? ''}
+                    disabled={busy || !canManage}
+                    onChange={(e) => {
+                      const afkChannelId = e.target.value || null;
+                      void (async () => {
+                        setBusy(true);
+                        try {
+                          const updated = await client.updateGuild(guildId, { afkChannelId });
+                          patchGuild(updated);
+                          setDetail(updated);
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'AFK kanalı kaydedilemedi');
+                        } finally {
+                          setBusy(false);
+                        }
+                      })();
+                    }}
+                  >
+                    <option value="">Kapalı</option>
+                    {channels
+                      .filter((c) => c.type === 'VOICE')
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-space-xs">
+                  <span className="font-label-sm text-on-surface-variant">Zaman aşımı (dakika)</span>
+                  <select
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                    value={String(detail?.afkTimeoutMinutes ?? 0)}
+                    disabled={busy || !canManage || !detail?.afkChannelId}
+                    onChange={(e) => {
+                      const afkTimeoutMinutes = Number(e.target.value);
+                      void (async () => {
+                        setBusy(true);
+                        try {
+                          const updated = await client.updateGuild(guildId, { afkTimeoutMinutes });
+                          patchGuild(updated);
+                          setDetail(updated);
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'AFK süresi kaydedilemedi');
+                        } finally {
+                          setBusy(false);
+                        }
+                      })();
+                    }}
+                  >
+                    {[0, 1, 5, 10, 15, 30, 60].map((m) => (
+                      <option key={m} value={m}>
+                        {m === 0 ? 'Kapalı' : `${m} dk`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
               <button
                 type="button"
                 className="font-label-sm text-primary-container hover:underline"

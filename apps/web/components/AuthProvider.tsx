@@ -184,11 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     };
     const onConnect = () => {
-      // Soket bağlanınca UI'ı hemen çevrimiçi göster (sunucu event'i gelene kadar)
+      // Soket bağlanınca UI'ı hemen çevrimiçi göster (IDLE/DND tercihleri korunur)
       setUser((prev) => {
         if (!prev) return prev;
         if (prev.status === 'IDLE' || prev.status === 'DND') return prev;
-        if (prev.status === 'ONLINE') return prev;
         return { ...prev, status: 'ONLINE' };
       });
     };

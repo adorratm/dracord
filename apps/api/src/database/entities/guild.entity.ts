@@ -28,6 +28,13 @@ export class Guild extends CuidEntity {
   @Column({ type: 'boolean', default: false })
   discoverable!: boolean;
 
+  @Column({ type: 'varchar', nullable: true })
+  afkChannelId!: string | null;
+
+  /** 0 = AFK kapalı. Tipik: 5–60 dk */
+  @Column({ type: 'int', default: 0 })
+  afkTimeoutMinutes!: number;
+
   @Column({ type: 'varchar' })
   ownerId!: string;
 

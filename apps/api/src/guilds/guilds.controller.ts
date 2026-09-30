@@ -57,7 +57,15 @@ export class GuildsController {
   update(
     @Param('guildId') guildId: string,
     @CurrentUser() user: JwtPayloadUser,
-    @Body() body: { name?: string; iconUrl?: string | null; bannerUrl?: string | null; discoverable?: boolean },
+    @Body()
+    body: {
+      name?: string;
+      iconUrl?: string | null;
+      bannerUrl?: string | null;
+      discoverable?: boolean;
+      afkChannelId?: string | null;
+      afkTimeoutMinutes?: number;
+    },
   ) {
     return this.guildsService.updateGuild(guildId, user.sub, body);
   }

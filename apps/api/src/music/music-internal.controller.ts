@@ -63,6 +63,11 @@ export class MusicInternalController {
     const token = new AccessToken(apiKey, apiSecret, {
       identity: botId,
       name: user.displayName,
+      metadata: JSON.stringify({
+        avatarUrl: user.avatarUrl ?? null,
+        username: user.username,
+        isBot: true,
+      }),
     });
     token.addGrant({
       roomJoin: true,

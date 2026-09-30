@@ -147,44 +147,85 @@ export function MusicPlayerBar({ guildId, textChannelId, variant = 'chat' }: Pro
       <div
         className={
           variant === 'stage'
-            ? 'shrink-0 mx-space-md mb-space-sm rounded-lg border border-surface-container-highest bg-surface-container-high px-space-sm py-1.5 flex items-center gap-2 min-h-10'
-            : 'shrink-0 mx-space-md mb-space-sm rounded-lg border border-primary-container/30 bg-surface-container-high px-space-sm py-1.5 flex items-center gap-2 min-h-10'
+            ? 'shrink-0 mx-space-md mb-space-sm rounded-lg border border-surface-container-highest bg-surface-container-high px-space-sm py-1.5 flex flex-col gap-1.5 min-h-10'
+            : 'shrink-0 mx-space-md mb-space-sm rounded-lg border border-primary-container/30 bg-surface-container-high px-space-sm py-1.5 flex flex-col gap-1.5 min-h-10'
         }
       >
-        <button
-          type="button"
-          disabled={busy || !track}
-          className="w-8 h-8 rounded-md bg-primary-container text-on-primary-container disabled:opacity-40 flex items-center justify-center shrink-0"
-          onClick={() => void control(paused ? 'resume' : 'pause')}
-          aria-label={paused ? 'Oynat' : 'Duraklat'}
-        >
-          <span className="material-symbols-outlined text-[18px]">
-            {paused ? 'play_arrow' : 'pause'}
-          </span>
-        </button>
-        <p className="font-body-sm text-on-surface truncate flex-1 min-w-0">
-          {track?.title ?? 'Dracord-Bot'}
-        </p>
-        <label className="hidden sm:flex items-center gap-1 w-28 shrink-0">
-          <VolumeSlider
-            value={localBotVol}
-            tone="secondary"
-            aria-label="Bot yerel ses"
-            onChange={(v) => {
-              setLocalBotVol(v);
-              voice.setParticipantVolume(DRACORD_BOT_USER_ID, v);
-            }}
-          />
-        </label>
-        <button
-          type="button"
-          className="w-8 h-8 rounded-md text-outline hover:bg-surface-bright flex items-center justify-center shrink-0"
-          onClick={toggleSize}
-          aria-label="Büyüt"
-          title="Genişlet"
-        >
-          <span className="material-symbols-outlined text-[18px]">unfold_more</span>
-        </button>
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            disabled={busy || !track}
+            className="w-8 h-8 rounded-md bg-primary-container text-on-primary-container disabled:opacity-40 flex items-center justify-center shrink-0"
+            onClick={() => void control(paused ? 'resume' : 'pause')}
+            aria-label={paused ? 'Oynat' : 'Duraklat'}
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {paused ? 'play_arrow' : 'pause'}
+            </span>
+          </button>
+          <button
+            type="button"
+            disabled={busy || !track}
+            className="w-8 h-8 rounded-md bg-surface-container-highest text-on-surface disabled:opacity-40 flex items-center justify-center shrink-0"
+            onClick={() => void control('skip')}
+            aria-label="Atla"
+          >
+            <span className="material-symbols-outlined text-[18px]">skip_next</span>
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            className="w-8 h-8 rounded-md bg-error/15 text-error disabled:opacity-40 flex items-center justify-center shrink-0"
+            onClick={() => void control('stop')}
+            aria-label="Durdur"
+          >
+            <span className="material-symbols-outlined text-[18px]">stop</span>
+          </button>
+          <p className="font-body-sm text-on-surface truncate flex-1 min-w-0">
+            {track?.title ?? 'Dracord-Bot'}
+          </p>
+          <button
+            type="button"
+            className="w-8 h-8 rounded-md text-outline hover:bg-surface-bright flex items-center justify-center shrink-0"
+            onClick={toggleSize}
+            aria-label="Büyüt"
+            title="Genişlet"
+          >
+            <span className="material-symbols-outlined text-[18px]">unfold_more</span>
+          </button>
+        </div>
+        <div className="flex items-center gap-2 min-w-0 px-0.5">
+          <label className="flex items-center gap-1 flex-1 min-w-0" title="Bot sunucu sesi">
+            <span className="material-symbols-outlined text-[14px] text-primary-container shrink-0">
+              smart_toy
+            </span>
+            <VolumeSlider
+              value={botVol}
+              disabled={busy}
+              tone="primary"
+              aria-label="Bot sesi"
+              onChange={(v) => setState((s) => (s ? { ...s, volume: v } : s))}
+              onCommit={(v) => {
+                saveMusicBotVolume(v);
+                void control('volume', v);
+              }}
+            />
+          </label>
+          <label className="flex items-center gap-1 flex-1 min-w-0" title="Senin (yerel)">
+            <span className="material-symbols-outlined text-[14px] text-outline shrink-0">
+              headphones
+            </span>
+            <VolumeSlider
+              value={localBotVol}
+              tone="secondary"
+              aria-label="Senin sesin"
+              onChange={(v) => {
+                setLocalBotVol(v);
+                voice.setParticipantVolume(DRACORD_BOT_USER_ID, v);
+              }}
+            />
+          </label>
+        </div>
       </div>
     );
   }

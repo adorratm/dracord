@@ -1,7 +1,7 @@
 'use client';
 
 import type { MemberRoleSummary, PresenceStatus, SocialLinks } from '@dracord/types';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
@@ -23,6 +23,9 @@ export interface UserHoverCardUser {
   socialLinks?: SocialLinks | null;
   roles?: MemberRoleSummary[];
 }
+
+const CARD_W = 288;
+const GAP = 8;
 
 export function UserHoverCard({
   user,
@@ -55,25 +58,50 @@ export function UserHoverCard({
     };
   }, []);
 
+  const place = () => {
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cardH = cardRef.current?.offsetHeight || 280;
+    let x = rect.left;
+    let y = rect.bottom + GAP;
+    if (x + CARD_W > window.innerWidth - GAP) {
+      x = Math.max(GAP, window.innerWidth - CARD_W - GAP);
+    }
+    if (x < GAP) x = GAP;
+    // Prefer below; flip above if not enough room
+    if (y + cardH > window.innerHeight - GAP) {
+      y = Math.max(GAP, rect.top - cardH - GAP);
+    }
+    // Keep near the name horizontally: prefer aligning to left of anchor
+    if (rect.right < CARD_W && rect.left > window.innerWidth / 2) {
+      x = Math.max(GAP, rect.right - CARD_W);
+    }
+    setPos({ x, y });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    const onScroll = () => place();
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open]);
+
   const show = () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
-      const rect = anchorRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      let x = rect.left;
-      let y = rect.bottom + 8;
-      const w = 288;
-      const h = 280;
-      if (x + w > window.innerWidth - 8) x = Math.max(8, window.innerWidth - w - 8);
-      if (y + h > window.innerHeight - 8) y = Math.max(8, rect.top - h - 8);
-      setPos({ x, y });
+      place();
       setOpen(true);
-    }, 280);
+    }, 220);
   };
 
   const hide = () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => setOpen(false), 160);
+    timerRef.current = window.setTimeout(() => setOpen(false), 140);
   };
 
   const keep = () => {
@@ -96,7 +124,7 @@ export function UserHoverCard({
   return (
     <span
       ref={anchorRef}
-      className={cn('inline-flex', className)}
+      className={cn('inline-flex max-w-full', className)}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}
@@ -116,7 +144,7 @@ export function UserHoverCard({
             onMouseEnter={keep}
             onMouseLeave={hide}
           >
-              <div className="h-16 w-full" style={bannerStyle} />
+            <div className="h-16 w-full" style={bannerStyle} />
             <div className="px-3 pb-3 -mt-6 relative">
               <Avatar
                 displayName={user.displayName}

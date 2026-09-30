@@ -2,11 +2,11 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Metindeki @/# mention ve URL parçalarını ayırır. */
+/** Metindeki @/# mention, bot slash komutu ve URL parçalarını ayırır. */
 export function tokenizeMessageContent(
   content: string,
   opts: { mentionNames?: string[]; channelNames?: string[] } = {},
-): Array<{ type: 'text' | 'mention' | 'channel' | 'url'; value: string }> {
+): Array<{ type: 'text' | 'mention' | 'channel' | 'url' | 'slash'; value: string }> {
   const mentionNames = [
     'everyone',
     'all',
@@ -15,8 +15,13 @@ export function tokenizeMessageContent(
   const uniqueMentions = [...new Set(mentionNames.map((n) => n.trim()).filter(Boolean))];
   const channelNames = [...new Set((opts.channelNames ?? []).map((n) => n.trim()).filter(Boolean))];
 
-  const parts: Array<{ type: 'text' | 'mention' | 'channel' | 'url'; value: string }> = [];
+  const parts: Array<{
+    type: 'text' | 'mention' | 'channel' | 'url' | 'slash';
+    value: string;
+  }> = [];
   const patterns: string[] = [];
+  // Slash komut (mesaj başı veya satır başı)
+  patterns.push(`(?:^|\\n)/(?:oynat|play|atla|skip|duraklat|pause|devam|resume|durdur|stop|kuyruk|queue|ses|volume|kaldir|remove)\\b[^\\n]*`);
   if (uniqueMentions.length) {
     patterns.push(
       `@(?:${uniqueMentions.map(escapeRegExp).join('|')})(?![a-zA-Z0-9_])`,
@@ -33,6 +38,10 @@ export function tokenizeMessageContent(
   const chunks = content.split(re);
   for (const chunk of chunks) {
     if (!chunk) continue;
+    if (/^\/(?:oynat|play|atla|skip|duraklat|pause|devam|resume|durdur|stop|kuyruk|queue|ses|volume|kaldir|remove)\b/i.test(chunk.trimStart())) {
+      parts.push({ type: 'slash', value: chunk });
+      continue;
+    }
     if (/^@(?:everyone|all)$/i.test(chunk)) {
       parts.push({ type: 'mention', value: chunk });
       continue;
@@ -50,7 +59,6 @@ export function tokenizeMessageContent(
     }
     if (/^https?:\/\//i.test(chunk)) {
       parts.push({ type: 'url', value: chunk.replace(/[.,;:!?)]+$/, '') });
-      // trailing punctuation left as text if stripped
       const trailing = chunk.slice(parts[parts.length - 1]!.value.length);
       if (trailing) parts.push({ type: 'text', value: trailing });
       continue;

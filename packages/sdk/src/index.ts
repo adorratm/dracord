@@ -254,6 +254,8 @@ export class DracordClient {
       iconUrl?: string | null;
       bannerUrl?: string | null;
       discoverable?: boolean;
+      afkChannelId?: string | null;
+      afkTimeoutMinutes?: number;
     },
   ): Promise<GuildSummary> {
     return this.request(`/guilds/${guildId}`, {
