@@ -199,7 +199,23 @@ export function GuildChannelView({
     if (!guildId || !user) return;
     void client
       .getGuildMembers(guildId)
-      .then(setGuildMembers)
+      .then((members) => {
+        setGuildMembers(
+          members.map((m) => {
+            if (m.id !== user.id) return m;
+            // Sayfa geçişinde API hâlâ OFFLINE dönebilir; oturum açıkken kendini çevrimdışı gösterme
+            const live =
+              user.status === 'IDLE' || user.status === 'DND' || user.status === 'ONLINE'
+                ? user.status
+                : 'ONLINE';
+            return {
+              ...m,
+              status: live,
+              customStatus: user.customStatus ?? m.customStatus,
+            };
+          }),
+        );
+      })
       .catch(() => setGuildMembers([]));
     void client
       .listGuildRoles(guildId)
@@ -216,12 +232,25 @@ export function GuildChannelView({
       status: PublicUser['status'];
       customStatus?: string | null;
     }) => {
+      // Kendi oturumun bağlıyken gelen OFFLINE (reconnect grace) yok say
+      if (
+        payload.userId === user.id &&
+        payload.status === 'OFFLINE' &&
+        client.socket?.connected
+      ) {
+        return;
+      }
+      // Seste görünen biri OFFLINE gelirse çevrimiçi tut
+      const inVoiceNow = voice.participants.some((p) => p.id === payload.userId);
+      const nextStatus =
+        inVoiceNow && payload.status === 'OFFLINE' ? ('ONLINE' as const) : payload.status;
+
       setGuildMembers((prev) =>
         prev.map((m) =>
           m.id === payload.userId
             ? {
                 ...m,
-                status: payload.status,
+                status: nextStatus,
                 customStatus:
                   payload.customStatus !== undefined ? payload.customStatus : m.customStatus,
               }
@@ -233,19 +262,43 @@ export function GuildChannelView({
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
     };
-  }, [client, user]);
+  }, [client, user, voice.participants]);
 
   // Kendi status'umuzu üye listesinde canlı tut
   useEffect(() => {
     if (!user) return;
+    const live =
+      user.status === 'OFFLINE' && client.socket?.connected
+        ? ('ONLINE' as const)
+        : user.status;
     setGuildMembers((prev) =>
       prev.map((m) =>
         m.id === user.id
-          ? { ...m, status: user.status, customStatus: user.customStatus }
+          ? { ...m, status: live, customStatus: user.customStatus }
           : m,
       ),
     );
-  }, [user?.id, user?.status, user?.customStatus]);
+  }, [user?.id, user?.status, user?.customStatus, client]);
+
+  /** API OFFLINE döndürse bile: ses kanalındaysa veya kendi oturumun açıksa canlı durum */
+  const liveMemberStatus = useCallback(
+    (memberId: string, fallback?: PublicUser['status'] | null): PublicUser['status'] => {
+      const inVoiceNow = voice.participants.some((p) => p.id === memberId);
+      if (user && memberId === user.id) {
+        if (user.status === 'IDLE' || user.status === 'DND') return user.status;
+        if (user.status === 'ONLINE') return 'ONLINE';
+        // OFFLINE / eksik: socket veya seste ise online göster
+        if (client.socket?.connected || inVoiceNow) return 'ONLINE';
+        return 'OFFLINE';
+      }
+      if (inVoiceNow) {
+        if (fallback === 'IDLE' || fallback === 'DND' || fallback === 'ONLINE') return fallback;
+        return 'ONLINE';
+      }
+      return fallback ?? 'OFFLINE';
+    },
+    [user, voice.participants, client],
+  );
 
   useEffect(() => {
     if (!guildId || !user) return;
@@ -659,12 +712,21 @@ export function GuildChannelView({
         if (hasRole) await client.removeMemberRole(guildId, targetUserId, roleId);
         else await client.addMemberRole(guildId, targetUserId, roleId);
         const members = await client.getGuildMembers(guildId);
-        setGuildMembers(members);
+        setGuildMembers(
+          members.map((m) => {
+            if (m.id !== user?.id) return m;
+            const live =
+              user.status === 'IDLE' || user.status === 'DND' || user.status === 'ONLINE'
+                ? user.status
+                : 'ONLINE';
+            return { ...m, status: live, customStatus: user.customStatus ?? m.customStatus };
+          }),
+        );
       } catch (err) {
         setDmError(err instanceof Error ? err.message : 'Rol güncellenemedi');
       }
     },
-    [client, guildId],
+    [client, guildId, user],
   );
 
   /** Aktif ses kanalındaki oda engelleri (yetkiliye görünür) */
@@ -725,11 +787,14 @@ export function GuildChannelView({
             bio: guildMembers.find((g) => g.id === p.id)?.bio,
             socialLinks: guildMembers.find((g) => g.id === p.id)?.socialLinks,
             roles: guildMembers.find((g) => g.id === p.id)?.roles,
-            status: guildMembers.find((g) => g.id === p.id)?.status ?? ('ONLINE' as const),
+            status: liveMemberStatus(
+              p.id,
+              guildMembers.find((g) => g.id === p.id)?.status,
+            ),
             customStatus: guildMembers.find((g) => g.id === p.id)?.customStatus,
             isBot,
             subtitle: presenceLabelTr(
-              guildMembers.find((g) => g.id === p.id)?.status ?? 'ONLINE',
+              liveMemberStatus(p.id, guildMembers.find((g) => g.id === p.id)?.status),
               guildMembers.find((g) => g.id === p.id)?.customStatus,
             ),
             onClick: () => void openMemberDm(p.id, isBot),
@@ -787,10 +852,13 @@ export function GuildChannelView({
                     id: user.id,
                     displayName: user.displayName,
                     avatarUrl: user.avatarUrl,
-                    status: user.status,
+                    status: liveMemberStatus(user.id, user.status),
                     customStatus: user.customStatus,
                     isBot: Boolean(user.isBot),
-                    subtitle: presenceLabelTr(user.status, user.customStatus),
+                    subtitle: presenceLabelTr(
+                      liveMemberStatus(user.id, user.status),
+                      user.customStatus,
+                    ),
                     onClick: () => void openMemberDm(user.id, Boolean(user.isBot)),
                   },
                 ]
@@ -877,7 +945,7 @@ export function GuildChannelView({
             bio: m.bio,
             socialLinks: m.socialLinks,
             roles: m.roles,
-            status: m.status,
+            status: liveMemberStatus(m.id, m.status),
             customStatus: m.customStatus,
             isBot,
             roleColor: topRole?.color,
@@ -890,8 +958,8 @@ export function GuildChannelView({
                 label: r.name,
               })),
             subtitle: denied
-              ? `Engelli · ${presenceLabelTr(m.status, m.customStatus)}`
-              : presenceLabelTr(m.status, m.customStatus),
+              ? `Engelli · ${presenceLabelTr(liveMemberStatus(m.id, m.status), m.customStatus)}`
+              : presenceLabelTr(liveMemberStatus(m.id, m.status), m.customStatus),
             onClick: () => setProfileUser(m),
             contextActions: actions.length ? actions : undefined,
           };
@@ -914,6 +982,7 @@ export function GuildChannelView({
     sendFriendRequest,
     toggleMemberRole,
     activeVoiceDeniedIds,
+    liveMemberStatus,
   ]);
 
   const saveChannel = useCallback(async () => {
@@ -1113,7 +1182,7 @@ export function GuildChannelView({
         displayName: user?.displayName ?? 'Kullanıcı',
         username: user?.username ?? null,
         avatarUrl: user?.avatarUrl,
-        status: user?.status ?? 'ONLINE',
+        status: liveMemberStatus(user?.id ?? '', user?.status) || user?.status || 'ONLINE',
         customStatus: user?.customStatus ?? null,
         muted: inVoice ? voice.muted : undefined,
         deafened: inVoice ? voice.deafened : undefined,
@@ -1589,7 +1658,7 @@ export function GuildChannelView({
               }
             />
           )}
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 z-[100]">
             {inVoice && (
               <MusicPlayerBar
                 guildId={guildId}

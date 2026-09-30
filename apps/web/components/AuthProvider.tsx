@@ -81,10 +81,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const me = await client.getMe();
-      setUser(me);
+      setUser((prev) => {
+        if (
+          client.socket?.connected &&
+          me.status === 'OFFLINE' &&
+          prev &&
+          (prev.status === 'ONLINE' || prev.status === 'IDLE' || prev.status === 'DND')
+        ) {
+          return { ...me, status: prev.status, customStatus: prev.customStatus ?? me.customStatus };
+        }
+        if (client.socket?.connected && me.status === 'OFFLINE') {
+          return { ...me, status: 'ONLINE' };
+        }
+        return me;
+      });
       const access = getAccessToken();
       const refresh = getRefreshToken();
-      if (access && refresh) persistSession(access, refresh, me);
+      if (access && refresh) {
+        const next =
+          client.socket?.connected && me.status === 'OFFLINE'
+            ? { ...me, status: 'ONLINE' as const }
+            : me;
+        persistSession(access, refresh, next);
+      }
       return me;
     } catch {
       return null;
@@ -110,8 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (access) {
         const me = await client.getMe();
-        setUser(me);
-        if (refresh) persistSession(access, refresh, me);
+        const live =
+          client.socket?.connected && me.status === 'OFFLINE'
+            ? { ...me, status: 'ONLINE' as const }
+            : me;
+        setUser(live);
+        if (refresh) persistSession(access, refresh, live);
         setReady(true);
         return;
       }
@@ -170,6 +193,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       customStatus?: string | null;
     }) => {
       if (payload.userId !== userId) return;
+      // Bu sekme açıkken kendini çevrimdışı gösterme (sayfa geçişi / reconnect race)
+      if (payload.status === 'OFFLINE') return;
       setUser((prev) =>
         prev
           ? {
@@ -184,7 +209,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     };
     const onConnect = () => {
-      // Soket bağlanınca UI'ı hemen çevrimiçi göster (IDLE/DND tercihleri korunur)
       setUser((prev) => {
         if (!prev) return prev;
         if (prev.status === 'IDLE' || prev.status === 'DND') return prev;

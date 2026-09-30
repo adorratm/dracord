@@ -161,7 +161,7 @@ export function VoiceSideChat({
       </div>
 
       {effectiveId && (
-        <div className="shrink-0 border-t border-surface-container-high">
+        <div className="relative shrink-0 z-[100] border-t border-surface-container-high">
           <ChatInput
             key={effectiveId}
             channelName={active?.name}

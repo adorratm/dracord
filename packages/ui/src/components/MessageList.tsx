@@ -379,7 +379,7 @@ export function MessageItem({
         compact && !isHeading && 'py-0.5',
         isSelfMention && 'bg-primary-container/10 hover:bg-primary-container/15',
         isHeading && 'py-space-md mt-space-sm border-t border-surface-container-highest/80',
-        (menuOpen || reactPickerOpen) && 'z-50',
+        (menuOpen || reactPickerOpen) && 'z-[3]',
         className,
       )}
       data-menu-open={menuOpen || reactPickerOpen ? '' : undefined}
@@ -491,7 +491,7 @@ export function MessageItem({
       {actions && (
         <div
           className={cn(
-            'absolute right-space-sm transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-20 pointer-events-none [&_button]:pointer-events-auto',
+            'absolute right-space-sm transition-opacity flex items-center gap-0.5 rounded-lg bg-surface-container-high border border-surface-container-highest shadow-bar p-0.5 z-10 pointer-events-none [&_button]:pointer-events-auto',
             sticker ? 'bottom-1 top-auto' : '-top-3',
             menuOpen || reactPickerOpen
               ? 'opacity-100'
@@ -1145,10 +1145,10 @@ export function MessageList({
   const topPad = Math.max(0, parentHeight - totalSize);
 
   return (
-    <div className={cn('relative flex-1 min-h-0 flex flex-col', className)}>
+    <div className={cn('relative z-0 flex-1 min-h-0 flex flex-col isolate', className)}>
       <div
         ref={parentRef}
-        className="flex-1 overflow-y-auto min-h-0"
+        className="flex-1 overflow-y-auto min-h-0 relative z-0"
         role="log"
         aria-live="polite"
         onScroll={onScroll}
@@ -1180,7 +1180,9 @@ export function MessageList({
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 className={cn(
-                  'hover:z-30 focus-within:z-40 [&:has([data-menu-open])]:z-50 transition-[background-color,box-shadow] duration-300',
+                  'relative z-0 transition-[background-color,box-shadow] duration-300',
+                  // Menü açıkken komşu satırların üstüne çık; hover z yükseltme yapma (picker/jump ile çakışır)
+                  '[&:has([data-menu-open])]:z-[3] focus-within:z-[2]',
                   highlighted &&
                     'bg-primary-container/25 ring-2 ring-inset ring-primary-container/60 rounded-lg shadow-[inset_0_0_0_1px_rgba(189,147,249,0.35)]',
                 )}
@@ -1211,7 +1213,7 @@ export function MessageList({
       </div>
 
       {showJump && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-space-md">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[50] flex justify-center px-space-md">
           <button
             type="button"
             onClick={() => {
@@ -1226,7 +1228,7 @@ export function MessageList({
                 requestAnimationFrame(() => scrollToBottom());
               });
             }}
-            className="pointer-events-auto h-9 px-4 rounded-full flex items-center justify-center gap-space-xs border border-surface-container-highest bg-surface-container-high/95 text-on-surface font-label-sm shadow-float backdrop-blur-sm hover:bg-surface-bright hover:border-primary-container/50 transition-colors"
+            className="pointer-events-auto relative z-[50] h-9 px-4 rounded-full flex items-center justify-center gap-space-xs border border-surface-container-highest bg-surface-container-high/95 text-on-surface font-label-sm shadow-float backdrop-blur-sm hover:bg-surface-bright hover:border-primary-container/50 transition-colors"
           >
             <span className="material-symbols-outlined text-[16px] leading-none text-primary-container">
               keyboard_double_arrow_down

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { tokenizeMessageContent } from '../lib/mentions';
 import {
@@ -189,6 +190,13 @@ export function ChatInput({
   const fileRef = useRef<HTMLInputElement>(null);
   const stickerFileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const pickerPanelRef = useRef<HTMLDivElement>(null);
+  const mentionPanelRef = useRef<HTMLDivElement>(null);
+  const [pickerBox, setPickerBox] = useState<{
+    bottom: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const attachRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dragDepth = useRef(0);
@@ -446,10 +454,38 @@ export function ChatInput({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [attachOpen]);
 
+  useLayoutEffect(() => {
+    if (!pickerOpen && !mention) {
+      setPickerBox(null);
+      return;
+    }
+    const update = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const pad = 12;
+      const maxW = 448;
+      setPickerBox({
+        bottom: Math.max(8, window.innerHeight - rect.top + 8),
+        left: Math.max(8, rect.left + pad),
+        width: Math.min(maxW, Math.max(240, rect.width - pad * 2)),
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [pickerOpen, mention, expanded, replyTo]);
+
   useEffect(() => {
     if (!pickerOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setPickerOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (pickerPanelRef.current?.contains(t)) return;
+      setPickerOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -646,6 +682,7 @@ export function ChatInput({
       className={cn(
         'px-space-md flex flex-col shrink-0 relative box-border',
         expanded || replyTo ? 'min-h-16 justify-end py-2' : 'h-16 justify-center',
+        (pickerOpen || attachOpen || mention) && 'z-[90]',
         className,
       )}
       onDragEnter={onDragEnter}
@@ -678,8 +715,19 @@ export function ChatInput({
         </div>
       )}
 
-      {pickerOpen && (
-        <div className="absolute bottom-full left-space-md right-space-md mb-2 z-20 max-w-md rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
+      {pickerOpen &&
+        pickerBox &&
+        typeof document !== 'undefined' &&
+        createPortal(
+        <div
+          ref={pickerPanelRef}
+          className="fixed z-[200] max-w-md rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden isolate"
+          style={{
+            bottom: pickerBox.bottom,
+            left: pickerBox.left,
+            width: pickerBox.width,
+          }}
+        >
           <div className="flex border-b border-surface-container-highest">
             {(
               [
@@ -1028,11 +1076,23 @@ export function ChatInput({
                   })}              </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {mention && mentionOptionsCount > 0 && (
-        <div className="absolute bottom-full left-space-md right-space-md mb-2 z-30 max-w-sm rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
+      {mention && mentionOptionsCount > 0 &&
+        pickerBox &&
+        typeof document !== 'undefined' &&
+        createPortal(
+        <div
+          ref={mentionPanelRef}
+          className="fixed z-[200] max-w-sm rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden"
+          style={{
+            bottom: pickerBox.bottom,
+            left: pickerBox.left,
+            width: Math.min(pickerBox.width, 384),
+          }}
+        >
           <div className="px-space-sm py-space-xs border-b border-surface-container-highest flex items-center gap-space-xs">
             <span className="material-symbols-outlined text-[16px] text-outline leading-none">
               {mention.kind === 'slash' ? 'smart_toy' : 'search'}
@@ -1144,7 +1204,8 @@ export function ChatInput({
                     </li>
                   ))}
           </ul>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <div
