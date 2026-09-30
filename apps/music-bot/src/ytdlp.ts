@@ -19,32 +19,43 @@ export function ffmpegBin() {
 
 /**
  * Ortak yt-dlp bayrakları.
- * YouTube "Sign in to confirm you’re not a bot" için:
- * - YTDLP_COOKIES_FILE: Netscape cookies.txt (önerilen)
- * - YTDLP_EXTRACTOR_ARGS: varsayılan android/ios/mweb client’ları
+ *
+ * Not: Varsayılan olarak `--js-runtimes node` KULLANILMAZ — güncel yt-dlp’de
+ * EJS bileşeni olmadan Python traceback üretebiliyor. Android client JS istemez.
+ * Gerekirse: YTDLP_JS_RUNTIMES=node ve YTDLP_REMOTE_COMPONENTS=ejs:github
  */
 export function commonYtdlpArgs(): string[] {
-  const args: string[] = [
-    '--no-playlist',
-    '--no-warnings',
-    // YouTube JS challenge için Node (Docker'da deno yok)
-    '--js-runtimes',
-    'node',
-  ];
+  const args: string[] = ['--no-playlist', '--no-warnings'];
+
+  const jsRuntimes = process.env.YTDLP_JS_RUNTIMES?.trim();
+  if (jsRuntimes) {
+    args.push('--js-runtimes', jsRuntimes);
+  }
+
+  const remoteComponents = process.env.YTDLP_REMOTE_COMPONENTS?.trim();
+  if (remoteComponents) {
+    args.push('--remote-components', remoteComponents);
+  }
 
   const cookies = process.env.YTDLP_COOKIES_FILE?.trim();
   if (cookies && hasUsableCookiesFile(cookies)) {
     args.push('--cookies', cookies);
   }
 
+  // android* JS challenge istemez; web/mweb bot + nsig için EJS ister
   const extractorArgs =
     process.env.YTDLP_EXTRACTOR_ARGS?.trim() ||
-    'youtube:player_client=android,ios,mweb';
+    'youtube:player_client=android_vr,android';
   if (extractorArgs) {
     args.push('--extractor-args', extractorArgs);
   }
 
   return args;
+}
+
+export function cookiesStatus(): { path: string | null; loaded: boolean } {
+  const path = process.env.YTDLP_COOKIES_FILE?.trim() || null;
+  return { path, loaded: Boolean(path && hasUsableCookiesFile(path)) };
 }
 
 /** Netscape cookies.txt — yorum satırı dışında gerçek cookie satırı var mı */
@@ -59,6 +70,29 @@ function hasUsableCookiesFile(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Discord / log için traceback yerine son ERROR satırı */
+export function summarizeYtdlpError(err: string): string {
+  const lines = err
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const errorLine = [...lines].reverse().find((l) => /^ERROR:/i.test(l));
+  if (errorLine) {
+    return errorLine.replace(/^ERROR:\s*/i, '').slice(0, 180);
+  }
+  const useful = [...lines]
+    .reverse()
+    .find(
+      (l) =>
+        !/^Traceback\b/i.test(l) &&
+        !/^File\b/.test(l) &&
+        !/^\^/.test(l) &&
+        !/^during handling/i.test(l) &&
+        !/^The above exception/i.test(l),
+    );
+  return (useful || err).slice(0, 180);
 }
 
 /** Metadata (JSON) — arama veya URL */
@@ -76,7 +110,7 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
     });
     child.on('close', (code: number | null) => {
       if (code !== 0 || !out.trim()) {
-        reject(new Error(err.trim() || `yt-dlp failed (${code})`));
+        reject(new Error(summarizeYtdlpError(err) || `yt-dlp failed (${code})`));
         return;
       }
       try {

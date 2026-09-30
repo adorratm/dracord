@@ -2,12 +2,19 @@ import type { Job } from 'bullmq';
 import { Worker } from 'bullmq';
 import type { MusicJobPayload } from '@dracord/types';
 import { MusicPlayer } from './player';
+import { cookiesStatus } from './ytdlp';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const QUEUE = 'dracord-music';
 
 async function main() {
   console.log('Dracord music-bot starting…');
+  const cookies = cookiesStatus();
+  console.log(
+    cookies.loaded
+      ? `YouTube cookies: loaded (${cookies.path})`
+      : `YouTube cookies: MISSING — bot check likely (${cookies.path ?? 'YTDLP_COOKIES_FILE unset'})`,
+  );
   const player = new MusicPlayer();
 
   const worker = new Worker<MusicJobPayload>(
