@@ -1,5 +1,6 @@
 /** Client-side video → animated GIF sticker (max 15s). Uses gifenc. */
 
+/// <reference path="../types/gifenc.d.ts" />
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 
 const MAX_DURATION_SEC = 15;

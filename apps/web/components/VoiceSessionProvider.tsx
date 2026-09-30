@@ -1201,9 +1201,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           audio: true,
           resolution: { width: 1920, height: 1080, frameRate: 60 },
           contentHint: 'detail',
-          maxBitrate: 6_000_000,
         },
-        { simulcast: false },
+        {
+          simulcast: false,
+          screenShareEncoding: { maxBitrate: 6_000_000, maxFramerate: 60 },
+        },
       );
       setScreenSharing(true);
       // Kendi paylaşımını otomatik odakla
