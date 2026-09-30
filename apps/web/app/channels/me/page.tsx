@@ -176,6 +176,9 @@ export default function FriendsHubPage() {
             friends={friends}
             pending={[]}
             blocked={blocked}
+            onTabChange={(tab) => {
+              if (tab === 'blocked') void loadBlocked();
+            }}
             emptyState={
               <DracoEmpty
                 mood="peek"

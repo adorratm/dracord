@@ -12,6 +12,7 @@ import {
   VoiceStage,
   VolumeSlider,
   type MemberListGroup,
+  type MemberListAction,
 } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -435,30 +436,65 @@ export function GuildChannelView({
         await client.denyVoiceUser(chId, targetUserId);
         await reload();
       } catch (err) {
-        setDmError(err instanceof Error ? err.message : 'Engellenemedi');
+        setDmError(err instanceof Error ? err.message : 'Oda engeli eklenemedi');
       }
     },
     [voice.voiceChannelId, isVoiceView, channelId, canManageChannels, client, reload],
   );
 
+  const blockMember = useCallback(
+    async (targetUserId: string) => {
+      if (!user || targetUserId === user.id) return;
+      try {
+        await client.blockUser(targetUserId);
+        setDmError(null);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Engellenemedi');
+      }
+    },
+    [user, client],
+  );
+
   const memberGroups: MemberListGroup[] = useMemo(() => {
     const voiceList = inVoice
-      ? voice.participants.map((p) => ({
-          id: p.id,
-          displayName: p.displayName,
-          avatarUrl: p.avatarUrl,
-          status: 'ONLINE' as const,
-          isBot: Boolean((p as { isBot?: boolean }).isBot),
-          subtitle:
-            canManageChannels && p.id !== user?.id ? 'Tıkla: DM · Sağ tık: engelle' : undefined,
-          onClick: () => void openMemberDm(p.id, Boolean((p as { isBot?: boolean }).isBot)),
-          onContextMenu: canManageChannels
-            ? () => {
-                if (p.id === user?.id) return;
-                void denyFromVoice(p.id);
-              }
-            : undefined,
-        }))
+      ? voice.participants.map((p) => {
+          const isSelf = p.id === user?.id;
+          const isBot = Boolean((p as { isBot?: boolean }).isBot);
+          const actions: MemberListAction[] = [];
+          if (!isSelf) {
+            actions.push({
+              id: 'dm',
+              label: 'Mesaj gönder',
+              onSelect: () => void openMemberDm(p.id, isBot),
+            });
+          }
+          if (!isSelf && !isBot) {
+            actions.push({
+              id: 'block',
+              label: 'Kullanıcıyı engelle',
+              danger: true,
+              onSelect: () => void blockMember(p.id),
+            });
+          }
+          if (!isSelf && canManageChannels) {
+            actions.push({
+              id: 'deny-voice',
+              label: 'Ses odasından engelle',
+              danger: true,
+              onSelect: () => void denyFromVoice(p.id),
+            });
+          }
+          return {
+            id: p.id,
+            displayName: p.displayName,
+            avatarUrl: p.avatarUrl,
+            status: 'ONLINE' as const,
+            isBot,
+            subtitle: isSelf ? undefined : 'Tıkla: DM · Sağ tık: menü',
+            onClick: () => void openMemberDm(p.id, isBot),
+            contextActions: actions.length ? actions : undefined,
+          };
+        })
       : [];
     return [
       {
@@ -484,15 +520,36 @@ export function GuildChannelView({
       {
         id: 'members',
         label: 'Üyeler',
-        members: guildMembers.map((m) => ({
-          id: m.id,
-          displayName: m.displayName,
-          avatarUrl: m.avatarUrl,
-          status: m.status,
-          isBot: Boolean(m.isBot),
-          subtitle: m.id === user?.id ? 'Notlarım' : 'Mesaj gönder',
-          onClick: () => void openMemberDm(m.id, Boolean(m.isBot)),
-        })),
+        members: guildMembers.map((m) => {
+          const isSelf = m.id === user?.id;
+          const isBot = Boolean(m.isBot);
+          const actions: MemberListAction[] = [];
+          if (!isSelf) {
+            actions.push({
+              id: 'dm',
+              label: 'Mesaj gönder',
+              onSelect: () => void openMemberDm(m.id, isBot),
+            });
+          }
+          if (!isSelf && !isBot) {
+            actions.push({
+              id: 'block',
+              label: 'Kullanıcıyı engelle',
+              danger: true,
+              onSelect: () => void blockMember(m.id),
+            });
+          }
+          return {
+            id: m.id,
+            displayName: m.displayName,
+            avatarUrl: m.avatarUrl,
+            status: m.status,
+            isBot,
+            subtitle: isSelf ? 'Notlarım' : 'Tıkla: DM · Sağ tık: menü',
+            onClick: () => void openMemberDm(m.id, isBot),
+            contextActions: actions.length ? actions : undefined,
+          };
+        }),
       },
     ];
   }, [
@@ -503,6 +560,7 @@ export function GuildChannelView({
     openMemberDm,
     canManageChannels,
     denyFromVoice,
+    blockMember,
   ]);
 
   const saveChannel = useCallback(async () => {

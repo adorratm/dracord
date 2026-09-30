@@ -25,7 +25,12 @@ export type {
 } from './components/ChannelSidebar';
 
 export { MemberList } from './components/MemberList';
-export type { MemberListProps, MemberListGroup, MemberListMember } from './components/MemberList';
+export type {
+  MemberListProps,
+  MemberListGroup,
+  MemberListMember,
+  MemberListAction,
+} from './components/MemberList';
 
 export { MessageList, MessageItem } from './components/MessageList';
 export type { MessageListProps, MessageItemProps, MessageItemActions } from './components/MessageList';

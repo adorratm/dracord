@@ -1,8 +1,17 @@
 'use client';
 
 import type { PresenceStatus } from '@dracord/types';
+import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
+
+export interface MemberListAction {
+  id: string;
+  label: string;
+  danger?: boolean;
+  onSelect: () => void;
+}
 
 export interface MemberListMember {
   id: string;
@@ -13,7 +22,10 @@ export interface MemberListMember {
   subtitle?: string;
   isBot?: boolean;
   onClick?: () => void;
+  /** @deprecated Tek aksiyon — yerine contextActions kullan */
   onContextMenu?: () => void;
+  /** Sağ tık menüsü — engel yalnızca buradan seçilince uygulanır */
+  contextActions?: MemberListAction[];
 }
 
 export interface MemberListGroup {
@@ -27,7 +39,82 @@ export interface MemberListProps {
   className?: string;
 }
 
+type MenuState = {
+  x: number;
+  y: number;
+  memberId: string;
+  displayName: string;
+  actions: MemberListAction[];
+};
+
 export function MemberList({ groups, className }: MemberListProps) {
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!menu) return;
+
+    // Sağ tık mousedown'ı menüyü anında kapatmasın
+    let removeClose: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      const onPointerDown = (e: PointerEvent) => {
+        const node = menuRef.current;
+        if (node && e.target instanceof Node && node.contains(e.target)) return;
+        setMenu(null);
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setMenu(null);
+      };
+      document.addEventListener('pointerdown', onPointerDown, true);
+      document.addEventListener('keydown', onKey);
+      removeClose = () => {
+        document.removeEventListener('pointerdown', onPointerDown, true);
+        document.removeEventListener('keydown', onKey);
+      };
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      removeClose?.();
+    };
+  }, [menu]);
+
+  useEffect(() => {
+    if (!menu || !menuRef.current) return;
+    const el = menuRef.current;
+    const rect = el.getBoundingClientRect();
+    let x = menu.x;
+    let y = menu.y;
+    if (x + rect.width > window.innerWidth - 8) x = Math.max(8, window.innerWidth - rect.width - 8);
+    if (y + rect.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - rect.height - 8);
+    if (x !== menu.x || y !== menu.y) {
+      setMenu((prev) => (prev ? { ...prev, x, y } : prev));
+    }
+  }, [menu]);
+
+  const resolveActions = (member: MemberListMember): MemberListAction[] => {
+    if (member.contextActions?.length) return member.contextActions;
+    if (member.onContextMenu) {
+      return [{ id: 'default', label: 'Engelle', danger: true, onSelect: member.onContextMenu }];
+    }
+    return [];
+  };
+
+  const openMenu = (e: MouseEvent, member: MemberListMember) => {
+    const actions = resolveActions(member);
+    if (actions.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      memberId: member.id,
+      displayName: member.displayName,
+      actions,
+    });
+  };
+
   return (
     <aside
       className={cn(
@@ -42,48 +129,91 @@ export function MemberList({ groups, className }: MemberListProps) {
             {group.label} — {group.members.length}
           </h3>
           <ul className="flex flex-col gap-0.5">
-            {group.members.map((member) => (
-              <li key={member.id}>
-                <button
-                  type="button"
-                  onClick={member.onClick}
-                  onContextMenu={(e) => {
-                    if (!member.onContextMenu) return;
-                    e.preventDefault();
-                    member.onContextMenu();
-                  }}
-                  className="w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group"
-                >
-                  <Avatar
-                    displayName={member.displayName}
-                    imageUrl={member.avatarUrl}
-                    size="md"
-                    status={member.status}
-                  />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <span
-                        className="font-body-sm text-body-sm truncate"
-                        style={member.roleColor ? { color: member.roleColor } : undefined}
-                      >
-                        {member.displayName}
+            {group.members.map((member) => {
+              const hasMenu = resolveActions(member).length > 0;
+              return (
+                <li key={member.id}>
+                  <button
+                    type="button"
+                    onClick={member.onClick}
+                    onContextMenu={(e) => openMenu(e, member)}
+                    aria-haspopup={hasMenu ? 'menu' : undefined}
+                    aria-expanded={menu?.memberId === member.id}
+                    aria-controls={menu?.memberId === member.id ? menuId : undefined}
+                    className={cn(
+                      'w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group',
+                      menu?.memberId === member.id && 'bg-surface-container',
+                    )}
+                  >
+                    <Avatar
+                      displayName={member.displayName}
+                      imageUrl={member.avatarUrl}
+                      size="md"
+                      status={member.status}
+                    />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="font-body-sm text-body-sm truncate"
+                          style={member.roleColor ? { color: member.roleColor } : undefined}
+                        >
+                          {member.displayName}
+                        </span>
+                        {member.isBot && (
+                          <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
+                            BOT
+                          </span>
+                        )}
                       </span>
-                      {member.isBot && (
-                        <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
-                          BOT
+                      {member.subtitle && (
+                        <span className="font-label-sm text-label-sm text-outline truncate">
+                          {member.subtitle}
                         </span>
                       )}
-                    </span>
-                    {member.subtitle && (
-                      <span className="font-label-sm text-label-sm text-outline truncate">{member.subtitle}</span>
-                    )}
-                  </div>
-                </button>
-              </li>
-            ))}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}
+
+      {menu &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            id={menuId}
+            ref={menuRef}
+            role="menu"
+            className="fixed z-[100] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
+            style={{ left: menu.x, top: menu.y }}
+          >
+            <p className="px-3 py-1.5 font-label-sm text-outline truncate border-b border-surface-container-highest mb-0.5">
+              {menu.displayName}
+            </p>
+            {menu.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                className={cn(
+                  'w-full text-left px-3 py-2 font-body-sm hover:bg-surface-bright transition-colors',
+                  action.danger ? 'text-error' : 'text-on-surface',
+                )}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenu(null);
+                  action.onSelect();
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </aside>
   );
 }

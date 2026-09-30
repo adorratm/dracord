@@ -80,7 +80,7 @@ export class UsersService {
       where: { userId, status: FriendshipStatus.BLOCKED },
       relations: { friend: true },
     });
-    return rows.map((r) => toPublicUser(r.friend));
+    return rows.filter((r) => r.friend).map((r) => toPublicUser(r.friend));
   }
 
   async blockUser(userId: string, targetId: string): Promise<{ ok: true }> {
