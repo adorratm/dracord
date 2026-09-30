@@ -16,6 +16,24 @@ COMPOSE=(docker compose
   --env-file .env
 )
 
+wait_healthy() {
+  local svc="$1"
+  local want="$2"
+  for _ in $(seq 1 90); do
+    local h r
+    h="$("${COMPOSE[@]}" ps "$svc" 2>/dev/null | grep -c '(healthy)' || true)"
+    r="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null | wc -l | tr -d ' ')"
+    if [[ "${r:-0}" -ge "$want" && "${h:-0}" -ge "$want" ]]; then
+      echo "    $svc ok ($h/$r healthy)"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "!! $svc not healthy (want=$want)"
+  "${COMPOSE[@]}" ps "$svc" || true
+  return 1
+}
+
 echo "==> Normalize api/web/admin to $REPLICAS replicas + start edge"
 "${COMPOSE[@]}" up -d \
   --scale "api=$REPLICAS" \
@@ -26,22 +44,23 @@ echo "==> Normalize api/web/admin to $REPLICAS replicas + start edge"
   api web admin
 
 echo "==> Wait for health"
-for svc in api web admin; do
-  for _ in $(seq 1 60); do
-    h="$("${COMPOSE[@]}" ps "$svc" | grep -c '(healthy)' || true)"
-    r="$("${COMPOSE[@]}" ps -q "$svc" | wc -l | tr -d ' ')"
-    if [[ "$r" -ge "$REPLICAS" && "$h" -ge "$REPLICAS" ]]; then
-      echo "    $svc ok ($h/$r healthy)"
-      break
-    fi
-    sleep 3
-  done
-done
+wait_healthy api "$REPLICAS"
+wait_healthy web "$REPLICAS"
+wait_healthy admin "$REPLICAS"
 
-"${COMPOSE[@]}" up -d --no-deps edge
+"${COMPOSE[@]}" up -d --no-deps --force-recreate edge
+# edge needs a moment after port publish
+sleep 3
+for _ in $(seq 1 30); do
+  if curl -fsS -o /dev/null http://127.0.0.1:14000/health/ready 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
 
 echo "==> Smoke"
 curl -fsS -o /dev/null -w "web %{http_code}\n" http://127.0.0.1:13000/health || true
 curl -fsS -o /dev/null -w "api %{http_code}\n" http://127.0.0.1:14000/health/ready || true
+curl -fsS -o /dev/null -w "admin %{http_code}\n" http://127.0.0.1:13001/health || true
 "${COMPOSE[@]}" ps
-echo "Done. If other domains are swapped, fix host Nginx server_name blocks (not this stack)."
+echo "Done. Public HTTPS needs: bash docker/sync-dracord-nginx.sh http|https"

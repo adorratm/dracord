@@ -62,6 +62,8 @@ services:
     ports: !reset []
     expose:
       - "3000"
+    # Docker injects HOSTNAME=containerId; override at process start (ENV alone is not enough).
+    command: ["sh", "-c", "export HOSTNAME=0.0.0.0; exec node apps/web/server.js"]
     environment:
       HOSTNAME: "0.0.0.0"
     build:
@@ -75,6 +77,7 @@ services:
     ports: !reset []
     expose:
       - "3000"
+    command: ["sh", "-c", "export HOSTNAME=0.0.0.0; exec node apps/admin/server.js"]
     environment:
       HOSTNAME: "0.0.0.0"
     build:
