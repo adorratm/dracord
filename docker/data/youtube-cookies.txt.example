@@ -1,0 +1,3 @@
+# Netscape HTTP Cookie File
+# Bu dosya git'e commit edilmez. Gerçek cookie satırlarını buraya koyun.
+# Export: yt-dlp --cookies-from-browser chrome --cookies youtube-cookies.txt --skip-download "https://www.youtube.com/"

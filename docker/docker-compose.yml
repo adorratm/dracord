@@ -175,6 +175,12 @@ services:
       MUSIC_AUDIO_BITRATE_KBPS: ${MUSIC_AUDIO_BITRATE_KBPS:-320}
       YTDLP_PATH: /usr/local/bin/yt-dlp
       FFMPEG_PATH: ffmpeg
+      # YouTube bot duvarı: Netscape cookies.txt mount edin (aşağıdaki volume)
+      YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-/cookies/youtube.txt}
+      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=android,ios,mweb}
+    volumes:
+      # Host'ta yoksa boş dosya oluşturun: touch docker/data/youtube-cookies.txt
+      - ${YTDLP_COOKIES_HOST_PATH:-../docker/data/youtube-cookies.txt}:/cookies/youtube.txt:ro
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:

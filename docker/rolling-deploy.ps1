@@ -93,6 +93,13 @@ if ($useProd -eq '1') {
 }
 
 if ($env:DRACORD_ROLL_MUSIC_BOT -ne '0') {
+  $cookiesHost = if ($env:YTDLP_COOKIES_HOST_PATH) { $env:YTDLP_COOKIES_HOST_PATH } else { Join-Path $PSScriptRoot 'data\youtube-cookies.txt' }
+  $cookiesDir = Split-Path -Parent $cookiesHost
+  if (-not (Test-Path $cookiesDir)) { New-Item -ItemType Directory -Path $cookiesDir -Force | Out-Null }
+  if (-not (Test-Path $cookiesHost)) {
+    Set-Content -Path $cookiesHost -Value "# Netscape HTTP Cookie File`n" -Encoding utf8
+    Write-Host "==> Created empty cookies stub: $cookiesHost"
+  }
   Write-Host '==> Recreating music-bot'
   try { Invoke-Compose @('up', '-d', '--build', '--force-recreate', '--no-deps', 'music-bot') } catch { }
 }

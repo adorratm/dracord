@@ -134,6 +134,14 @@ if [[ "$USE_PROD" == "1" ]]; then
 fi
 
 if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then
+  # Docker dosya yoksa dizin yaratır; cookies mount bozulmasın
+  COOKIES_HOST="${YTDLP_COOKIES_HOST_PATH:-/opt/dracord/secrets/youtube-cookies.txt}"
+  mkdir -p "$(dirname "$COOKIES_HOST")"
+  if [[ ! -e "$COOKIES_HOST" ]]; then
+    echo "# Netscape HTTP Cookie File" > "$COOKIES_HOST"
+    chmod 600 "$COOKIES_HOST" || true
+    echo "==> Created empty cookies stub: $COOKIES_HOST (YouTube bot duvarı için gerçek cookie gerekli)"
+  fi
   echo "==> Recreating music-bot"
   "${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot || true
 fi

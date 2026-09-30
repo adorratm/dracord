@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 export type YtMeta = {
@@ -16,17 +17,54 @@ export function ffmpegBin() {
   return process.env.FFMPEG_PATH || 'ffmpeg';
 }
 
+/**
+ * Ortak yt-dlp bayrakları.
+ * YouTube "Sign in to confirm you’re not a bot" için:
+ * - YTDLP_COOKIES_FILE: Netscape cookies.txt (önerilen)
+ * - YTDLP_EXTRACTOR_ARGS: varsayılan android/ios/mweb client’ları
+ */
+export function commonYtdlpArgs(): string[] {
+  const args: string[] = [
+    '--no-playlist',
+    '--no-warnings',
+    // YouTube JS challenge için Node (Docker'da deno yok)
+    '--js-runtimes',
+    'node',
+  ];
+
+  const cookies = process.env.YTDLP_COOKIES_FILE?.trim();
+  if (cookies && hasUsableCookiesFile(cookies)) {
+    args.push('--cookies', cookies);
+  }
+
+  const extractorArgs =
+    process.env.YTDLP_EXTRACTOR_ARGS?.trim() ||
+    'youtube:player_client=android,ios,mweb';
+  if (extractorArgs) {
+    args.push('--extractor-args', extractorArgs);
+  }
+
+  return args;
+}
+
+/** Netscape cookies.txt — yorum satırı dışında gerçek cookie satırı var mı */
+function hasUsableCookiesFile(path: string): boolean {
+  if (!existsSync(path)) return false;
+  try {
+    const text = readFileSync(path, 'utf8');
+    return text.split('\n').some((line) => {
+      const t = line.trim();
+      return t.length > 0 && !t.startsWith('#') && t.includes('\t');
+    });
+  } catch {
+    return false;
+  }
+}
+
 /** Metadata (JSON) — arama veya URL */
 export async function fetchMeta(source: string): Promise<YtMeta> {
   return new Promise((resolve, reject) => {
-    const args = [
-      '-j',
-      '--no-playlist',
-      '--no-warnings',
-      '--js-runtimes',
-      'node',
-      source,
-    ];
+    const args = ['-j', ...commonYtdlpArgs(), source];
     const child = spawn(ytdlpBin(), args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -67,12 +105,8 @@ export function openPcmStream(source: string): {
       'bestaudio/best',
       '-o',
       '-',
-      '--no-playlist',
-      '--no-warnings',
       '--quiet',
-      // YouTube JS challenge için Node (Docker'da deno yok)
-      '--js-runtimes',
-      'node',
+      ...commonYtdlpArgs(),
       source,
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] },

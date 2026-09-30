@@ -12,6 +12,8 @@ dist
 !**/.env.example
 docker/livekit.yaml
 docker/livekit.prod.yaml
+docker/data/youtube-cookies.txt
+**/youtube-cookies.txt
 *.log
 coverage
 .DS_Store
