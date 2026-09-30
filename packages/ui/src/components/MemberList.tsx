@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
+import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
 
 export interface MemberListAction {
   id: string;
@@ -21,6 +22,8 @@ export interface MemberListMember {
   roleColor?: string;
   subtitle?: string;
   isBot?: boolean;
+  /** Animasyonlu rol rozetleri */
+  badges?: Array<{ id: string; badgeKey?: string | null; color?: string; label?: string }>;
   onClick?: () => void;
   /** @deprecated Tek aksiyon — yerine contextActions kullan */
   onContextMenu?: () => void;
@@ -51,6 +54,15 @@ export function MemberList({ groups, className }: MemberListProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('dracord-role-badge-styles')) return;
+    const el = document.createElement('style');
+    el.id = 'dracord-role-badge-styles';
+    el.textContent = ROLE_BADGE_STYLES;
+    document.head.appendChild(el);
+  }, []);
 
   useEffect(() => {
     if (!menu) return;
@@ -164,6 +176,17 @@ export function MemberList({ groups, className }: MemberListProps) {
                             BOT
                           </span>
                         )}
+                        {(member.badges ?? [])
+                          .filter((b) => b.badgeKey && b.badgeKey !== 'none')
+                          .slice(0, 2)
+                          .map((b) => (
+                            <RoleBadge
+                              key={b.id}
+                              badgeKey={b.badgeKey}
+                              color={b.color}
+                              size="sm"
+                            />
+                          ))}
                       </span>
                       {member.subtitle && (
                         <span className="font-label-sm text-label-sm text-outline truncate">

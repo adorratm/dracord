@@ -32,6 +32,12 @@ export type {
   MemberListAction,
 } from './components/MemberList';
 
+export { RoleBadge, ROLE_BADGE_STYLES } from './components/RoleBadge';
+export type { RoleBadgeProps } from './components/RoleBadge';
+
+export { UserProfileCard } from './components/UserProfileCard';
+export type { UserProfileCardProps } from './components/UserProfileCard';
+
 export { MessageList, MessageItem } from './components/MessageList';
 export type { MessageListProps, MessageItemProps, MessageItemActions } from './components/MessageList';
 

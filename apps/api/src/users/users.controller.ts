@@ -12,9 +12,29 @@ export class UsersController {
     return this.usersService.listFriends(req.user.sub);
   }
 
+  @Get('friends/pending')
+  pendingFriends(@Req() req: { user: { sub: string } }) {
+    return this.usersService.listPendingFriends(req.user.sub);
+  }
+
   @Get('blocked')
   blocked(@Req() req: { user: { sub: string } }) {
     return this.usersService.listBlocked(req.user.sub);
+  }
+
+  @Post(':id/friend-request')
+  sendFriendRequest(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.usersService.sendFriendRequest(req.user.sub, id);
+  }
+
+  @Post(':id/friend-request/accept')
+  acceptFriendRequest(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.usersService.acceptFriendRequest(req.user.sub, id);
+  }
+
+  @Delete(':id/friend-request')
+  declineFriendRequest(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.usersService.declineFriendRequest(req.user.sub, id);
   }
 
   @Post(':id/block')

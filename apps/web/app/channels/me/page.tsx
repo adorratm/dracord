@@ -2,7 +2,7 @@
 
 import type { FriendRow } from '@dracord/ui';
 import { FriendsHub } from '@dracord/ui';
-import type { ChannelSummary } from '@dracord/types';
+import type { ChannelSummary, PublicUser } from '@dracord/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
@@ -17,10 +17,15 @@ export default function FriendsHubPage() {
   const { user, client } = useAuth();
   const { guilds } = useGuildNav(undefined);
   const [friends, setFriends] = useState<FriendRow[]>([]);
+  const [pending, setPending] = useState<FriendRow[]>([]);
   const [blocked, setBlocked] = useState<FriendRow[]>([]);
   const [dms, setDms] = useState<ChannelSummary[]>([]);
   const [dmError, setDmError] = useState<string | null>(null);
   const [dmsOpen, setDmsOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addQuery, setAddQuery] = useState('');
+  const [addResults, setAddResults] = useState<PublicUser[]>([]);
+  const [addBusy, setAddBusy] = useState(false);
 
   const openDm = useCallback(
     async (userId: string) => {
@@ -43,6 +48,82 @@ export default function FriendsHubPage() {
     },
     [router],
   );
+
+  const loadFriends = useCallback(async () => {
+    try {
+      const list = await client.getFriends();
+      setFriends(
+        list.map((f) => ({
+          id: f.id,
+          displayName: f.displayName,
+          avatarUrl: f.avatarUrl,
+          status: f.status,
+          onMessage: () => {
+            void openDm(f.id);
+          },
+        })),
+      );
+    } catch {
+      setFriends([]);
+    }
+  }, [client, openDm]);
+
+  const loadPending = useCallback(async () => {
+    try {
+      const { incoming, outgoing } = await client.getPendingFriends();
+      const rows: FriendRow[] = [
+        ...incoming.map((f) => ({
+          id: f.id,
+          displayName: f.displayName,
+          avatarUrl: f.avatarUrl,
+          status: f.status,
+          pendingIncoming: true,
+          subtitle: 'Gelen istek',
+          onAccept: () => {
+            void (async () => {
+              try {
+                await client.acceptFriendRequest(f.id);
+                await Promise.all([loadPending(), loadFriends()]);
+              } catch (err) {
+                setDmError(err instanceof Error ? err.message : 'Kabul edilemedi');
+              }
+            })();
+          },
+          onDecline: () => {
+            void (async () => {
+              try {
+                await client.declineFriendRequest(f.id);
+                await loadPending();
+              } catch (err) {
+                setDmError(err instanceof Error ? err.message : 'Reddedilemedi');
+              }
+            })();
+          },
+        })),
+        ...outgoing.map((f) => ({
+          id: f.id,
+          displayName: f.displayName,
+          avatarUrl: f.avatarUrl,
+          status: f.status,
+          pendingIncoming: false,
+          subtitle: 'Giden istek',
+          onDecline: () => {
+            void (async () => {
+              try {
+                await client.declineFriendRequest(f.id);
+                await loadPending();
+              } catch (err) {
+                setDmError(err instanceof Error ? err.message : 'İptal edilemedi');
+              }
+            })();
+          },
+        })),
+      ];
+      setPending(rows);
+    } catch {
+      setPending([]);
+    }
+  }, [client, loadFriends]);
 
   const loadBlocked = useCallback(async () => {
     try {
@@ -76,26 +157,39 @@ export default function FriendsHubPage() {
       .listDms()
       .then(setDms)
       .catch(() => setDms([]));
-    void client
-      .getFriends()
-      .then((list) => {
-        setFriends(
-          list.map((f) => ({
-            id: f.id,
-            displayName: f.displayName,
-            avatarUrl: f.avatarUrl,
-            status: f.status,
-            onMessage: () => {
-              void openDm(f.id);
-            },
-          })),
-        );
-      })
-      .catch(() => {
-        setFriends([]);
-      });
+    void loadFriends();
+    void loadPending();
     void loadBlocked();
-  }, [client, user, openDm, loadBlocked]);
+  }, [client, user, loadFriends, loadPending, loadBlocked]);
+
+  useEffect(() => {
+    if (!addOpen || addQuery.trim().length < 2) {
+      setAddResults([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void client
+        .searchUsers(addQuery.trim())
+        .then((list) => setAddResults(list.filter((u) => u.id !== user?.id).slice(0, 8)))
+        .catch(() => setAddResults([]));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [addOpen, addQuery, client, user?.id]);
+
+  const sendRequest = async (targetId: string) => {
+    setAddBusy(true);
+    setDmError(null);
+    try {
+      await client.sendFriendRequest(targetId);
+      setAddQuery('');
+      setAddResults([]);
+      await loadPending();
+    } catch (err) {
+      setDmError(err instanceof Error ? err.message : 'İstek gönderilemedi');
+    } finally {
+      setAddBusy(false);
+    }
+  };
 
   const dmSidebar = (
     <aside className="w-full md:w-60 h-full shrink-0 border-r border-surface-container-highest bg-surface-container-low flex flex-col min-h-0">
@@ -110,9 +204,7 @@ export default function FriendsHubPage() {
         >
           Notlarım
         </button>
-        {dmError && (
-          <p className="mt-space-xs font-body-sm text-error">{dmError}</p>
-        )}
+        {dmError && <p className="mt-space-xs font-body-sm text-error">{dmError}</p>}
       </div>
       <ul className="flex-1 overflow-y-auto py-space-sm px-space-xs">
         {dms.length === 0 ? (
@@ -130,14 +222,9 @@ export default function FriendsHubPage() {
                 <span className="material-symbols-outlined text-[18px] text-outline shrink-0">
                   {ch.selfNotes ? 'sticky_note_2' : 'person'}
                 </span>
-                <span className="font-body-sm text-on-surface truncate flex-1">
-                  {ch.name}
-                </span>
+                <span className="font-body-sm text-on-surface truncate flex-1">{ch.name}</span>
                 {ch.unread && (
-                  <span
-                    className="w-2 h-2 rounded-full bg-primary shrink-0"
-                    aria-label="Okunmamış"
-                  />
+                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Okunmamış" />
                 )}
               </button>
             </li>
@@ -153,12 +240,7 @@ export default function FriendsHubPage() {
         <div className="flex flex-1 min-h-0 bg-surface relative">
           <div className="hidden md:flex h-full min-h-0 shrink-0">{dmSidebar}</div>
 
-          <MobileDrawer
-            open={dmsOpen}
-            onClose={() => setDmsOpen(false)}
-            side="left"
-            title="Mesajlar"
-          >
+          <MobileDrawer open={dmsOpen} onClose={() => setDmsOpen(false)} side="left" title="Mesajlar">
             {dmSidebar}
           </MobileDrawer>
 
@@ -174,17 +256,18 @@ export default function FriendsHubPage() {
 
           <FriendsHub
             friends={friends}
-            pending={[]}
+            pending={pending}
             blocked={blocked}
             onTabChange={(tab) => {
               if (tab === 'blocked') void loadBlocked();
+              if (tab === 'pending') void loadPending();
             }}
             emptyState={
               <DracoEmpty
                 mood="peek"
                 size={112}
                 title="Kimse yok gibi…"
-                description="Draco da yalnızlık çekiyor. Bir sunucuya girip sohbet başlat!"
+                description="Arkadaş ekle veya bir sunucuya girip sohbet başlat!"
                 headset
               />
             }
@@ -200,17 +283,59 @@ export default function FriendsHubPage() {
                 </button>
                 <button
                   type="button"
-                  className="px-space-md py-space-xs rounded-lg bg-primary-container text-on-primary-container font-label-md hover:opacity-90"
-                  onClick={() => {
-                    const firstGuild = guilds[0];
-                    if (firstGuild) router.push(`/channels/${firstGuild.id}`);
-                  }}
+                  className="px-space-md py-space-xs rounded-lg bg-primary text-on-primary font-label-md hover:opacity-90"
+                  onClick={() => setAddOpen((v) => !v)}
                 >
-                  Sunuculara git
+                  Arkadaş ekle
                 </button>
               </div>
             }
           />
+
+          {addOpen && (
+            <div className="absolute inset-x-0 top-14 z-30 mx-auto max-w-md px-space-md">
+              <div className="rounded-xl border border-surface-container-highest bg-surface-container-low shadow-float p-space-md">
+                <p className="font-label-sm text-on-surface-variant mb-space-sm">
+                  Kullanıcı adı veya görünen ad ile ara
+                </p>
+                <input
+                  value={addQuery}
+                  onChange={(e) => setAddQuery(e.target.value)}
+                  placeholder="ara…"
+                  className="w-full h-10 rounded-lg bg-surface-container-highest px-space-md font-body-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/40"
+                  autoFocus
+                />
+                <ul className="mt-space-sm max-h-56 overflow-y-auto flex flex-col gap-1">
+                  {addResults.map((u) => (
+                    <li key={u.id} className="flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg hover:bg-surface-container">
+                      <span className="flex-1 font-body-sm text-on-surface truncate">
+                        {u.displayName}{' '}
+                        <span className="text-outline">@{u.username}</span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={addBusy}
+                        className="h-8 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                        onClick={() => void sendRequest(u.id)}
+                      >
+                        İstek gönder
+                      </button>
+                    </li>
+                  ))}
+                  {addQuery.trim().length >= 2 && addResults.length === 0 && (
+                    <li className="px-space-sm py-space-md font-body-sm text-outline">Sonuç yok</li>
+                  )}
+                </ul>
+                <button
+                  type="button"
+                  className="mt-space-sm font-label-sm text-outline hover:text-on-surface"
+                  onClick={() => setAddOpen(false)}
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </AppShell>
     </RequireAuth>

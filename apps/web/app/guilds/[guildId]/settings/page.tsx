@@ -6,11 +6,34 @@ import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
 import { useGuildNav } from '@/hooks/useGuildNav';
-import type { GuildSummary } from '@dracord/types';
+import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
+import { RoleBadge } from '@dracord/ui';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
 }
+
+const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
+  { id: 'none', label: 'Rozet yok' },
+  { id: 'crown', label: 'Taç' },
+  { id: 'shield', label: 'Kalkan' },
+  { id: 'star', label: 'Yıldız' },
+  { id: 'fire', label: 'Ateş' },
+  { id: 'sparkle', label: 'Parıltı' },
+  { id: 'diamond', label: 'Elmas' },
+  { id: 'heart', label: 'Kalp' },
+];
+
+const BG_OPTIONS: { id: RoleProfileBgKey; label: string }[] = [
+  { id: 'none', label: 'Varsayılan' },
+  { id: 'aurora', label: 'Aurora' },
+  { id: 'ember', label: 'Kor' },
+  { id: 'ocean', label: 'Okyanus' },
+  { id: 'noir', label: 'Noir' },
+  { id: 'candy', label: 'Candy' },
+  { id: 'mint', label: 'Mint' },
+  { id: 'sunset', label: 'Gün batımı' },
+];
 
 export default function GuildSettingsPage({ params }: PageProps) {
   const { guildId } = use(params);
@@ -22,6 +45,21 @@ export default function GuildSettingsPage({ params }: PageProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canManage, setCanManage] = useState(false);
+  const [canManageRoles, setCanManageRoles] = useState(false);
+  const [roles, setRoles] = useState<RoleDto[]>([]);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleColor, setNewRoleColor] = useState('#5865F2');
+  const [newBadge, setNewBadge] = useState<RoleBadgeKey>('star');
+  const [newBg, setNewBg] = useState<RoleProfileBgKey>('aurora');
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const list = await client.listGuildRoles(guildId);
+      setRoles(list.sort((a, b) => b.position - a.position));
+    } catch {
+      setRoles([]);
+    }
+  }, [client, guildId]);
 
   useEffect(() => {
     setDetail(guild);
@@ -38,9 +76,19 @@ export default function GuildSettingsPage({ params }: PageProps) {
             perms.has('MANAGE_GUILD') ||
             perms.has('ADMINISTRATOR'),
         );
+        setCanManageRoles(
+          p.owner || perms.has('MANAGE_ROLES') || perms.has('ADMINISTRATOR'),
+        );
       })
-      .catch(() => setCanManage(false));
+      .catch(() => {
+        setCanManage(false);
+        setCanManageRoles(false);
+      });
   }, [client, guildId, user?.id]);
+
+  useEffect(() => {
+    void loadRoles();
+  }, [loadRoles]);
 
   useEffect(() => {
     if (!guild && guildId) {
@@ -104,6 +152,54 @@ export default function GuildSettingsPage({ params }: PageProps) {
     },
     [client, guildId, patchGuild],
   );
+
+  const createRole = async () => {
+    if (!newRoleName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await client.createGuildRole(guildId, {
+        name: newRoleName.trim(),
+        color: newRoleColor,
+        badgeKey: newBadge,
+        profileBgKey: newBg,
+        hoist: true,
+        permissions: ['VIEW_CHANNELS', 'SEND_MESSAGES', 'ADD_REACTIONS'],
+      });
+      setNewRoleName('');
+      await loadRoles();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rol oluşturulamadı');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const patchRole = async (role: RoleDto, patch: Record<string, unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await client.updateGuildRole(guildId, role.id, patch);
+      await loadRoles();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rol güncellenemedi');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeRole = async (role: RoleDto) => {
+    if (role.name === '@everyone') return;
+    setBusy(true);
+    try {
+      await client.deleteGuildRole(guildId, role.id);
+      await loadRoles();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rol silinemedi');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <RequireAuth>
@@ -226,6 +322,138 @@ export default function GuildSettingsPage({ params }: PageProps) {
               </button>
             </div>
           )}
+
+          <section className="max-w-2xl mt-space-2xl">
+            <h2 className="font-headline-lg text-on-surface mb-space-sm">Roller & rozetler</h2>
+            <p className="font-body-sm text-on-surface-variant mb-space-md">
+              Animasyonlu rozet ve profil arka planı rol bazlıdır. Üye listesinde sağ tık → rol ver.
+            </p>
+            {!canManageRoles ? (
+              <p className="font-body-sm text-outline">Rol yönetmek için yetkin yok.</p>
+            ) : (
+              <>
+                <div className="rounded-xl border border-surface-container-highest bg-surface-container-low p-space-md mb-space-lg space-y-space-sm">
+                  <p className="font-label-sm text-outline uppercase tracking-wider">Yeni rol</p>
+                  <div className="flex flex-wrap gap-space-sm items-center">
+                    <input
+                      value={newRoleName}
+                      onChange={(e) => setNewRoleName(e.target.value)}
+                      placeholder="Rol adı"
+                      className="h-9 px-space-sm rounded-lg bg-surface-container-highest outline-none flex-1 min-w-[8rem]"
+                    />
+                    <input
+                      type="color"
+                      value={newRoleColor}
+                      onChange={(e) => setNewRoleColor(e.target.value)}
+                      className="h-9 w-12 rounded cursor-pointer bg-transparent"
+                      title="Renk"
+                    />
+                    <select
+                      value={newBadge}
+                      onChange={(e) => setNewBadge(e.target.value as RoleBadgeKey)}
+                      className="h-9 rounded-lg bg-surface-container-highest px-2 font-label-sm"
+                    >
+                      {BADGE_OPTIONS.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={newBg}
+                      onChange={(e) => setNewBg(e.target.value as RoleProfileBgKey)}
+                      className="h-9 rounded-lg bg-surface-container-highest px-2 font-label-sm"
+                    >
+                      {BG_OPTIONS.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={busy || !newRoleName.trim()}
+                      onClick={() => void createRole()}
+                      className="h-9 px-space-md rounded-lg bg-primary text-on-primary font-label-sm disabled:opacity-50"
+                    >
+                      Oluştur
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="font-label-sm text-outline">Önizleme:</span>
+                    <RoleBadge badgeKey={newBadge} color={newRoleColor} label={newRoleName || 'Rol'} />
+                  </div>
+                </div>
+
+                <ul className="flex flex-col gap-space-sm">
+                  {roles.map((role) => (
+                    <li
+                      key={role.id}
+                      className="rounded-xl border border-surface-container-highest bg-surface-container-low p-space-md flex flex-wrap items-center gap-space-sm"
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: role.color }}
+                      />
+                      <span className="font-body-sm text-on-surface font-semibold min-w-[6rem]">
+                        {role.name}
+                      </span>
+                      <RoleBadge
+                        badgeKey={role.badgeKey}
+                        color={role.color}
+                        label={role.name !== '@everyone' ? role.name : undefined}
+                      />
+                      {role.name !== '@everyone' && (
+                        <>
+                          <select
+                            value={role.badgeKey || 'none'}
+                            disabled={busy}
+                            onChange={(e) => void patchRole(role, { badgeKey: e.target.value })}
+                            className="h-8 rounded-lg bg-surface-container-highest px-2 font-label-sm"
+                          >
+                            {BADGE_OPTIONS.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={role.profileBgKey || 'none'}
+                            disabled={busy}
+                            onChange={(e) =>
+                              void patchRole(role, { profileBgKey: e.target.value })
+                            }
+                            className="h-8 rounded-lg bg-surface-container-highest px-2 font-label-sm"
+                          >
+                            {BG_OPTIONS.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                Arka plan: {o.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="color"
+                            value={role.color}
+                            disabled={busy}
+                            onChange={(e) => void patchRole(role, { color: e.target.value })}
+                            className="h-8 w-10 rounded cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void removeRole(role)}
+                            className="h-8 px-space-sm rounded-lg text-error hover:bg-error/10 font-label-sm ml-auto"
+                          >
+                            Sil
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
         </div>
       </AppShell>
     </RequireAuth>

@@ -478,6 +478,96 @@ export class DracordClient {
     return this.request('/users/blocked');
   }
 
+  async getPendingFriends(): Promise<import('@dracord/types').FriendPendingLists> {
+    return this.request('/users/friends/pending');
+  }
+
+  async sendFriendRequest(userId: string): Promise<{ ok: true; status: string }> {
+    return this.request(`/users/${userId}/friend-request`, {
+      method: 'POST',
+      body: '{}',
+    });
+  }
+
+  async acceptFriendRequest(userId: string): Promise<{ ok: true }> {
+    return this.request(`/users/${userId}/friend-request/accept`, {
+      method: 'POST',
+      body: '{}',
+    });
+  }
+
+  async declineFriendRequest(userId: string): Promise<{ ok: true }> {
+    return this.request(`/users/${userId}/friend-request`, { method: 'DELETE' });
+  }
+
+  async listGuildRoles(guildId: string): Promise<import('@dracord/types').RoleDto[]> {
+    return this.request(`/guilds/${guildId}/roles`);
+  }
+
+  async createGuildRole(
+    guildId: string,
+    body: {
+      name: string;
+      color?: string;
+      permissions?: string[];
+      badgeKey?: string | null;
+      profileBgKey?: string | null;
+      hoist?: boolean;
+    },
+  ): Promise<import('@dracord/types').RoleDto> {
+    return this.request(`/guilds/${guildId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async updateGuildRole(
+    guildId: string,
+    roleId: string,
+    body: Record<string, unknown>,
+  ): Promise<import('@dracord/types').RoleDto> {
+    return this.request(`/guilds/${guildId}/roles/${roleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deleteGuildRole(guildId: string, roleId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/roles/${roleId}`, { method: 'DELETE' });
+  }
+
+  async addMemberRole(
+    guildId: string,
+    userId: string,
+    roleId: string,
+  ): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/roles/members/${userId}/${roleId}`, {
+      method: 'POST',
+      body: '{}',
+    });
+  }
+
+  async removeMemberRole(
+    guildId: string,
+    userId: string,
+    roleId: string,
+  ): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/roles/members/${userId}/${roleId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async setMemberRoles(
+    guildId: string,
+    userId: string,
+    roleIds: string[],
+  ): Promise<{ ok: true; roleIds: string[] }> {
+    return this.request(`/guilds/${guildId}/roles/members/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ roleIds }),
+    });
+  }
+
   async getVoiceToken(
     channelId: string,
     password?: string,
@@ -622,6 +712,11 @@ export class DracordClient {
 
   async getFriends(): Promise<PublicUser[]> {
     return this.request('/users/friends');
+  }
+
+  async searchUsers(query: string): Promise<PublicUser[]> {
+    const q = encodeURIComponent(query.trim());
+    return this.request(`/users/search?q=${q}`);
   }
 
   async listNotifications(opts?: {

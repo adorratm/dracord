@@ -83,6 +83,16 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
           </button>
         </div>
       )}
+      {tab === 'pending' && !friend.pendingIncoming && friend.onDecline && (
+        <button
+          type="button"
+          onClick={friend.onDecline}
+          className="shrink-0 h-9 px-space-md rounded-full bg-surface-container-highest hover:bg-error-container text-on-surface font-label-sm transition-colors"
+          aria-label="İsteği iptal et"
+        >
+          İptal
+        </button>
+      )}
       {tab === 'online' && (
         <button
           type="button"

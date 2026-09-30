@@ -83,6 +83,128 @@ export class UsersService {
     return rows.filter((r) => r.friend).map((r) => toPublicUser(r.friend));
   }
 
+  async listPendingFriends(userId: string): Promise<{
+    incoming: PublicUser[];
+    outgoing: PublicUser[];
+  }> {
+    const [incomingRows, outgoingRows] = await Promise.all([
+      this.em.find(Friendship, {
+        where: { friendId: userId, status: FriendshipStatus.PENDING },
+        relations: { user: true },
+      }),
+      this.em.find(Friendship, {
+        where: { userId, status: FriendshipStatus.PENDING },
+        relations: { friend: true },
+      }),
+    ]);
+    return {
+      incoming: incomingRows.filter((r) => r.user).map((r) => toPublicUser(r.user)),
+      outgoing: outgoingRows.filter((r) => r.friend).map((r) => toPublicUser(r.friend)),
+    };
+  }
+
+  private async assertNotBlocked(a: string, b: string) {
+    const blocked = await this.em.findOne(Friendship, {
+      where: [
+        { userId: a, friendId: b, status: FriendshipStatus.BLOCKED },
+        { userId: b, friendId: a, status: FriendshipStatus.BLOCKED },
+      ],
+    });
+    if (blocked) throw new ForbiddenException('Bu kullanıcı ile etkileşim engelli');
+  }
+
+  async sendFriendRequest(userId: string, targetId: string): Promise<{ ok: true; status: string }> {
+    if (userId === targetId) {
+      throw new BadRequestException('Kendine istek gönderemezsin');
+    }
+    const target = await this.em.findOne(User, { where: { id: targetId } });
+    if (!target) throw new NotFoundException('Kullanıcı bulunamadı');
+    await this.assertNotBlocked(userId, targetId);
+
+    const privacy = mergeClientSettings(target.clientSettings ?? null);
+    if (privacy.privacy?.allowFriendRequests === false) {
+      throw new ForbiddenException('Bu kullanıcı arkadaşlık isteği kabul etmiyor');
+    }
+
+    const existing = await this.em.findOne(Friendship, {
+      where: { userId, friendId: targetId },
+    });
+    if (existing?.status === FriendshipStatus.BLOCKED) {
+      throw new ForbiddenException('Önce engeli kaldırmalısın');
+    }
+    if (existing?.status === FriendshipStatus.ACCEPTED) {
+      throw new ConflictException('Zaten arkadaşsınız');
+    }
+    if (existing?.status === FriendshipStatus.PENDING) {
+      return { ok: true, status: 'PENDING' };
+    }
+
+    // Karşı taraf daha önce istek göndermişse otomatik kabul
+    const reverse = await this.em.findOne(Friendship, {
+      where: { userId: targetId, friendId: userId },
+    });
+    if (reverse?.status === FriendshipStatus.PENDING) {
+      reverse.status = FriendshipStatus.ACCEPTED;
+      await this.em.save(Friendship, reverse);
+      return { ok: true, status: 'ACCEPTED' };
+    }
+    if (reverse?.status === FriendshipStatus.ACCEPTED) {
+      throw new ConflictException('Zaten arkadaşsınız');
+    }
+
+    await this.em.save(
+      Friendship,
+      this.em.create(Friendship, {
+        userId,
+        friendId: targetId,
+        status: FriendshipStatus.PENDING,
+      }),
+    );
+    return { ok: true, status: 'PENDING' };
+  }
+
+  async acceptFriendRequest(userId: string, fromUserId: string): Promise<{ ok: true }> {
+    const row = await this.em.findOne(Friendship, {
+      where: {
+        userId: fromUserId,
+        friendId: userId,
+        status: FriendshipStatus.PENDING,
+      },
+    });
+    if (!row) throw new NotFoundException('Bekleyen istek yok');
+    await this.assertNotBlocked(userId, fromUserId);
+    row.status = FriendshipStatus.ACCEPTED;
+    await this.em.save(Friendship, row);
+    return { ok: true };
+  }
+
+  async declineFriendRequest(userId: string, otherUserId: string): Promise<{ ok: true }> {
+    // Gelen isteği reddet veya giden isteği iptal et
+    const incoming = await this.em.findOne(Friendship, {
+      where: {
+        userId: otherUserId,
+        friendId: userId,
+        status: FriendshipStatus.PENDING,
+      },
+    });
+    if (incoming) {
+      await this.em.remove(Friendship, incoming);
+      return { ok: true };
+    }
+    const outgoing = await this.em.findOne(Friendship, {
+      where: {
+        userId,
+        friendId: otherUserId,
+        status: FriendshipStatus.PENDING,
+      },
+    });
+    if (outgoing) {
+      await this.em.remove(Friendship, outgoing);
+      return { ok: true };
+    }
+    throw new NotFoundException('Bekleyen istek yok');
+  }
+
   async blockUser(userId: string, targetId: string): Promise<{ ok: true }> {
     if (userId === targetId) {
       throw new BadRequestException('Kendini engelleyemezsin');

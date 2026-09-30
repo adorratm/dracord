@@ -9,11 +9,13 @@ import {
   MemberList,
   MessageList,
   Modal,
+  UserProfileCard,
   VoiceStage,
   VolumeSlider,
   type MemberListGroup,
   type MemberListAction,
 } from '@dracord/ui';
+import type { RoleDto } from '@dracord/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell, rememberChannel } from '@/components/AppShell';
@@ -102,6 +104,7 @@ export function GuildChannelView({
   const [canManageChannels, setCanManageChannels] = useState(false);
   const [canManageMessages, setCanManageMessages] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
+  const [canManageRoles, setCanManageRoles] = useState(false);
   const [deleteMessageTarget, setDeleteMessageTarget] = useState<{
     id: string;
     preview: string;
@@ -137,6 +140,8 @@ export function GuildChannelView({
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [guildMembers, setGuildMembers] = useState<PublicUser[]>([]);
+  const [guildRoles, setGuildRoles] = useState<RoleDto[]>([]);
+  const [profileUser, setProfileUser] = useState<PublicUser | null>(null);
   const [voicePasswordPrompt, setVoicePasswordPrompt] = useState<{
     channel: ChannelSummary;
   } | null>(null);
@@ -187,6 +192,10 @@ export function GuildChannelView({
       .getGuildMembers(guildId)
       .then(setGuildMembers)
       .catch(() => setGuildMembers([]));
+    void client
+      .listGuildRoles(guildId)
+      .then(setGuildRoles)
+      .catch(() => setGuildRoles([]));
   }, [client, guildId, user]);
 
   useEffect(() => {
@@ -202,11 +211,15 @@ export function GuildChannelView({
         setCanManageMessages(
           p.owner || set.has('MANAGE_MESSAGES') || set.has('ADMINISTRATOR'),
         );
+        setCanManageRoles(
+          p.owner || set.has('MANAGE_ROLES') || set.has('ADMINISTRATOR'),
+        );
       })
       .catch(() => {
         setCanManageGuild(false);
         setCanManageChannels(false);
         setCanManageMessages(false);
+        setCanManageRoles(false);
       });
   }, [client, guildId, user]);
 
@@ -486,6 +499,33 @@ export function GuildChannelView({
     [user, client],
   );
 
+  const sendFriendRequest = useCallback(
+    async (targetUserId: string) => {
+      if (!user || targetUserId === user.id) return;
+      try {
+        await client.sendFriendRequest(targetUserId);
+        setDmError(null);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'İstek gönderilemedi');
+      }
+    },
+    [user, client],
+  );
+
+  const toggleMemberRole = useCallback(
+    async (targetUserId: string, roleId: string, hasRole: boolean) => {
+      try {
+        if (hasRole) await client.removeMemberRole(guildId, targetUserId, roleId);
+        else await client.addMemberRole(guildId, targetUserId, roleId);
+        const members = await client.getGuildMembers(guildId);
+        setGuildMembers(members);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Rol güncellenemedi');
+      }
+    },
+    [client, guildId],
+  );
+
   /** Aktif ses kanalındaki oda engelleri (yetkiliye görünür) */
   const activeVoiceDeniedIds = useMemo(() => {
     const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
@@ -614,7 +654,15 @@ export function GuildChannelView({
           const isSelf = m.id === user?.id;
           const isBot = Boolean(m.isBot);
           const denied = activeVoiceDeniedIds.includes(m.id);
+          const topRole = (m.roles ?? [])
+            .filter((r) => r.name !== '@everyone')
+            .sort((a, b) => b.position - a.position)[0];
           const actions: MemberListAction[] = [];
+          actions.push({
+            id: 'profile',
+            label: 'Profili gör',
+            onSelect: () => setProfileUser(m),
+          });
           if (!isSelf) {
             actions.push({
               id: 'dm',
@@ -623,6 +671,11 @@ export function GuildChannelView({
             });
           }
           if (!isSelf && !isBot) {
+            actions.push({
+              id: 'friend',
+              label: 'Arkadaşlık isteği gönder',
+              onSelect: () => void sendFriendRequest(m.id),
+            });
             actions.push({
               id: 'block',
               label: 'Kullanıcıyı engelle',
@@ -646,18 +699,37 @@ export function GuildChannelView({
               });
             }
           }
+          if (canManageRoles && !isBot) {
+            for (const role of guildRoles.filter((r) => r.name !== '@everyone')) {
+              const has = (m.roles ?? []).some((r) => r.id === role.id);
+              actions.push({
+                id: `role-${role.id}`,
+                label: has ? `Rol kaldır: ${role.name}` : `Rol ver: ${role.name}`,
+                onSelect: () => void toggleMemberRole(m.id, role.id, has),
+              });
+            }
+          }
           return {
             id: m.id,
             displayName: m.displayName,
             avatarUrl: m.avatarUrl,
             status: m.status,
             isBot,
+            roleColor: topRole?.color,
+            badges: (m.roles ?? [])
+              .filter((r) => r.badgeKey && r.badgeKey !== 'none')
+              .map((r) => ({
+                id: r.id,
+                badgeKey: r.badgeKey,
+                color: r.color,
+                label: r.name,
+              })),
             subtitle: isSelf
               ? 'Notlarım'
               : denied
                 ? 'Odaya girişi engelli · Sağ tık: menü'
-                : 'Tıkla: DM · Sağ tık: menü',
-            onClick: () => void openMemberDm(m.id, isBot),
+                : 'Tıkla: profil · Sağ tık: menü',
+            onClick: () => setProfileUser(m),
             contextActions: actions.length ? actions : undefined,
           };
         }),
@@ -669,11 +741,15 @@ export function GuildChannelView({
     isVoiceView,
     voice.participants,
     guildMembers,
+    guildRoles,
     openMemberDm,
     canManageChannels,
+    canManageRoles,
     denyFromVoice,
     allowFromVoice,
     blockMember,
+    sendFriendRequest,
+    toggleMemberRole,
     activeVoiceDeniedIds,
   ]);
 
@@ -1936,6 +2012,49 @@ export function GuildChannelView({
           </ul>
         )}
       </Modal>
+
+      <UserProfileCard
+        open={Boolean(profileUser)}
+        onClose={() => setProfileUser(null)}
+        user={{
+          id: profileUser?.id ?? '',
+          displayName: profileUser?.displayName ?? '',
+          username: profileUser?.username,
+          avatarUrl: profileUser?.avatarUrl,
+          bannerUrl: profileUser?.bannerUrl,
+          bannerColor: profileUser?.bannerColor,
+          bio: profileUser?.bio,
+          status: profileUser?.status,
+          isBot: profileUser?.isBot,
+          roles: profileUser?.roles,
+        }}
+        actions={
+          profileUser && profileUser.id !== user?.id
+            ? [
+                {
+                  id: 'dm',
+                  label: 'Mesaj gönder',
+                  onClick: () => void openMemberDm(profileUser.id, Boolean(profileUser.isBot)),
+                },
+                ...(profileUser.isBot
+                  ? []
+                  : [
+                      {
+                        id: 'friend',
+                        label: 'Arkadaşlık isteği gönder',
+                        onClick: () => void sendFriendRequest(profileUser.id),
+                      },
+                      {
+                        id: 'block',
+                        label: 'Engelle',
+                        danger: true,
+                        onClick: () => void blockMember(profileUser.id),
+                      },
+                    ]),
+              ]
+            : []
+        }
+      />
     </AppShell>
   );
 }

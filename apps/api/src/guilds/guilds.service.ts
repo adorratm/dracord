@@ -18,6 +18,7 @@ import { Guild } from '@/database/entities/guild.entity';
 import { GuildInvite } from '@/database/entities/guild-invite.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
 import { GuildMemberRole } from '@/database/entities/guild-member-role.entity';
+import { Role } from '@/database/entities/role.entity';
 import { RolePermission } from '@/database/entities/role-permission.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
@@ -101,6 +102,84 @@ export class GuildsService {
       this.em.create(GuildMember, { guildId: guild.id, userId }),
     );
     await this.bot.ensureBotInGuild(guild.id);
+
+    // Varsayılan @everyone + Moderasyon rolleri
+    const everyone = await this.em.save(
+      Role,
+      this.em.create(Role, {
+        guildId: guild.id,
+        name: '@everyone',
+        color: '#99AAB5',
+        position: 0,
+        badgeKey: 'none',
+        profileBgKey: 'none',
+        hoist: false,
+      }),
+    );
+    await this.em.save(
+      RolePermission,
+      [
+        GuildPermissions.VIEW_CHANNELS,
+        GuildPermissions.SEND_MESSAGES,
+        GuildPermissions.ADD_REACTIONS,
+        GuildPermissions.CREATE_POLLS,
+      ].map((permission) =>
+        this.em.create(RolePermission, { roleId: everyone.id, permission }),
+      ),
+    );
+
+    const mod = await this.em.save(
+      Role,
+      this.em.create(Role, {
+        guildId: guild.id,
+        name: 'Moderatör',
+        color: '#ED4245',
+        position: 10,
+        badgeKey: 'shield',
+        profileBgKey: 'ember',
+        hoist: true,
+      }),
+    );
+    await this.em.save(
+      RolePermission,
+      [
+        GuildPermissions.MANAGE_MESSAGES,
+        GuildPermissions.KICK_MEMBERS,
+        GuildPermissions.MANAGE_CHANNELS,
+        GuildPermissions.VIEW_CHANNELS,
+        GuildPermissions.SEND_MESSAGES,
+      ].map((permission) =>
+        this.em.create(RolePermission, { roleId: mod.id, permission }),
+      ),
+    );
+
+    const vip = await this.em.save(
+      Role,
+      this.em.create(Role, {
+        guildId: guild.id,
+        name: 'VIP',
+        color: '#FEE75C',
+        position: 5,
+        badgeKey: 'crown',
+        profileBgKey: 'aurora',
+        hoist: true,
+      }),
+    );
+
+    const ownerMember = await this.em.findOne(GuildMember, {
+      where: { guildId: guild.id, userId },
+    });
+    if (ownerMember) {
+      await this.em.save(
+        GuildMemberRole,
+        [everyone, mod, vip].map((r) =>
+          this.em.create(GuildMemberRole, {
+            guildMemberId: ownerMember.id,
+            roleId: r.id,
+          }),
+        ),
+      );
+    }
 
     const textCat = await this.em.save(
       Category,
@@ -302,10 +381,22 @@ export class GuildsService {
       where: { guildId, userId },
     });
     if (!existing) {
-      await this.em.save(
+      const member = await this.em.save(
         GuildMember,
         this.em.create(GuildMember, { guildId, userId }),
       );
+      const everyone = await this.em.findOne(Role, {
+        where: { guildId, name: '@everyone' },
+      });
+      if (everyone) {
+        await this.em.save(
+          GuildMemberRole,
+          this.em.create(GuildMemberRole, {
+            guildMemberId: member.id,
+            roleId: everyone.id,
+          }),
+        );
+      }
     }
     return this.toSummary(guild);
   }
@@ -314,11 +405,32 @@ export class GuildsService {
     await this.ensureMember(guildId, userId);
     const members = await this.em.find(GuildMember, {
       where: { guildId },
-      relations: { user: true },
+      relations: {
+        user: true,
+        roles: { role: true },
+      },
       take: 250,
       order: { joinedAt: 'ASC' },
     });
-    return members.filter((m) => m.user).map((m) => toPublicUser(m.user));
+    return members
+      .filter((m) => m.user)
+      .map((m) => {
+        const pub = toPublicUser(m.user);
+        const roles = (m.roles ?? [])
+          .map((mr) => mr.role)
+          .filter((r): r is NonNullable<typeof r> => Boolean(r))
+          .sort((a, b) => b.position - a.position)
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            color: r.color,
+            position: r.position,
+            badgeKey: (r.badgeKey || 'none') as import('@dracord/types').RoleBadgeKey,
+            profileBgKey: (r.profileBgKey || 'none') as import('@dracord/types').RoleProfileBgKey,
+            hoist: Boolean(r.hoist),
+          }));
+        return { ...pub, roles };
+      });
   }
 
   async ensureMember(guildId: string, userId: string): Promise<void> {

@@ -26,6 +26,45 @@ export interface PublicUser {
   censorLinkPreviews?: boolean;
   /** Sistem / müzik botu */
   isBot?: boolean;
+  /** Sunucu üyeliğinde dolu — rol rozetleri */
+  roles?: MemberRoleSummary[];
+}
+
+/** Animasyonlu rol rozeti stilleri */
+export type RoleBadgeKey =
+  | 'none'
+  | 'crown'
+  | 'shield'
+  | 'star'
+  | 'fire'
+  | 'sparkle'
+  | 'diamond'
+  | 'heart';
+
+/** Profil kartı arka plan temaları */
+export type RoleProfileBgKey =
+  | 'none'
+  | 'aurora'
+  | 'ember'
+  | 'ocean'
+  | 'noir'
+  | 'candy'
+  | 'mint'
+  | 'sunset';
+
+export interface MemberRoleSummary {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  badgeKey?: RoleBadgeKey | null;
+  profileBgKey?: RoleProfileBgKey | null;
+  hoist?: boolean;
+}
+
+export interface FriendPendingLists {
+  incoming: PublicUser[];
+  outgoing: PublicUser[];
 }
 
 export interface VoiceMemberSummary {
@@ -265,6 +304,9 @@ export interface RoleDto {
   color: string;
   position: number;
   permissions: string[];
+  badgeKey?: RoleBadgeKey | null;
+  profileBgKey?: RoleProfileBgKey | null;
+  hoist?: boolean;
 }
 
 export interface GuildInviteDto {
