@@ -40,7 +40,7 @@ Yalnızca veri katmanı + LiveKit (postgres / pgbouncer / redis / livekit). Tüm
 yarn docker:up:all
 ```
 
-**Not:** Yerelde Postgres host portu **5433** (`5433:5432`) — Windows’ta sık görülen 5432 çakışmasını önlemek için. `DATABASE_URL` örneği: `postgresql://dracord:dracord@localhost:5433/dracord`. PgBouncer host’ta **6432**.
+**Not:** Yerelde Postgres host portu **5434** (`5434:5432`) — Windows’ta sık görülen 5432 çakışmasını önlemek için. `DATABASE_URL` örneği: `postgresql://dracord:dracord@localhost:5434/dracord`. PgBouncer host’ta **6432**.
 
 Durdurmak:
 

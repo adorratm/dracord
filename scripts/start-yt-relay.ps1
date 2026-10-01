@@ -28,11 +28,6 @@ if (-not $Secret) {
   Write-Host 'Bunu sunucu .env dosyasina yapistir'
 }
 
-if (-not (Test-Path -LiteralPath $Cookies)) {
-  Write-Error "Cookie yok: $Cookies - once export + encode script"
-  exit 1
-}
-
 $ytDlp = Find-YtDlp
 if (-not $ytDlp) {
   Write-Host 'yt-dlp bulunamadi. Kur: winget install yt-dlp.yt-dlp'
@@ -42,7 +37,11 @@ $env:YTDLP_PATH = $ytDlp
 
 $env:YTDLP_RELAY_PORT = "$Port"
 $env:YTDLP_RELAY_SECRET = $Secret
-$env:YTDLP_COOKIES_FILE = $Cookies
+if (Test-Path -LiteralPath $Cookies) {
+  $env:YTDLP_COOKIES_FILE = $Cookies
+} else {
+  Remove-Item Env:YTDLP_COOKIES_FILE -ErrorAction SilentlyContinue
+}
 $env:YTDLP_IMPERSONATE = '1'
 
 $namedConfig = Join-Path $root 'docker\data\cloudflared-yt-relay.yml'
