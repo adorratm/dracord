@@ -137,10 +137,27 @@ if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then
   # Docker dosya yoksa dizin yaratır; cookies mount bozulmasın
   COOKIES_HOST="${YTDLP_COOKIES_HOST_PATH:-/opt/dracord/secrets/youtube-cookies.txt}"
   mkdir -p "$(dirname "$COOKIES_HOST")"
-  if [[ ! -e "$COOKIES_HOST" ]]; then
+  ENV_FILE="${COMPOSE_ENV_FILE:-/opt/dracord/.env}"
+  # .env’de B64 varsa her recreate’te dosyayı senkronla (reboot/stub sonrası boş kalmasın)
+  if [[ -f "$ENV_FILE" ]] && grep -q '^YTDLP_COOKIES_B64=' "$ENV_FILE"; then
+    python3 - <<PY || true
+import base64, os, re
+env = open("${ENV_FILE}", encoding="utf-8", errors="ignore").read()
+m = re.search(r"^YTDLP_COOKIES_B64=(.+)$", env, re.M)
+if not m:
+    raise SystemExit(0)
+raw = base64.b64decode(m.group(1).strip().encode("ascii"), validate=False)
+path = "${COOKIES_HOST}"
+open(path, "wb").write(raw)
+os.chmod(path, 0o600)
+print(f"==> Synced cookies from YTDLP_COOKIES_B64 → {path} ({len(raw)} bytes)")
+PY
+  elif [[ ! -e "$COOKIES_HOST" ]]; then
     echo "# Netscape HTTP Cookie File" > "$COOKIES_HOST"
     chmod 600 "$COOKIES_HOST" || true
     echo "==> Created empty cookies stub: $COOKIES_HOST (YouTube bot duvarı için gerçek cookie gerekli)"
+  elif ! grep -q $'\t' "$COOKIES_HOST" 2>/dev/null; then
+    echo "==> UYARI: $COOKIES_HOST boş/stub — YTDLP_COOKIES_B64 yok. push-youtube-cookies.ps1 çalıştır." >&2
   fi
   echo "==> Recreating music-bot"
   "${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot || true

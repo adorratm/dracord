@@ -249,7 +249,16 @@ function buildCommonArgs(opts: RunOpts): string[] {
 
 function clientStrategies(): RunOpts[] {
   const hasCookies = Boolean(ensureCookiesFile() && cookiesStatus().loaded);
-  const forced = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
+  const forcedRaw = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
+  // android_* cookie’yi yok sayıp bot duvarına düşer — cookie varken zorlamayı atla
+  const forcedAndroid = forcedRaw ? /player_client=android/.test(forcedRaw) : false;
+  const forced =
+    forcedRaw && !(hasCookies && forcedAndroid) ? forcedRaw : null;
+  if (forcedRaw && hasCookies && forcedAndroid) {
+    console.warn(
+      `[yt-dlp] YTDLP_EXTRACTOR_ARGS=${forcedRaw} cookie varken atlandı (android cookie kullanmaz)`,
+    );
+  }
 
   // Cookie varken tv/web* önce; android sonda veya cookie’siz
   const preferred = hasCookies
@@ -279,10 +288,12 @@ function clientStrategies(): RunOpts[] {
     const isAndroid = /player_client=android/.test(extractorArgs);
 
     if (hasCookies) {
-      out.push({ extractorArgs, needJs });
-      out.push({ extractorArgs, needJs, impersonate: true });
-      // android + cookie bazen daha kötü; cookie’siz de dene
-      if (isAndroid) {
+      // Cookie client’larda önce cookie ile dene
+      if (!isAndroid) {
+        out.push({ extractorArgs, needJs });
+        out.push({ extractorArgs, needJs, impersonate: true });
+      } else {
+        // android: cookie’siz (cookie yine de işe yaramaz)
         out.push({ extractorArgs, needJs, skipCookies: true });
         out.push({ extractorArgs, needJs, impersonate: true, skipCookies: true });
       }
