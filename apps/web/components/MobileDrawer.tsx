@@ -63,7 +63,7 @@ export function MobileDrawer({
   if (!mounted || !open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[80]" data-mobile-drawer="">
+    <div className="fixed inset-0 z-[250]" data-mobile-drawer="">
       <button
         type="button"
         className="absolute inset-0 bg-black/55"

@@ -296,7 +296,7 @@ export default function FriendsHubPage() {
   return (
     <RequireAuth>
       <AppShell guilds={guilds} homeActive titleBarNav="direct-messages" subtitle="Direkt mesajlar">
-        <div className="flex flex-1 min-h-0 bg-surface relative">
+        <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden bg-surface relative">
           <div className="hidden md:flex h-full min-h-0 shrink-0">{dmSidebar}</div>
 
           <MobileDrawer open={dmsOpen} onClose={() => setDmsOpen(false)} side="left" title="Mesajlar">
@@ -305,7 +305,7 @@ export default function FriendsHubPage() {
 
           <button
             type="button"
-            className="md:hidden fixed bottom-20 left-3 z-40 h-11 w-11 rounded-full bg-surface-container-high text-on-surface shadow-float flex items-center justify-center border border-surface-container-highest"
+            className="md:hidden fixed bottom-20 right-3 z-40 h-11 w-11 rounded-full bg-surface-container-high text-on-surface shadow-float flex items-center justify-center border border-surface-container-highest"
             aria-label="Mesajlar"
             title="Mesajlar"
             onClick={() => setDmsOpen(true)}
@@ -314,6 +314,7 @@ export default function FriendsHubPage() {
           </button>
 
           <FriendsHub
+            className="min-w-0 w-full"
             friends={friends}
             pending={pending}
             blocked={blocked}
@@ -331,10 +332,10 @@ export default function FriendsHubPage() {
               />
             }
             headerAction={
-              <div className="flex items-center gap-space-sm">
+              <div className="flex items-center gap-1 sm:gap-space-sm min-w-0">
                 <button
                   type="button"
-                  className="md:hidden h-9 w-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                  className="md:hidden h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                   aria-label="Mesajlar"
                   onClick={() => setDmsOpen(true)}
                 >
@@ -342,18 +343,22 @@ export default function FriendsHubPage() {
                 </button>
                 <button
                   type="button"
-                  className="px-space-md py-space-xs rounded-lg bg-primary text-on-primary font-label-md hover:opacity-90"
+                  className="shrink-0 h-9 px-2.5 sm:px-space-md rounded-lg bg-primary text-on-primary font-label-sm sm:font-label-md hover:opacity-90 inline-flex items-center gap-1"
                   onClick={() => setAddOpen((v) => !v)}
                 >
-                  Arkadaş ekle
+                  <span className="material-symbols-outlined text-[18px] sm:hidden leading-none">
+                    person_add
+                  </span>
+                  <span className="sm:hidden">Ekle</span>
+                  <span className="hidden sm:inline">Arkadaş ekle</span>
                 </button>
               </div>
             }
           />
 
           {addOpen && (
-            <div className="absolute inset-x-0 top-14 z-30 mx-auto max-w-md px-space-md">
-              <div className="rounded-xl border border-surface-container-highest bg-surface-container-low shadow-float p-space-md">
+            <div className="absolute inset-x-0 top-14 z-30 mx-auto w-full max-w-md px-space-md min-w-0">
+              <div className="rounded-xl border border-surface-container-highest bg-surface-container-low shadow-float p-space-md min-w-0">
                 <p className="font-label-sm text-on-surface-variant mb-space-sm">
                   Kullanıcı adı veya görünen ad ile ara
                 </p>
@@ -364,20 +369,24 @@ export default function FriendsHubPage() {
                   className="w-full h-10 rounded-lg bg-surface-container-highest px-space-md font-body-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/40"
                   autoFocus
                 />
-                <ul className="mt-space-sm max-h-56 overflow-y-auto flex flex-col gap-1">
+                <ul className="mt-space-sm max-h-56 overflow-y-auto flex flex-col gap-1 min-w-0">
                   {addResults.map((u) => (
-                    <li key={u.id} className="flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg hover:bg-surface-container">
-                      <span className="flex-1 font-body-sm text-on-surface truncate">
+                    <li
+                      key={u.id}
+                      className="flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg hover:bg-surface-container min-w-0"
+                    >
+                      <span className="flex-1 font-body-sm text-on-surface truncate min-w-0">
                         {u.displayName}{' '}
                         <span className="text-outline">@{u.username}</span>
                       </span>
                       <button
                         type="button"
                         disabled={addBusy}
-                        className="h-8 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                        className="shrink-0 h-8 px-2.5 sm:px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
                         onClick={() => void sendRequest(u.id)}
                       >
-                        İstek gönder
+                        <span className="sm:hidden">İstek</span>
+                        <span className="hidden sm:inline">İstek gönder</span>
                       </button>
                     </li>
                   ))}

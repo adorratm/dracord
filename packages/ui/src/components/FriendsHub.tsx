@@ -49,7 +49,7 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
   return (
     <div
       className={cn(
-        'flex items-center gap-space-md px-space-md py-space-sm rounded-lg hover:bg-surface-container transition-colors',
+        'flex items-center gap-space-sm sm:gap-space-md px-space-md py-space-sm rounded-lg hover:bg-surface-container transition-colors min-w-0',
         tab === 'blocked' && 'opacity-80',
       )}
     >
@@ -116,11 +116,12 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
         <button
           type="button"
           onClick={friend.onUnblock}
-          className="shrink-0 h-9 px-space-md rounded-full bg-surface-container-highest hover:bg-primary-container text-on-surface hover:text-on-primary-container font-label-sm transition-colors"
+          className="shrink-0 h-9 px-2.5 sm:px-space-md rounded-full bg-surface-container-highest hover:bg-primary-container text-on-surface hover:text-on-primary-container font-label-sm transition-colors"
           aria-label="Engeli kaldır"
           title="Engeli kaldır"
         >
-          Engeli kaldır
+          <span className="sm:hidden">Kaldır</span>
+          <span className="hidden sm:inline">Engeli kaldır</span>
         </button>
       )}
     </div>
@@ -157,20 +158,32 @@ export function FriendsHub({
           : blocked;
 
   return (
-    <div className={cn('flex flex-col flex-1 min-h-0 bg-surface-container', className)}>
-      <div className="px-space-md pt-space-lg pb-space-sm border-b border-surface-container-high flex items-center justify-between gap-space-md">
-        <h1 className="font-headline-lg text-headline-lg text-on-surface">Arkadaşlar</h1>
-        {headerAction}
+    <div className={cn('flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden bg-surface-container', className)}>
+      <div className="px-space-md pt-space-md sm:pt-space-lg pb-space-sm border-b border-surface-container-high flex items-center justify-between gap-space-sm min-w-0">
+        <h1 className="font-headline-lg text-headline-lg text-on-surface shrink-0 truncate">
+          Arkadaşlar
+        </h1>
+        {headerAction ? (
+          <div className="flex items-center justify-end gap-space-xs sm:gap-space-sm min-w-0 shrink">
+            {headerAction}
+          </div>
+        ) : null}
       </div>
 
-      <div className="flex gap-space-md px-space-md pt-space-md border-b border-surface-container-high overflow-x-auto">
+      <div
+        className="flex gap-1 sm:gap-space-md px-space-md pt-space-md border-b border-surface-container-high overflow-x-auto overscroll-x-contain min-w-0 touch-pan-x"
+        role="tablist"
+        aria-label="Arkadaş sekmeleri"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
+            role="tab"
+            aria-selected={tab === t.id}
             onClick={() => setActiveTab(t.id)}
             className={cn(
-              'pb-space-sm font-headline-md text-headline-md border-b-2 transition-colors whitespace-nowrap shrink-0',
+              'pb-space-sm px-1 sm:px-0 font-label-md sm:font-headline-md text-[13px] sm:text-headline-md border-b-2 transition-colors whitespace-nowrap shrink-0',
               tab === t.id
                 ? 'border-primary-container text-on-surface'
                 : 'border-transparent text-on-surface-variant hover:text-on-surface',
@@ -183,7 +196,7 @@ export function FriendsHub({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto py-space-md space-y-0.5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-space-md space-y-0.5 min-w-0">
         {list.length === 0 ? (
           tab === 'online' && emptyState ? (
             emptyState
