@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Create TypeORM tables on an empty prod Postgres (bypasses PgBouncer — DDL needs direct PG).
+# Create/update TypeORM tables on Postgres (bypasses PgBouncer — DDL needs direct PG).
 #
-# Why .env NODE_ENV=development alone failed:
-#   docker-compose.prod.yml used to force NODE_ENV=production on the api service,
-#   and DATABASE_URL points at pgbouncer (schema sync/DDL often fails there).
+# Why not via the running api service:
+#   DATABASE_URL points at pgbouncer; TypeORM synchronize / ALTER TYPE often fails there
+#   and can abort Nest bootstrap (container Restarting).
 #
 # Usage:
 #   bash docker/schema-sync-once.sh
+#   DRACORD_SCHEMA_SKIP_RECREATE=1 bash docker/schema-sync-once.sh   # sync only (deploy rolls later)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,10 +37,10 @@ COMPOSE=(docker compose
   --env-file "$ENV_FILE"
 )
 
-echo "==> One-shot API boot: NODE_ENV=development + direct postgres (not pgbouncer)"
+echo "==> One-shot API boot: synchronize=true + direct postgres (not pgbouncer)"
 # run blocks until we stop it; timeout after sync window
 set +e
-timeout 45 "${COMPOSE[@]}" run --rm --no-deps \
+timeout 60 "${COMPOSE[@]}" run --rm --no-deps \
   -e NODE_ENV=development \
   -e DATABASE_SYNCHRONIZE=true \
   -e DATABASE_URL="$DIRECT_URL" \
@@ -56,6 +57,28 @@ if ! "${COMPOSE[@]}" exec -T postgres \
   psql -U "$PGUSER" -d "$PGDB" -tAc "SELECT to_regclass('public.accounts');" | grep -q accounts; then
   echo "!! accounts table still missing — check api logs above" >&2
   exit 1
+fi
+
+# Ensure FORUM enum exists (TypeORM sync often skips enum widen)
+"${COMPOSE[@]}" exec -T postgres \
+  psql -U "$PGUSER" -d "$PGDB" -v ON_ERROR_STOP=0 <<'SQL' || true
+DO $enum$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'channels_type_enum')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_enum e
+       JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'channels_type_enum' AND e.enumlabel = 'FORUM'
+     ) THEN
+    ALTER TYPE channels_type_enum ADD VALUE 'FORUM';
+  END IF;
+END
+$enum$;
+SQL
+
+if [[ "${DRACORD_SCHEMA_SKIP_RECREATE:-0}" == "1" ]]; then
+  echo "==> Schema sync done (skip recreate — caller will roll api)"
+  exit 0
 fi
 
 echo "==> Restore production api replicas"

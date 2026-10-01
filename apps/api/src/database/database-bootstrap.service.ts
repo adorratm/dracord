@@ -16,6 +16,16 @@ export class DatabaseBootstrapService implements OnModuleInit {
   }
 
   private async ensureChannelTypeForum() {
+    // PgBouncer (transaction pool) üzerinde ALTER TYPE sık break eder;
+    // prod şema güncellemesi docker/schema-sync-once.sh ile direct Postgres’e yapılır.
+    const dbUrl = this.dataSource.options && 'url' in this.dataSource.options
+      ? String((this.dataSource.options as { url?: string }).url ?? '')
+      : '';
+    if (/pgbouncer/i.test(dbUrl)) {
+      this.log.debug('PgBouncer — FORUM enum DDL atlandı (schema-sync-once kullan)');
+      return;
+    }
+
     try {
       const exists = await this.dataSource.query<{ exists: boolean }[]>(`
         SELECT EXISTS (

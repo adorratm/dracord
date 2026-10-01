@@ -8,8 +8,8 @@ import { PushSubscription } from '@/database/entities/push-subscription.entity';
 @Injectable()
 export class PushService {
   private readonly log = new Logger(PushService.name);
-  private readonly enabled: boolean;
-  private readonly publicKey: string | null;
+  private enabled: boolean;
+  private publicKey: string | null;
 
   constructor(
     private readonly em: EntityManager,
@@ -22,7 +22,17 @@ export class PushService {
     this.enabled = Boolean(publicKey && privateKey);
     this.publicKey = publicKey || null;
     if (this.enabled) {
-      webpush.setVapidDetails(subject, publicKey, privateKey);
+      try {
+        webpush.setVapidDetails(subject, publicKey, privateKey);
+      } catch (err) {
+        this.enabled = false;
+        this.publicKey = null;
+        this.log.warn(
+          `VAPID yapılandırması geçersiz — web push kapalı: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     } else {
       this.log.warn('VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY yok — web push kapalı');
     }

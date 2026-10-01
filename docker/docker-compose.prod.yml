@@ -45,8 +45,10 @@ services:
     expose:
       - "4000"
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_SYNCHRONIZE: ${DATABASE_SYNCHRONIZE:-false}
+      # Force prod flags — never inherit NODE_ENV=development from .env (would enable
+      # TypeORM synchronize through PgBouncer and crash on enum/DDL).
+      NODE_ENV: production
+      DATABASE_SYNCHRONIZE: "false"
       LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rtc.dracord.com.tr}
       MUSIC_BOT_LIVEKIT_URL: ws://livekit:7880
       FRONTEND_URL: ${FRONTEND_URL:-https://dracord.com.tr}

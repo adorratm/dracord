@@ -56,6 +56,10 @@ wait_healthy() {
   done
   echo "!! Timeout waiting for $svc (want=$want running=${running:-0} healthy=${healthy:-0})"
   "${COMPOSE[@]}" ps "$svc" || true
+  for id in $("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true); do
+    echo "----- $svc logs ${id:0:12} -----"
+    docker logs --tail 100 "$id" 2>&1 || true
+  done
   return 1
 }
 

@@ -63,8 +63,36 @@ docker compose \
   --env-file .env \
   up -d postgres pgbouncer redis elasticsearch livekit
 
-if ! bash docker/rolling-deploy.sh api web admin; then
-  echo "==> Rolling deploy failed — attempting stack recover (replicas + edge)"
+# Build first so schema sync uses the new image (new columns/tables/enums).
+echo "==> Build app images (before schema sync)"
+docker compose \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.zd.yml \
+  -f docker/docker-compose.prod.yml \
+  --env-file .env \
+  build api web admin
+
+echo "==> Schema sync (direct Postgres — required after entity changes)"
+DRACORD_SCHEMA_SKIP_RECREATE=1 bash docker/schema-sync-once.sh .env
+
+echo "==> Rolling deploy (images already built)"
+if ! DRACORD_SKIP_BUILD=1 bash docker/rolling-deploy.sh api web admin; then
+  echo "==> Rolling deploy failed — dumping api logs + attempting recover"
+  docker compose \
+    -f docker/docker-compose.yml \
+    -f docker/docker-compose.zd.yml \
+    -f docker/docker-compose.prod.yml \
+    --env-file .env \
+    ps api || true
+  for id in $(docker compose \
+    -f docker/docker-compose.yml \
+    -f docker/docker-compose.zd.yml \
+    -f docker/docker-compose.prod.yml \
+    --env-file .env \
+    ps -q api 2>/dev/null || true); do
+    echo "----- logs ${id:0:12} -----"
+    docker logs --tail 80 "$id" 2>&1 || true
+  done
   bash docker/recover-stack.sh || true
   exit 1
 fi

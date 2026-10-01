@@ -45,6 +45,7 @@ module.exports = {
     'pg',
     'pg-native',
     'bcrypt',
+    'web-push',
     '@bull-board/api',
     '@bull-board/express',
     'class-transformer',
