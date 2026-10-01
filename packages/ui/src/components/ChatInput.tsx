@@ -192,7 +192,13 @@ export function ChatInput({
   const rootRef = useRef<HTMLDivElement>(null);
   const pickerPanelRef = useRef<HTMLDivElement>(null);
   const mentionPanelRef = useRef<HTMLDivElement>(null);
+  const attachPanelRef = useRef<HTMLDivElement>(null);
   const [pickerBox, setPickerBox] = useState<{
+    bottom: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [attachBox, setAttachBox] = useState<{
     bottom: number;
     left: number;
     width: number;
@@ -448,10 +454,41 @@ export function ChatInput({
   useEffect(() => {
     if (!attachOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!attachRef.current?.contains(e.target as Node)) setAttachOpen(false);
+      const t = e.target as Node;
+      if (attachRef.current?.contains(t)) return;
+      if (attachPanelRef.current?.contains(t)) return;
+      setAttachOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
+  }, [attachOpen]);
+
+  useLayoutEffect(() => {
+    if (!attachOpen) {
+      setAttachBox(null);
+      return;
+    }
+    const update = () => {
+      const rect = attachRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(288, window.innerWidth - 16);
+      let left = rect.left;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - width - 8);
+      }
+      setAttachBox({
+        bottom: Math.max(8, window.innerHeight - rect.top + 8),
+        left,
+        width,
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
   }, [attachOpen]);
 
   useLayoutEffect(() => {
@@ -1245,8 +1282,19 @@ export function ChatInput({
           >
             <span className="material-symbols-outlined text-[22px] leading-none">add_circle</span>
           </button>
-          {attachOpen && (
-            <div className="absolute bottom-full left-0 mb-2 z-40 w-72 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden">
+          {attachOpen &&
+            attachBox &&
+            typeof document !== 'undefined' &&
+            createPortal(
+              <div
+                ref={attachPanelRef}
+                className="fixed z-[200] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden max-h-[min(70dvh,28rem)] overflow-y-auto"
+                style={{
+                  bottom: attachBox.bottom,
+                  left: attachBox.left,
+                  width: attachBox.width,
+                }}
+              >
               <div className="p-2 flex flex-col gap-0.5">
                 {onHeadingClick && (
                   <button
@@ -1332,7 +1380,8 @@ export function ChatInput({
                   Çoklu dosya desteklenir
                 </p>
               </button>
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
         <div className="relative flex-1 min-w-0">

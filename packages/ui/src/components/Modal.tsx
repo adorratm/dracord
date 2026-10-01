@@ -15,7 +15,7 @@ export interface ModalProps {
 export function Modal({ open, title, onClose, children, footer, className }: ModalProps) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-space-md">
+    <div className="fixed inset-0 z-[220] flex items-end sm:items-center justify-center p-0 sm:p-space-md">
       <button
         type="button"
         className="absolute inset-0 bg-black/60 transition-opacity duration-200"
@@ -27,11 +27,11 @@ export function Modal({ open, title, onClose, children, footer, className }: Mod
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative w-full max-w-md rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-fade-in',
+          'relative w-full sm:max-w-md max-h-[min(92dvh,40rem)] flex flex-col rounded-t-2xl sm:rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-slide-up',
           className,
         )}
       >
-        <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-high">
+        <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-high shrink-0">
           <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
           <button
             type="button"
@@ -42,9 +42,11 @@ export function Modal({ open, title, onClose, children, footer, className }: Mod
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
-        <div className="p-space-md">{children}</div>
+        <div className="p-space-md overflow-y-auto min-h-0 flex-1">{children}</div>
         {footer && (
-          <div className="px-space-md pb-space-md flex justify-end gap-space-sm">{footer}</div>
+          <div className="px-space-md pb-space-md pt-space-xs flex justify-end gap-space-sm shrink-0 border-t border-surface-container-high/60">
+            {footer}
+          </div>
         )}
       </div>
     </div>

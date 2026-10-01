@@ -1284,7 +1284,8 @@ export function GuildChannelView({
         onClick={() => setChannelsOpen(true)}
         style={
           channelsOpen ||
-          (!isVoiceView && !showingVoiceStage && !channelPending && !channelMissing)
+          showingVoiceStage ||
+          (!isVoiceView && !channelPending && !channelMissing)
             ? { display: 'none' }
             : undefined
         }
@@ -1340,13 +1341,26 @@ export function GuildChannelView({
           onLeave={() => {
             leaveVoiceAndMaybeNavigate();
           }}
-          onToggleParticipants={() => setParticipantsOpen((v) => !v)}
+          onToggleParticipants={() => {
+            setParticipantsOpen((v) => {
+              const next = !v;
+              if (next && typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+                setChatOpen(false);
+              }
+              return next;
+            });
+          }}
           onToggleChat={() => {
             setChatOpen((v) => {
               const next = !v;
-              if (next && !voiceChatChannelId) {
-                const text = channels.find((c) => c.type === 'TEXT');
-                if (text) setVoiceChatChannelId(text.id);
+              if (next) {
+                if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+                  setParticipantsOpen(false);
+                }
+                if (!voiceChatChannelId) {
+                  const text = channels.find((c) => c.type === 'TEXT');
+                  if (text) setVoiceChatChannelId(text.id);
+                }
               }
               return next;
             });

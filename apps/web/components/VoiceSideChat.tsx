@@ -1,7 +1,7 @@
 'use client';
 
 import type { ChannelSummary } from '@dracord/types';
-import { ChatInput, MessageList } from '@dracord/ui';
+import { ChatInput, MessageList, Modal } from '@dracord/ui';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useChatChannel } from '@/hooks/useChatChannel';
@@ -37,10 +37,18 @@ export function VoiceSideChat({
     sendMessage,
     sendWithAttachments,
     sendMedia,
+    sendPoll,
+    votePoll,
     error,
   } = useChatChannel(effectiveId);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState('Evet\nHayır');
+  const [headingOpen, setHeadingOpen] = useState(false);
+  const [headingText, setHeadingText] = useState('');
+  const [busy, setBusy] = useState(false);
   const active = textChannels.find((c) => c.id === effectiveId);
   const titleLabel = active ? `#${active.name}` : effectiveId ? 'Direkt mesaj' : 'Kanal seç';
 
@@ -155,6 +163,7 @@ export function VoiceSideChat({
               onReact: (m, emoji) => {
                 void client.toggleReaction(m.id, emoji).catch(() => undefined);
               },
+              onVotePoll: (m, optionId) => void votePoll(m.id, optionId),
             }}
           />
         )}
@@ -168,6 +177,11 @@ export function VoiceSideChat({
             onSend={(text) => void sendMessage(text)}
             onAttachFiles={(files) => void sendWithAttachments(files)}
             onSendMedia={(payload) => void sendMedia(payload)}
+            onPollClick={() => setPollOpen(true)}
+            onHeadingClick={() => {
+              setHeadingText('');
+              setHeadingOpen(true);
+            }}
             spellCheck={prefs.messaging.spellcheck}
             uploadStickerFile={async (file) => {
               const uploaded = await client.uploadFile(file, 'stickers');
@@ -176,6 +190,89 @@ export function VoiceSideChat({
           />
         </div>
       )}
+
+      <Modal
+        open={pollOpen}
+        title="Anket oluştur"
+        onClose={() => setPollOpen(false)}
+        footer={
+          <button
+            type="button"
+            disabled={busy || !pollQuestion.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              const options = pollOptions
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean);
+              if (options.length < 2) return;
+              setBusy(true);
+              void sendPoll(pollQuestion.trim(), options)
+                .then(() => {
+                  setPollOpen(false);
+                  setPollQuestion('');
+                  setPollOptions('Evet\nHayır');
+                })
+                .finally(() => setBusy(false));
+            }}
+          >
+            Gönder
+          </button>
+        }
+      >
+        <label className="flex flex-col gap-space-xs mb-space-md">
+          <span className="font-label-sm text-on-surface-variant">Soru</span>
+          <input
+            value={pollQuestion}
+            onChange={(e) => setPollQuestion(e.target.value)}
+            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-space-xs">
+          <span className="font-label-sm text-on-surface-variant">
+            Seçenekler (her satır bir seçenek)
+          </span>
+          <textarea
+            value={pollOptions}
+            onChange={(e) => setPollOptions(e.target.value)}
+            rows={4}
+            className="w-full rounded-lg bg-surface-container-highest px-space-sm py-space-sm outline-none"
+          />
+        </label>
+      </Modal>
+
+      <Modal
+        open={headingOpen}
+        title="Bölüm başlığı"
+        onClose={() => setHeadingOpen(false)}
+        footer={
+          <button
+            type="button"
+            disabled={busy || !headingText.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+            onClick={() => {
+              const text = headingText.trim();
+              if (!text) return;
+              setBusy(true);
+              void sendMessage(text, undefined, { type: 'heading' })
+                .then(() => {
+                  setHeadingOpen(false);
+                  setHeadingText('');
+                })
+                .finally(() => setBusy(false));
+            }}
+          >
+            Gönder
+          </button>
+        }
+      >
+        <input
+          value={headingText}
+          onChange={(e) => setHeadingText(e.target.value)}
+          placeholder="Başlık metni"
+          className="w-full h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+        />
+      </Modal>
     </div>
   );
 }

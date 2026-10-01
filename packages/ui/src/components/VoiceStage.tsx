@@ -270,11 +270,11 @@ export function VoiceStage({
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Metin solda */}
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Metin — masaüstü yan panel */}
         {showChat && (
           <aside
-            className="relative border-r border-surface-container-high bg-surface-container shrink-0 flex flex-col min-h-0 w-full max-w-[90vw] md:max-w-none"
+            className="relative border-r border-surface-container-high bg-surface-container shrink-0 flex-col min-h-0 hidden md:flex"
             style={{ width: localChatW }}
           >
             {chatPanel}
@@ -282,7 +282,7 @@ export function VoiceStage({
               role="separator"
               aria-orientation="vertical"
               aria-label="Sohbet genişliği"
-              className="hidden md:block absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-container/40 z-10"
+              className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-container/40 z-10"
               onPointerDown={chatResize.onPointerDown}
               onPointerMove={chatResize.onPointerMove}
               onPointerUp={chatResize.onPointerUp}
@@ -290,7 +290,7 @@ export function VoiceStage({
           </aside>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 relative p-space-md gap-space-md">
+        <div className="flex-1 flex flex-col min-w-0 relative p-space-sm sm:p-space-md gap-space-sm sm:gap-space-md">
           {(() => {
             const cameraParticipants = participants.filter((p) => p.camera);
             const autoSpeaker =
@@ -416,10 +416,10 @@ export function VoiceStage({
 
                 <div
                   className={cn(
-                    'grid gap-space-md content-start overflow-y-auto p-0.5',
+                    'grid gap-space-sm sm:gap-space-md content-start overflow-y-auto p-0.5 min-w-0',
                     stripMode
-                      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 shrink-0 max-h-52'
-                      : 'flex-1 grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
+                      ? 'grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 shrink-0 max-h-52'
+                      : 'flex-1 grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
                   )}
                 >
                   {participants.map((p) => {
@@ -452,10 +452,10 @@ export function VoiceStage({
                             : undefined
                         }
                         className={cn(
-                          'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-sm relative overflow-hidden transition-shadow duration-200 box-border',
+                          'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-sm relative overflow-hidden transition-shadow duration-200 box-border w-full min-w-0',
                           stripMode
-                            ? 'aspect-video min-h-[7rem] sm:min-h-[8.5rem]'
-                            : 'aspect-video min-h-[9rem] sm:min-h-0',
+                            ? 'aspect-video min-h-[6.5rem] sm:min-h-[8.5rem]'
+                            : 'aspect-video min-h-[8rem] sm:min-h-0',
                           p.speaking && 'ring-2 ring-inset ring-primary-container',
                           (isFocusedShare || isFeaturedCam) && 'ring-2 ring-inset ring-primary',
                           p.isBot && 'ring-1 ring-inset ring-secondary-container/60',
@@ -536,6 +536,7 @@ export function VoiceStage({
                                 {vol === 0 ? 'volume_off' : p.isBot ? 'smart_toy' : 'volume_up'}
                               </span>
                               <VolumeSlider
+                                size="sm"
                                 value={vol}
                                 aria-label={
                                   p.isBot
@@ -565,19 +566,18 @@ export function VoiceStage({
           {stageOverlay}
         </div>
 
-        {/* Kullanıcılar sağda */}
+        {/* Kullanıcılar — masaüstü yan panel */}
         {showParts && (
           <aside
-            className="relative border-l border-surface-container-high bg-surface-container-low shrink-0 overflow-hidden flex flex-col min-h-0 w-full max-w-[90vw] md:max-w-none"
+            className="relative border-l border-surface-container-high bg-surface-container-low shrink-0 overflow-hidden flex-col min-h-0 hidden md:flex"
             style={{ width: localPartW }}
           >
             <div
               role="separator"
               aria-orientation="vertical"
               aria-label="Üye paneli genişliği"
-              className="hidden md:block absolute top-0 left-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-container/40 z-10"
+              className="absolute top-0 left-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-container/40 z-10"
               onPointerDown={(e) => {
-                // sola sürükleyince genişlesin
                 const startX = e.clientX;
                 const startW = localPartW;
                 const target = e.target as HTMLElement;
@@ -596,6 +596,34 @@ export function VoiceStage({
             />
             {participantsPanel}
           </aside>
+        )}
+
+        {/* Mobil: sohbet / üyeler üstten overlay */}
+        {showChat && (
+          <div className="md:hidden absolute inset-0 z-50 flex flex-col pointer-events-none">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/55 pointer-events-auto"
+              aria-label="Sohbeti kapat"
+              onClick={onToggleChat}
+            />
+            <div className="relative z-10 pointer-events-auto flex flex-col h-[min(88dvh,42rem)] w-full rounded-b-2xl overflow-hidden border-b border-surface-container-highest bg-surface-container shadow-float dracord-slide-up">
+              {chatPanel}
+            </div>
+          </div>
+        )}
+        {showParts && (
+          <div className="md:hidden absolute inset-0 z-[51] flex flex-col pointer-events-none">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/55 pointer-events-auto"
+              aria-label="Üyeleri kapat"
+              onClick={onToggleParticipants}
+            />
+            <div className="relative z-10 pointer-events-auto flex flex-col h-[min(88dvh,42rem)] w-full rounded-b-2xl overflow-hidden border-b border-surface-container-highest bg-surface-container-low shadow-float dracord-slide-up">
+              {participantsPanel}
+            </div>
+          </div>
         )}
       </div>
 
