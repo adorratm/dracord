@@ -22,7 +22,7 @@ function resolveLogoPng(): string {
 
 export default async function OpenGraphImage() {
   const logoBytes = await readFile(resolveLogoPng());
-  const logoSrc = Uint8Array.from(logoBytes).buffer;
+  const logoSrc = `data:image/png;base64,${logoBytes.toString('base64')}`;
 
   return new ImageResponse(
     (
