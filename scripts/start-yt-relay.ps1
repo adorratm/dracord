@@ -45,10 +45,18 @@ $env:YTDLP_RELAY_SECRET = $Secret
 $env:YTDLP_COOKIES_FILE = $Cookies
 $env:YTDLP_IMPERSONATE = '1'
 
+$namedConfig = Join-Path $root 'docker\data\cloudflared-yt-relay.yml'
 Write-Host "yt-dlp: $ytDlp"
 Write-Host "Relay :$Port"
-Write-Host "Diger terminal: cloudflared tunnel --url http://127.0.0.1:$Port"
-Write-Host "Sunucu .env:"
-Write-Host "  YTDLP_RELAY_URL=https://....trycloudflare.com"
-Write-Host "  YTDLP_RELAY_SECRET=$Secret"
+Write-Host "YTDLP_RELAY_SECRET=$Secret"
+if (Test-Path -LiteralPath $namedConfig) {
+  Write-Host "Sabit tunnel config bulundu — diger terminal:"
+  Write-Host "  cloudflared tunnel --config `"$namedConfig`" run"
+  Write-Host "Sunucu .env YTDLP_RELAY_URL bir kez ayarli kalsin (setup-yt-relay-tunnel.ps1)."
+} else {
+  Write-Host "Gecici URL (her acilista degisir) — sabit icin: scripts\setup-yt-relay-tunnel.ps1"
+  Write-Host "  cloudflared tunnel --url http://127.0.0.1:$Port"
+  Write-Host "Sunucu .env:"
+  Write-Host "  YTDLP_RELAY_URL=https://....trycloudflare.com"
+}
 node (Join-Path $PSScriptRoot 'yt-resolve-relay.mjs')

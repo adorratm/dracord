@@ -38,9 +38,31 @@ async function main() {
   const relay = process.env.YTDLP_RELAY_URL?.trim();
   if (relay) {
     console.log(`yt-dlp relay: ${relay}`);
+    try {
+      const secret = process.env.YTDLP_RELAY_SECRET?.trim() || '';
+      const headers: Record<string, string> = {};
+      if (secret) {
+        headers.Authorization = `Bearer ${secret}`;
+        headers['X-Relay-Secret'] = secret;
+      }
+      const ping = await fetch(`${relay.replace(/\/$/, '')}/health`, {
+        headers,
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (ping.ok) {
+        console.log('yt-dlp relay: health OK');
+      } else {
+        console.warn(`yt-dlp relay: health HTTP ${ping.status} — tunnel/URL kontrol et`);
+      }
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `yt-dlp relay: ULASILAMIYOR (${m}) — YouTube çalmaz. PC’de relay+cloudflared aç veya YTDLP_RELAY_URL güncelle.`,
+      );
+    }
   } else if (!proxy) {
     console.warn(
-      'yt-dlp proxy/relay yok — Hetzner’de cookie yetmeyebilir. YTDLP_PROXY veya scripts/start-yt-relay.ps1',
+      'yt-dlp proxy/relay yok — Hetzner’de cookie yetmez. YTDLP_PROXY veya scripts/start-yt-relay.ps1',
     );
   }
   const player = new MusicPlayer();

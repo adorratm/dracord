@@ -34,7 +34,8 @@ $lineFile = Join-Path $tmpDir 'cookies.b64.line'
 $shFile = Join-Path $tmpDir 'apply-cookies.sh'
 Set-Content -Path $lineFile -Value $line -Encoding ascii -NoNewline
 
-@'
+# LF-only bash (CRLF → "no such service: music-bot")
+$bash = @'
 #!/usr/bin/env bash
 set -euo pipefail
 ENVF=/opt/dracord/.env
@@ -44,6 +45,11 @@ LINE=$(cat "$LINE_FILE")
 grep -v '^YTDLP_COOKIES_B64=' "$ENVF" > "$ENVF.tmp" || true
 printf '%s\n' "$LINE" >> "$ENVF.tmp"
 mv "$ENVF.tmp" "$ENVF"
+# Cookie varken android extractor bot duvarını tetikler — zorla tv/web_embedded
+grep -v '^YTDLP_EXTRACTOR_ARGS=' "$ENVF" > "$ENVF.tmp" || true
+echo 'YTDLP_EXTRACTOR_ARGS=youtube:player_client=tv,web_embedded' >> "$ENVF.tmp"
+mv "$ENVF.tmp" "$ENVF"
+grep -q '^YTDLP_IMPERSONATE=' "$ENVF" || echo 'YTDLP_IMPERSONATE=1' >> "$ENVF"
 # Mount edilen dosyayı da güncelle (eski stub B64'ü ezmesin)
 mkdir -p /opt/dracord/secrets
 python3 - <<'PY'
@@ -58,15 +64,28 @@ open(path, "wb").write(raw)
 os.chmod(path, 0o600)
 print(f"wrote {path} bytes={len(raw)}")
 PY
-grep -q '^YTDLP_EXTRACTOR_ARGS=' "$ENVF" || echo 'YTDLP_EXTRACTOR_ARGS=youtube:player_client=tv,web_embedded' >> "$ENVF"
-grep -q '^YTDLP_IMPERSONATE=' "$ENVF" || echo 'YTDLP_IMPERSONATE=1' >> "$ENVF"
 rm -f "$LINE_FILE"
 cd /opt/dracord
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.zd.yml -f docker/docker-compose.prod.yml --env-file .env \
-  up -d --build --force-recreate --no-deps music-bot
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.zd.yml -f docker/docker-compose.prod.yml --env-file .env \
-  logs --tail=40 music-bot
-'@ | Set-Content -Path $shFile -Encoding ascii
+COMPOSE=(docker compose
+  -f docker/docker-compose.yml
+  -f docker/docker-compose.zd.yml
+  -f docker/docker-compose.prod.yml
+  --env-file .env)
+"${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot
+# compose logs bazen proje/service eşleşmez — container id ile al
+cid=$("${COMPOSE[@]}" ps -q music-bot || true)
+if [[ -z "${cid}" ]]; then
+  cid=$(docker ps -qf name=music-bot | head -n1 || true)
+fi
+if [[ -n "${cid}" ]]; then
+  docker logs --tail=50 "$cid"
+else
+  echo "UYARI: music-bot container bulunamadı" >&2
+  docker ps --format '{{.Names}}' | grep -i music || true
+fi
+'@
+
+[System.IO.File]::WriteAllText($shFile, ($bash -replace "`r`n", "`n" -replace "`r", "`n"))
 
 Write-Host "==> scp → $SshTarget"
 scp $lineFile "${SshTarget}:/tmp/dracord-cookies.b64.line"

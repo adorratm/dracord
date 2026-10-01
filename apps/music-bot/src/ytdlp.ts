@@ -400,11 +400,14 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`[yt-dlp] relay fail: ${msg}`);
-      if (looksLikeYoutube(source)) {
+      // Hetzner'de cookie yetmez — relay yoksa / ölüyse YouTube icin yerel deneme yaniltici
+      if (looksLikeYoutube(source) && !proxy) {
         throw new Error(
-          `Ev relay basarisiz: ${msg.slice(0, 120)} — PC'de start-yt-relay + cloudflared acik mi? URL/secret .env'de dogru mu?`,
+          `Ev relay kapali/ulasilamiyor (${msg.slice(0, 80)}). ` +
+            `PC: start-yt-relay.ps1 + cloudflared; trycloudflare URL her acilista degisir → .env YTDLP_RELAY_URL guncelle + music-bot recreate.`,
         );
       }
+      console.warn('[yt-dlp] relay fail — proxy ile yerel deneme');
     }
   }
 

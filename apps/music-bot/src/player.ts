@@ -225,14 +225,17 @@ export class MusicPlayer {
         .catch((e) => console.warn('track meta update failed', e));
     } catch (e) {
       console.error('resolve failed', e);
-      let msg = (e as Error).message.slice(0, 160);
-      if (/not a bot|Sign in|cookies|LOGIN_REQUIRED/i.test(msg)) {
+      let msg = (e as Error).message.slice(0, 220);
+      if (/relay kapali|relay basarisiz|relay fail|fetch failed/i.test(msg)) {
+        msg =
+          'Ev YouTube relay kapalı. PC’de start-yt-relay.ps1 + cloudflared aç; yeni trycloudflare URL’yi .env → YTDLP_RELAY_URL yazıp music-bot recreate et.';
+      } else if (/not a bot|Sign in|cookies|LOGIN_REQUIRED/i.test(msg)) {
         if (!cookiesStatus().loaded) {
           msg =
             'YouTube cookie yok. .env → YTDLP_COOKIES_B64 (scripts/encode-youtube-cookies.ps1), music-bot recreate.';
-        } else if (!process.env.YTDLP_RELAY_URL?.trim() && !process.env.YTDLP_PROXY?.trim()) {
+        } else {
           msg =
-            'Hetzner YouTube engelli. Ev PC relay (start-yt-relay.ps1 + cloudflared) veya residential YTDLP_PROXY sart.';
+            'Hetzner bot duvarı — cookie yetmez. Ev relay (start-yt-relay.ps1 + cloudflared) veya residential YTDLP_PROXY şart.';
         }
       }
       if (session.textChannelId) {
