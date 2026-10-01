@@ -14,6 +14,8 @@ export interface VolumeSliderProps {
   className?: string;
   /** Track dolu kısım rengi */
   tone?: 'primary' | 'secondary' | 'neutral';
+  /** compact satırlar için ince slider */
+  size?: 'sm' | 'md';
   'aria-label'?: string;
 }
 
@@ -43,20 +45,28 @@ export function VolumeSlider({
   disabled = false,
   className,
   tone = 'primary',
+  size = 'md',
   'aria-label': ariaLabel,
 }: VolumeSliderProps) {
   const clamped = Math.max(min, Math.min(max, value));
   const pct = max === min ? 0 : ((clamped - min) / (max - min)) * 100;
+  const compact = size === 'sm';
 
   return (
     <div
       className={cn(
-        'relative flex items-center h-8 flex-1 min-w-0 select-none',
+        'relative flex items-center flex-1 min-w-0 select-none',
+        compact ? 'h-5' : 'h-8',
         disabled && 'opacity-40 pointer-events-none',
         className,
       )}
     >
-      <div className="absolute inset-x-0 h-2 rounded-full bg-surface-container-highest pointer-events-none overflow-hidden">
+      <div
+        className={cn(
+          'absolute inset-x-0 rounded-full bg-surface-container-highest pointer-events-none overflow-hidden',
+          compact ? 'h-1' : 'h-2',
+        )}
+      >
         <div
           className={cn('h-full rounded-full transition-[width] duration-75', TONE_FILL[tone])}
           style={{ width: `${pct}%` }}
@@ -64,7 +74,8 @@ export function VolumeSlider({
       </div>
       <div
         className={cn(
-          'absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 shadow-sm pointer-events-none',
+          'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 shadow-sm pointer-events-none',
+          compact ? 'h-2.5 w-2.5' : 'h-4 w-4',
           TONE_THUMB[tone],
         )}
         style={{ left: `${pct}%` }}

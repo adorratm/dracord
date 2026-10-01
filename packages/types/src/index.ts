@@ -185,10 +185,18 @@ export interface MessageEmbed {
   siteName?: string | null;
 }
 
+export interface MessageReactionUserDto {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
 export interface MessageReactionDto {
   emoji: string;
   count: number;
   me: boolean;
+  /** Tepki bırakanlar (hover popover) */
+  users?: MessageReactionUserDto[];
 }
 
 export interface MessagePollOptionDto {

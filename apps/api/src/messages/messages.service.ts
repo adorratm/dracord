@@ -167,6 +167,7 @@ export class MessagesService {
     const hideMap = new Map(hides.map((h) => [h.messageId, h.mode]));
     const reactions = await this.em.find(Reaction, {
       where: { messageId: In(ids) },
+      relations: { user: true },
     });
     const reactionByMsg = new Map<string, Reaction[]>();
     for (const r of reactions) {
@@ -404,7 +405,7 @@ export class MessagesService {
     message.pinnedAt = new Date();
     message.pinnedById = userId;
     await this.em.save(Message, message);
-    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
     const dto = await this.toDtoWithReply(message, userId, reactions);
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
@@ -421,7 +422,7 @@ export class MessagesService {
     message.pinnedAt = null;
     message.pinnedById = null;
     await this.em.save(Message, message);
-    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
     const dto = await this.toDtoWithReply(message, userId, reactions);
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
@@ -557,7 +558,7 @@ export class MessagesService {
     message.updatedAt = new Date();
     message.embeds = trimmed ? await this.linkPreview.buildEmbeds(trimmed) : null;
     await this.em.save(Message, message);
-    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
     const dto = this.toDto(message, { viewerId: userId, reactions });
     void this.indexer.indexMessage(dto).catch(() => undefined);
     this.realtime.emitUpdate(message.channelId, dto);
@@ -619,7 +620,10 @@ export class MessagesService {
         this.em.create(Reaction, { messageId, userId, emoji: clean }),
       );
     }
-    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const reactions = await this.em.find(Reaction, {
+      where: { messageId },
+      relations: { user: true },
+    });
     const dto = this.toDto(message, { viewerId: userId, reactions });
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
@@ -655,7 +659,7 @@ export class MessagesService {
     poll.votes[optionId] = list;
     message.poll = poll;
     await this.em.save(Message, message);
-    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
     const dto = this.toDto(message, { viewerId: userId, reactions });
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
@@ -814,7 +818,7 @@ export class MessagesService {
     if (!message || message.deletedAt) {
       throw new NotFoundException('Message not found');
     }
-    const reactions = await this.em.find(Reaction, { where: { messageId } });
+    const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
     return this.toDto(message, { viewerId, reactions });
   }
 
@@ -841,17 +845,31 @@ export class MessagesService {
     reactions: Reaction[],
     viewerId?: string,
   ): MessageReactionDto[] {
-    const map = new Map<string, { count: number; me: boolean }>();
+    const map = new Map<
+      string,
+      {
+        count: number;
+        me: boolean;
+        users: Array<{ id: string; displayName: string; avatarUrl?: string | null }>;
+      }
+    >();
     for (const r of reactions) {
-      const cur = map.get(r.emoji) ?? { count: 0, me: false };
+      const cur = map.get(r.emoji) ?? { count: 0, me: false, users: [] };
       cur.count += 1;
       if (viewerId && r.userId === viewerId) cur.me = true;
+      const u = r.user;
+      cur.users.push({
+        id: r.userId,
+        displayName: u?.displayName ?? 'Kullanıcı',
+        avatarUrl: u?.avatarUrl ?? null,
+      });
       map.set(r.emoji, cur);
     }
     return [...map.entries()].map(([emoji, v]) => ({
       emoji,
       count: v.count,
       me: v.me,
+      users: v.users.slice(0, 24),
     }));
   }
 
@@ -887,3 +905,4 @@ export class MessagesService {
     };
   }
 }
+

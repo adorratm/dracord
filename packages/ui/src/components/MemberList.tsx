@@ -148,11 +148,11 @@ export function MemberList({ groups, className }: MemberListProps) {
           <h3 className="px-space-sm mb-space-xs font-label-sm text-label-sm uppercase tracking-wider font-bold text-on-surface-variant">
             {group.label} — {group.members.length}
           </h3>
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-0.5 dracord-stagger">
             {group.members.map((member) => {
               const hasMenu = resolveActions(member).length > 0;
               return (
-                <li key={member.id}>
+                <li key={member.id} className="transition-transform duration-150 hover:translate-x-0.5">
                   <UserHoverCard
                     user={{
                       id: member.id,

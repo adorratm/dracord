@@ -391,7 +391,7 @@ export function ChatInput({
       }
       if (t.type === 'slash') {
         return (
-          <span key={i} className="text-secondary-container bg-secondary-container/25 rounded-[2px]">
+          <span key={i} className="text-[#8be9fd] bg-[#8be9fd]/18 rounded-[2px] font-semibold">
             {t.value}
           </span>
         );
@@ -1184,7 +1184,7 @@ export function ChatInput({
                           insertMention(`/${c.name}${c.argRequired ? ' ' : ''}`)
                         }
                       >
-                        <span className="w-8 h-8 shrink-0 rounded-lg bg-secondary-container/25 text-secondary-container inline-flex items-center justify-center mt-0.5">
+                        <span className="w-8 h-8 shrink-0 rounded-lg bg-[#8be9fd]/15 text-[#8be9fd] inline-flex items-center justify-center mt-0.5">
                           <span className="font-label-md">/</span>
                         </span>
                         <div className="min-w-0 flex-1">

@@ -189,7 +189,7 @@ function renderMessageContent(
       return (
         <span
           key={i}
-          className="inline text-secondary-container bg-secondary-container/15 rounded px-1 font-medium"
+          className="inline text-[#8be9fd] bg-[#8be9fd]/12 rounded px-1 font-semibold tracking-tight"
         >
           {t.value}
         </span>
@@ -478,11 +478,52 @@ export function MessageItem({
         {!isHeading && message.reactions && message.reactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {message.reactions.map((r) => (
-              <button key={r.emoji} type="button" onClick={() => actions?.onReact?.(message, r.emoji)}
-                className={cn('h-7 px-2 rounded-full text-sm inline-flex items-center gap-1 border', r.me ? 'border-primary-container bg-primary-container/20' : 'border-surface-container-highest bg-surface-container-low hover:bg-surface-bright')}>
-                <span>{r.emoji}</span>
-                <span className="font-label-sm text-outline">{r.count}</span>
-              </button>
+              <div key={r.emoji} className="relative group/rxn">
+                <button
+                  type="button"
+                  onClick={() => actions?.onReact?.(message, r.emoji)}
+                  className={cn(
+                    'h-7 px-2 rounded-full text-sm inline-flex items-center gap-1 border transition-transform duration-150 hover:scale-105 active:scale-95',
+                    r.me
+                      ? 'border-primary-container bg-primary-container/20'
+                      : 'border-surface-container-highest bg-surface-container-low hover:bg-surface-bright',
+                  )}
+                >
+                  <span className="dracord-pop">{r.emoji}</span>
+                  <span className="font-label-sm text-outline">{r.count}</span>
+                </button>
+                {(r.users?.length ?? 0) > 0 && (
+                  <div
+                    role="tooltip"
+                    className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[80] opacity-0 scale-95 group-hover/rxn:opacity-100 group-hover/rxn:scale-100 group-focus-within/rxn:opacity-100 transition-[opacity,transform] duration-150 origin-bottom"
+                  >
+                    <div className="min-w-[10rem] max-w-[14rem] rounded-xl border border-surface-container-highest bg-surface-container-high shadow-float px-2.5 py-2 dracord-fade-in">
+                      <p className="font-label-sm text-outline mb-1.5 flex items-center gap-1">
+                        <span>{r.emoji}</span>
+                        <span>
+                          {r.count} tepki
+                          {r.me ? ' · sen' : ''}
+                        </span>
+                      </p>
+                      <ul className="space-y-1 max-h-40 overflow-y-auto">
+                        {(r.users ?? []).map((u) => (
+                          <li key={u.id} className="flex items-center gap-2 min-w-0">
+                            <Avatar
+                              displayName={u.displayName}
+                              imageUrl={u.avatarUrl}
+                              size="sm"
+                              statusRing={false}
+                            />
+                            <span className="font-label-sm text-on-surface truncate">
+                              {u.displayName}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}

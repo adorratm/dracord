@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   SettingsPage,
   SettingsSection,
@@ -12,15 +13,23 @@ export default function TermsPage() {
       <SettingsSection>
         <div className="px-space-md py-space-md space-y-space-sm font-body-sm text-on-surface-variant">
           <p>
-            Dracord’u kullanarak topluluk kurallarımıza uymayı kabul edersiniz: taciz,
-            yasa dışı içerik ve spam yasaktır. Hesap güvenliğinden siz sorumlusunuz.
+            Hizmet koşullarının tam metni herkese açık yasal sayfada yer alır. Dracord’u
+            kullanarak bu koşulları kabul etmiş olursunuz.
           </p>
-          <p>
-            Hizmet “olduğu gibi” sunulur; özellikler değişebilir. Ödeme gerektiren
-            özellikler ayrı koşullara tabi olacaktır.
-          </p>
+          <Link
+            href="/legal/terms"
+            className="inline-flex h-9 px-3 items-center rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+          >
+            Hizmet koşullarını aç
+          </Link>
+          <Link
+            href="/legal/community"
+            className="block text-primary-container hover:underline font-label-sm"
+          >
+            Topluluk kuralları →
+          </Link>
         </div>
-        <SettingsNote>Son güncelleme: 2026-09-29</SettingsNote>
+        <SettingsNote>Son güncelleme: 2026-04-01</SettingsNote>
       </SettingsSection>
     </SettingsPage>
   );

@@ -105,6 +105,9 @@ const NAV: NavDef[] = [
         href: '/settings/privacy-policy',
       },
       { id: 'terms', label: 'Hizmet Koşulları', icon: 'gavel', href: '/settings/terms' },
+      { id: 'kvkk', label: 'KVKK', icon: 'verified_user', href: '/legal/kvkk' },
+      { id: 'cookies', label: 'Çerezler', icon: 'cookie', href: '/legal/cookies' },
+      { id: 'community', label: 'Topluluk', icon: 'diversity_3', href: '/legal/community' },
     ],
   },
 ];
