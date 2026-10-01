@@ -77,9 +77,6 @@ services:
       YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtubepot-bgutilhttp:base_url=http://bgutil-provider:4416}
       YTDLP_COOKIES_B64: ${YTDLP_COOKIES_B64:-}
       YTDLP_IMPERSONATE: ${YTDLP_IMPERSONATE:-1}
-      YTDLP_PROXY: ${YTDLP_PROXY:-}
-      YTDLP_RELAY_URL: ${YTDLP_RELAY_URL:-}
-      YTDLP_RELAY_SECRET: ${YTDLP_RELAY_SECRET:-}
     volumes:
       - ${YTDLP_COOKIES_HOST_PATH:-/opt/dracord/secrets/youtube-cookies.txt}:/cookies/youtube.txt:ro
 
