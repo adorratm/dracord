@@ -13,9 +13,11 @@ export function SettingsPage({
   children: ReactNode;
 }) {
   return (
-    <div className="max-w-2xl space-y-space-lg">
-      <header>
-        <h2 className="font-headline-lg text-headline-lg text-on-surface">{title}</h2>
+    <div className="max-w-2xl w-full min-w-0 space-y-space-md sm:space-y-space-lg">
+      <header className="min-w-0">
+        <h2 className="font-headline-lg text-xl sm:text-headline-lg text-on-surface break-words">
+          {title}
+        </h2>
         {description && (
           <p className="mt-space-xs font-body-md text-body-md text-on-surface-variant">
             {description}
@@ -66,11 +68,11 @@ export function SettingsToggle({
   return (
     <label
       className={cn(
-        'flex items-start justify-between gap-space-md px-space-md py-space-md cursor-pointer',
+        'flex items-start justify-between gap-space-sm sm:gap-space-md px-space-md py-space-md cursor-pointer min-w-0',
         disabled && 'opacity-50 cursor-not-allowed',
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="font-body-md text-on-surface">{label}</p>
         {description && (
           <p className="font-body-sm text-on-surface-variant mt-1">{description}</p>
@@ -103,8 +105,8 @@ export function SettingsSelect({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-space-md px-space-md py-space-md">
-      <div className="min-w-0">
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-space-sm sm:gap-space-md px-space-md py-space-md min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="font-body-md text-on-surface">{label}</p>
         {description && (
           <p className="font-body-sm text-on-surface-variant mt-1">{description}</p>
@@ -114,7 +116,7 @@ export function SettingsSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 min-w-[9rem] px-space-sm rounded-lg bg-surface-container-highest text-on-surface font-body-sm outline-none shrink-0"
+        className="h-9 w-full sm:w-auto sm:min-w-[9rem] max-w-full px-space-sm rounded-lg bg-surface-container-highest text-on-surface font-body-sm outline-none shrink-0"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
