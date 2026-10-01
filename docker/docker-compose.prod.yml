@@ -62,12 +62,19 @@ services:
       livekit:
         condition: service_started
 
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+    init: true
+    networks:
+      - internal
+
   music-bot:
     environment:
       LIVEKIT_URL: ws://livekit:7880
       API_URL: http://api:4000
       YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-/cookies/youtube.txt}
-      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=tv,web_embedded}
+      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtubepot-bgutilhttp:base_url=http://bgutil-provider:4416}
       YTDLP_COOKIES_B64: ${YTDLP_COOKIES_B64:-}
       YTDLP_IMPERSONATE: ${YTDLP_IMPERSONATE:-1}
       YTDLP_PROXY: ${YTDLP_PROXY:-}

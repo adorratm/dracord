@@ -136,6 +136,13 @@ services:
       - internal
       - public
 
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+    init: true
+    networks:
+      - internal
+
   music-bot:
     build:
       context: ..
@@ -156,7 +163,7 @@ services:
       FFMPEG_PATH: ffmpeg
       # Cookie varken tv/web_embedded oturumu kullanır; android_* cookie’yi yok sayabilir
       YTDLP_COOKIES_FILE: ${YTDLP_COOKIES_FILE:-/cookies/youtube.txt}
-      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtube:player_client=tv,web_embedded}
+      YTDLP_EXTRACTOR_ARGS: ${YTDLP_EXTRACTOR_ARGS:-youtubepot-bgutilhttp:base_url=http://bgutil-provider:4416}
       YTDLP_COOKIES_B64: ${YTDLP_COOKIES_B64:-}
       YTDLP_IMPERSONATE: ${YTDLP_IMPERSONATE:-1}
       YTDLP_PROXY: ${YTDLP_PROXY:-}
@@ -173,6 +180,8 @@ services:
       redis:
         condition: service_healthy
       livekit:
+        condition: service_started
+      bgutil-provider:
         condition: service_started
     networks:
       - internal
