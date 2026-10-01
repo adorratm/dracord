@@ -305,11 +305,21 @@ function clientStrategies(): RunOpts[] {
   return out;
 }
 
+const YTDLP_TIMEOUT_MS = Number(process.env.YTDLP_TIMEOUT_MS || 90_000);
+
 function runYtdlp(args: string[]): Promise<{ code: number | null; out: string; err: string }> {
   return new Promise((resolve) => {
     const child = spawn(ytdlpBin(), args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
+    const timer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* ignore */
+      }
+      resolve({ code: 1, out, err: err || `yt-dlp timeout (${YTDLP_TIMEOUT_MS}ms)` });
+    }, YTDLP_TIMEOUT_MS);
     child.stdout.on('data', (d: Buffer) => {
       out += d.toString();
     });
@@ -317,9 +327,11 @@ function runYtdlp(args: string[]): Promise<{ code: number | null; out: string; e
       err += d.toString();
     });
     child.on('error', (e) => {
+      clearTimeout(timer);
       resolve({ code: 1, out, err: e.message });
     });
     child.on('close', (code) => {
+      clearTimeout(timer);
       resolve({ code, out, err });
     });
   });
@@ -385,14 +397,15 @@ function looksLikeYoutube(source: string): boolean {
   return /youtube\.com|youtu\.be|youtubei/i.test(source) || /^[a-zA-Z0-9_-]{11}$/.test(source.trim());
 }
 
-/** Metadata — relay varsa YouTube icin yereli deneme (yaniltici bot hatasi olmasin) */
+/** Metadata — proxy varsa önce yerel+proxy; relay yalnızca proxy yokken */
 export async function fetchMeta(source: string): Promise<YtMeta> {
   ensureCookiesFile();
   workingStreamUrl = null;
   const proxy = resolveProxy();
   const relay = relayBase();
 
-  if (relay) {
+  // Proxy varken ölü/eski YTDLP_RELAY_URL 120s bloklamasın
+  if (relay && !proxy) {
     try {
       const meta = await fetchMetaViaRelay(source);
       console.log(`[yt-dlp] resolved via relay audio-proxy (${relay})`);
@@ -400,15 +413,15 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`[yt-dlp] relay fail: ${msg}`);
-      // Hetzner'de cookie yetmez — relay yoksa / ölüyse YouTube icin yerel deneme yaniltici
-      if (looksLikeYoutube(source) && !proxy) {
+      if (looksLikeYoutube(source)) {
         throw new Error(
           `Ev relay kapali/ulasilamiyor (${msg.slice(0, 80)}). ` +
-            `PC: start-yt-relay.ps1 + cloudflared; trycloudflare URL her acilista degisir → .env YTDLP_RELAY_URL guncelle + music-bot recreate.`,
+            `PC: start-yt-relay.ps1 + cloudflared; veya YTDLP_PROXY kullan ve YTDLP_RELAY_URL satırını sil.`,
         );
       }
-      console.warn('[yt-dlp] relay fail — proxy ile yerel deneme');
     }
+  } else if (relay && proxy) {
+    console.warn('[yt-dlp] YTDLP_PROXY var — YTDLP_RELAY_URL atlandı (çakışmayı önlemek için)');
   }
 
   let lastErr = 'yt-dlp failed';
