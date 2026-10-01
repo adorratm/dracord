@@ -26,7 +26,7 @@ yarn desktop
 
 ## OAuth (`dracord://`)
 
-Uygulama `dracord://` özel protokolünü kaydeder. OAuth geri dönüşleri şimdilik web `/auth/callback` yoluna yönlendirilir (stub). Windows’ta ikinci örnek (`second-instance`), macOS’ta `open-url` olayları dinlenir.
+Uygulama `dracord://` özel protokolünü kaydeder. Masaüstü girişinde web `intent=desktop` ile Google OAuth başlatır; API başarılı/2FA dönüşünü `dracord://oauth?…` olarak yönlendirir. Electron deep link’i `/auth/callback?electron=1&payload=…` adresine yükler. Windows’ta `second-instance`, macOS’ta `open-url` dinlenir.
 
 ## Pencere kontrolleri
 

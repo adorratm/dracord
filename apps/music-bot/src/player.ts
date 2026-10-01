@@ -67,6 +67,12 @@ export class MusicPlayer {
     const existing = this.sessions.get(k);
     if (existing) {
       if (textChannelId) existing.textChannelId = textChannelId;
+      try {
+        const state = await api.getState(guildId, voiceChannelId);
+        if (state && typeof state.volume === 'number') existing.volume = state.volume;
+      } catch {
+        /* ignore */
+      }
       return existing;
     }
 
@@ -121,6 +127,14 @@ export class MusicPlayer {
       console.warn('presence join failed', e);
     });
 
+    let volume = 80;
+    try {
+      const state = await api.getState(guildId, voiceChannelId);
+      if (state && typeof state.volume === 'number') volume = state.volume;
+    } catch {
+      /* ignore */
+    }
+
     const s: Session = {
       guildId,
       voiceChannelId,
@@ -128,7 +142,7 @@ export class MusicPlayer {
       room,
       source,
       track,
-      volume: 80,
+      volume,
       paused: false,
       stopPlayback: null,
       playing: false,

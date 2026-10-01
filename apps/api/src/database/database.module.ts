@@ -3,25 +3,31 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   Account,
+  AuditLog,
   Category,
   Channel,
   DMChannel,
   DMChannelMember,
   Friendship,
   Guild,
+  GuildBan,
   GuildInvite,
   GuildMember,
   GuildMemberRole,
   Message,
+  MessageBookmark,
   MessageHide,
   ChannelReadState,
   Notification,
+  PushSubscription,
   Reaction,
   Role,
   RolePermission,
   Session,
+  SlashCommand,
   User,
 } from './entities';
+import { DatabaseBootstrapService } from './database-bootstrap.service';
 
 const entities = [
   User,
@@ -29,10 +35,13 @@ const entities = [
   Session,
   Guild,
   GuildMember,
+  GuildBan,
+  AuditLog,
   GuildInvite,
   Category,
   Channel,
   Message,
+  MessageBookmark,
   MessageHide,
   ChannelReadState,
   Reaction,
@@ -43,6 +52,8 @@ const entities = [
   DMChannel,
   DMChannelMember,
   Notification,
+  PushSubscription,
+  SlashCommand,
 ];
 
 @Module({
@@ -61,6 +72,7 @@ const entities = [
       }),
     }),
   ],
+  providers: [DatabaseBootstrapService],
   exports: [TypeOrmModule],
 })
 export class DatabaseModule {}

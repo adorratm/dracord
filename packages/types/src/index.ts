@@ -1,6 +1,6 @@
 export type PresenceStatus = 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE';
 
-export type ChannelType = 'TEXT' | 'VOICE' | 'CATEGORY';
+export type ChannelType = 'TEXT' | 'VOICE' | 'CATEGORY' | 'FORUM';
 
 export interface SocialLinks {
   website?: string;
@@ -34,6 +34,8 @@ export interface PublicUser {
   censorLinkPreviews?: boolean;
   /** Sistem / müzik botu */
   isBot?: boolean;
+  /** Yalnızca kendi profilinde: 2FA açık mı */
+  twoFactorEnabled?: boolean;
   /** Sunucu üyeliğinde dolu — rol rozetleri */
   roles?: MemberRoleSummary[];
 }
@@ -141,6 +143,13 @@ export interface GuildSummary {
   afkTimeoutMinutes?: number;
 }
 
+export interface CategoryDto {
+  id: string;
+  guildId: string;
+  name: string;
+  position: number;
+}
+
 export interface ChannelSummary {
   id: string;
   guildId: string | null;
@@ -157,6 +166,8 @@ export interface ChannelSummary {
   lastReadMessageId?: string | null;
   /** Self-DM (notlar) kanalı */
   selfNotes?: boolean;
+  /** DM kanalı kimliği (guild dışı) */
+  dmChannelId?: string | null;
   /** DM karşı taraf */
   peerUserId?: string | null;
   peerAvatarUrl?: string | null;
@@ -167,6 +178,13 @@ export interface ChannelSummary {
   hasPassword?: boolean;
   /** Odaya girmesi engellenen kullanıcı id’leri (yalnızca yetkiliye) */
   deniedUserIds?: string[];
+  /** Kanal izin overwrite’ları */
+  permissionOverwrites?: Array<{
+    id: string;
+    type: 'role' | 'member';
+    allow: string[];
+    deny: string[];
+  }>;
 }
 
 export interface MessageAttachment {
@@ -204,6 +222,8 @@ export interface MessagePollOptionDto {
   text: string;
   voteCount: number;
   voted: boolean;
+  /** Son oy verenler (avatar strip) */
+  voters?: MessageReactionUserDto[];
 }
 
 export interface MessagePollDto {
@@ -242,6 +262,10 @@ export interface MessageDto {
   type?: MessageType;
   replyTo?: MessageReplyRef | null;
   pinnedAt?: string | null;
+  /** Thread kökü (yanıtlar bu id altında) */
+  threadRootId?: string | null;
+  /** Ana akışta: bu mesaja bağlı thread yanıt sayısı */
+  threadReplyCount?: number;
   forwardedFrom?: MessageForwardedFrom | null;
   attachments?: MessageAttachment[];
   embeds?: MessageEmbed[];
@@ -249,8 +273,20 @@ export interface MessageDto {
   poll?: MessagePollDto | null;
   /** Görüntüleyen bu mesajı gizlediyse */
   viewerHide?: MessageViewerHide;
+  /** Görüntüleyen yer imine eklediyse */
+  bookmarked?: boolean;
   createdAt: string;
   updatedAt: string | null;
+}
+
+export interface MessageBookmarkDto {
+  id: string;
+  messageId: string;
+  channelId: string;
+  channelName: string | null;
+  guildId: string | null;
+  createdAt: string;
+  message: MessageDto;
 }
 
 export type GuildPermission =
@@ -260,6 +296,9 @@ export type GuildPermission =
   | 'MANAGE_MESSAGES'
   | 'MANAGE_ROLES'
   | 'KICK_MEMBERS'
+  | 'BAN_MEMBERS'
+  | 'MOVE_MEMBERS'
+  | 'MODERATE_MEMBERS'
   | 'VIEW_CHANNELS'
   | 'SEND_MESSAGES'
   | 'CREATE_POLLS'
@@ -357,7 +396,9 @@ export interface VoiceStatePayload {
   guildId: string;
   channelId: string | null;
   user: VoiceMemberSummary;
-  action: 'join' | 'leave' | 'update';
+  action: 'join' | 'leave' | 'update' | 'move';
+  /** action=move iken hedef ses kanalı */
+  targetChannelId?: string | null;
 }
 
 export type NotificationType = 'MENTION' | 'ANNOUNCEMENT' | 'SYSTEM' | 'FRIEND' | 'DM';
@@ -386,15 +427,36 @@ export const SocketEvents = {
   CHANNEL_JOIN: 'channel:join',
   CHANNEL_LEAVE: 'channel:leave',
   VOICE_STATE: 'voice:state',
+  /** DM / grup DM ses-görüntü araması */
+  DM_CALL: 'dm:call',
   NOTIFICATION_CREATE: 'notification:create',
   REACTION_UPDATE: 'reaction:update',
 } as const;
+
+/** DM aramalarında presence için sentetik guild id */
+export const DM_CALL_GUILD_ID = '__dm__';
+
+export type DmCallMode = 'audio' | 'video';
+
+export interface DmCallPayload {
+  action: 'ring' | 'join' | 'leave' | 'ended' | 'invite' | 'decline';
+  channelId: string;
+  mode: DmCallMode;
+  fromUserId: string;
+  fromDisplayName?: string;
+  targetUserId?: string | null;
+}
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];
 
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+}
+
+export interface AuthTwoFactorChallenge {
+  requires2fa: true;
+  challengeToken: string;
 }
 
 /** Kullanıcı istemci ayarları (Discord tarzı tercihler) */
@@ -421,6 +483,8 @@ export interface ClientSettings {
   };
   notifications: {
     desktopEnabled: boolean;
+    /** Sekme kapalıyken Web Push */
+    pushEnabled?: boolean;
     soundEnabled: boolean;
     unreadBadge: boolean;
     mentionsOnly: boolean;

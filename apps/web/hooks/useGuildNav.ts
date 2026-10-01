@@ -1,4 +1,4 @@
-import type { ChannelSummary, GuildSummary } from '@dracord/types';
+import type { CategoryDto, ChannelSummary, GuildSummary } from '@dracord/types';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -6,6 +6,7 @@ type GuildNavSnapshot = {
   guilds: GuildSummary[];
   guild: GuildSummary | null;
   channels: ChannelSummary[];
+  categories: CategoryDto[];
 };
 
 /** Sayfa remount / kanal geçişinde “Sunucu yükleniyor” flaşını önler. */
@@ -26,16 +27,23 @@ export function useGuildNav(guildId: string | undefined) {
   const [guilds, setGuilds] = useState<GuildSummary[]>(cached?.guilds ?? []);
   const [guild, setGuild] = useState<GuildSummary | null>(cached?.guild ?? null);
   const [channels, setChannels] = useState<ChannelSummary[]>(cached?.channels ?? []);
+  const [categories, setCategories] = useState<CategoryDto[]>(cached?.categories ?? []);
   const [loading, setLoading] = useState(!cached);
 
   const applySnapshot = useCallback(
-    (list: GuildSummary[], ch: ChannelSummary[]) => {
+    (list: GuildSummary[], ch: ChannelSummary[], cats: CategoryDto[]) => {
       const nextGuild = guildId ? (list.find((x) => x.id === guildId) ?? null) : null;
       setGuilds(list);
       setGuild(nextGuild);
       setChannels(ch);
+      setCategories(cats);
       if (guildId) {
-        writeCache(guildId, { guilds: list, guild: nextGuild, channels: ch });
+        writeCache(guildId, {
+          guilds: list,
+          guild: nextGuild,
+          channels: ch,
+          categories: cats,
+        });
       }
     },
     [guildId],
@@ -48,10 +56,14 @@ export function useGuildNav(guildId: string | undefined) {
     try {
       const list = await client.listGuilds();
       let ch: ChannelSummary[] = [];
+      let cats: CategoryDto[] = [];
       if (guildId) {
-        ch = await client.getGuildChannels(guildId);
+        [ch, cats] = await Promise.all([
+          client.getGuildChannels(guildId),
+          client.listGuildCategories(guildId).catch(() => [] as CategoryDto[]),
+        ]);
       }
-      applySnapshot(list, ch);
+      applySnapshot(list, ch, cats);
     } finally {
       setLoading(false);
     }
@@ -67,12 +79,13 @@ export function useGuildNav(guildId: string | undefined) {
             guilds: guildsNext,
             guild: next,
             channels: readCache(guildId)?.channels ?? channels,
+            categories: readCache(guildId)?.categories ?? categories,
           });
         }
         return guildsNext;
       });
     },
-    [guildId, channels],
+    [guildId, channels, categories],
   );
 
   /** Okunmamış sayacı: absolute=true ise count değerine set, değilse delta ekle */
@@ -93,30 +106,34 @@ export function useGuildNav(guildId: string | undefined) {
             guilds: hit?.guilds ?? guilds,
             guild: hit?.guild ?? guild,
             channels: next,
+            categories: hit?.categories ?? categories,
           });
         }
         return next;
       });
     },
-    [guildId, guilds, guild],
+    [guildId, guilds, guild, categories],
   );
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     const hit = readCache(guildId);
-    // Cache varsa arka planda yenile; flaş yok
     if (!hit) setLoading(true);
     void (async () => {
       try {
         const list = await client.listGuilds();
         if (cancelled) return;
         let ch: ChannelSummary[] = hit?.channels ?? [];
+        let cats: CategoryDto[] = hit?.categories ?? [];
         if (guildId) {
-          ch = await client.getGuildChannels(guildId);
+          [ch, cats] = await Promise.all([
+            client.getGuildChannels(guildId),
+            client.listGuildCategories(guildId).catch(() => [] as CategoryDto[]),
+          ]);
         }
         if (cancelled) return;
-        applySnapshot(list, ch);
+        applySnapshot(list, ch, cats);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -126,5 +143,14 @@ export function useGuildNav(guildId: string | undefined) {
     };
   }, [client, guildId, user, applySnapshot]);
 
-  return { guilds, guild, channels, loading, reload, patchGuild, patchChannelUnread };
+  return {
+    guilds,
+    guild,
+    channels,
+    categories,
+    loading,
+    reload,
+    patchGuild,
+    patchChannelUnread,
+  };
 }

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -26,8 +27,8 @@ export class GuildsController {
   }
 
   @Get('discover')
-  discover() {
-    return this.guildsService.discover();
+  discover(@Query('q') q?: string) {
+    return this.guildsService.discover(q);
   }
 
   @Post()
@@ -94,6 +95,131 @@ export class GuildsController {
     @CurrentUser() user: JwtPayloadUser,
   ) {
     return this.guildsService.joinDiscoverable(guildId, user.sub);
+  }
+
+  @Post(':guildId/members/:userId/kick')
+  kick(
+    @Param('guildId') guildId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.kickMember(guildId, user.sub, userId);
+  }
+
+  @Post(':guildId/members/:userId/ban')
+  ban(
+    @Param('guildId') guildId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { reason?: string },
+  ) {
+    return this.guildsService.banMember(guildId, user.sub, userId, body?.reason);
+  }
+
+  @Delete(':guildId/bans/:userId')
+  unban(
+    @Param('guildId') guildId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.unbanMember(guildId, user.sub, userId);
+  }
+
+  @Get(':guildId/bans')
+  listBans(@Param('guildId') guildId: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.guildsService.listBans(guildId, user.sub);
+  }
+
+  @Post(':guildId/members/:userId/timeout')
+  timeout(
+    @Param('guildId') guildId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { minutes?: number },
+  ) {
+    return this.guildsService.timeoutMember(
+      guildId,
+      user.sub,
+      userId,
+      body?.minutes ?? 10,
+    );
+  }
+
+  @Get(':guildId/audit-logs')
+  auditLogs(@Param('guildId') guildId: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.guildsService.listAuditLogs(guildId, user.sub);
+  }
+
+  @Get(':guildId/categories')
+  listCategories(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.listCategories(guildId, user.sub);
+  }
+
+  @Post(':guildId/categories')
+  createCategory(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { name: string },
+  ) {
+    return this.guildsService.createCategory(guildId, user.sub, body?.name ?? '');
+  }
+
+  @Patch(':guildId/categories/:categoryId')
+  updateCategory(
+    @Param('guildId') guildId: string,
+    @Param('categoryId') categoryId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { name?: string; position?: number },
+  ) {
+    return this.guildsService.updateCategory(guildId, categoryId, user.sub, body ?? {});
+  }
+
+  @Delete(':guildId/categories/:categoryId')
+  async deleteCategory(
+    @Param('guildId') guildId: string,
+    @Param('categoryId') categoryId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    await this.guildsService.deleteCategory(guildId, categoryId, user.sub);
+    return { ok: true };
+  }
+
+  @Get(':guildId/slash-commands')
+  listSlashCommands(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.listSlashCommands(guildId, user.sub);
+  }
+
+  @Post(':guildId/slash-commands')
+  registerSlashCommand(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body()
+    body: {
+      name: string;
+      description: string;
+      usage?: string;
+      aliases?: string[];
+      botName?: string;
+      responseTemplate?: string;
+    },
+  ) {
+    return this.guildsService.registerSlashCommand(guildId, user.sub, body ?? {});
+  }
+
+  @Delete(':guildId/slash-commands/:commandId')
+  async deleteSlashCommand(
+    @Param('guildId') guildId: string,
+    @Param('commandId') commandId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    await this.guildsService.deleteSlashCommand(guildId, commandId, user.sub);
+    return { ok: true };
   }
 }
 

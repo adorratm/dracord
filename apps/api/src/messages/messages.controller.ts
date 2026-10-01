@@ -82,9 +82,23 @@ export class MessagesController {
       dto.content ?? '',
       dto.attachments,
       dto.poll,
-      { replyToId: dto.replyToId, type: dto.type },
+      { replyToId: dto.replyToId, threadRootId: dto.threadRootId, type: dto.type },
     );
     return message;
+  }
+
+  @Get('messages/:messageId/thread')
+  listThread(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? Number(limit) : 100;
+    return this.messagesService.listThreadMessages(
+      messageId,
+      user.sub,
+      Number.isFinite(parsed) ? parsed : 100,
+    );
   }
 
   @Patch('messages/:messageId')
@@ -171,5 +185,33 @@ export class MessagesController {
     @CurrentUser() user: JwtPayloadUser,
   ) {
     return this.messagesService.unhideMessage(messageId, user.sub);
+  }
+
+  @Post('messages/:messageId/bookmark')
+  bookmark(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.messagesService.bookmarkMessage(messageId, user.sub);
+  }
+
+  @Delete('messages/:messageId/bookmark')
+  unbookmark(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.messagesService.unbookmarkMessage(messageId, user.sub);
+  }
+
+  @Get('users/me/bookmarks')
+  listBookmarks(
+    @CurrentUser() user: JwtPayloadUser,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? Number(limit) : 50;
+    return this.messagesService.listBookmarks(
+      user.sub,
+      Number.isFinite(parsed) ? parsed : 50,
+    );
   }
 }

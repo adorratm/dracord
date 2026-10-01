@@ -65,6 +65,8 @@ export interface ChatInputProps {
   onPollClick?: () => void;
   /** Bölüm başlığı oluştur */
   onHeadingClick?: () => void;
+  /** Yazmaya başlandığında (throttle üst katmanda) */
+  onTyping?: () => void;
   /** Yanıtlanan mesaj (composer quote) */
   replyTo?: {
     id: string;
@@ -77,6 +79,8 @@ export interface ChatInputProps {
   loadFeaturedGifs?: () => Promise<GifSearchResult[]>;
   mentionUsers?: ChatMentionUser[];
   mentionChannels?: ChatMentionChannel[];
+  /** Harici slash komut listesi (API registry); yoksa yerleşik müzik komutları */
+  botSlashCommands?: BotSlashCommand[];
   /** Tarayıcı yazım denetimi */
   spellCheck?: boolean;
   /** Videodan sticker: GIF’i S3’e yükle (yoksa data URL kaydedilir) */
@@ -158,12 +162,14 @@ export function ChatInput({
   onAttachFiles,
   onPollClick,
   onHeadingClick,
+  onTyping,
   replyTo,
   onCancelReply,
   searchGifs,
   loadFeaturedGifs,
   mentionUsers = [],
   mentionChannels = [],
+  botSlashCommands,
   spellCheck = true,
   uploadStickerFile,
   className,
@@ -213,6 +219,29 @@ export function ChatInput({
   const MAX_LINES = 8;
   const MAX_TEXTAREA_PX = LINE_HEIGHT_PX * MAX_LINES;
   const [expanded, setExpanded] = useState(false);
+  const [kbOffset, setKbOffset] = useState(0);
+  const [touchUi, setTouchUi] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setTouchUi(window.matchMedia('(pointer: coarse)').matches);
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKbOffset(offset > 40 ? offset : 0);
+    };
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    sync();
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+    };
+  }, []);
 
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current;
@@ -324,8 +353,19 @@ export function ChatInput({
 
   const slashOptions = useMemo(() => {
     if (mention?.kind !== 'slash') return [] as BotSlashCommand[];
-    return filterBotSlashCommands(mention.query).slice(0, 10);
-  }, [mention]);
+    const q = mention.query.trim().toLocaleLowerCase('tr-TR');
+    const source = botSlashCommands?.length
+      ? botSlashCommands
+      : filterBotSlashCommands('');
+    const filtered = !q
+      ? source
+      : source.filter((c) => {
+          if (c.name.includes(q)) return true;
+          if (c.aliases?.some((a) => a.includes(q))) return true;
+          return c.description.toLocaleLowerCase('tr-TR').includes(q);
+        });
+    return filtered.slice(0, 10);
+  }, [mention, botSlashCommands]);
 
   const mentionOptionsCount =
     mention?.kind === 'user'
@@ -722,6 +762,7 @@ export function ChatInput({
         (pickerOpen || attachOpen || mention) && 'z-[90]',
         className,
       )}
+      style={kbOffset > 0 ? { transform: `translateY(-${kbOffset}px)` } : undefined}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -1386,15 +1427,17 @@ export function ChatInput({
         </div>
         <div className="relative flex-1 min-w-0">
           {/* Overlay ve textarea aynı tipografi/genişlik — scrollbar farkı caret kaydırır */}
-          <div
-            aria-hidden
-            id="chat-input-highlight"
-            className="pointer-events-none absolute inset-0 overflow-y-auto font-body-md text-body-md leading-6 whitespace-pre-wrap break-words text-dracula-fg [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-            style={{ maxHeight: MAX_TEXTAREA_PX }}
-          >
-            {highlightNodes}
-            {value.endsWith('\n') ? '\n' : null}
-          </div>
+          {!touchUi && (
+            <div
+              aria-hidden
+              id="chat-input-highlight"
+              className="pointer-events-none absolute inset-0 overflow-y-auto font-body-md text-body-md leading-6 whitespace-pre-wrap break-words text-dracula-fg [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              style={{ maxHeight: MAX_TEXTAREA_PX }}
+            >
+              {highlightNodes}
+              {value.endsWith('\n') ? '\n' : null}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={value}
@@ -1402,6 +1445,7 @@ export function ChatInput({
               setValue(e.target.value);
               const caret = e.target.selectionStart ?? e.target.value.length;
               setMention(detectMentionTrigger(e.target.value, caret));
+              if (e.target.value.trim()) onTyping?.();
             }}
             onClick={syncMentionFromCaret}
             onKeyUp={syncMentionFromCaret}
@@ -1415,7 +1459,10 @@ export function ChatInput({
             spellCheck={spellCheck}
             rows={1}
             placeholder={resolvedPlaceholder}
-            className="relative block w-full m-0 border-0 bg-transparent placeholder:text-dracula-comment font-body-md text-body-md leading-6 resize-none outline-none overflow-y-auto whitespace-pre-wrap break-words min-h-[24px] text-transparent [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            className={cn(
+              'relative block w-full m-0 border-0 bg-transparent placeholder:text-dracula-comment font-body-md text-body-md leading-6 resize-none outline-none overflow-y-auto whitespace-pre-wrap break-words min-h-[24px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+              touchUi ? 'text-dracula-fg' : 'text-transparent',
+            )}
             style={{
               maxHeight: MAX_TEXTAREA_PX,
               caretColor: '#f8f8f2',

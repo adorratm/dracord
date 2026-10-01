@@ -78,6 +78,18 @@ export class User extends CuidEntity {
   @Column({ type: 'boolean', default: false })
   isBot!: boolean;
 
+  /** TOTP 2FA gizli anahtarı (base32); istemciye asla gönderilmez */
+  @Column({ type: 'varchar', nullable: true })
+  totpSecret!: string | null;
+
+  /** 2FA etkin mi */
+  @Column({ type: 'boolean', default: false })
+  totpEnabled!: boolean;
+
+  /** bcrypt’lenmiş kurtarma kodları (tek kullanımlık) */
+  @Column({ type: 'simple-json', nullable: true })
+  totpRecoveryHashes!: string[] | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

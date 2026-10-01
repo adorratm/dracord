@@ -58,6 +58,7 @@ export function AppShell({
   const [discoverable, setDiscoverable] = useState(true);
   const [inviteCode, setInviteCode] = useState('');
   const [discover, setDiscover] = useState<ServerRailGuild[]>([]);
+  const [discoverQuery, setDiscoverQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serversOpen, setServersOpen] = useState(false);
@@ -66,7 +67,10 @@ export function AppShell({
     async (guildId: string) => {
       try {
         const channels = await client.getGuildChannels(guildId);
-        const text = channels.find((c) => c.type === 'TEXT') ?? channels[0];
+        const text =
+          channels.find((c) => c.type === 'TEXT') ??
+          channels.find((c) => c.type === 'FORUM') ??
+          channels[0];
         if (text) {
           rememberChannel(guildId, text.id);
           router.push(`/channels/${guildId}/${text.id}`);
@@ -127,9 +131,18 @@ export function AppShell({
   );
 
   useEffect(() => {
-    if (!exploreOpen) return;
-    void client.discoverGuilds().then(setDiscover).catch(() => setDiscover([]));
-  }, [exploreOpen, client]);
+    if (!exploreOpen) {
+      setDiscoverQuery('');
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void client
+        .discoverGuilds(discoverQuery.trim() || undefined)
+        .then(setDiscover)
+        .catch(() => setDiscover([]));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [exploreOpen, discoverQuery, client]);
 
   const createServer = async () => {
     setBusy(true);
@@ -189,7 +202,7 @@ export function AppShell({
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface">
+    <div className="flex flex-col h-dvh max-h-dvh w-screen overflow-hidden bg-surface">
       <div data-tour="nav">
         <TitleBar
           activeNav={titleBarNav}
@@ -313,9 +326,20 @@ export function AppShell({
       </Modal>
 
       <Modal open={exploreOpen} title="Sunucu keşfet" onClose={() => setExploreOpen(false)}>
+        <input
+          value={discoverQuery}
+          onChange={(e) => setDiscoverQuery(e.target.value)}
+          className="w-full h-10 px-space-sm mb-space-sm rounded-lg bg-surface-container-highest text-on-surface outline-none"
+          placeholder="Sunucu ara…"
+          autoFocus
+        />
         <div className="flex flex-col gap-space-sm max-h-80 overflow-y-auto">
           {discover.length === 0 && (
-            <p className="text-on-surface-variant font-body-sm">Keşfedilebilir sunucu yok.</p>
+            <p className="text-on-surface-variant font-body-sm">
+              {discoverQuery.trim()
+                ? 'Eşleşen sunucu yok.'
+                : 'Keşfedilebilir sunucu yok.'}
+            </p>
           )}
           {discover.map((g) => (
             <button

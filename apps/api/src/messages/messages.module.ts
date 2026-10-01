@@ -5,6 +5,7 @@ import { MusicModule } from '@/music/music.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
 import { SearchModule } from '@/search/search.module';
 import { LinkPreviewService } from './link-preview.service';
+import { CustomSlashService } from './custom-slash.service';
 import { MessagesController } from './messages.controller';
 import { MessagesRealtimeService } from './messages-realtime.service';
 import { MessagesService } from './messages.service';
@@ -18,7 +19,12 @@ import { MessagesService } from './messages.service';
     forwardRef(() => MusicModule),
   ],
   controllers: [MessagesController],
-  providers: [MessagesService, LinkPreviewService, MessagesRealtimeService],
+  providers: [
+    MessagesService,
+    LinkPreviewService,
+    MessagesRealtimeService,
+    CustomSlashService,
+  ],
   exports: [MessagesService, MessagesRealtimeService],
 })
 export class MessagesModule {}

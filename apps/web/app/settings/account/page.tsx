@@ -11,14 +11,12 @@ import {
   SettingsNote,
 } from '@/components/settings/SettingsControls';
 import { resetAppTour } from '@/lib/onboarding';
-import { useUserPreferences } from '@/lib/user-preferences';
 
 const STATUSES: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
 
 export default function AccountInfoPage() {
   const router = useRouter();
   const { user, client, setUser } = useAuth();
-  const { prefs } = useUserPreferences();
   const [customStatus, setCustomStatus] = useState(user?.customStatus ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -47,11 +45,6 @@ export default function AccountInfoPage() {
         <div className="px-space-md py-space-md space-y-space-sm">
           <p className="font-headline-md text-headline-md">
             {user?.displayName ?? '—'}
-            {prefs.billing.nitroPlan !== 'none' && (
-              <span className="ml-2 align-middle text-[11px] px-1.5 py-0.5 rounded bg-primary-container text-on-primary-container font-label-sm">
-                NITRO
-              </span>
-            )}
           </p>
           <p className="font-body-sm text-outline">@{user?.username ?? '—'}</p>
           <p className="font-body-sm text-on-surface-variant">

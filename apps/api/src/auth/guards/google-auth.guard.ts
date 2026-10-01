@@ -25,7 +25,9 @@ export class GoogleAuthGuard extends AuthGuard('google') {
       return {};
     }
     const intent = String(req.query?.intent ?? 'web').toLowerCase();
-    return { state: intent === 'admin' ? 'admin' : 'web' };
+    if (intent === 'admin') return { state: 'admin' };
+    if (intent === 'desktop') return { state: 'desktop' };
+    return { state: 'web' };
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

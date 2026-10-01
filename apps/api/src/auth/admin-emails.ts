@@ -24,3 +24,7 @@ export function isAdminEmail(config: ConfigService, email: string | null | undef
 export function isAdminOAuthIntent(state: unknown): boolean {
   return String(state ?? '').toLowerCase() === 'admin';
 }
+
+export function isDesktopOAuthIntent(state: unknown): boolean {
+  return String(state ?? '').toLowerCase() === 'desktop';
+}

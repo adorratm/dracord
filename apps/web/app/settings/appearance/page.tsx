@@ -80,7 +80,7 @@ export default function AppearanceSettingsPage() {
       </SettingsSection>
       <SettingsSection>
         <SettingsNote>
-          Kompakt yoğunluk, erişilebilirlikteki mesaj gruplamasını da sıkılaştırır.
+          Kompakt yoğunluk satır aralığını sıkılaştırır ve mesaj gruplamasını kapatır.
         </SettingsNote>
       </SettingsSection>
     </SettingsPage>

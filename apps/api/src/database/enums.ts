@@ -15,6 +15,7 @@ export enum ChannelType {
   TEXT = 'TEXT',
   VOICE = 'VOICE',
   CATEGORY = 'CATEGORY',
+  FORUM = 'FORUM',
 }
 
 export enum FriendshipStatus {

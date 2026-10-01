@@ -20,6 +20,7 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   },
   notifications: {
     desktopEnabled: true,
+    pushEnabled: false,
     soundEnabled: true,
     unreadBadge: true,
     mentionsOnly: false,

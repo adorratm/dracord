@@ -9,7 +9,7 @@ import { Avatar } from './Avatar';
 import { presenceDotClass, presenceLabelTr } from '../lib/presence';
 import { VolumeSlider } from './VolumeSlider';
 
-export type SidebarChannelType = 'text' | 'voice';
+export type SidebarChannelType = 'text' | 'voice' | 'forum';
 
 export interface SidebarVoiceMember {
   id: string;
@@ -27,7 +27,13 @@ export interface SidebarCategory {
   collapsed?: boolean;
   onToggle?: () => void;
   onAddChannel?: () => void;
+  onEditCategory?: () => void;
+  onDeleteCategory?: () => void;
   channels: SidebarChannelItem[];
+  /** Kanal sürükle-sırala (aynı kategori içinde) */
+  onReorderChannels?: (orderedIds: string[]) => void;
+  /** Sıralama için (UI göstermez) */
+  sortPosition?: number;
 }
 
 export interface SidebarChannelItem {
@@ -44,6 +50,10 @@ export interface SidebarChannelItem {
   onContextMenu?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** Üye sürükle-bırak (ses kanalına taşı) */
+  onDropMember?: (userId: string) => void;
+  /** Kanal sırası için sürükle */
+  draggable?: boolean;
 }
 
 export interface UserPanelAudioDevice {
@@ -723,13 +733,74 @@ export interface ChannelSidebarProps {
   className?: string;
 }
 
-function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
+function ChannelRow({
+  channel,
+  onChannelReorderDrop,
+}: {
+  channel: SidebarChannelItem;
+  onChannelReorderDrop?: (draggedId: string, targetId: string) => void;
+}) {
   const isText = channel.type === 'text';
+  const isForum = channel.type === 'forum';
+  const isMessageChannel = isText || isForum;
   const voiceMembers = channel.voiceMembers ?? [];
   const hasActions = Boolean(channel.onEdit || channel.onDelete);
+  const [dragOver, setDragOver] = useState(false);
+  const [reorderOver, setReorderOver] = useState(false);
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div
+      className={cn(
+        'flex flex-col gap-0.5',
+        dragOver && !isMessageChannel && 'ring-2 ring-primary-container/60 rounded-lg',
+        reorderOver && 'ring-1 ring-outline rounded-lg',
+      )}
+      draggable={Boolean(channel.draggable && onChannelReorderDrop)}
+      onDragStart={
+        channel.draggable && onChannelReorderDrop
+          ? (e) => {
+              e.dataTransfer.setData('application/x-dracord-channel', channel.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }
+          : undefined
+      }
+      onDragOver={(e) => {
+        const types = [...e.dataTransfer.types];
+        if (
+          types.includes('application/x-dracord-user') &&
+          !isMessageChannel &&
+          channel.onDropMember
+        ) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          setDragOver(true);
+          return;
+        }
+        if (types.includes('application/x-dracord-channel') && onChannelReorderDrop) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          setReorderOver(true);
+        }
+      }}
+      onDragLeave={() => {
+        setDragOver(false);
+        setReorderOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        setReorderOver(false);
+        const userId = e.dataTransfer.getData('application/x-dracord-user');
+        if (userId && !isMessageChannel) {
+          channel.onDropMember?.(userId);
+          return;
+        }
+        const draggedId = e.dataTransfer.getData('application/x-dracord-channel');
+        if (draggedId && onChannelReorderDrop && draggedId !== channel.id) {
+          onChannelReorderDrop(draggedId, channel.id);
+        }
+      }}
+    >
       <div
         className={cn(
           'group/row relative flex items-center rounded-lg w-full transition-colors duration-200',
@@ -754,7 +825,16 @@ function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
           {channel.active && (
             <div className="absolute -left-space-xs top-1.5 bottom-1.5 w-1 bg-primary-container rounded-r-full" />
           )}
-          {isText ? (
+          {isForum ? (
+            <span
+              className={cn(
+                'material-symbols-outlined text-[18px]',
+                channel.active ? 'text-primary-container' : 'text-outline',
+              )}
+            >
+              forum
+            </span>
+          ) : isText ? (
             <span
               className={cn(
                 'font-headline-md text-headline-md',
@@ -777,7 +857,7 @@ function ChannelRow({ channel }: { channel: SidebarChannelItem }) {
           {channel.unread && !channel.active && (
             <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Okunmamış" />
           )}
-          {!isText && voiceMembers.length > 0 && (
+          {!isMessageChannel && voiceMembers.length > 0 && (
             <span className="font-label-sm text-label-sm text-primary font-bold">
               {voiceMembers.length}
             </span>
@@ -948,7 +1028,7 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={category.onToggle}
-                  className="flex items-center gap-space-xs flex-1 text-left"
+                  className="flex items-center gap-space-xs flex-1 text-left min-w-0"
                 >
                   <span
                     className={cn(
@@ -958,25 +1038,64 @@ export function ChannelSidebar({
                   >
                     expand_more
                   </span>
-                  <span className="font-label-sm text-label-sm uppercase tracking-wider font-bold">
+                  <span className="font-label-sm text-label-sm uppercase tracking-wider font-bold truncate">
                     {category.label}
                   </span>
                 </button>
-                {category.onAddChannel && (
-                  <button
-                    type="button"
-                    onClick={category.onAddChannel}
-                    className="material-symbols-outlined text-[14px] cursor-pointer hover:text-primary-container transition-colors duration-200"
-                    aria-label="Kanal ekle"
-                  >
-                    add
-                  </button>
-                )}
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                  {category.onEditCategory && (
+                    <button
+                      type="button"
+                      onClick={category.onEditCategory}
+                      className="material-symbols-outlined text-[14px] cursor-pointer hover:text-primary-container transition-colors duration-200 p-0.5"
+                      aria-label="Kategoriyi düzenle"
+                    >
+                      edit
+                    </button>
+                  )}
+                  {category.onDeleteCategory && (
+                    <button
+                      type="button"
+                      onClick={category.onDeleteCategory}
+                      className="material-symbols-outlined text-[14px] cursor-pointer hover:text-error transition-colors duration-200 p-0.5"
+                      aria-label="Kategoriyi sil"
+                    >
+                      delete
+                    </button>
+                  )}
+                  {category.onAddChannel && (
+                    <button
+                      type="button"
+                      onClick={category.onAddChannel}
+                      className="material-symbols-outlined text-[14px] cursor-pointer hover:text-primary-container transition-colors duration-200 p-0.5"
+                      aria-label="Kanal ekle"
+                    >
+                      add
+                    </button>
+                  )}
+                </div>
               </div>
               {!category.collapsed && (
                 <div className="flex flex-col gap-space-xs">
                   {category.channels.map((ch) => (
-                    <ChannelRow key={ch.id} channel={ch} />
+                    <ChannelRow
+                      key={ch.id}
+                      channel={ch}
+                      onChannelReorderDrop={
+                        category.onReorderChannels
+                          ? (draggedId, targetId) => {
+                              const ids = category.channels.map((c) => c.id);
+                              const from = ids.indexOf(draggedId);
+                              const to = ids.indexOf(targetId);
+                              if (from < 0 || to < 0 || from === to) return;
+                              const next = [...ids];
+                              next.splice(from, 1);
+                              next.splice(to, 0, draggedId);
+                              category.onReorderChannels?.(next);
+                            }
+                          : undefined
+                      }
+                    />
                   ))}
                 </div>
               )}

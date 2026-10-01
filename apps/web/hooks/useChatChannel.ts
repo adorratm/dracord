@@ -40,8 +40,11 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
   const [error, setError] = useState<string | null>(null);
   const [atLiveEdge, setAtLiveEdge] = useState(true);
   const [pendingNewCount, setPendingNewCount] = useState(0);
+  const [typingUsers, setTypingUsers] = useState<Array<{ userId: string; username: string }>>([]);
   const channelRef = useRef(channelId);
   const atLiveRef = useRef(true);
+  const typingTimersRef = useRef(new Map<string, number>());
+  const lastTypingEmitRef = useRef(0);
   channelRef.current = channelId;
   atLiveRef.current = atLiveEdge;
 
@@ -79,6 +82,9 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     setError(null);
     setAtLiveEdge(!aroundMessageId);
     setPendingNewCount(0);
+    setTypingUsers([]);
+    for (const t of typingTimersRef.current.values()) window.clearTimeout(t);
+    typingTimersRef.current.clear();
 
     client.connectSocket();
     client.joinChannel(channelId);
@@ -104,6 +110,17 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     const socket = client.socket;
     const onCreate = (message: MessageDto) => {
       if (message.channelId !== channelId) return;
+      // Thread yanıtları ana kanal listesine düşmesin
+      if (message.threadRootId) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === message.threadRootId
+              ? { ...m, threadReplyCount: (m.threadReplyCount ?? 0) + 1 }
+              : m,
+          ),
+        );
+        return;
+      }
       if (!atLiveRef.current) {
         setPendingNewCount((n) => n + 1);
         return;
@@ -145,14 +162,42 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     socket?.on(SocketEvents.MESSAGE_UPDATE, onUpdate);
     socket?.on(SocketEvents.MESSAGE_DELETE, onDelete);
 
+    const onTyping = (payload: { channelId: string; userId: string; username: string }) => {
+      if (payload.channelId !== channelId) return;
+      if (payload.userId === user?.id) return;
+      setTypingUsers((prev) => {
+        if (prev.some((t) => t.userId === payload.userId)) return prev;
+        return [...prev, { userId: payload.userId, username: payload.username }];
+      });
+      const prevTimer = typingTimersRef.current.get(payload.userId);
+      if (prevTimer) window.clearTimeout(prevTimer);
+      const timer = window.setTimeout(() => {
+        typingTimersRef.current.delete(payload.userId);
+        setTypingUsers((prev) => prev.filter((t) => t.userId !== payload.userId));
+      }, 4000);
+      typingTimersRef.current.set(payload.userId, timer);
+    };
+    socket?.on(SocketEvents.TYPING_START, onTyping);
+
     return () => {
       cancelled = true;
       client.leaveChannel(channelId);
       socket?.off(SocketEvents.MESSAGE_CREATE, onCreate);
       socket?.off(SocketEvents.MESSAGE_UPDATE, onUpdate);
       socket?.off(SocketEvents.MESSAGE_DELETE, onDelete);
+      socket?.off(SocketEvents.TYPING_START, onTyping);
+      for (const t of typingTimersRef.current.values()) window.clearTimeout(t);
+      typingTimersRef.current.clear();
     };
   }, [channelId, client, user, aroundMessageId, applyPage]);
+
+  const notifyTyping = useCallback(() => {
+    if (!channelId) return;
+    const now = Date.now();
+    if (now - lastTypingEmitRef.current < 2500) return;
+    lastTypingEmitRef.current = now;
+    client.startTyping(channelId);
+  }, [channelId, client]);
 
   const loadOlder = useCallback(async () => {
     if (!channelId || loadingOlder || !hasMore || messages.length === 0) return;
@@ -193,7 +238,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     async (
       content: string,
       attachments?: MessageAttachment[],
-      opts?: { replyToId?: string; type?: 'default' | 'heading' },
+      opts?: { replyToId?: string; threadRootId?: string; type?: 'default' | 'heading' },
     ) => {
       if (!channelId) return;
       const message = await client.sendMessage(
@@ -203,6 +248,8 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         undefined,
         opts,
       );
+      // Thread yanıtları ana akışa eklenmez
+      if (message.threadRootId) return message;
       setAtLiveEdge(true);
       setPendingNewCount(0);
       setMessages((prev) => {
@@ -212,6 +259,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         return next;
       });
       void client.markChannelRead(channelId).catch(() => undefined);
+      return message;
     },
     [channelId, client, hasMore],
   );
@@ -391,6 +439,21 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     [channelId, client, hasMore],
   );
 
+  const bookmarkMessage = useCallback(
+    async (messageId: string, bookmark: boolean) => {
+      if (!channelId) return;
+      const message = bookmark
+        ? await client.bookmarkMessage(messageId)
+        : await client.unbookmarkMessage(messageId);
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === message.id ? message : m));
+        remember(channelId, { items: next, hasMore });
+        return next;
+      });
+    },
+    [channelId, client, hasMore],
+  );
+
   const upsertMessage = useCallback(
     (message: MessageDto) => {
       if (!channelId) return;
@@ -416,6 +479,8 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     error,
     atLiveEdge,
     pendingNewCount,
+    typingUsers,
+    notifyTyping,
     setAtLiveEdge,
     loadOlder,
     jumpToPresent,
@@ -430,6 +495,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     hideMessage,
     unhideMessage,
     pinMessage,
+    bookmarkMessage,
     upsertMessage,
   };
 }

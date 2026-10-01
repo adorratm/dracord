@@ -35,6 +35,12 @@ import {
   saveActiveVoice,
 } from '@/lib/voice-session-storage';
 import {
+  createTabId,
+  openVoiceTabChannel,
+  postVoiceTabMessage,
+  type VoiceTabMessage,
+} from '@/lib/voice-tab-sync';
+import {
   audioBitrateToMaxBitrate,
   loadVoiceAudioSettings,
   micVolumeToPresenceDb,
@@ -58,6 +64,10 @@ interface VoiceSessionValue {
   voiceChannelId: string | null;
   voiceGuildId: string | null;
   connected: boolean;
+  /** Bu sekme LiveKit lideri mi (çoklu sekmede yalnızca biri true) */
+  isVoiceLeader: boolean;
+  /** Ses başka sekmede; bu sekme dinlemiyor */
+  voiceOnOtherTab: boolean;
   /** WebRTC RTT (ping), ms */
   latencyMs: number | null;
   muted: boolean;
@@ -73,6 +83,9 @@ interface VoiceSessionValue {
   participants: VoiceParticipant[];
   participantVolumes: Record<string, number>;
   error: string | null;
+  /** Tarayıcı autoplay engeli — kullanıcı jesti ile unlockAudio çağır */
+  audioPlaybackBlocked: boolean;
+  unlockAudio: () => Promise<void>;
   noiseCancellation: boolean;
   noiseNote: string | null;
   audioSettings: VoiceAudioSettings;
@@ -162,7 +175,7 @@ function voiceAudioCaptureOptions(settings: VoiceAudioSettings): AudioCaptureOpt
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-    sampleRate: 48000,
+    // sampleRate sabitleme bazı mobil tarayıcılarda constraint hatası verir
     deviceId: settings.inputDeviceId || undefined,
   };
 }
@@ -349,9 +362,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const participantVolumesRef = useRef<Map<string, number>>(new Map());
   const restoringRef = useRef(false);
   const intentionalLeaveRef = useRef(false);
+  /** Liderlik başka sekmeye geçerken presence’ı bırakma */
+  const transferringLeadershipRef = useRef(false);
   const voicePasswordRef = useRef<string | undefined>(undefined);
+  const tabIdRef = useRef(createTabId());
+  const voiceBcRef = useRef<BroadcastChannel | null>(null);
+  const isLeaderRef = useRef(true);
 
   const [connected, setConnected] = useState(false);
+  const [isVoiceLeader, setIsVoiceLeader] = useState(true);
+  const [voiceOnOtherTab, setVoiceOnOtherTab] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
@@ -362,6 +382,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [participantVolumes, setParticipantVolumes] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
+  const [audioPlaybackBlocked, setAudioPlaybackBlocked] = useState(false);
   const [noiseCancellation, setNoiseCancellation] = useState(false);
   const [noiseNote, setNoiseNote] = useState<string | null>(null);
   const [audioSettings, setAudioSettings] = useState<VoiceAudioSettings>(() =>
@@ -374,7 +395,86 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   mutedRef.current = muted;
   channelIdRef.current = voiceChannelId;
   guildIdRef.current = voiceGuildId;
+  isLeaderRef.current = isVoiceLeader;
   audioSettingsRef.current = audioSettings;
+
+  const claimVoiceLeadership = useCallback((channelId: string, guildId: string) => {
+    setIsVoiceLeader(true);
+    setVoiceOnOtherTab(false);
+    postVoiceTabMessage(voiceBcRef.current, {
+      type: 'claim',
+      tabId: tabIdRef.current,
+      channelId,
+      guildId,
+      at: Date.now(),
+    });
+  }, []);
+
+  /** Çoklu sekme: yalnızca odaklanan sekme LiveKit lideri olur */
+  useEffect(() => {
+    const bc = openVoiceTabChannel((msg: VoiceTabMessage) => {
+      if (msg.type === 'claim') {
+        if (msg.tabId === tabIdRef.current) return;
+        if (channelIdRef.current && msg.channelId === channelIdRef.current) {
+          transferringLeadershipRef.current = true;
+          setIsVoiceLeader(false);
+          setVoiceOnOtherTab(true);
+          window.setTimeout(() => {
+            transferringLeadershipRef.current = false;
+          }, 800);
+        }
+        return;
+      }
+      if (msg.type === 'leave') {
+        if (msg.tabId === tabIdRef.current) return;
+        const ch = channelIdRef.current;
+        const g = guildIdRef.current;
+        const wasLeader = isLeaderRef.current;
+        intentionalLeaveRef.current = true;
+        clearActiveVoice();
+        setVoiceChannelId(null);
+        setVoiceGuildId(null);
+        setVoiceOnOtherTab(false);
+        setIsVoiceLeader(true);
+        if (wasLeader && ch) {
+          void client.leaveVoiceState(ch).catch(() => undefined);
+          if (g) client.emitVoiceState({ guildId: g, channelId: null });
+        }
+      }
+    });
+    voiceBcRef.current = bc;
+    return () => {
+      bc?.close();
+      voiceBcRef.current = null;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      const ch = channelIdRef.current;
+      const g = guildIdRef.current;
+      if (!ch || !g) return;
+      if (document.visibilityState !== 'visible') return;
+      claimVoiceLeadership(ch, g);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [claimVoiceLeadership]);
+
+  useEffect(() => {
+    if (!voiceChannelId || !voiceGuildId) return;
+    // Gizli/arka plan sekme restore’da lider olmasın — bot + LiveKit çakışmasın
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      setIsVoiceLeader(false);
+      setVoiceOnOtherTab(true);
+      return;
+    }
+    claimVoiceLeadership(voiceChannelId, voiceGuildId);
+  }, [voiceChannelId, voiceGuildId, claimVoiceLeadership]);
 
   useEffect(() => {
     const loaded = loadParticipantVolumes();
@@ -416,11 +516,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
     void refreshAudioDevices(false);
-    const onChange = () => void refreshAudioDevices(false);
-    navigator.mediaDevices?.addEventListener?.('devicechange', onChange);
-    return () => {
-      navigator.mediaDevices?.removeEventListener?.('devicechange', onChange);
-    };
   }, [user, refreshAudioDevices]);
 
   const applyMicGainToTrack = useCallback(async (mic: LocalAudioTrack, volume: number) => {
@@ -440,28 +535,90 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const applyRoomAudioSettings = useCallback(
     async (room: Room, settings: VoiceAudioSettings) => {
+      let next = settings;
       try {
         if (settings.inputDeviceId) {
-          await room.switchActiveDevice('audioinput', settings.inputDeviceId);
+          const inputs = await Room.getLocalDevices('audioinput', false);
+          const stillThere = inputs.some((d) => d.deviceId === settings.inputDeviceId);
+          if (stillThere) {
+            await room.switchActiveDevice('audioinput', settings.inputDeviceId);
+          } else {
+            next = { ...next, inputDeviceId: '' };
+            persistAudio(next);
+          }
         }
       } catch {
         // cihaz yoksa yoksay
       }
       try {
         if (settings.outputDeviceId) {
-          await room.switchActiveDevice('audiooutput', settings.outputDeviceId);
+          const outputs = await Room.getLocalDevices('audiooutput', false);
+          const stillThere = outputs.some((d) => d.deviceId === settings.outputDeviceId);
+          if (stillThere) {
+            await room.switchActiveDevice('audiooutput', settings.outputDeviceId);
+          } else {
+            next = { ...next, outputDeviceId: '' };
+            persistAudio(next);
+          }
         }
       } catch {
         // sinkId desteklenmiyorsa yoksay
       }
-      applyOutputVolume(room, settings.outputVolume, participantVolumesRef.current);
+      applyOutputVolume(room, next.outputVolume, participantVolumesRef.current);
       const mic = getMicTrack(room);
       if (mic) {
-        await applyMicGainToTrack(mic, settings.micVolume).catch(() => undefined);
+        await applyMicGainToTrack(mic, next.micVolume).catch(() => undefined);
       }
     },
-    [applyMicGainToTrack],
+    [applyMicGainToTrack, persistAudio],
   );
+
+  const unlockAudio = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    try {
+      await room.startAudio();
+      setAudioPlaybackBlocked(!room.canPlaybackAudio);
+    } catch {
+      setAudioPlaybackBlocked(true);
+    }
+  }, []);
+
+  const reapplyDevicesAfterChange = useCallback(async () => {
+    await refreshAudioDevices(false);
+    const room = roomRef.current;
+    if (!room) return;
+    const settings = audioSettingsRef.current;
+    try {
+      const [inputs, outputs] = await Promise.all([
+        Room.getLocalDevices('audioinput', false),
+        Room.getLocalDevices('audiooutput', false),
+      ]);
+      let next = { ...settings };
+      if (settings.inputDeviceId && !inputs.some((d) => d.deviceId === settings.inputDeviceId)) {
+        next.inputDeviceId = '';
+      }
+      if (settings.outputDeviceId && !outputs.some((d) => d.deviceId === settings.outputDeviceId)) {
+        next.outputDeviceId = '';
+      }
+      if (next.inputDeviceId !== settings.inputDeviceId || next.outputDeviceId !== settings.outputDeviceId) {
+        persistAudio(next);
+      }
+      await applyRoomAudioSettings(room, next);
+    } catch {
+      // ignore
+    }
+  }, [refreshAudioDevices, applyRoomAudioSettings, persistAudio]);
+
+  // Sistem cihazları değişince liste + aktif cihazı yeniden uygula
+  useEffect(() => {
+    if (!user) return;
+    const onChange = () => void reapplyDevicesAfterChange();
+    navigator.mediaDevices?.addEventListener?.('devicechange', onChange);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onChange);
+    };
+  }, [user, reapplyDevicesAfterChange]);
 
   const refreshParticipants = useCallback((room: Room, isMuted: boolean) => {
     const list: VoiceParticipant[] = [];
@@ -715,6 +872,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     if (!voiceChannelId || !user) {
       return;
     }
+    if (!isVoiceLeader) {
+      return;
+    }
 
     const channelId = voiceChannelId;
     const guildId = voiceGuildId;
@@ -850,8 +1010,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
     });
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      setAudioPlaybackBlocked(!room.canPlaybackAudio);
       if (!room.canPlaybackAudio) {
-        void room.startAudio().catch(() => undefined);
+        void room.startAudio().catch(() => setAudioPlaybackBlocked(true));
       }
     });
     room.on(RoomEvent.LocalTrackPublished, (publication: LocalTrackPublication) => {
@@ -886,8 +1047,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
         try {
           await room.startAudio();
+          setAudioPlaybackBlocked(!room.canPlaybackAudio);
         } catch {
-          // kullanıcı jesti sonrası tekrar denenecek
+          setAudioPlaybackBlocked(true);
         }
         try {
           await room.localParticipant.setMicrophoneEnabled(
@@ -901,8 +1063,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
         try {
           await room.startAudio();
+          setAudioPlaybackBlocked(!room.canPlaybackAudio);
         } catch {
-          // ignore
+          setAudioPlaybackBlocked(true);
         }
         await applyRoomAudioSettings(room, audioSettingsRef.current);
         void refreshAudioDevices(false);
@@ -966,7 +1129,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void (async () => {
         const saved = readActiveVoice();
         const shouldLeavePresence =
-          intentionalLeaveRef.current || !saved || saved.channelId !== channelId;
+          !transferringLeadershipRef.current &&
+          (intentionalLeaveRef.current || !saved || saved.channelId !== channelId);
         try {
           if (shouldLeavePresence) {
             await client.leaveVoiceState(channelId);
@@ -989,6 +1153,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, [
     voiceChannelId,
     voiceGuildId,
+    isVoiceLeader,
     client,
     user,
     refreshParticipants,
@@ -1037,26 +1202,35 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [user, voiceChannelId]);
 
-  const join = useCallback((channelId: string, guildId: string, opts?: { password?: string }) => {
-    intentionalLeaveRef.current = false;
-    voicePasswordRef.current = opts?.password;
-    saveActiveVoice({ guildId, channelId });
-    setVoiceChannelId((prev) => {
-      if (prev === channelId) return prev;
-      return channelId;
-    });
-    setVoiceGuildId(guildId);
-  }, []);
+  const join = useCallback(
+    (channelId: string, guildId: string, opts?: { password?: string }) => {
+      intentionalLeaveRef.current = false;
+      voicePasswordRef.current = opts?.password;
+      saveActiveVoice({ guildId, channelId });
+      setVoiceChannelId((prev) => {
+        if (prev === channelId) return prev;
+        return channelId;
+      });
+      setVoiceGuildId(guildId);
+      // Aynı kanalda bile odak sekmesi liderliği alsın (çoklu sekme)
+      claimVoiceLeadership(channelId, guildId);
+    },
+    [claimVoiceLeadership],
+  );
 
   const leave = useCallback(() => {
     const channelId = channelIdRef.current;
     const guildId = guildIdRef.current;
     intentionalLeaveRef.current = true;
+    transferringLeadershipRef.current = false;
     voicePasswordRef.current = undefined;
     clearActiveVoice();
     setVoiceChannelId(null);
     setVoiceGuildId(null);
     setConnected(false);
+    setVoiceOnOtherTab(false);
+    setIsVoiceLeader(true);
+    setAudioPlaybackBlocked(false);
     setParticipants([]);
     setError(null);
     setScreenSharing(false);
@@ -1065,7 +1239,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     focusedScreenShareIdRef.current = null;
     clearScreenShareView();
     clearCameraViews();
-    if (channelId) {
+    postVoiceTabMessage(voiceBcRef.current, {
+      type: 'leave',
+      tabId: tabIdRef.current,
+      at: Date.now(),
+    });
+    if (channelId && isLeaderRef.current) {
       void (async () => {
         try {
           await client.leaveVoiceState(channelId);
@@ -1080,17 +1259,23 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return channelId;
   }, [client, clearScreenShareView, clearCameraViews]);
 
-  /** Yetkili kick: sunucu VOICE_STATE leave yayınladığında oturumu kapat */
+  /** Yetkili kick: sunucu VOICE_STATE leave/move yayınladığında oturumu güncelle */
   useEffect(() => {
     if (!user) return;
     const sock = client.connectSocket();
     const onVoice = (payload: {
       channelId: string | null;
+      targetChannelId?: string | null;
+      guildId?: string;
       user: { id: string };
       action: string;
     }) => {
-      if (payload.action !== 'leave') return;
       if (payload.user.id !== user.id) return;
+      if (payload.action === 'move' && payload.targetChannelId && payload.guildId) {
+        join(payload.targetChannelId, payload.guildId);
+        return;
+      }
+      if (payload.action !== 'leave') return;
       if (!payload.channelId || payload.channelId !== channelIdRef.current) return;
       leave();
       setError('Bu odadan çıkarıldın veya girişin engellendi.');
@@ -1099,7 +1284,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
     };
-  }, [user, client, leave]);
+  }, [user, client, leave, join]);
 
   const applyParticipantVolume = useCallback((identity: string, volume: number) => {
     const room = roomRef.current;
@@ -1296,13 +1481,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       try {
         if (deviceId) {
           await room.switchActiveDevice('audioinput', deviceId);
-        } else {
-          const devices = await Room.getLocalDevices('audioinput', false);
-          const fallback = devices.find((d) => d.deviceId && d.deviceId !== 'default') ?? devices[0];
-          if (fallback?.deviceId) {
-            await room.switchActiveDevice('audioinput', fallback.deviceId);
-          }
         }
+        // boş = tarayıcı / sistem varsayılanı — listedeki ilk cihaza zorlama
         const mic = getMicTrack(room);
         if (mic && !deepFilterActiveRef.current) {
           micGainRef.current = null;
@@ -1324,13 +1504,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       try {
         if (deviceId) {
           await room.switchActiveDevice('audiooutput', deviceId);
-        } else {
-          const devices = await Room.getLocalDevices('audiooutput', false);
-          const fallback = devices.find((d) => d.deviceId && d.deviceId !== 'default') ?? devices[0];
-          if (fallback?.deviceId) {
-            await room.switchActiveDevice('audiooutput', fallback.deviceId);
-          }
         }
+        // boş = sistem varsayılanı
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Çıkış aygıtı değiştirilemedi');
       }
@@ -1487,6 +1662,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceChannelId,
       voiceGuildId,
       connected,
+      isVoiceLeader,
+      voiceOnOtherTab,
       latencyMs,
       muted,
       deafened,
@@ -1500,6 +1677,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       participants,
       participantVolumes,
       error,
+      audioPlaybackBlocked,
+      unlockAudio,
       noiseCancellation,
       noiseNote,
       audioSettings,
@@ -1527,6 +1706,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceChannelId,
       voiceGuildId,
       connected,
+      isVoiceLeader,
+      voiceOnOtherTab,
       latencyMs,
       muted,
       deafened,
@@ -1540,6 +1721,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       participants,
       participantVolumes,
       error,
+      audioPlaybackBlocked,
+      unlockAudio,
       noiseCancellation,
       noiseNote,
       audioSettings,

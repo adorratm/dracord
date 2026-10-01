@@ -17,9 +17,9 @@ function resolveAppUrlFromDeepLink(rawUrl) {
   if (!rawUrl || !rawUrl.startsWith('dracord://')) {
     return null;
   }
-  // OAuth deep link stub: forward to web auth handler (implement on web later).
+  // dracord://oauth?accessToken=…&refreshToken=… → web /auth/callback
   const payload = rawUrl.replace(/^dracord:\/\//, '');
-  const base = isDev ? 'http://localhost:3000' : 'https://dracord.com.tr';
+  const base = appUrl.replace(/\/$/, '');
   return `${base}/auth/callback?electron=1&payload=${encodeURIComponent(payload)}`;
 }
 

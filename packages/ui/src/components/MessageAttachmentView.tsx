@@ -63,10 +63,19 @@ export function MediaLightbox({ attachment, onClose }: MediaLightboxProps) {
       <div className="flex-1 min-h-0 flex items-center justify-center p-space-md">
         {isImage(contentType, filename) && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={filename} className="max-w-full max-h-full object-contain" />
+          <img
+            src={url}
+            alt={filename}
+            className="w-full h-full max-w-[100vw] max-h-[calc(100dvh-3rem)] object-contain"
+          />
         )}
         {isVideo(contentType, filename) && (
-          <video src={url} controls autoPlay className="max-w-full max-h-full rounded-lg" />
+          <video
+            src={url}
+            controls
+            autoPlay
+            className="w-full h-full max-w-[100vw] max-h-[calc(100dvh-3rem)] object-contain rounded-lg"
+          />
         )}
         {isAudio(contentType, filename) && (
           <audio src={url} controls autoPlay className="w-full max-w-lg" />

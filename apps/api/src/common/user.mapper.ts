@@ -29,6 +29,10 @@ export function toPublicUser(
   };
 
   const viewerId = opts?.viewerId;
+  if (!viewerId || viewerId === user.id) {
+    base.twoFactorEnabled = Boolean(user.totpEnabled);
+  }
+
   if (viewerId && viewerId !== user.id) {
     const privacy = mergeClientSettings(user.clientSettings).privacy;
     if (privacy.showBio === false) base.bio = null;

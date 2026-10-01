@@ -35,7 +35,7 @@ export function MessageEmbedView({ embed, censored = false, className }: Message
           <p className="font-label-sm text-outline truncate">{embed.siteName}</p>
         )}
         <p className="font-headline-md text-primary-container truncate">
-          {embed.title ?? embed.url}
+          {embed.title || embed.siteName || 'Bağlantı'}
         </p>
         {embed.description && showContent && (
           <p className="font-body-sm text-on-surface-variant line-clamp-3">{embed.description}</p>

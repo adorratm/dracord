@@ -1,17 +1,5 @@
-import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
+import type { CategoryDto, ChannelSummary, VoiceMemberSummary } from '@dracord/types';
 import type { SidebarCategory, SidebarChannelItem } from '@dracord/ui';
-
-const CATEGORY_LABELS: Record<string, string> = {
-  'seed-cat-info': 'Bilgi',
-  'seed-cat-chat': 'Sohbet',
-  'seed-cat-voice': 'Ses',
-};
-
-function categoryLabel(categoryId: string | null, nameHint?: string): string {
-  if (nameHint) return nameHint;
-  if (!categoryId) return 'Kanallar';
-  return CATEGORY_LABELS[categoryId] ?? 'Kanallar';
-}
 
 export function buildSidebarCategories(
   channels: ChannelSummary[],
@@ -22,9 +10,16 @@ export function buildSidebarCategories(
     /** Kullanıcı gerçekten bu LiveKit oturumundaysa id; değilse kendisini listeden çıkar. */
     selfUserId?: string;
     selfVoiceChannelId?: string | null;
+    guildCategories?: CategoryDto[];
     onAddChannel?: (categoryId: string | null) => void;
     onEditChannel?: (channel: ChannelSummary) => void;
     onDeleteChannel?: (channel: ChannelSummary) => void;
+    onEditCategory?: (category: CategoryDto) => void;
+    onDeleteCategory?: (category: CategoryDto) => void;
+    onDropMember?: (userId: string, channel: ChannelSummary) => void;
+    collapsedCategoryIds?: Set<string>;
+    onToggleCategory?: (categoryId: string) => void;
+    onReorderChannels?: (categoryId: string | null, orderedIds: string[]) => void;
   },
 ): SidebarCategory[] {
   const textAndVoice = channels.filter((c) => c.type !== 'CATEGORY');
@@ -37,6 +32,15 @@ export function buildSidebarCategories(
     byCategory.set(key, list);
   }
 
+  // Boş kategoriler de görünsün
+  for (const cat of extras?.guildCategories ?? []) {
+    if (!byCategory.has(cat.id)) byCategory.set(cat.id, []);
+  }
+
+  const catMeta = new Map(
+    (extras?.guildCategories ?? []).map((c) => [c.id, c] as const),
+  );
+
   const categories: SidebarCategory[] = [];
 
   for (const [categoryId, list] of byCategory) {
@@ -46,7 +50,6 @@ export function buildSidebarCategories(
         ch.type === 'VOICE'
           ? (extras?.voiceMembersByChannel?.[ch.id] ?? ch.voiceMembers ?? [])
           : undefined;
-      // Kendimizi yalnızca gerçekten o ses kanalındaysak göster (Redis hayaletini gizle)
       if (voiceMembers && extras?.selfUserId) {
         const inThis =
           extras.selfVoiceChannelId != null && extras.selfVoiceChannelId === ch.id;
@@ -57,12 +60,13 @@ export function buildSidebarCategories(
       return {
         id: ch.id,
         name: ch.name,
-        type: ch.type === 'VOICE' ? 'voice' : 'text',
+        type:
+          ch.type === 'VOICE' ? 'voice' : ch.type === 'FORUM' ? 'forum' : 'text',
         active: ch.id === activeChannelId,
         unread: Boolean(ch.unread || (ch.unreadCount ?? 0) > 0) && ch.id !== activeChannelId,
         locked: Boolean(ch.locked),
         badgeCount:
-          ch.type === 'TEXT' && ch.id !== activeChannelId
+          (ch.type === 'TEXT' || ch.type === 'FORUM') && ch.id !== activeChannelId
             ? (ch.unreadCount ?? (ch.unread ? 1 : 0)) || undefined
             : undefined,
         voiceMembers: voiceMembers?.map((m) => ({
@@ -80,27 +84,43 @@ export function buildSidebarCategories(
           : undefined,
         onEdit: extras?.onEditChannel ? () => extras.onEditChannel?.(ch) : undefined,
         onDelete: extras?.onDeleteChannel ? () => extras.onDeleteChannel?.(ch) : undefined,
+        onDropMember:
+          ch.type === 'VOICE' && extras?.onDropMember
+            ? (userId) => extras.onDropMember?.(userId, ch)
+            : undefined,
+        draggable: Boolean(extras?.onReorderChannels),
       };
     });
 
+    const meta = categoryId ? catMeta.get(categoryId) : undefined;
+    const catKey = categoryId ?? 'uncategorized';
     categories.push({
-      id: categoryId ?? 'uncategorized',
-      label: categoryLabel(categoryId),
+      id: catKey,
+      label: meta?.name ?? (categoryId ? 'Kategori' : 'Kanallar'),
+      collapsed: extras?.collapsedCategoryIds?.has(catKey) ?? false,
+      onToggle: extras?.onToggleCategory
+        ? () => extras.onToggleCategory?.(catKey)
+        : undefined,
       channels: items,
       onAddChannel: extras?.onAddChannel
         ? () => extras.onAddChannel?.(categoryId)
         : undefined,
+      onEditCategory:
+        meta && extras?.onEditCategory ? () => extras.onEditCategory?.(meta) : undefined,
+      onDeleteCategory:
+        meta && extras?.onDeleteCategory ? () => extras.onDeleteCategory?.(meta) : undefined,
+      onReorderChannels: extras?.onReorderChannels
+        ? (orderedIds) => extras.onReorderChannels?.(categoryId, orderedIds)
+        : undefined,
+      sortPosition: meta?.position ?? (categoryId ? 999 : -1),
     });
   }
 
   categories.sort((a, b) => {
-    const order = (id: string) => {
-      if (id === 'seed-cat-info') return 0;
-      if (id === 'seed-cat-chat') return 1;
-      if (id === 'seed-cat-voice') return 2;
-      return 3;
-    };
-    return order(a.id) - order(b.id);
+    const pa = a.sortPosition ?? 999;
+    const pb = b.sortPosition ?? 999;
+    if (pa !== pb) return pa - pb;
+    return a.label.localeCompare(b.label, 'tr');
   });
 
   return categories;

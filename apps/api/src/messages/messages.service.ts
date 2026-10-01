@@ -13,10 +13,12 @@ import { Friendship } from '@/database/entities/friendship.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
 import { Message } from '@/database/entities/message.entity';
 import { MessageHide } from '@/database/entities/message-hide.entity';
+import { MessageBookmark } from '@/database/entities/message-bookmark.entity';
 import { Reaction } from '@/database/entities/reaction.entity';
 import { User } from '@/database/entities/user.entity';
 import type {
   MessageAttachment,
+  MessageBookmarkDto,
   MessageDto,
   MessageEmbed,
   MessageForwardedFrom,
@@ -38,6 +40,7 @@ import { SearchIndexerService } from '@/search/search-indexer.service';
 import { MusicCommandsService } from '@/music/music-commands.service';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { LinkPreviewService } from './link-preview.service';
+import { CustomSlashService } from './custom-slash.service';
 import { MessagesRealtimeService } from './messages-realtime.service';
 
 type MessagePollStored = {
@@ -59,6 +62,7 @@ export class MessagesService {
     private readonly linkPreview: LinkPreviewService,
     private readonly realtime: MessagesRealtimeService,
     private readonly musicCommands: MusicCommandsService,
+    private readonly customSlash: CustomSlashService,
   ) {}
 
   async listChannelMessages(
@@ -76,6 +80,7 @@ export class MessagesService {
     const where: Record<string, unknown> = {
       channelId,
       deletedAt: IsNull(),
+      threadRootId: IsNull(),
     };
 
     if (opts.before) {
@@ -117,11 +122,17 @@ export class MessagesService {
     });
     if (!pivot) throw new NotFoundException('Message not found');
 
+    // Thread içi mesaja around ile gelindiyse kök + yanıtları dön
+    if (pivot.threadRootId) {
+      return this.listThreadMessages(pivot.threadRootId, userId, limit);
+    }
+
     const half = Math.max(1, Math.floor(limit / 2));
     const older = await this.em.find(Message, {
       where: {
         channelId,
         deletedAt: IsNull(),
+        threadRootId: IsNull(),
         createdAt: LessThan(pivot.createdAt),
       },
       relations: { author: true },
@@ -132,6 +143,7 @@ export class MessagesService {
       where: {
         channelId,
         deletedAt: IsNull(),
+        threadRootId: IsNull(),
         createdAt: MoreThan(pivot.createdAt),
       },
       relations: { author: true },
@@ -145,6 +157,7 @@ export class MessagesService {
         where: {
           channelId,
           deletedAt: IsNull(),
+          threadRootId: IsNull(),
           createdAt: LessThan(older[older.length - 1]?.createdAt ?? pivot.createdAt),
         },
       }));
@@ -152,6 +165,34 @@ export class MessagesService {
     const raw = [...older.reverse(), pivot, ...newer];
     const items = await this.mapMessagesForViewer(raw, userId);
     return { items, hasMore: olderHasMore };
+  }
+
+  async listThreadMessages(
+    rootMessageId: string,
+    userId: string,
+    limit = 100,
+  ): Promise<MessagePage> {
+    const root = await this.em.findOne(Message, {
+      where: { id: rootMessageId, deletedAt: IsNull() },
+      relations: { author: true },
+    });
+    if (!root) throw new NotFoundException('Thread bulunamadı');
+    if (root.threadRootId) {
+      throw new BadRequestException('Geçersiz thread kökü');
+    }
+    await this.channels.getChannel(root.channelId, userId);
+    const take = Math.min(Math.max(limit, 1), 100);
+    const replies = await this.em.find(Message, {
+      where: {
+        threadRootId: rootMessageId,
+        deletedAt: IsNull(),
+      },
+      relations: { author: true },
+      order: { createdAt: 'ASC' },
+      take,
+    });
+    const items = await this.mapMessagesForViewer([root, ...replies], userId);
+    return { items, hasMore: false };
   }
 
   private async mapMessagesForViewer(
@@ -165,6 +206,10 @@ export class MessagesService {
       where: { userId: viewerId, messageId: In(ids) },
     });
     const hideMap = new Map(hides.map((h) => [h.messageId, h.mode]));
+    const bookmarks = await this.em.find(MessageBookmark, {
+      where: { userId: viewerId, messageId: In(ids) },
+    });
+    const bookmarkSet = new Set(bookmarks.map((b) => b.messageId));
     const reactions = await this.em.find(Reaction, {
       where: { messageId: In(ids) },
       relations: { user: true },
@@ -195,6 +240,24 @@ export class MessagesService {
       }
     }
 
+    const pollVoters = await this.loadPollVoterUsers(messages.map((m) => m.poll));
+
+    const rootIds = messages.filter((m) => !m.threadRootId).map((m) => m.id);
+    const replyCountMap = new Map<string, number>();
+    if (rootIds.length) {
+      const rows = await this.em
+        .createQueryBuilder(Message, 'm')
+        .select('m.threadRootId', 'rootId')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('m.threadRootId IN (:...rootIds)', { rootIds })
+        .andWhere('m.deletedAt IS NULL')
+        .groupBy('m.threadRootId')
+        .getRawMany<{ rootId: string; cnt: string }>();
+      for (const row of rows) {
+        replyCountMap.set(row.rootId, Number(row.cnt) || 0);
+      }
+    }
+
     const out: MessageDto[] = [];
     for (const m of messages) {
       if (blocked.has(m.authorId)) continue;
@@ -204,8 +267,11 @@ export class MessagesService {
         this.toDto(m, {
           viewerId,
           hideMode: mode === 'HIDDEN' ? 'hidden' : null,
+          bookmarked: bookmarkSet.has(m.id),
           reactions: reactionByMsg.get(m.id) ?? [],
           replyTo: m.replyToId ? replyMap.get(m.replyToId) ?? null : null,
+          pollVoters,
+          threadReplyCount: m.threadRootId ? undefined : replyCountMap.get(m.id) ?? 0,
         }),
       );
     }
@@ -235,12 +301,24 @@ export class MessagesService {
     pollInput?: { question: string; options: string[]; multi?: boolean },
     opts: {
       replyToId?: string;
+      threadRootId?: string;
       type?: MessageType;
       forwardedFrom?: MessageForwardedFrom | null;
     } = {},
   ): Promise<{ message: MessageDto; notifications: NotificationDto[] }> {
     await this.channels.getChannel(channelId, userId);
     const channelRow = await this.em.findOne(Channel, { where: { id: channelId } });
+    if (channelRow?.guildId) {
+      await this.guilds.assertNotTimedOut(channelRow.guildId, userId);
+      const canSend = await this.channels.memberCanInChannel(
+        channelRow,
+        userId,
+        'SEND_MESSAGES',
+      );
+      if (!canSend) {
+        throw new ForbiddenException('Bu kanala mesaj gönderme iznin yok');
+      }
+    }
     const trimmed = content.trim();
     const msgType: MessageType = opts.type === 'heading' ? 'heading' : 'default';
     let poll: MessagePollStored | null = null;
@@ -293,6 +371,16 @@ export class MessagesService {
 
     let replyToId: string | null = null;
     let replyRef: MessageReplyRef | null = null;
+    let threadRootId: string | null = null;
+    if (opts.threadRootId) {
+      const root = await this.em.findOne(Message, {
+        where: { id: opts.threadRootId, channelId, deletedAt: IsNull() },
+      });
+      if (!root || root.threadRootId) {
+        throw new BadRequestException('Geçersiz thread kökü');
+      }
+      threadRootId = root.id;
+    }
     if (opts.replyToId) {
       const parent = await this.em.findOne(Message, {
         where: { id: opts.replyToId, channelId, deletedAt: IsNull() },
@@ -306,10 +394,24 @@ export class MessagesService {
         authorName: parent.author?.displayName ?? 'Kullanıcı',
         contentPreview: (parent.content || '').slice(0, 120),
       };
+      // Açık threadRoot yoksa yanıttan thread'e bağla
+      if (!threadRootId && parent.threadRootId) {
+        threadRootId = parent.threadRootId;
+      }
     }
 
     const embeds =
-      msgType === 'default' && trimmed ? await this.linkPreview.buildEmbeds(trimmed) : [];
+      msgType === 'default' && trimmed && !poll && !/^sticker:\S+$/u.test(trimmed)
+        ? await this.linkPreview.buildEmbeds(trimmed)
+        : [];
+    // Attachment URL’leri content’te tekrarlanıyorsa embed’i atla (yalnızca görsel mesaj)
+    const attachmentUrls = new Set((attachments ?? []).map((a) => a.url));
+    const contentUrls = trimmed ? this.linkPreview.extractUrls(trimmed) : [];
+    const onlyAttachmentUrls =
+      attachmentUrls.size > 0 &&
+      contentUrls.length > 0 &&
+      contentUrls.every((u) => attachmentUrls.has(u));
+    const finalEmbeds = onlyAttachmentUrls ? [] : embeds;
     const saved = await this.em.save(
       Message,
       this.em.create(Message, {
@@ -318,11 +420,12 @@ export class MessagesService {
         content: trimmed || (poll || opts.forwardedFrom ? ' ' : ' '),
         type: msgType,
         replyToId,
+        threadRootId,
         pinnedAt: null,
         pinnedById: null,
         forwardedFrom: opts.forwardedFrom ?? null,
         attachments: attachments?.length ? attachments : null,
-        embeds: embeds.length ? embeds : null,
+        embeds: finalEmbeds.length ? finalEmbeds : null,
         poll,
       }),
     );
@@ -330,7 +433,7 @@ export class MessagesService {
       where: { id: saved.id },
       relations: { author: true },
     });
-    const dto = this.toDto(message, {
+    const dto = await this.toDtoResolved(message, {
       viewerId: userId,
       reactions: [],
       replyTo: replyRef,
@@ -355,7 +458,10 @@ export class MessagesService {
       !attachments?.length &&
       !poll
     ) {
-      void this.musicCommands.tryHandle(userId, channelId, trimmed).catch(() => undefined);
+      void (async () => {
+        const music = await this.musicCommands.tryHandle(userId, channelId, trimmed);
+        if (!music) await this.customSlash.tryHandle(userId, channelId, trimmed);
+      })().catch(() => undefined);
     }
 
     return { message: dto, notifications };
@@ -540,7 +646,7 @@ export class MessagesService {
         };
       }
     }
-    return this.toDto(message, { viewerId, reactions, replyTo });
+    return this.toDtoResolved(message, { viewerId, reactions, replyTo });
   }
 
   async updateMessage(messageId: string, userId: string, content: string): Promise<MessageDto> {
@@ -556,10 +662,13 @@ export class MessagesService {
     if (!trimmed && !message.poll) throw new BadRequestException('Mesaj boş olamaz');
     message.content = trimmed || ' ';
     message.updatedAt = new Date();
-    message.embeds = trimmed ? await this.linkPreview.buildEmbeds(trimmed) : null;
+    message.embeds =
+      trimmed && !message.poll && !/^sticker:\S+$/u.test(trimmed)
+        ? await this.linkPreview.buildEmbeds(trimmed)
+        : null;
     await this.em.save(Message, message);
     const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
-    const dto = this.toDto(message, { viewerId: userId, reactions });
+    const dto = await this.toDtoResolved(message, { viewerId: userId, reactions });
     void this.indexer.indexMessage(dto).catch(() => undefined);
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
@@ -624,7 +733,7 @@ export class MessagesService {
       where: { messageId },
       relations: { user: true },
     });
-    const dto = this.toDto(message, { viewerId: userId, reactions });
+    const dto = await this.toDtoResolved(message, { viewerId: userId, reactions });
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
   }
@@ -660,7 +769,7 @@ export class MessagesService {
     message.poll = poll;
     await this.em.save(Message, message);
     const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
-    const dto = this.toDto(message, { viewerId: userId, reactions });
+    const dto = await this.toDtoResolved(message, { viewerId: userId, reactions });
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
   }
@@ -691,6 +800,94 @@ export class MessagesService {
     });
     if (row) await this.em.remove(MessageHide, row);
     return { ok: true };
+  }
+
+  async bookmarkMessage(messageId: string, userId: string): Promise<MessageDto> {
+    const message = await this.em.findOne(Message, {
+      where: { id: messageId },
+      relations: { author: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Mesaj bulunamadı');
+    await this.channels.getChannel(message.channelId, userId);
+    const existing = await this.em.findOne(MessageBookmark, {
+      where: { userId, messageId },
+    });
+    if (!existing) {
+      await this.em.save(
+        MessageBookmark,
+        this.em.create(MessageBookmark, { userId, messageId }),
+      );
+    }
+    const reactions = await this.em.find(Reaction, {
+      where: { messageId },
+      relations: { user: true },
+    });
+    return this.toDtoResolved(message, {
+      viewerId: userId,
+      bookmarked: true,
+      reactions,
+    });
+  }
+
+  async unbookmarkMessage(messageId: string, userId: string): Promise<MessageDto> {
+    const message = await this.em.findOne(Message, {
+      where: { id: messageId },
+      relations: { author: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Mesaj bulunamadı');
+    const row = await this.em.findOne(MessageBookmark, {
+      where: { userId, messageId },
+    });
+    if (row) await this.em.remove(MessageBookmark, row);
+    const reactions = await this.em.find(Reaction, {
+      where: { messageId },
+      relations: { user: true },
+    });
+    return this.toDtoResolved(message, {
+      viewerId: userId,
+      bookmarked: false,
+      reactions,
+    });
+  }
+
+  async listBookmarks(userId: string, limit = 50): Promise<MessageBookmarkDto[]> {
+    const take = Math.min(Math.max(limit, 1), 100);
+    const rows = await this.em.find(MessageBookmark, {
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      take,
+    });
+    if (!rows.length) return [];
+    const messages = await this.em.find(Message, {
+      where: { id: In(rows.map((r) => r.messageId)), deletedAt: IsNull() },
+      relations: { author: true },
+    });
+    const msgById = new Map(messages.map((m) => [m.id, m]));
+    const channelIds = [...new Set(messages.map((m) => m.channelId))];
+    const channels = channelIds.length
+      ? await this.em.find(Channel, { where: { id: In(channelIds) } })
+      : [];
+    const chById = new Map(channels.map((c) => [c.id, c]));
+    const dtos = await this.mapMessagesForViewer(messages, userId);
+    const dtoById = new Map(dtos.map((d) => [d.id, d]));
+
+    const out: MessageBookmarkDto[] = [];
+    for (const row of rows) {
+      const msg = msgById.get(row.messageId);
+      const dto = dtoById.get(row.messageId);
+      if (!msg || !dto) continue;
+      const ch = chById.get(msg.channelId);
+      out.push({
+        id: row.id,
+        messageId: row.messageId,
+        channelId: msg.channelId,
+        channelName: ch?.name ?? null,
+        guildId: ch?.guildId ?? null,
+        createdAt: row.createdAt.toISOString(),
+        message: { ...dto, bookmarked: true },
+      });
+    }
+    return out;
   }
 
   private async createMessageNotifications(
@@ -819,17 +1016,48 @@ export class MessagesService {
       throw new NotFoundException('Message not found');
     }
     const reactions = await this.em.find(Reaction, { where: { messageId }, relations: { user: true } });
-    return this.toDto(message, { viewerId, reactions });
+    return this.toDtoResolved(message, { viewerId, reactions });
   }
 
-  private toPollDto(poll: MessagePollStored, viewerId?: string): MessagePollDto {
+  private async loadPollVoterUsers(
+    polls: Array<MessagePollStored | null | undefined>,
+  ): Promise<Map<string, User>> {
+    const ids = new Set<string>();
+    for (const poll of polls) {
+      if (!poll?.votes) continue;
+      for (const list of Object.values(poll.votes)) {
+        for (const id of list) ids.add(id);
+      }
+    }
+    if (!ids.size) return new Map();
+    const users = await this.em.find(User, { where: { id: In([...ids]) } });
+    return new Map(users.map((u) => [u.id, u]));
+  }
+
+  private toPollDto(
+    poll: MessagePollStored,
+    viewerId?: string,
+    voterUsers?: Map<string, User>,
+  ): MessagePollDto {
     const options = poll.options.map((o) => {
-      const voters = poll.votes[o.id] ?? [];
+      const voterIds = poll.votes[o.id] ?? [];
+      const voters = voterIds
+        .slice(-3)
+        .reverse()
+        .map((id) => {
+          const u = voterUsers?.get(id);
+          return {
+            id,
+            displayName: u?.displayName ?? 'Kullanıcı',
+            avatarUrl: u?.avatarUrl ?? null,
+          };
+        });
       return {
         id: o.id,
         text: o.text,
-        voteCount: voters.length,
-        voted: viewerId ? voters.includes(viewerId) : false,
+        voteCount: voterIds.length,
+        voted: viewerId ? voterIds.includes(viewerId) : false,
+        voters,
       };
     });
     return {
@@ -878,8 +1106,11 @@ export class MessagesService {
     opts: {
       viewerId?: string;
       hideMode?: 'hidden' | null;
+      bookmarked?: boolean;
       reactions?: Reaction[];
       replyTo?: MessageReplyRef | null;
+      pollVoters?: Map<string, User>;
+      threadReplyCount?: number;
     } = {},
   ): MessageDto {
     const hidden = opts.hideMode === 'hidden';
@@ -891,6 +1122,11 @@ export class MessagesService {
       type: message.type ?? 'default',
       replyTo: hidden ? null : (opts.replyTo ?? null),
       pinnedAt: message.pinnedAt?.toISOString() ?? null,
+      threadRootId: message.threadRootId ?? null,
+      threadReplyCount:
+        message.threadRootId != null
+          ? undefined
+          : (opts.threadReplyCount ?? 0),
       forwardedFrom: hidden ? null : (message.forwardedFrom ?? null),
       attachments: hidden ? undefined : (message.attachments ?? undefined),
       embeds: hidden ? undefined : message.embeds?.length ? message.embeds : undefined,
@@ -898,11 +1134,27 @@ export class MessagesService {
       poll:
         hidden || !message.poll
           ? null
-          : this.toPollDto(message.poll, opts.viewerId),
+          : this.toPollDto(message.poll, opts.viewerId, opts.pollVoters),
       viewerHide: hidden ? 'hidden' : null,
+      bookmarked: Boolean(opts.bookmarked),
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt?.toISOString() ?? null,
     };
+  }
+
+  private async toDtoResolved(
+    message: Message,
+    opts: {
+      viewerId?: string;
+      hideMode?: 'hidden' | null;
+      bookmarked?: boolean;
+      reactions?: Reaction[];
+      replyTo?: MessageReplyRef | null;
+      threadReplyCount?: number;
+    } = {},
+  ): Promise<MessageDto> {
+    const pollVoters = await this.loadPollVoterUsers([message.poll]);
+    return this.toDto(message, { ...opts, pollVoters });
   }
 }
 

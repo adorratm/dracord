@@ -14,7 +14,7 @@ import {
 import { cn } from '../lib/cn';
 import { contentHasSelfMention, tokenizeMessageContent } from '../lib/mentions';
 import { Avatar } from './Avatar';
-import { MessageAttachmentView } from './MessageAttachmentView';
+import { MediaLightbox, MessageAttachmentView } from './MessageAttachmentView';
 import { MessageEmbedView } from './MessageEmbedView';
 import { UserHoverCard } from './UserHoverCard';
 
@@ -34,6 +34,8 @@ export interface MessageItemActions {
   onReply?: (message: MessageDto) => void;
   onForward?: (message: MessageDto) => void;
   onPin?: (message: MessageDto, pin: boolean) => void;
+  onBookmark?: (message: MessageDto, bookmark: boolean) => void;
+  onOpenThread?: (message: MessageDto) => void;
   onCreateHeading?: (message: MessageDto) => void;
   onMarkUnread?: (message: MessageDto) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -48,6 +50,8 @@ export interface MessageItemActions {
 export interface MessageItemProps {
   message: MessageDto;
   compact?: boolean;
+  /** Görünüm: kompakt mesaj yoğunluğu (sıkı satır aralığı) */
+  dense?: boolean;
   showAvatar?: boolean;
   mentionNames?: string[];
   channelNames?: string[];
@@ -158,22 +162,45 @@ function isStickerMediaUrl(value: string): boolean {
   );
 }
 
+function contentIsOnlyMediaUrls(
+  content: string,
+  mediaUrls: Set<string>,
+): boolean {
+  const t = content.trim();
+  if (!t || !mediaUrls.size) return false;
+  if (mediaUrls.has(t)) return true;
+  const urls = t.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
+  if (!urls.length) return false;
+  const rest = t.replace(/https?:\/\/[^\s<>"')\]]+/gi, '').trim();
+  return !rest && urls.every((u) => mediaUrls.has(u.replace(/[.,;:!?)]+$/, '')));
+}
+
 function renderMessageContent(
   content: string,
   mentionNames: string[],
   channelNames: string[],
+  opts?: {
+    hideUrls?: Set<string>;
+    onStickerClick?: (url: string) => void;
+  },
 ): ReactNode {
   if (isStickerOnly(content)) {
     const glyph = stickerGlyph(content);
     if (isStickerMediaUrl(glyph)) {
       return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={glyph}
-          alt="sticker"
-          className="max-w-[160px] max-h-[160px] w-auto h-auto object-contain select-none"
-          loading="lazy"
-        />
+        <button
+          type="button"
+          onClick={() => opts?.onStickerClick?.(glyph)}
+          className="block text-left"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={glyph}
+            alt="sticker"
+            className="max-w-[160px] max-h-[160px] w-auto h-auto object-contain select-none cursor-zoom-in"
+            loading="lazy"
+          />
+        </button>
       );
     }
     return (
@@ -206,6 +233,10 @@ function renderMessageContent(
       );
     }
     if (t.type === 'url') {
+      const cleaned = t.value.replace(/[.,;:!?)]+$/, '');
+      if (opts?.hideUrls?.has(cleaned) || opts?.hideUrls?.has(t.value)) {
+        return null;
+      }
       return (
         <a
           key={i}
@@ -225,6 +256,7 @@ function renderMessageContent(
 export function MessageItem({
   message,
   compact = false,
+  dense = false,
   showAvatar = true,
   mentionNames = [],
   channelNames = [],
@@ -242,6 +274,7 @@ export function MessageItem({
   const [idCopied, setIdCopied] = useState(false);
   const [contentCopied, setContentCopied] = useState(false);
   const [reportDone, setReportDone] = useState(false);
+  const [stickerLightbox, setStickerLightbox] = useState<string | null>(null);
   /** Popover: aşağıda yer yoksa yukarı aç */
   const [popoverPlacement, setPopoverPlacement] = useState<'up' | 'down'>('down');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -254,12 +287,32 @@ export function MessageItem({
   const sticker = isStickerOnly(message.content);
   const isSelfMention = contentHasSelfMention(message.content, mentionNames);
   const isHeading = message.type === 'heading';
+  const mediaUrls = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of message.attachments ?? []) set.add(a.url);
+    for (const e of message.embeds ?? []) {
+      set.add(e.url);
+      if (e.imageUrl) set.add(e.imageUrl);
+    }
+    if (sticker) {
+      const g = stickerGlyph(message.content);
+      if (isStickerMediaUrl(g)) set.add(g);
+    }
+    return set;
+  }, [message.attachments, message.embeds, message.content, sticker]);
   const hidePlainContent =
+    Boolean(message.poll) ||
     sticker ||
     (message.attachments?.length === 1 && !message.content.trim()) ||
     (message.attachments?.length === 1 &&
       message.attachments[0] &&
-      message.content.trim() === message.attachments[0].filename);
+      message.content.trim() === message.attachments[0].filename) ||
+    contentIsOnlyMediaUrls(message.content, mediaUrls);
+  const hideMediaEmbeds =
+    hideEmbeds ||
+    sticker ||
+    Boolean(message.attachments?.length) ||
+    contentIsOnlyMediaUrls(message.content, mediaUrls);
 
   const computePlacement = useCallback((estimatedHeight: number) => {
     const el = menuRef.current;
@@ -376,9 +429,11 @@ export function MessageItem({
     <article
       className={cn(
         'group flex gap-space-md px-space-md py-space-xs hover:bg-surface-container-low/60 transition-colors relative',
-        compact && !isHeading && 'py-0.5',
+        (compact || dense) && !isHeading && 'py-0.5',
+        dense && isHeading && 'py-space-sm mt-space-xs',
         isSelfMention && 'bg-primary-container/10 hover:bg-primary-container/15',
-        isHeading && 'py-space-md mt-space-sm border-t border-surface-container-highest/80',
+        isHeading && !dense && 'py-space-md mt-space-sm border-t border-surface-container-highest/80',
+        isHeading && dense && 'border-t border-surface-container-highest/80',
         (menuOpen || reactPickerOpen) && 'z-[3]',
         className,
       )}
@@ -435,11 +490,17 @@ export function MessageItem({
             )}
             {!hidePlainContent && (
               <p className={cn('font-body-md text-body-md text-on-surface whitespace-pre-wrap break-words', sticker && 'mt-1')}>
-                {renderMessageContent(message.content, mentionNames, channelNames)}
+                {renderMessageContent(message.content, mentionNames, channelNames, {
+                  hideUrls: mediaUrls,
+                })}
               </p>
             )}
-            {sticker && hidePlainContent && (
-              <div className="mt-1">{renderMessageContent(message.content, mentionNames, channelNames)}</div>
+            {sticker && (
+              <div className="mt-1">
+                {renderMessageContent(message.content, mentionNames, channelNames, {
+                  onStickerClick: (url) => setStickerLightbox(url),
+                })}
+              </div>
             )}
           </>
         )}
@@ -450,7 +511,7 @@ export function MessageItem({
             ))}
           </ul>
         )}
-        {!isHeading && !hideEmbeds && message.embeds && message.embeds.length > 0 && (
+        {!isHeading && !hideMediaEmbeds && message.embeds && message.embeds.length > 0 && (
           <div className="flex flex-col gap-space-xs">
             {message.embeds.map((embed) => (
               <MessageEmbedView key={embed.url} embed={embed} censored={censorLinkPreviews} />
@@ -461,20 +522,70 @@ export function MessageItem({
           <div className="mt-space-sm max-w-md rounded-lg border border-surface-container-highest bg-surface-container-low p-space-sm space-y-space-xs">
             <p className="font-headline-md text-on-surface">{message.poll.question}</p>
             {message.poll.options.map((opt) => {
-              const pct = message.poll!.totalVotes > 0 ? Math.round((opt.voteCount / message.poll!.totalVotes) * 100) : 0;
+              const pct =
+                message.poll!.totalVotes > 0
+                  ? Math.round((opt.voteCount / message.poll!.totalVotes) * 100)
+                  : 0;
               return (
-                <button key={opt.id} type="button" disabled={message.poll!.closed} onClick={() => actions?.onVotePoll?.(message, opt.id)}
-                  className={cn('relative w-full text-left rounded-lg overflow-hidden border px-space-sm py-space-xs', opt.voted ? 'border-primary-container bg-primary-container/15' : 'border-surface-container-highest hover:bg-surface-bright')}>
-                  <span className="absolute inset-y-0 left-0 bg-primary-container/20" style={{ width: pct + '%' }} />
-                  <span className="relative flex justify-between gap-space-sm font-body-sm">
-                    <span>{opt.text}</span>
-                    <span className="text-outline">{opt.voteCount} · %{pct}</span>
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={message.poll!.closed}
+                  onClick={() => actions?.onVotePoll?.(message, opt.id)}
+                  className={cn(
+                    'relative w-full text-left rounded-lg overflow-hidden border px-space-sm py-space-xs transition-colors',
+                    opt.voted
+                      ? 'border-[#bd93f9] bg-[#bd93f9]/25 shadow-[inset_0_0_0_1px_rgba(189,147,249,0.35)]'
+                      : 'border-surface-container-highest hover:bg-surface-bright',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute inset-y-0 left-0',
+                      opt.voted ? 'bg-[#bd93f9]/35' : 'bg-primary-container/20',
+                    )}
+                    style={{ width: pct + '%' }}
+                  />
+                  <span className="relative flex items-center justify-between gap-space-sm font-body-sm">
+                    <span className={cn(opt.voted && 'text-[#f8f8f2] font-semibold')}>{opt.text}</span>
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      {(opt.voters?.length ?? 0) > 0 && (
+                        <span className="flex -space-x-1.5">
+                          {opt.voters!.slice(0, 3).map((v) => (
+                            <Avatar
+                              key={v.id}
+                              displayName={v.displayName}
+                              imageUrl={v.avatarUrl}
+                              size="sm"
+                              className="!h-5 !w-5 ring-1 ring-surface-container-low"
+                            />
+                          ))}
+                        </span>
+                      )}
+                      <span className={cn('text-outline tabular-nums', opt.voted && 'text-[#bd93f9]')}>
+                        {opt.voteCount} · %{pct}
+                      </span>
+                    </span>
                   </span>
                 </button>
               );
             })}
           </div>
         )}
+        <MediaLightbox
+          attachment={
+            stickerLightbox
+              ? {
+                  id: 'sticker',
+                  url: stickerLightbox,
+                  filename: 'sticker',
+                  contentType: 'image/png',
+                  size: 0,
+                }
+              : null
+          }
+          onClose={() => setStickerLightbox(null)}
+        />
         {!isHeading && message.reactions && message.reactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {message.reactions.map((r) => (
@@ -527,6 +638,18 @@ export function MessageItem({
             ))}
           </div>
         )}
+        {!isHeading && !message.threadRootId && actions?.onOpenThread && (
+            <button
+              type="button"
+              onClick={() => actions.onOpenThread?.(message)}
+              className="mt-1 self-start inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-label-sm text-primary-container hover:bg-primary-container/10"
+            >
+              <span className="material-symbols-outlined text-[16px]">forum</span>
+              {(message.threadReplyCount ?? 0) > 0
+                ? `${message.threadReplyCount} yanıt — Thread’i gör`
+                : 'Thread başlat'}
+            </button>
+          )}
       </div>
 
       {actions && (
@@ -659,6 +782,16 @@ export function MessageItem({
                         actions.onCreateHeading?.(message);
                       }}
                     />
+                    {actions.onOpenThread && (
+                      <MenuRow
+                        icon="forum"
+                        label="Thread’de yanıtla"
+                        onClick={() => {
+                          closeAllMenus();
+                          actions.onOpenThread?.(message);
+                        }}
+                      />
+                    )}
                     <MenuDivider />
                   </>
                 )}
@@ -669,6 +802,16 @@ export function MessageItem({
                     onClick={() => {
                       closeAllMenus();
                       actions.onPin?.(message, !message.pinnedAt);
+                    }}
+                  />
+                )}
+                {actions.onBookmark && (
+                  <MenuRow
+                    icon="bookmark"
+                    label={message.bookmarked ? 'Yer imini kaldır' : 'Yer imine ekle'}
+                    onClick={() => {
+                      closeAllMenus();
+                      actions.onBookmark?.(message, !message.bookmarked);
                     }}
                   />
                 )}
@@ -933,6 +1076,8 @@ export interface MessageListProps {
   censorLinkPreviews?: boolean;
   hideEmbeds?: boolean;
   messageGrouping?: boolean;
+  /** Görünüm ayarı: kompakt mesaj yoğunluğu */
+  dense?: boolean;
   hour24?: boolean;
   locale?: string;
   messageActions?: MessageItemActions;
@@ -968,6 +1113,7 @@ export function MessageList({
   censorLinkPreviews = false,
   hideEmbeds = false,
   messageGrouping = true,
+  dense = false,
   hour24 = true,
   locale = 'tr-TR',
   messageActions,
@@ -1238,6 +1384,7 @@ export function MessageList({
                 <MessageItem
                   message={message}
                   compact={compact}
+                  dense={dense}
                   showAvatar={!compact}
                   mentionNames={mentionNames}
                   channelNames={channelNames}

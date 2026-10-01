@@ -7,7 +7,9 @@ import { GlobalSearch } from '@/components/GlobalSearch';
 import { OnboardingGate } from '@/components/OnboardingGate';
 import { SettingsReturnTracker } from '@/components/SettingsReturnTracker';
 import { VoiceSessionProvider } from '@/components/VoiceSessionProvider';
+import { DmIncomingCallListener } from '@/components/DmCallControls';
 import { PreferencesProvider } from '@/lib/user-preferences';
+import { I18nProvider } from '@/lib/i18n';
 import './globals.css';
 
 const inter = Inter({
@@ -121,18 +123,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans antialiased">
-        <Analytics />
         <AuthProvider>
           <PreferencesProvider>
-            <OnboardingGate>
-              <VoiceSessionProvider>
-                <Suspense fallback={null}>
-                  <GlobalSearch />
-                </Suspense>
-                <SettingsReturnTracker />
-                {children}
-              </VoiceSessionProvider>
-            </OnboardingGate>
+            <Analytics />
+            <I18nProvider>
+              <OnboardingGate>
+                <VoiceSessionProvider>
+                  <Suspense fallback={null}>
+                    <GlobalSearch />
+                  </Suspense>
+                  <SettingsReturnTracker />
+                  <DmIncomingCallListener />
+                  {children}
+                </VoiceSessionProvider>
+              </OnboardingGate>
+            </I18nProvider>
           </PreferencesProvider>
         </AuthProvider>
       </body>

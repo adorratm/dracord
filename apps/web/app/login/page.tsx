@@ -21,7 +21,13 @@ export default function LoginPage() {
 
   const onGoogleLogin = () => {
     setError(null);
-    window.location.href = getDracordClient().getGoogleLoginUrl();
+    const isDesktop = Boolean(
+      (window as Window & { dracordDesktop?: { isElectron?: boolean } }).dracordDesktop
+        ?.isElectron,
+    );
+    window.location.href = getDracordClient().getGoogleLoginUrl(
+      isDesktop ? 'desktop' : 'web',
+    );
   };
 
   return (

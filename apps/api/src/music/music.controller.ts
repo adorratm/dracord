@@ -109,11 +109,11 @@ export class MusicController {
         }
         state =
           state ??
-          this.state.emptyState(
+          (await this.state.emptyState(
             body.guildId,
             body.voiceChannelId,
             textChannelId || body.voiceChannelId,
-          );
+          ));
         state.volume = Math.round(n);
         if (textChannelId) state.textChannelId = textChannelId;
         await this.state.save(state);

@@ -37,6 +37,8 @@ export interface MemberListMember {
   onContextMenu?: () => void;
   /** Sağ tık menüsü — engel yalnızca buradan seçilince uygulanır */
   contextActions?: MemberListAction[];
+  /** Sürükleyerek ses kanalına taşı */
+  draggable?: boolean;
 }
 
 export interface MemberListGroup {
@@ -171,6 +173,18 @@ export function MemberList({ groups, className }: MemberListProps) {
                   >
                     <button
                       type="button"
+                      draggable={member.draggable}
+                      onDragStart={
+                        member.draggable
+                          ? (e) => {
+                              e.dataTransfer.setData(
+                                'application/x-dracord-user',
+                                member.id,
+                              );
+                              e.dataTransfer.effectAllowed = 'move';
+                            }
+                          : undefined
+                      }
                       onClick={member.onClick}
                       onContextMenu={(e) => openMenu(e, member)}
                       aria-haspopup={hasMenu ? 'menu' : undefined}
@@ -179,6 +193,7 @@ export function MemberList({ groups, className }: MemberListProps) {
                       className={cn(
                         'w-full max-w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group min-w-0',
                         menu?.memberId === member.id && 'bg-surface-container',
+                        member.draggable && 'cursor-grab active:cursor-grabbing',
                       )}
                     >
                       <Avatar

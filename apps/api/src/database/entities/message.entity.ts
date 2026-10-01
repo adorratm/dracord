@@ -39,6 +39,10 @@ export class Message extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   replyToId!: string | null;
 
+  /** Thread kök mesajı; doluysa bu mesaj kanal ana akışında değil thread içindedir */
+  @Column({ type: 'varchar', nullable: true })
+  threadRootId!: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   pinnedAt!: Date | null;
 

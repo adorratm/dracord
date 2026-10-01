@@ -6,6 +6,7 @@ import {
   type NotificationType,
 } from '@/database/entities/notification.entity';
 import { User } from '@/database/entities/user.entity';
+import { PushService } from './push.service';
 
 export interface CreateNotificationInput {
   userId: string;
@@ -21,7 +22,10 @@ export interface CreateNotificationInput {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly push: PushService,
+  ) {}
 
   toDto(n: Notification): NotificationDto {
     return {
@@ -56,7 +60,9 @@ export class NotificationsService {
       }),
     );
     const saved = await this.em.save(Notification, rows);
-    return saved.map((n) => this.toDto(n));
+    const dtos = saved.map((n) => this.toDto(n));
+    void this.push.sendNotificationDtos(dtos).catch(() => undefined);
+    return dtos;
   }
 
   async listForUser(

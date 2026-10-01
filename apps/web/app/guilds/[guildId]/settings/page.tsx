@@ -35,6 +35,37 @@ const BG_OPTIONS: { id: RoleProfileBgKey; label: string }[] = [
   { id: 'sunset', label: 'Gün batımı' },
 ];
 
+const ROLE_PERMISSIONS: { id: string; label: string }[] = [
+  { id: 'VIEW_CHANNELS', label: 'Kanalları gör' },
+  { id: 'SEND_MESSAGES', label: 'Mesaj gönder' },
+  { id: 'ADD_REACTIONS', label: 'Tepki ekle' },
+  { id: 'CREATE_POLLS', label: 'Anket oluştur' },
+  { id: 'MANAGE_MESSAGES', label: 'Mesajları yönet' },
+  { id: 'MANAGE_CHANNELS', label: 'Kanalları yönet' },
+  { id: 'MANAGE_ROLES', label: 'Rolleri yönet' },
+  { id: 'MANAGE_GUILD', label: 'Sunucuyu yönet' },
+  { id: 'KICK_MEMBERS', label: 'Üye at' },
+  { id: 'BAN_MEMBERS', label: 'Üye yasakla' },
+  { id: 'MOVE_MEMBERS', label: 'Ses taşı / ayır' },
+  { id: 'MODERATE_MEMBERS', label: 'Timeout' },
+  { id: 'ADMINISTRATOR', label: 'Yönetici' },
+];
+
+type AuditRow = {
+  id: string;
+  actorId: string;
+  action: string;
+  targetId: string | null;
+  createdAt: string;
+};
+
+type BanRow = {
+  userId: string;
+  reason: string | null;
+  bannedById: string;
+  createdAt: string;
+};
+
 export default function GuildSettingsPage({ params }: PageProps) {
   const { guildId } = use(params);
   const router = useRouter();
@@ -51,6 +82,22 @@ export default function GuildSettingsPage({ params }: PageProps) {
   const [newRoleColor, setNewRoleColor] = useState('#5865F2');
   const [newBadge, setNewBadge] = useState<RoleBadgeKey>('star');
   const [newBg, setNewBg] = useState<RoleProfileBgKey>('aurora');
+  const [auditLogs, setAuditLogs] = useState<AuditRow[]>([]);
+  const [bans, setBans] = useState<BanRow[]>([]);
+  const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
+  const [slashCommands, setSlashCommands] = useState<
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      usage: string;
+      botName: string | null;
+    }>
+  >([]);
+  const [slashName, setSlashName] = useState('');
+  const [slashDesc, setSlashDesc] = useState('');
+  const [slashUsage, setSlashUsage] = useState('');
+  const [slashTemplate, setSlashTemplate] = useState('');
 
   const loadRoles = useCallback(async () => {
     try {
@@ -58,6 +105,37 @@ export default function GuildSettingsPage({ params }: PageProps) {
       setRoles(list.sort((a, b) => b.position - a.position));
     } catch {
       setRoles([]);
+    }
+  }, [client, guildId]);
+
+  const loadModeration = useCallback(async () => {
+    try {
+      const [logs, banList] = await Promise.all([
+        client.listGuildAuditLogs(guildId).catch(() => []),
+        client.listGuildBans(guildId).catch(() => []),
+      ]);
+      setAuditLogs(logs.slice(0, 50));
+      setBans(banList);
+    } catch {
+      setAuditLogs([]);
+      setBans([]);
+    }
+  }, [client, guildId]);
+
+  const loadSlashCommands = useCallback(async () => {
+    try {
+      const list = await client.listGuildSlashCommands(guildId);
+      setSlashCommands(
+        list.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          usage: c.usage,
+          botName: c.botName,
+        })),
+      );
+    } catch {
+      setSlashCommands([]);
     }
   }, [client, guildId]);
 
@@ -88,7 +166,9 @@ export default function GuildSettingsPage({ params }: PageProps) {
 
   useEffect(() => {
     void loadRoles();
-  }, [loadRoles]);
+    void loadModeration();
+    void loadSlashCommands();
+  }, [loadRoles, loadModeration, loadSlashCommands]);
 
   useEffect(() => {
     if (!guild && guildId) {
@@ -201,6 +281,29 @@ export default function GuildSettingsPage({ params }: PageProps) {
     }
   };
 
+  const createSlashCommand = async () => {
+    if (!slashName.trim() || !slashDesc.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await client.registerGuildSlashCommand(guildId, {
+        name: slashName.trim(),
+        description: slashDesc.trim(),
+        usage: slashUsage.trim() || undefined,
+        responseTemplate: slashTemplate.trim() || undefined,
+      });
+      setSlashName('');
+      setSlashDesc('');
+      setSlashUsage('');
+      setSlashTemplate('');
+      await loadSlashCommands();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Komut kaydedilemedi');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <RequireAuth>
       <AppShell guilds={guilds} activeGuildId={guildId} subtitle="Sunucu ayarları">
@@ -291,6 +394,36 @@ export default function GuildSettingsPage({ params }: PageProps) {
                   className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
                   disabled={busy}
                 />
+              </label>
+
+              <label className="flex items-center gap-space-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={Boolean(detail?.discoverable)}
+                  disabled={busy || !canManage}
+                  onChange={(e) => {
+                    const discoverable = e.target.checked;
+                    void (async () => {
+                      setBusy(true);
+                      setError(null);
+                      try {
+                        const updated = await client.updateGuild(guildId, { discoverable });
+                        patchGuild(updated);
+                        setDetail(updated);
+                      } catch (err) {
+                        setError(
+                          err instanceof Error ? err.message : 'Keşfet ayarı kaydedilemedi',
+                        );
+                      } finally {
+                        setBusy(false);
+                      }
+                    })();
+                  }}
+                />
+                <span className="font-body-sm text-on-surface">
+                  Keşfette göster (herkes katılabilir)
+                </span>
               </label>
 
               <dl className="grid gap-space-sm">
@@ -510,6 +643,16 @@ export default function GuildSettingsPage({ params }: PageProps) {
                           <button
                             type="button"
                             disabled={busy}
+                            onClick={() =>
+                              setExpandedRoleId((id) => (id === role.id ? null : role.id))
+                            }
+                            className="h-8 px-space-sm rounded-lg bg-surface-container-highest font-label-sm"
+                          >
+                            İzinler
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
                             onClick={() => void removeRole(role)}
                             className="h-8 px-space-sm rounded-lg text-error hover:bg-error/10 font-label-sm ml-auto"
                           >
@@ -517,12 +660,174 @@ export default function GuildSettingsPage({ params }: PageProps) {
                           </button>
                         </>
                       )}
+                      {role.name !== '@everyone' && expandedRoleId === role.id && (
+                        <div className="w-full mt-space-sm grid grid-cols-1 sm:grid-cols-2 gap-1 border-t border-surface-container-highest pt-space-sm">
+                          {ROLE_PERMISSIONS.map((perm) => {
+                            const checked = (role.permissions ?? []).includes(perm.id);
+                            return (
+                              <label
+                                key={perm.id}
+                                className="flex items-center gap-2 font-label-sm text-on-surface-variant cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={busy}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...new Set([...(role.permissions ?? []), perm.id])]
+                                      : (role.permissions ?? []).filter((p) => p !== perm.id);
+                                    void patchRole(role, { permissions: next });
+                                  }}
+                                />
+                                {perm.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
               </>
             )}
           </section>
+
+          {canManage && (
+            <section className="max-w-2xl mt-space-2xl space-y-space-lg">
+              <div>
+                <h2 className="font-headline-lg text-on-surface mb-space-sm">
+                  Slash komutları
+                </h2>
+                <p className="font-body-sm text-outline mb-space-sm">
+                  Sunucuya özel komutlar. Chat’te / yazınca listelenir; çağrılınca bot yanıt
+                  verir. Şablonda {'{user}'}, {'{args}'}, {'{command}'} kullanılabilir.
+                </p>
+                <div className="flex flex-col gap-space-sm mb-space-md">
+                  <input
+                    value={slashName}
+                    onChange={(e) => setSlashName(e.target.value)}
+                    placeholder="komut-adı"
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  />
+                  <input
+                    value={slashDesc}
+                    onChange={(e) => setSlashDesc(e.target.value)}
+                    placeholder="Açıklama"
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  />
+                  <input
+                    value={slashUsage}
+                    onChange={(e) => setSlashUsage(e.target.value)}
+                    placeholder="Kullanım (örn. /selam [üye])"
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  />
+                  <input
+                    value={slashTemplate}
+                    onChange={(e) => setSlashTemplate(e.target.value)}
+                    placeholder="Yanıt şablonu (isteğe bağlı) — Merhaba {user}!"
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy || !slashName.trim() || !slashDesc.trim()}
+                    onClick={() => void createSlashCommand()}
+                    className="self-start px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                  >
+                    Komut ekle
+                  </button>
+                </div>
+                {slashCommands.length === 0 ? (
+                  <p className="font-body-sm text-outline">Henüz özel komut yok.</p>
+                ) : (
+                  <ul className="flex flex-col gap-1">
+                    {slashCommands.map((c) => (
+                      <li
+                        key={c.id}
+                        className="flex items-start gap-2 rounded-lg bg-surface-container-low px-space-sm py-space-sm"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-label-sm text-primary-container truncate">
+                            /{c.name}
+                            {c.botName ? (
+                              <span className="text-outline font-normal"> · {c.botName}</span>
+                            ) : null}
+                          </p>
+                          <p className="font-body-sm text-on-surface truncate">{c.description}</p>
+                          <p className="font-label-sm text-outline truncate">{c.usage}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="font-label-sm text-error hover:underline shrink-0"
+                          onClick={() => {
+                            void client
+                              .deleteGuildSlashCommand(guildId, c.id)
+                              .then(() => loadSlashCommands())
+                              .catch((err: unknown) =>
+                                setError(
+                                  err instanceof Error ? err.message : 'Silinemedi',
+                                ),
+                              );
+                          }}
+                        >
+                          Sil
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h2 className="font-headline-lg text-on-surface mb-space-sm">Yasaklılar</h2>
+                {bans.length === 0 ? (
+                  <p className="font-body-sm text-outline">Yasaklı üye yok.</p>
+                ) : (
+                  <ul className="flex flex-col gap-1">
+                    {bans.map((b) => (
+                      <li
+                        key={b.userId}
+                        className="flex items-center gap-2 rounded-lg bg-surface-container-low px-space-sm py-space-sm"
+                      >
+                        <span className="font-mono text-body-sm flex-1 truncate">{b.userId}</span>
+                        <button
+                          type="button"
+                          className="font-label-sm text-primary-container hover:underline"
+                          onClick={() => {
+                            void client.unbanGuildMember(guildId, b.userId).then(() => {
+                              void loadModeration();
+                            });
+                          }}
+                        >
+                          Yasağı kaldır
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h2 className="font-headline-lg text-on-surface mb-space-sm">Denetim kaydı</h2>
+                {auditLogs.length === 0 ? (
+                  <p className="font-body-sm text-outline">Henüz kayıt yok.</p>
+                ) : (
+                  <ul className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                    {auditLogs.map((l) => (
+                      <li
+                        key={l.id}
+                        className="rounded-lg bg-surface-container-low px-space-sm py-space-xs font-label-sm text-on-surface-variant"
+                      >
+                        <span className="text-on-surface">{l.action}</span>
+                        {l.targetId ? ` → ${l.targetId.slice(0, 8)}…` : ''}
+                        <span className="text-outline ml-2">
+                          {new Date(l.createdAt).toLocaleString('tr-TR')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </AppShell>
     </RequireAuth>

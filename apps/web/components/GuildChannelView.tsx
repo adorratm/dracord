@@ -1,6 +1,12 @@
 'use client';
 
-import type { ChannelSummary, PublicUser, VoiceMemberSummary, VoiceStatePayload } from '@dracord/types';
+import type {
+  CategoryDto,
+  ChannelSummary,
+  PublicUser,
+  VoiceMemberSummary,
+  VoiceStatePayload,
+} from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import {
   Avatar,
@@ -27,11 +33,21 @@ import { openMessageSearch } from '@/components/GlobalSearch';
 import { MobileDrawer } from '@/components/MobileDrawer';
 import { VoiceSideChat } from '@/components/VoiceSideChat';
 import { buildSidebarCategories } from '@/lib/channels';
+import {
+  filterMessageContent,
+  isSuspiciousUrl,
+} from '@/lib/content-filter';
+import {
+  extractForumTags,
+  sortForumMessages,
+  type ForumSort,
+} from '@/lib/forum';
 import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { useUserPreferences } from '@/lib/user-preferences';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
+import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -41,6 +57,7 @@ interface GuildChannelViewProps {
 
 type ConfirmState =
   | { kind: 'channel'; channel: ChannelSummary }
+  | { kind: 'category'; category: CategoryDto }
   | { kind: 'guild' }
   | null;
 
@@ -51,10 +68,21 @@ export function GuildChannelView({
 }: GuildChannelViewProps) {
   const router = useRouter();
   const { user, client, setUser } = useAuth();
-  const { guilds, guild, channels, loading, reload, patchGuild, patchChannelUnread } =
-    useGuildNav(guildId);
+  const {
+    guilds,
+    guild,
+    channels,
+    categories: guildCategories,
+    loading,
+    reload,
+    patchGuild,
+    patchChannelUnread,
+  } = useGuildNav(guildId);
   const channel = channels.find((c) => c.id === channelId);
   const isVoiceView = channel?.type === 'VOICE';
+  const isForumView = channel?.type === 'FORUM';
+  const [forumSort, setForumSort] = useState<ForumSort>('newest');
+  const [forumTag, setForumTag] = useState<string | null>(null);
   const channelPending = !channel && (loading || channels.length === 0);
   const channelMissing = !channel && !loading && channels.length > 0;
 
@@ -78,7 +106,10 @@ export function GuildChannelView({
     hideMessage,
     unhideMessage,
     pinMessage,
+    bookmarkMessage,
     error: chatError,
+    typingUsers,
+    notifyTyping,
   } = useChatChannel(isVoiceView ? undefined : channelId, aroundMessageId);
   const voice = useVoiceSession();
   const { prefs } = useUserPreferences();
@@ -104,8 +135,13 @@ export function GuildChannelView({
     categoryId: string | null;
     channel?: ChannelSummary;
   } | null>(null);
+  const [categoryModal, setCategoryModal] = useState<{
+    mode: 'create' | 'edit';
+    category?: CategoryDto;
+  } | null>(null);
+  const [categoryName, setCategoryName] = useState('');
   const [channelName, setChannelName] = useState('');
-  const [channelType, setChannelType] = useState<'TEXT' | 'VOICE'>('TEXT');
+  const [channelType, setChannelType] = useState<'TEXT' | 'VOICE' | 'FORUM'>('TEXT');
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [serverNameDraft, setServerNameDraft] = useState('');
@@ -114,6 +150,24 @@ export function GuildChannelView({
   const [canManageMessages, setCanManageMessages] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
   const [canManageRoles, setCanManageRoles] = useState(false);
+  const [canMoveMembers, setCanMoveMembers] = useState(false);
+  const [canKickMembers, setCanKickMembers] = useState(false);
+  const [canBanMembers, setCanBanMembers] = useState(false);
+  const [canModerateMembers, setCanModerateMembers] = useState(false);
+  const [moveTargetUser, setMoveTargetUser] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = localStorage.getItem(`dracord.collapsedCats.${guildId}`);
+      if (!raw) return new Set();
+      return new Set(JSON.parse(raw) as string[]);
+    } catch {
+      return new Set();
+    }
+  });
   const [deleteMessageTarget, setDeleteMessageTarget] = useState<{
     id: string;
     preview: string;
@@ -140,9 +194,26 @@ export function GuildChannelView({
   const [forwardChannelId, setForwardChannelId] = useState('');
   const [forwardNote, setForwardNote] = useState('');
   const [pinsOpen, setPinsOpen] = useState(false);
+  const [threadRoot, setThreadRoot] = useState<import('@dracord/types').MessageDto | null>(
+    null,
+  );
+  const [threadMessages, setThreadMessages] = useState<
+    import('@dracord/types').MessageDto[]
+  >([]);
+  const [threadBusy, setThreadBusy] = useState(false);
+  const [threadDraft, setThreadDraft] = useState('');
+  const [botSlashCommands, setBotSlashCommands] = useState<
+    Array<{ name: string; aliases?: string[]; description: string; usage: string }>
+  >([]);
   const [pins, setPins] = useState<
     Array<{ id: string; content: string; authorName: string }>
   >([]);
+  const [latestPin, setLatestPin] = useState<import('@dracord/types').MessageDto | null>(
+    null,
+  );
+  const [pinCount, setPinCount] = useState(0);
+  const threadScrollRef = useRef<HTMLDivElement | null>(null);
+  const [threadSending, setThreadSending] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
@@ -158,6 +229,10 @@ export function GuildChannelView({
   const [channelLocked, setChannelLocked] = useState(false);
   const [channelPasswordDraft, setChannelPasswordDraft] = useState('');
   const [channelDeniedIds, setChannelDeniedIds] = useState<string[]>([]);
+  const [channelOverwrites, setChannelOverwrites] = useState<
+    Array<{ id: string; type: 'role' | 'member'; allow: string[]; deny: string[] }>
+  >([]);
+  const [showOverwriteEditor, setShowOverwriteEditor] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
 
   const mentionNames = useMemo(() => {
@@ -167,7 +242,10 @@ export function GuildChannelView({
   }, [user]);
 
   const channelNames = useMemo(
-    () => channels.filter((c) => c.type === 'TEXT').map((c) => c.name),
+    () =>
+      channels
+        .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
+        .map((c) => c.name),
     [channels],
   );
 
@@ -301,6 +379,35 @@ export function GuildChannelView({
   );
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`dracord.collapsedCats.${guildId}`);
+      setCollapsedCats(raw ? new Set(JSON.parse(raw) as string[]) : new Set());
+    } catch {
+      setCollapsedCats(new Set());
+    }
+  }, [guildId]);
+
+  const toggleCategoryCollapse = useCallback(
+    (categoryId: string) => {
+      setCollapsedCats((prev) => {
+        const next = new Set(prev);
+        if (next.has(categoryId)) next.delete(categoryId);
+        else next.add(categoryId);
+        try {
+          localStorage.setItem(
+            `dracord.collapsedCats.${guildId}`,
+            JSON.stringify([...next]),
+          );
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    },
+    [guildId],
+  );
+
+  useEffect(() => {
     if (!guildId || !user) return;
     void client
       .getGuildPermissions(guildId)
@@ -316,12 +423,31 @@ export function GuildChannelView({
         setCanManageRoles(
           p.owner || set.has('MANAGE_ROLES') || set.has('ADMINISTRATOR'),
         );
+        setCanMoveMembers(
+          p.owner ||
+            set.has('MOVE_MEMBERS') ||
+            set.has('MANAGE_CHANNELS') ||
+            set.has('ADMINISTRATOR'),
+        );
+        setCanKickMembers(
+          p.owner || set.has('KICK_MEMBERS') || set.has('ADMINISTRATOR'),
+        );
+        setCanBanMembers(
+          p.owner || set.has('BAN_MEMBERS') || set.has('ADMINISTRATOR'),
+        );
+        setCanModerateMembers(
+          p.owner || set.has('MODERATE_MEMBERS') || set.has('ADMINISTRATOR'),
+        );
       })
       .catch(() => {
         setCanManageGuild(false);
         setCanManageChannels(false);
         setCanManageMessages(false);
         setCanManageRoles(false);
+        setCanMoveMembers(false);
+        setCanKickMembers(false);
+        setCanBanMembers(false);
+        setCanModerateMembers(false);
       });
   }, [client, guildId, user]);
 
@@ -337,21 +463,108 @@ export function GuildChannelView({
     patchChannelUnread(channelId, 0, true);
   }, [channelId, client, isVoiceView, patchChannelUnread]);
 
+  const refreshPins = useCallback(async () => {
+    if (!channelId || isVoiceView) {
+      setLatestPin(null);
+      setPinCount(0);
+      setPins([]);
+      return;
+    }
+    try {
+      const list = await client.listPinnedMessages(channelId);
+      setPinCount(list.length);
+      setLatestPin(list[0] ?? null);
+      setPins(
+        list.map((m) => ({
+          id: m.id,
+          content: m.content.slice(0, 100),
+          authorName: m.author.displayName,
+        })),
+      );
+    } catch {
+      setLatestPin(null);
+      setPinCount(0);
+      setPins([]);
+    }
+  }, [channelId, client, isVoiceView]);
+
+  useEffect(() => {
+    void refreshPins();
+  }, [refreshPins]);
+
+  useEffect(() => {
+    if (!channelId) return;
+    const sock = client.connectSocket();
+    const onUpdate = (message: import('@dracord/types').MessageDto) => {
+      if (message.channelId !== channelId) return;
+      if (message.pinnedAt || latestPin?.id === message.id) {
+        void refreshPins();
+      }
+    };
+    const onDelete = (payload: { id: string; channelId: string }) => {
+      if (payload.channelId !== channelId) return;
+      if (latestPin?.id === payload.id) void refreshPins();
+    };
+    sock.on(SocketEvents.MESSAGE_UPDATE, onUpdate);
+    sock.on(SocketEvents.MESSAGE_DELETE, onDelete);
+    return () => {
+      sock.off(SocketEvents.MESSAGE_UPDATE, onUpdate);
+      sock.off(SocketEvents.MESSAGE_DELETE, onDelete);
+    };
+  }, [channelId, client, refreshPins, latestPin?.id]);
+
   useEffect(() => {
     if (!pinsOpen || !channelId) return;
+    void refreshPins();
+  }, [pinsOpen, channelId, refreshPins]);
+
+  // Kanal değişince thread kapat
+  useEffect(() => {
+    setThreadRoot(null);
+    setThreadDraft('');
+  }, [channelId]);
+
+  useEffect(() => {
+    if (!threadRoot) {
+      setThreadMessages([]);
+      return;
+    }
+    setThreadBusy(true);
     void client
-      .listPinnedMessages(channelId)
-      .then((list) =>
-        setPins(
-          list.map((m) => ({
-            id: m.id,
-            content: m.content.slice(0, 100),
-            authorName: m.author.displayName,
-          })),
-        ),
-      )
-      .catch(() => setPins([]));
-  }, [pinsOpen, channelId, client]);
+      .getMessageThread(threadRoot.id)
+      .then((page) => setThreadMessages(page.items))
+      .catch(() => setThreadMessages([threadRoot]))
+      .finally(() => setThreadBusy(false));
+  }, [threadRoot, client]);
+
+  useEffect(() => {
+    if (!threadRoot) return;
+    const sock = client.connectSocket();
+    const onCreate = (message: import('@dracord/types').MessageDto) => {
+      if (message.threadRootId !== threadRoot.id && message.id !== threadRoot.id) return;
+      setThreadMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
+    };
+    sock.on(SocketEvents.MESSAGE_CREATE, onCreate);
+    return () => {
+      sock.off(SocketEvents.MESSAGE_CREATE, onCreate);
+    };
+  }, [threadRoot, client]);
+
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [threadMessages.length, threadRoot?.id]);
+
+  useEffect(() => {
+    void client
+      .listBotCommands(guildId)
+      .then((res) => setBotSlashCommands(res.commands ?? []))
+      .catch(() => setBotSlashCommands([]));
+  }, [client, guildId]);
 
   useEffect(() => {
     const map: Record<string, VoiceMemberSummary[]> = {};
@@ -539,19 +752,62 @@ export function GuildChannelView({
       }));
     }
     if (isVoiceView || (leftId && channelId === leftId)) {
-      const text = channels.find((c) => c.type === 'TEXT');
+      const text =
+        channels.find((c) => c.type === 'TEXT') ??
+        channels.find((c) => c.type === 'FORUM');
       if (text) router.push(`/channels/${guildId}/${text.id}`);
     }
   }, [voice, user, isVoiceView, channelId, channels, guildId, router]);
 
   const openEditChannel = useCallback((ch: ChannelSummary) => {
     setChannelName(ch.name);
-    setChannelType(ch.type === 'VOICE' ? 'VOICE' : 'TEXT');
+    setChannelType(
+      ch.type === 'VOICE' ? 'VOICE' : ch.type === 'FORUM' ? 'FORUM' : 'TEXT',
+    );
     setChannelLocked(Boolean(ch.locked));
     setChannelPasswordDraft('');
     setChannelDeniedIds(ch.deniedUserIds ?? []);
+    setChannelOverwrites(
+      (ch.permissionOverwrites ?? []).map((o) => ({
+        id: o.id,
+        type: o.type,
+        allow: [...(o.allow ?? [])],
+        deny: [...(o.deny ?? [])],
+      })),
+    );
+    setShowOverwriteEditor(false);
     setChannelModal({ mode: 'edit', categoryId: ch.categoryId, channel: ch });
   }, []);
+
+  const setOverwritePerm = useCallback(
+    (
+      targetId: string,
+      targetType: 'role' | 'member',
+      perm: string,
+      mode: 'inherit' | 'allow' | 'deny',
+    ) => {
+      setChannelOverwrites((prev) => {
+        const idx = prev.findIndex((o) => o.id === targetId && o.type === targetType);
+        const base =
+          idx >= 0
+            ? { ...prev[idx], allow: [...prev[idx].allow], deny: [...prev[idx].deny] }
+            : { id: targetId, type: targetType, allow: [] as string[], deny: [] as string[] };
+        base.allow = base.allow.filter((p) => p !== perm);
+        base.deny = base.deny.filter((p) => p !== perm);
+        if (mode === 'allow') base.allow.push(perm);
+        if (mode === 'deny') base.deny.push(perm);
+        const empty = base.allow.length === 0 && base.deny.length === 0;
+        if (idx < 0) {
+          return empty ? prev : [...prev, base];
+        }
+        if (empty) return prev.filter((_, i) => i !== idx);
+        const next = [...prev];
+        next[idx] = base;
+        return next;
+      });
+    },
+    [],
+  );
 
   const openMemberDm = useCallback(
     async (memberId: string, isBot?: boolean) => {
@@ -602,12 +858,41 @@ export function GuildChannelView({
     [joinVoiceChannel, guildId, router, canManageChannels],
   );
 
+  const disconnectFromVoice = useCallback(
+    async (targetUserId: string) => {
+      const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+      if (!chId || !canMoveMembers) return;
+      try {
+        await client.disconnectVoiceUser(chId, targetUserId);
+        await reload();
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Odadan ayrılamadı');
+      }
+    },
+    [voice.voiceChannelId, isVoiceView, channelId, canMoveMembers, client, reload],
+  );
+
+  const moveToVoiceChannel = useCallback(
+    async (targetUserId: string, targetChannelId: string) => {
+      if (!canMoveMembers) return;
+      try {
+        await client.moveVoiceUser(targetUserId, targetChannelId);
+        setMoveTargetUser(null);
+        await reload();
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Taşıma başarısız');
+      }
+    },
+    [canMoveMembers, client, reload],
+  );
+
   const categories = useMemo(
     () =>
       buildSidebarCategories(channels, channelId, selectChannel, {
         voiceMembersByChannel,
         selfUserId: user?.id,
         selfVoiceChannelId: voice.voiceChannelId,
+        guildCategories,
         onAddChannel: canManageChannels
           ? (categoryId) => {
               setChannelName('');
@@ -615,12 +900,50 @@ export function GuildChannelView({
               setChannelLocked(false);
               setChannelPasswordDraft('');
               setChannelDeniedIds([]);
+              setChannelOverwrites([]);
+              setShowOverwriteEditor(false);
               setChannelModal({ mode: 'create', categoryId });
             }
           : undefined,
         onEditChannel: canManageChannels ? openEditChannel : undefined,
         onDeleteChannel: canManageChannels
           ? (ch) => setConfirm({ kind: 'channel', channel: ch })
+          : undefined,
+        onEditCategory: canManageChannels
+          ? (cat) => {
+              setCategoryName(cat.name);
+              setCategoryModal({ mode: 'edit', category: cat });
+            }
+          : undefined,
+        onDeleteCategory: canManageChannels
+          ? (cat) => setConfirm({ kind: 'category', category: cat })
+          : undefined,
+        onDropMember: canMoveMembers
+          ? (userId, channel) => {
+              if (channel.type !== 'VOICE') return;
+              void moveToVoiceChannel(userId, channel.id);
+            }
+          : undefined,
+        collapsedCategoryIds: collapsedCats,
+        onToggleCategory: toggleCategoryCollapse,
+        onReorderChannels: canManageChannels
+          ? (categoryId, orderedIds) => {
+              void (async () => {
+                try {
+                  await client.reorderGuildChannels(
+                    guildId,
+                    orderedIds.map((id, position) => ({
+                      id,
+                      position,
+                      categoryId,
+                    })),
+                  );
+                  await reload();
+                } catch (err) {
+                  setDmError(err instanceof Error ? err.message : 'Sıralama kaydedilemedi');
+                }
+              })();
+            }
           : undefined,
       }),
     [
@@ -631,7 +954,15 @@ export function GuildChannelView({
       openEditChannel,
       user?.id,
       voice.voiceChannelId,
+      guildCategories,
       canManageChannels,
+      canMoveMembers,
+      moveToVoiceChannel,
+      collapsedCats,
+      toggleCategoryCollapse,
+      client,
+      guildId,
+      reload,
     ],
   );
 
@@ -727,6 +1058,46 @@ export function GuildChannelView({
       }
     },
     [client, guildId, user],
+  );
+
+  const kickMember = useCallback(
+    async (targetUserId: string) => {
+      if (!canKickMembers) return;
+      try {
+        await client.kickGuildMember(guildId, targetUserId);
+        setGuildMembers((prev) => prev.filter((m) => m.id !== targetUserId));
+        await reload();
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Üye atılamadı');
+      }
+    },
+    [canKickMembers, client, guildId, reload],
+  );
+
+  const banMember = useCallback(
+    async (targetUserId: string) => {
+      if (!canBanMembers) return;
+      try {
+        await client.banGuildMember(guildId, targetUserId);
+        setGuildMembers((prev) => prev.filter((m) => m.id !== targetUserId));
+        await reload();
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Yasaklama başarısız');
+      }
+    },
+    [canBanMembers, client, guildId, reload],
+  );
+
+  const timeoutMember = useCallback(
+    async (targetUserId: string, minutes: number) => {
+      if (!canModerateMembers) return;
+      try {
+        await client.timeoutGuildMember(guildId, targetUserId, minutes);
+      } catch (err) {
+        setDmError(err instanceof Error ? err.message : 'Timeout uygulanamadı');
+      }
+    },
+    [canModerateMembers, client, guildId],
   );
 
   /** Aktif ses kanalındaki oda engelleri (yetkiliye görünür) */
@@ -925,6 +1296,45 @@ export function GuildChannelView({
               });
             }
           }
+          if (!isSelf && canMoveMembers) {
+            actions.push({
+              id: 'move-voice',
+              label: 'Ses kanalına taşı…',
+              onSelect: () =>
+                setMoveTargetUser({ id: m.id, displayName: m.displayName }),
+            });
+            if (inVoice || isVoiceView) {
+              actions.push({
+                id: 'disconnect-voice',
+                label: 'Odadan ayır',
+                onSelect: () => void disconnectFromVoice(m.id),
+              });
+            }
+          }
+          if (!isSelf && !isBot && canKickMembers) {
+            actions.push({
+              id: 'kick',
+              label: 'Sunucudan at',
+              danger: true,
+              onSelect: () => void kickMember(m.id),
+            });
+          }
+          if (!isSelf && !isBot && canBanMembers) {
+            actions.push({
+              id: 'ban',
+              label: 'Yasakla',
+              danger: true,
+              onSelect: () => void banMember(m.id),
+            });
+          }
+          if (!isSelf && !isBot && canModerateMembers) {
+            actions.push({
+              id: 'timeout',
+              label: 'Timeout (10 dk)',
+              danger: true,
+              onSelect: () => void timeoutMember(m.id, 10),
+            });
+          }
           if (canManageRoles && !isBot) {
             for (const role of guildRoles.filter((r) => r.name !== '@everyone')) {
               const has = (m.roles ?? []).some((r) => r.id === role.id);
@@ -948,7 +1358,7 @@ export function GuildChannelView({
             status: liveMemberStatus(m.id, m.status),
             customStatus: m.customStatus,
             isBot,
-            roleColor: topRole?.color,
+            roleColor: prefs.accessibility.roleColors ? topRole?.color : undefined,
             badges: (m.roles ?? [])
               .filter((r) => r.badgeKey && r.badgeKey !== 'none')
               .map((r) => ({
@@ -961,6 +1371,7 @@ export function GuildChannelView({
               ? `Engelli · ${presenceLabelTr(liveMemberStatus(m.id, m.status), m.customStatus)}`
               : presenceLabelTr(liveMemberStatus(m.id, m.status), m.customStatus),
             onClick: () => setProfileUser(m),
+            draggable: canMoveMembers && !isSelf,
             contextActions: actions.length ? actions : undefined,
           };
         }),
@@ -981,9 +1392,71 @@ export function GuildChannelView({
     blockMember,
     sendFriendRequest,
     toggleMemberRole,
+    disconnectFromVoice,
+    canMoveMembers,
+    canKickMembers,
+    canBanMembers,
+    canModerateMembers,
+    kickMember,
+    banMember,
+    timeoutMember,
     activeVoiceDeniedIds,
     liveMemberStatus,
+    prefs.accessibility.roleColors,
   ]);
+
+  const messagesWithRoleColors = useMemo(() => {
+    let list = messages;
+    if (prefs.accessibility.roleColors) {
+      list = list.map((msg) => {
+        const m = guildMembers.find((g) => g.id === msg.author.id);
+        const topRole = (m?.roles ?? [])
+          .filter((r) => r.name !== '@everyone')
+          .sort((a, b) => b.position - a.position)[0];
+        if (!topRole?.color) return msg;
+        return {
+          ...msg,
+          author: { ...msg.author, bannerColor: topRole.color },
+        };
+      });
+    }
+    if (prefs.messaging.filterExplicit) {
+      list = list.map((msg) => {
+        const content = filterMessageContent(msg.content, true);
+        const embeds = msg.embeds?.filter((e) => {
+          const probe = [e.url, e.imageUrl, e.title, e.description]
+            .filter(Boolean)
+            .join(' ');
+          return !isSuspiciousUrl(probe);
+        });
+        if (content === msg.content && embeds?.length === (msg.embeds?.length ?? 0)) {
+          return msg;
+        }
+        return { ...msg, content, embeds };
+      });
+    }
+    if (isForumView) {
+      list = sortForumMessages(list, forumSort, forumTag);
+    }
+    return list;
+  }, [
+    messages,
+    guildMembers,
+    prefs.accessibility.roleColors,
+    prefs.messaging.filterExplicit,
+    isForumView,
+    forumSort,
+    forumTag,
+  ]);
+
+  const forumTags = useMemo(() => {
+    if (!isForumView) return [] as string[];
+    const set = new Set<string>();
+    for (const m of messages) {
+      for (const t of extractForumTags(m.content)) set.add(t);
+    }
+    return [...set].sort();
+  }, [isForumView, messages]);
 
   const saveChannel = useCallback(async () => {
     if (!channelModal) return;
@@ -1010,6 +1483,12 @@ export function GuildChannelView({
           locked?: boolean;
           password?: string | null;
           deniedUserIds?: string[];
+          permissionOverwrites?: Array<{
+            id: string;
+            type: 'role' | 'member';
+            allow: string[];
+            deny: string[];
+          }> | null;
         } = { name: channelName };
         if (channelModal.channel.type === 'VOICE') {
           patch.locked = channelLocked;
@@ -1020,6 +1499,8 @@ export function GuildChannelView({
           }
           patch.deniedUserIds = channelDeniedIds;
         }
+        patch.permissionOverwrites =
+          channelOverwrites.length > 0 ? channelOverwrites : null;
         await client.updateChannel(channelModal.channel.id, patch);
         await reload();
         setChannelModal(null);
@@ -1034,6 +1515,7 @@ export function GuildChannelView({
     channelLocked,
     channelPasswordDraft,
     channelDeniedIds,
+    channelOverwrites,
     client,
     guildId,
     reload,
@@ -1099,6 +1581,11 @@ export function GuildChannelView({
           if (fallback) router.push(`/channels/${guildId}/${fallback.id}`);
           else router.push('/channels/@me');
         }
+      } else if (confirm.kind === 'category') {
+        await client.deleteGuildCategory(guildId, confirm.category.id);
+        setConfirm(null);
+        setCategoryModal(null);
+        await reload();
       } else {
         await client.deleteGuild(guildId);
         setConfirm(null);
@@ -1108,6 +1595,26 @@ export function GuildChannelView({
       setBusy(false);
     }
   }, [confirm, client, reload, channelId, channels, guildId, router]);
+
+  const saveCategory = useCallback(async () => {
+    if (!categoryModal || !categoryName.trim()) return;
+    setBusy(true);
+    try {
+      if (categoryModal.mode === 'create') {
+        await client.createGuildCategory(guildId, categoryName.trim());
+      } else if (categoryModal.category) {
+        await client.updateGuildCategory(guildId, categoryModal.category.id, {
+          name: categoryName.trim(),
+        });
+      }
+      setCategoryModal(null);
+      await reload();
+    } catch (err) {
+      setDmError(err instanceof Error ? err.message : 'Kategori kaydedilemedi');
+    } finally {
+      setBusy(false);
+    }
+  }, [categoryModal, categoryName, client, guildId, reload]);
 
   const searchGifs = useCallback(
     async (query: string) => {
@@ -1134,26 +1641,39 @@ export function GuildChannelView({
 
   const chatInputProps = {
     channelName: channel?.name,
+    placeholder: isForumView
+      ? `Yeni gönderi · #${channel?.name ?? 'forum'}`
+      : undefined,
     onSend: (text: string, meta?: { replyToId?: string }) => {
       void sendMessage(
         text,
         undefined,
         meta?.replyToId ? { replyToId: meta.replyToId } : undefined,
-      ).then(() => setReplyTo(null));
+      ).then((msg) => {
+        setReplyTo(null);
+        if (isForumView && msg && !meta?.replyToId) {
+          setThreadRoot(msg);
+          setThreadDraft('');
+        }
+      });
     },
     onAttachFiles: (files: FileList | File[]) => void sendWithAttachments(files),
     onSendMedia: (payload: Parameters<typeof sendMedia>[0]) => void sendMedia(payload),
     onPollClick: () => setPollOpen(true),
-    onHeadingClick: () => {
-      setHeadingText('');
-      setHeadingOpen(true);
-    },
-    replyTo,
+    onHeadingClick: isForumView
+      ? undefined
+      : () => {
+          setHeadingText('');
+          setHeadingOpen(true);
+        },
+    onTyping: notifyTyping,
+    replyTo: isForumView ? null : replyTo,
     onCancelReply: () => setReplyTo(null),
     searchGifs,
     loadFeaturedGifs,
     mentionUsers,
     mentionChannels,
+    botSlashCommands: botSlashCommands.length ? botSlashCommands : undefined,
     spellCheck: prefs.messaging.spellcheck,
     uploadStickerFile: async (file: File) => {
       const uploaded = await client.uploadFile(file, 'stickers');
@@ -1207,8 +1727,14 @@ export function GuildChannelView({
         onVoiceSettingsClick: () => router.push('/settings/voice'),
         onProfileClick: () => router.push('/settings/profile'),
         onStatusChange: (status, customStatus) => {
+          const share =
+            prefs.privacy.shareActivityStatus !== false &&
+            prefs.activity.displayActivity !== false;
           void client
-            .updatePresence({ status, customStatus })
+            .updatePresence({
+              status,
+              customStatus: share ? customStatus : null,
+            })
             .then((me) => setUser(me))
             .catch(() => undefined);
         },
@@ -1220,7 +1746,7 @@ export function GuildChannelView({
         onInputDeviceChange: (id) => void voice.setInputDevice(id),
         onOutputDeviceChange: (id) => void voice.setOutputDevice(id),
         onAudioMenuOpen: () => {
-          void voice.refreshAudioDevices();
+          void voice.refreshAudioDevices(true);
         },
         onVoiceReturnClick: () => {
           if (voice.voiceChannelId) {
@@ -1261,6 +1787,25 @@ export function GuildChannelView({
             onClick={() => setDmError(null)}
           >
             Kapat
+          </button>
+        </div>
+      )}
+      {voice.voiceOnOtherTab && voice.voiceChannelId && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
+          <span className="material-symbols-outlined text-primary-container text-[20px]">tab</span>
+          <p className="font-body-sm flex-1 min-w-0">
+            Ses başka sekmede açık. Bu sekmeye almak için tıkla.
+          </p>
+          <button
+            type="button"
+            className="h-8 px-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm shrink-0"
+            onClick={() => {
+              if (voice.voiceChannelId && voice.voiceGuildId) {
+                voice.join(voice.voiceChannelId, voice.voiceGuildId);
+              }
+            }}
+          >
+            Bu sekmeye al
           </button>
         </div>
       )}
@@ -1366,9 +1911,18 @@ export function GuildChannelView({
             });
           }}
           stageOverlay={
-            voice.error ? (
-              <div className="flex flex-col gap-space-sm px-space-md">
-                <p className="text-error font-body-sm">{voice.error}</p>
+            voice.error || voice.audioPlaybackBlocked ? (
+              <div className="flex flex-col gap-space-sm px-space-md items-center">
+                {voice.error && <p className="text-error font-body-sm">{voice.error}</p>}
+                {voice.audioPlaybackBlocked && (
+                  <button
+                    type="button"
+                    onClick={() => void voice.unlockAudio()}
+                    className="h-10 px-space-md rounded-xl bg-primary-container text-on-primary-container font-label-md"
+                  >
+                    Ses için dokun
+                  </button>
+                )}
               </div>
             ) : undefined
           }
@@ -1509,10 +2063,48 @@ export function GuildChannelView({
             >
               <span className="material-symbols-outlined text-[20px]">menu</span>
             </button>
-            <span className="text-outline font-headline-md">#</span>
+            <span
+              className={
+                isForumView
+                  ? 'material-symbols-outlined text-[20px] text-outline'
+                  : 'text-outline font-headline-md'
+              }
+            >
+              {isForumView ? 'forum' : '#'}
+            </span>
             <span className="font-headline-md text-headline-md text-on-surface truncate">
               {channel?.name ?? 'kanal'}
             </span>
+            {isForumView && (
+              <span className="font-label-sm text-outline shrink-0">Forum</span>
+            )}
+            {isForumView && (
+              <div className="flex items-center gap-1 ml-2 min-w-0">
+                <select
+                  value={forumSort}
+                  onChange={(e) => setForumSort(e.target.value as ForumSort)}
+                  className="h-8 rounded-lg bg-surface-container-highest px-2 font-label-sm outline-none"
+                  aria-label="Sıralama"
+                >
+                  <option value="newest">En yeni</option>
+                  <option value="oldest">En eski</option>
+                  <option value="pinned">Sabitlenenler önce</option>
+                </select>
+                <select
+                  value={forumTag ?? ''}
+                  onChange={(e) => setForumTag(e.target.value || null)}
+                  className="h-8 max-w-[9rem] rounded-lg bg-surface-container-highest px-2 font-label-sm outline-none"
+                  aria-label="Etiket"
+                >
+                  <option value="">Tüm etiketler</option>
+                  {forumTags.map((tag) => (
+                    <option key={tag} value={tag}>
+                      #{tag}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {prefs.developer.developerMode && (
               <>
                 <button
@@ -1577,6 +2169,19 @@ export function GuildChannelView({
               <span className="material-symbols-outlined text-[18px] leading-none">group</span>
             </button>
           </header>
+          {latestPin && !isVoiceView && (
+            <PinnedMessageBar
+              message={latestPin}
+              pinCount={pinCount}
+              onJump={() => {
+                router.replace(
+                  `/channels/${guildId}/${channelId}?messageId=${latestPin.id}`,
+                  { scroll: false },
+                );
+              }}
+              onViewAll={() => setPinsOpen(true)}
+            />
+          )}
           {chatError && (
             <p className="px-space-md py-space-sm text-error font-body-sm">{chatError}</p>
           )}
@@ -1587,7 +2192,7 @@ export function GuildChannelView({
           ) : (
             <MessageList
               scrollKey={channelId}
-              messages={messages}
+              messages={messagesWithRoleColors}
               mentionNames={mentionNames}
               channelNames={channelNames}
               censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
@@ -1596,6 +2201,7 @@ export function GuildChannelView({
                 prefs.accessibility.messageGrouping &&
                 prefs.appearance.messageDensity !== 'compact'
               }
+              dense={prefs.appearance.messageDensity === 'compact'}
               hour24={prefs.language.hour24}
               locale={prefs.language.locale === 'en' ? 'en-US' : 'tr-TR'}
               messageActions={{
@@ -1623,22 +2229,41 @@ export function GuildChannelView({
                   void client.blockUser(m.author.id).then(() => hideMessage(m.id, true));
                 },
                 onVotePoll: (m, optionId) => void votePoll(m.id, optionId),
-                onReply: (m) =>
-                  setReplyTo({
-                    id: m.id,
-                    authorName: m.author.displayName,
-                    contentPreview: m.content.slice(0, 120) || 'Ek / medya',
-                  }),
+                onReply: isForumView
+                  ? (m) => {
+                      setThreadRoot(m);
+                      setThreadDraft('');
+                    }
+                  : (m) =>
+                      setReplyTo({
+                        id: m.id,
+                        authorName: m.author.displayName,
+                        contentPreview: m.content.slice(0, 120) || 'Ek / medya',
+                      }),
                 onForward: (m) => {
                   setForwardTarget({ id: m.id, contentPreview: m.content.slice(0, 80) });
-                  setForwardChannelId(channels.find((c) => c.type === 'TEXT' && c.id !== channelId)?.id ?? '');
+                  setForwardChannelId(
+                    channels.find(
+                      (c) =>
+                        (c.type === 'TEXT' || c.type === 'FORUM') && c.id !== channelId,
+                    )?.id ?? '',
+                  );
                   setForwardNote('');
                 },
-                onPin: (m, pin) => void pinMessage(m.id, pin),
-                onCreateHeading: (m) => {
-                  setHeadingText(m.content.slice(0, 120));
-                  setHeadingOpen(true);
+                onPin: (m, pin) => {
+                  void pinMessage(m.id, pin).then(() => void refreshPins());
                 },
+                onBookmark: (m, bookmark) => void bookmarkMessage(m.id, bookmark),
+                onOpenThread: (m) => {
+                  setThreadRoot(m);
+                  setThreadDraft('');
+                },
+                onCreateHeading: isForumView
+                  ? undefined
+                  : (m) => {
+                      setHeadingText(m.content.slice(0, 120));
+                      setHeadingOpen(true);
+                    },
                 onMarkUnread: (m) => {
                   void client
                     .markChannelRead(channelId, { messageId: m.id, unreadFrom: true })
@@ -1666,17 +2291,34 @@ export function GuildChannelView({
                 <DracoEmpty
                   mood="idle"
                   size={120}
-                  title="Henüz mesaj yok"
-                  description="Draco dinliyor — sohbeti sen başlat!"
+                  title={isForumView ? 'Henüz gönderi yok' : 'Henüz mesaj yok'}
+                  description={
+                    isForumView
+                      ? 'İlk konuyu aç — yanıtlar thread panelinde toplanır.'
+                      : 'Draco dinliyor — sohbeti sen başlat!'
+                  }
                 />
               }
             />
           )}
           <div className="relative shrink-0 z-[100]">
+            {typingUsers.length > 0 && (
+              <p className="px-space-md pb-1 font-label-sm text-outline truncate">
+                {typingUsers.length === 1
+                  ? `${typingUsers[0]!.username} yazıyor…`
+                  : typingUsers.length === 2
+                    ? `${typingUsers[0]!.username} ve ${typingUsers[1]!.username} yazıyor…`
+                    : `${typingUsers.length} kişi yazıyor…`}
+              </p>
+            )}
             {inVoice && (
               <MusicPlayerBar
                 guildId={guildId}
-                textChannelId={isVoiceView ? channels.find((c) => c.type === 'TEXT')?.id : channelId}
+                textChannelId={
+                  isVoiceView
+                    ? channels.find((c) => c.type === 'TEXT' || c.type === 'FORUM')?.id
+                    : channelId
+                }
                 variant="chat"
               />
             )}
@@ -1714,6 +2356,20 @@ export function GuildChannelView({
             <span className="material-symbols-outlined text-[18px]">person_add</span>
             İnsanları davet et
           </button>
+          {canManageChannels && (
+            <button
+              type="button"
+              className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
+              onClick={() => {
+                setServerMenuOpen(false);
+                setCategoryName('');
+                setCategoryModal({ mode: 'create' });
+              }}
+            >
+              <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
+              Kategori oluştur
+            </button>
+          )}
           <button
             type="button"
             className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
@@ -1908,11 +2564,87 @@ export function GuildChannelView({
             </button>
             <button
               type="button"
+              className={`flex-1 h-10 rounded-lg ${channelType === 'FORUM' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high'}`}
+              onClick={() => setChannelType('FORUM')}
+            >
+              Forum
+            </button>
+            <button
+              type="button"
               className={`flex-1 h-10 rounded-lg ${channelType === 'VOICE' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high'}`}
               onClick={() => setChannelType('VOICE')}
             >
               Ses
             </button>
+          </div>
+        )}
+        {channelModal?.mode === 'edit' && canManageChannels && (
+          <div className="mt-space-md space-y-space-sm">
+            <button
+              type="button"
+              className="font-label-sm text-primary-container hover:underline"
+              onClick={() => setShowOverwriteEditor((v) => !v)}
+            >
+              {showOverwriteEditor ? 'İzinleri gizle' : 'Kanal izinleri (rol)'}
+            </button>
+            {showOverwriteEditor && (
+              <div className="space-y-space-sm max-h-64 overflow-y-auto rounded-lg bg-surface-container-highest p-space-sm">
+                <p className="font-body-sm text-outline">
+                  İzin: Varsayılan / İzin ver / Reddet
+                </p>
+                {(
+                  [
+                    { id: 'VIEW_CHANNEL', label: 'Kanalı gör' },
+                    { id: 'SEND_MESSAGES', label: 'Mesaj gönder' },
+                    { id: 'CONNECT', label: 'Sese bağlan' },
+                    { id: 'SPEAK', label: 'Konuş' },
+                  ] as const
+                ).map((perm) => (
+                  <div key={perm.id} className="space-y-space-xs">
+                    <p className="font-label-sm text-on-surface-variant">{perm.label}</p>
+                    {guildRoles.map((role) => {
+                      const ow = channelOverwrites.find(
+                        (o) => o.type === 'role' && o.id === role.id,
+                      );
+                      const mode = ow?.deny.includes(perm.id)
+                        ? 'deny'
+                        : ow?.allow.includes(perm.id)
+                          ? 'allow'
+                          : 'inherit';
+                      return (
+                        <div
+                          key={`${perm.id}-${role.id}`}
+                          className="flex items-center justify-between gap-space-sm"
+                        >
+                          <span
+                            className="font-body-sm truncate"
+                            style={role.color ? { color: role.color } : undefined}
+                          >
+                            {role.name}
+                          </span>
+                          <select
+                            className="h-8 rounded-md bg-surface-container-high px-space-xs font-label-sm"
+                            value={mode}
+                            onChange={(e) =>
+                              setOverwritePerm(
+                                role.id,
+                                'role',
+                                perm.id,
+                                e.target.value as 'inherit' | 'allow' | 'deny',
+                              )
+                            }
+                          >
+                            <option value="inherit">Varsayılan</option>
+                            <option value="allow">İzin ver</option>
+                            <option value="deny">Reddet</option>
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {(channelType === 'VOICE' || channelModal?.channel?.type === 'VOICE') && (
@@ -1973,6 +2705,51 @@ export function GuildChannelView({
               )}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={Boolean(categoryModal)}
+        title={categoryModal?.mode === 'edit' ? 'Kategoriyi düzenle' : 'Kategori oluştur'}
+        onClose={() => setCategoryModal(null)}
+        footer={
+          <div className="flex w-full items-center justify-between gap-space-sm">
+            {categoryModal?.mode === 'edit' && categoryModal.category ? (
+              <button
+                type="button"
+                className="px-space-md py-space-sm rounded-lg text-error hover:bg-error/10 font-body-sm"
+                onClick={() => {
+                  if (categoryModal.category) {
+                    setConfirm({ kind: 'category', category: categoryModal.category });
+                  }
+                }}
+              >
+                Kategoriyi sil
+              </button>
+            ) : (
+              <span />
+            )}
+            <button
+              type="button"
+              disabled={busy || !categoryName.trim()}
+              className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container disabled:opacity-50"
+              onClick={() => void saveCategory()}
+            >
+              Kaydet
+            </button>
+          </div>
+        }
+      >
+        <label className="flex flex-col gap-space-xs">
+          <span className="font-label-sm text-on-surface-variant">Kategori adı</span>
+          <input
+            value={categoryName}
+            onChange={(e) => setCategoryName(e.target.value)}
+            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && categoryName.trim()) void saveCategory();
+            }}
+          />
+        </label>
       </Modal>
 
       <Modal
@@ -2037,6 +2814,37 @@ export function GuildChannelView({
         </button>
       </Modal>
 
+      <Modal
+        open={Boolean(moveTargetUser)}
+        title={
+          moveTargetUser
+            ? `${moveTargetUser.displayName} — ses kanalına taşı`
+            : 'Ses kanalına taşı'
+        }
+        onClose={() => setMoveTargetUser(null)}
+      >
+        <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+          {channels
+            .filter((c) => c.type === 'VOICE')
+            .map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
+                onClick={() => {
+                  if (!moveTargetUser) return;
+                  void moveToVoiceChannel(moveTargetUser.id, c.id);
+                }}
+              >
+                <span className="material-symbols-outlined text-[18px] text-outline">
+                  volume_up
+                </span>
+                {c.name}
+              </button>
+            ))}
+        </div>
+      </Modal>
+
       <ConfirmDialog
         open={Boolean(confirm)}
         danger
@@ -2044,13 +2852,21 @@ export function GuildChannelView({
         title={
           confirm?.kind === 'guild'
             ? 'Sunucuyu sil?'
-            : `#${confirm?.kind === 'channel' ? confirm.channel.name : ''} kanalını sil?`
+            : confirm?.kind === 'category'
+              ? `"${confirm.category.name}" kategorisini sil?`
+              : confirm?.kind === 'channel'
+                ? `#${confirm.channel.name} kanalını sil?`
+                : 'Sil?'
         }
         description={
           confirm?.kind === 'guild' ? (
             <p>
               <strong>{serverName}</strong> kalıcı olarak silinecek. Tüm kanallar ve mesajlar
               kaybolur. Bu işlem geri alınamaz.
+            </p>
+          ) : confirm?.kind === 'category' ? (
+            <p>
+              Kategori silinecek; içindeki kanallar kategorisiz kalır (silinmez).
             </p>
           ) : (
             <p>
@@ -2252,10 +3068,11 @@ export function GuildChannelView({
           >
             <option value="">Kanal seç…</option>
             {channels
-              .filter((c) => c.type === 'TEXT')
+              .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
               .map((c) => (
                 <option key={c.id} value={c.id}>
-                  #{c.name}
+                  {c.type === 'FORUM' ? 'forum:' : '#'}
+                  {c.name}
                 </option>
               ))}
           </select>
@@ -2304,6 +3121,95 @@ export function GuildChannelView({
             ))}
           </ul>
         )}
+      </Modal>
+
+      <Modal
+        open={Boolean(threadRoot)}
+        title={
+          threadRoot
+            ? `${isForumView ? 'Gönderi' : 'Thread'} · ${threadRoot.author.displayName}`
+            : isForumView
+              ? 'Gönderi'
+              : 'Thread'
+        }
+        onClose={() => {
+          setThreadRoot(null);
+          setThreadDraft('');
+        }}
+      >
+        {threadRoot && (
+          <p className="font-body-sm text-outline mb-space-sm line-clamp-2">
+            {threadRoot.content.trim() || 'Ek / medya'}
+          </p>
+        )}
+        {threadBusy && <p className="font-body-sm text-outline mb-space-sm">Yükleniyor…</p>}
+        <div
+          ref={threadScrollRef}
+          className="max-h-72 overflow-y-auto space-y-space-sm mb-space-md"
+        >
+          {threadMessages.map((m, idx) => {
+            const isRoot = idx === 0 && m.id === threadRoot?.id;
+            return (
+              <div
+                key={m.id}
+                className={
+                  isRoot
+                    ? 'rounded-lg border border-primary-container/40 bg-primary-container/10 px-space-sm py-space-xs'
+                    : 'rounded-lg bg-surface-container-highest px-space-sm py-space-xs'
+                }
+              >
+                <p className="font-label-sm text-primary-container truncate flex items-center gap-1">
+                  {m.author.displayName}
+                  {isRoot && (
+                    <span className="text-outline font-normal">· başlangıç</span>
+                  )}
+                </p>
+                <p className="font-body-sm text-on-surface whitespace-pre-wrap break-words">
+                  {m.content || 'Ek / medya'}
+                </p>
+              </div>
+            );
+          })}
+          {!threadBusy && threadMessages.length === 0 && (
+            <p className="font-body-sm text-outline">Henüz yanıt yok — ilk yanıtı sen yaz.</p>
+          )}
+        </div>
+        <div className="flex gap-space-sm">
+          <input
+            value={threadDraft}
+            onChange={(e) => setThreadDraft(e.target.value)}
+            placeholder="Thread’e yanıt yaz…"
+            disabled={threadSending}
+            className="flex-1 h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none disabled:opacity-50"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && threadDraft.trim() && threadRoot && !threadSending) {
+                e.preventDefault();
+                setThreadSending(true);
+                void sendMessage(threadDraft.trim(), undefined, {
+                  threadRootId: threadRoot.id,
+                })
+                  .then(() => setThreadDraft(''))
+                  .finally(() => setThreadSending(false));
+              }
+            }}
+          />
+          <button
+            type="button"
+            disabled={!threadDraft.trim() || !threadRoot || threadSending}
+            className="h-10 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+            onClick={() => {
+              if (!threadRoot || !threadDraft.trim() || threadSending) return;
+              setThreadSending(true);
+              void sendMessage(threadDraft.trim(), undefined, {
+                threadRootId: threadRoot.id,
+              })
+                .then(() => setThreadDraft(''))
+                .finally(() => setThreadSending(false));
+            }}
+          >
+            Gönder
+          </button>
+        </div>
       </Modal>
 
       <UserProfileCard

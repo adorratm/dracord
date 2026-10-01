@@ -58,6 +58,10 @@ export class SearchService {
       limit?: number;
     },
   ): Promise<SearchResponse> {
+    const client = this.es.client;
+    if (!client || !this.es.isReady()) {
+      throw new ServiceUnavailableException('Arama servisi kullanılamıyor');
+    }
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
     const types = new Set(
       (opts.types?.length ? opts.types : ['guilds', 'channels', 'users', 'messages']).map((t) =>
@@ -99,7 +103,7 @@ export class SearchService {
     const hits: SearchHit[] = [];
 
     if (types.has('guilds')) {
-      const res = await this.es.client.search({
+      const res = await client.search({
         index: IDX_GUILDS,
         size: limit,
         query: {
@@ -133,7 +137,7 @@ export class SearchService {
       const guildFilter = opts.guildId
         ? { term: { guildId: opts.guildId } }
         : { terms: { guildId: memberGuildIds } };
-      const res = await this.es.client.search({
+      const res = await client.search({
         index: IDX_CHANNELS,
         size: limit,
         query: {
@@ -162,7 +166,7 @@ export class SearchService {
     }
 
     if (types.has('users') && visibleUserIds.length) {
-      const res = await this.es.client.search({
+      const res = await client.search({
         index: IDX_USERS,
         size: limit,
         query: {
@@ -213,7 +217,7 @@ export class SearchService {
       if (accessShould.length === 0) {
         // no accessible channels
       } else {
-        const res = await this.es.client.search({
+        const res = await client.search({
           index: IDX_MESSAGES,
           size: limit,
           query: {

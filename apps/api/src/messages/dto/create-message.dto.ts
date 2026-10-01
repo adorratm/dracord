@@ -79,6 +79,10 @@ export class CreateMessageDto {
   replyToId?: string;
 
   @IsOptional()
+  @IsString()
+  threadRootId?: string;
+
+  @IsOptional()
   @IsIn(['default', 'heading'])
   type?: 'default' | 'heading';
 }

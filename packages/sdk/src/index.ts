@@ -1,11 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 import type {
   AuthTokens,
+  CategoryDto,
   ChannelSummary,
   ClientSettings,
   GuildInviteDto,
   GuildSummary,
   MessageAttachment,
+  MessageBookmarkDto,
   MessageDto,
   MessagePage,
   PresignUploadResponse,
@@ -191,7 +193,12 @@ export class DracordClient {
     });
   }
 
-  async loginDev(username?: string): Promise<AuthTokens & { user: PublicUser }> {
+  async loginDev(
+    username?: string,
+  ): Promise<
+    | (AuthTokens & { user: PublicUser })
+    | { requires2fa: true; challengeToken: string }
+  > {
     const name = username || 'VampireDev';
     const slug = name.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'vampiredev';
     return this.request('/auth/dev-login', {
@@ -204,16 +211,132 @@ export class DracordClient {
     });
   }
 
-  getGoogleLoginUrl(intent: 'web' | 'admin' = 'web') {
+  async verifyTwoFactor(
+    challengeToken: string,
+    code: string,
+  ): Promise<AuthTokens & { user: PublicUser }> {
+    return this.request('/auth/2fa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    });
+  }
+
+  async getTwoFactorStatus(): Promise<{ enabled: boolean; recoveryRemaining: number }> {
+    return this.request('/auth/2fa/status');
+  }
+
+  async beginTwoFactorSetup(): Promise<{ secret: string; otpauthUrl: string }> {
+    return this.request('/auth/2fa/setup', { method: 'POST', body: '{}' });
+  }
+
+  async confirmTwoFactorSetup(
+    code: string,
+  ): Promise<{ enabled: true; recoveryCodes: string[] }> {
+    return this.request('/auth/2fa/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async regenerateTwoFactorRecovery(
+    code: string,
+  ): Promise<{ recoveryCodes: string[] }> {
+    return this.request('/auth/2fa/recovery/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async disableTwoFactor(opts: {
+    code?: string;
+    password?: string;
+  }): Promise<{ enabled: false }> {
+    return this.request('/auth/2fa', {
+      method: 'DELETE',
+      body: JSON.stringify(opts),
+    });
+  }
+
+  async cancelTwoFactorSetup(): Promise<{ ok: true }> {
+    return this.request('/auth/2fa/setup', { method: 'DELETE' });
+  }
+
+  getGoogleLoginUrl(intent: 'web' | 'admin' | 'desktop' = 'web') {
     const url = new URL(`${this.baseUrl}/auth/google`);
-    if (intent === 'admin') {
-      url.searchParams.set('intent', 'admin');
+    if (intent === 'admin' || intent === 'desktop') {
+      url.searchParams.set('intent', intent);
     }
     return url.toString();
   }
 
   async getAdminMe(): Promise<PublicUser> {
     return this.request('/auth/admin/me');
+  }
+
+  async listBotCommands(guildId?: string): Promise<{
+    commands: Array<{
+      id?: string;
+      name: string;
+      aliases?: string[];
+      description: string;
+      usage: string;
+      botId?: string;
+      botName?: string;
+      custom?: boolean;
+    }>;
+  }> {
+    const q = guildId ? `?guildId=${encodeURIComponent(guildId)}` : '';
+    return this.request(`/bots/commands${q}`);
+  }
+
+  async listGuildSlashCommands(guildId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      aliases: string[];
+      description: string;
+      usage: string;
+      botUserId: string | null;
+      botName: string | null;
+      createdById: string;
+      createdAt: string;
+    }>
+  > {
+    return this.request(`/guilds/${guildId}/slash-commands`);
+  }
+
+  async registerGuildSlashCommand(
+    guildId: string,
+    body: {
+      name: string;
+      description: string;
+      usage?: string;
+      aliases?: string[];
+      botName?: string;
+      responseTemplate?: string;
+    },
+  ): Promise<{
+    id: string;
+    name: string;
+    aliases: string[];
+    description: string;
+    usage: string;
+    responseTemplate?: string | null;
+    botUserId: string | null;
+    botName: string | null;
+    createdById: string;
+    createdAt: string;
+  }> {
+    return this.request(`/guilds/${guildId}/slash-commands`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deleteGuildSlashCommand(guildId: string, commandId: string): Promise<void> {
+    await this.request(`/guilds/${guildId}/slash-commands/${commandId}`, {
+      method: 'DELETE',
+    });
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
@@ -235,7 +358,11 @@ export class DracordClient {
     return this.request('/guilds');
   }
 
-  async discoverGuilds(): Promise<GuildSummary[]> {
+  async discoverGuilds(query?: string): Promise<GuildSummary[]> {
+    const q = query?.trim();
+    if (q) {
+      return this.request(`/guilds/discover?q=${encodeURIComponent(q)}`);
+    }
     return this.request('/guilds/discover');
   }
 
@@ -298,7 +425,7 @@ export class DracordClient {
     guildId: string,
     data: {
       name: string;
-      type: 'TEXT' | 'VOICE';
+      type: 'TEXT' | 'VOICE' | 'FORUM';
       categoryId?: string | null;
       topic?: string | null;
     },
@@ -315,14 +442,59 @@ export class DracordClient {
       name?: string;
       topic?: string | null;
       categoryId?: string | null;
+      position?: number;
       locked?: boolean;
       password?: string | null;
       deniedUserIds?: string[];
+      permissionOverwrites?: Array<{
+        id: string;
+        type: 'role' | 'member';
+        allow: string[];
+        deny: string[];
+      }> | null;
     },
   ): Promise<ChannelSummary> {
     return this.request(`/channels/${channelId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  }
+
+  async reorderGuildChannels(
+    guildId: string,
+    items: Array<{ id: string; position: number; categoryId?: string | null }>,
+  ): Promise<ChannelSummary[]> {
+    return this.request(`/guilds/${guildId}/channels/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async listGuildCategories(guildId: string): Promise<CategoryDto[]> {
+    return this.request(`/guilds/${guildId}/categories`);
+  }
+
+  async createGuildCategory(guildId: string, name: string): Promise<CategoryDto> {
+    return this.request(`/guilds/${guildId}/categories`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async updateGuildCategory(
+    guildId: string,
+    categoryId: string,
+    data: { name?: string; position?: number },
+  ): Promise<CategoryDto> {
+    return this.request(`/guilds/${guildId}/categories/${categoryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteGuildCategory(guildId: string, categoryId: string): Promise<void> {
+    await this.request(`/guilds/${guildId}/categories/${categoryId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -375,6 +547,69 @@ export class DracordClient {
     return this.request('/dm');
   }
 
+  async listDmMembers(channelId: string): Promise<PublicUser[]> {
+    return this.request(`/dm/channels/${channelId}/members`);
+  }
+
+  async addDmMember(channelId: string, userId: string): Promise<PublicUser[]> {
+    return this.request(`/dm/channels/${channelId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async removeDmMember(channelId: string, userId: string): Promise<PublicUser[]> {
+    return this.request(`/dm/channels/${channelId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getDmCall(channelId: string): Promise<{
+    active: boolean;
+    mode: 'audio' | 'video';
+    startedBy: string | null;
+    participants: Array<{
+      id: string;
+      displayName: string;
+      avatarUrl?: string | null;
+      muted?: boolean;
+      deafened?: boolean;
+    }>;
+  }> {
+    return this.request(`/dm/channels/${channelId}/calls`);
+  }
+
+  async startDmCall(
+    channelId: string,
+    mode: 'audio' | 'video' = 'audio',
+  ): Promise<{ ok: true; mode: 'audio' | 'video' }> {
+    return this.request(`/dm/channels/${channelId}/calls`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    });
+  }
+
+  async inviteToDmCall(channelId: string, userId: string): Promise<{ ok: true }> {
+    return this.request(`/dm/channels/${channelId}/calls/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async removeFromDmCall(channelId: string, userId: string): Promise<{ ok: true }> {
+    return this.request(`/dm/channels/${channelId}/calls/remove`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async declineDmCall(channelId: string): Promise<{ ok: true }> {
+    return this.request(`/dm/channels/${channelId}/calls/decline`, {
+      method: 'POST',
+      body: '{}',
+    });
+  }
+
   async sendMessage(
     channelId: string,
     content: string,
@@ -382,6 +617,7 @@ export class DracordClient {
     poll?: { question: string; options: string[]; multi?: boolean },
     opts?: {
       replyToId?: string;
+      threadRootId?: string;
       type?: 'default' | 'heading';
     },
   ): Promise<MessageDto> {
@@ -392,9 +628,14 @@ export class DracordClient {
         attachments,
         poll,
         replyToId: opts?.replyToId,
+        threadRootId: opts?.threadRootId,
         type: opts?.type,
       }),
     });
+  }
+
+  async getMessageThread(messageId: string, limit = 100): Promise<MessagePage> {
+    return this.request(`/messages/${messageId}/thread?limit=${limit}`);
   }
 
   async updateMessage(messageId: string, content: string): Promise<MessageDto> {
@@ -428,6 +669,18 @@ export class DracordClient {
 
   async unpinMessage(messageId: string): Promise<MessageDto> {
     return this.request(`/messages/${messageId}/pin`, { method: 'DELETE' });
+  }
+
+  async bookmarkMessage(messageId: string): Promise<MessageDto> {
+    return this.request(`/messages/${messageId}/bookmark`, { method: 'POST' });
+  }
+
+  async unbookmarkMessage(messageId: string): Promise<MessageDto> {
+    return this.request(`/messages/${messageId}/bookmark`, { method: 'DELETE' });
+  }
+
+  async listBookmarks(limit = 50): Promise<MessageBookmarkDto[]> {
+    return this.request(`/users/me/bookmarks?limit=${limit}`);
   }
 
   async listPinnedMessages(channelId: string): Promise<MessageDto[]> {
@@ -474,6 +727,61 @@ export class DracordClient {
 
   async getGuildPermissions(guildId: string): Promise<import('@dracord/types').GuildPermissionsDto> {
     return this.request(`/guilds/${guildId}/permissions`);
+  }
+
+  async kickGuildMember(guildId: string, userId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/members/${userId}/kick`, {
+      method: 'POST',
+      body: '{}',
+    });
+  }
+
+  async banGuildMember(
+    guildId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/members/${userId}/ban`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async unbanGuildMember(guildId: string, userId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/bans/${userId}`, { method: 'DELETE' });
+  }
+
+  async listGuildBans(
+    guildId: string,
+  ): Promise<
+    Array<{ userId: string; reason: string | null; bannedById: string; createdAt: string }>
+  > {
+    return this.request(`/guilds/${guildId}/bans`);
+  }
+
+  async timeoutGuildMember(
+    guildId: string,
+    userId: string,
+    minutes: number,
+  ): Promise<{ ok: true; timeoutUntil: string | null }> {
+    return this.request(`/guilds/${guildId}/members/${userId}/timeout`, {
+      method: 'POST',
+      body: JSON.stringify({ minutes }),
+    });
+  }
+
+  async listGuildAuditLogs(guildId: string): Promise<
+    Array<{
+      id: string;
+      actorId: string;
+      action: string;
+      targetId: string | null;
+      targetType: string | null;
+      meta: Record<string, unknown> | null;
+      createdAt: string;
+    }>
+  > {
+    return this.request(`/guilds/${guildId}/audit-logs`);
   }
 
   async blockUser(userId: string): Promise<{ ok: true }> {
@@ -626,6 +934,23 @@ export class DracordClient {
     });
   }
 
+  async disconnectVoiceUser(channelId: string, userId: string): Promise<{ ok: boolean }> {
+    return this.request(`/voice/channels/${channelId}/disconnect`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async moveVoiceUser(
+    userId: string,
+    targetChannelId: string,
+  ): Promise<{ ok: true; targetChannelId: string }> {
+    return this.request('/voice/move', {
+      method: 'POST',
+      body: JSON.stringify({ userId, targetChannelId }),
+    });
+  }
+
   async voiceHeartbeat(channelId: string): Promise<{ ok: boolean }> {
     return this.request('/voice/heartbeat', {
       method: 'POST',
@@ -750,6 +1075,28 @@ export class DracordClient {
 
   async markAllNotificationsRead(): Promise<{ updated: number }> {
     return this.request('/notifications/read-all', { method: 'POST', body: '{}' });
+  }
+
+  async getPushVapidPublicKey(): Promise<{ publicKey: string | null; enabled: boolean }> {
+    return this.request('/notifications/push/vapid-public-key');
+  }
+
+  async subscribePush(data: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+    userAgent?: string;
+  }): Promise<{ ok: true }> {
+    return this.request('/notifications/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async unsubscribePush(endpoint: string): Promise<{ ok: true }> {
+    return this.request('/notifications/push/subscribe', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    });
   }
 
   connectSocket() {

@@ -227,6 +227,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginDev = useCallback(
     async (username?: string) => {
       const result = await client.loginDev(username);
+      if ('requires2fa' in result && result.requires2fa) {
+        throw new Error('2FA_REQUIRED:' + result.challengeToken);
+      }
+      if (!('accessToken' in result)) {
+        throw new Error('Giriş başarısız');
+      }
       persistSession(result.accessToken, result.refreshToken, result.user);
       applyTokens(result.accessToken, result.refreshToken, result.user);
       setUser(result.user);

@@ -1,11 +1,19 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
-import type { GuildInviteDto, GuildPermissionsDto, GuildSummary, PublicUser } from '@dracord/types';
+import { EntityManager, ILike } from 'typeorm';
+import type {
+  CategoryDto,
+  GuildInviteDto,
+  GuildPermissionsDto,
+  GuildSummary,
+  PublicUser,
+} from '@dracord/types';
 import { createId } from '@paralleldrive/cuid2';
 import { toPublicUser } from '@/common/user.mapper';
 import {
@@ -15,6 +23,8 @@ import {
 import { Category } from '@/database/entities/category.entity';
 import { Channel } from '@/database/entities/channel.entity';
 import { Guild } from '@/database/entities/guild.entity';
+import { GuildBan } from '@/database/entities/guild-ban.entity';
+import { AuditLog } from '@/database/entities/audit-log.entity';
 import { GuildInvite } from '@/database/entities/guild-invite.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
 import { GuildMemberRole } from '@/database/entities/guild-member-role.entity';
@@ -23,7 +33,11 @@ import { RolePermission } from '@/database/entities/role-permission.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
 import { BotService } from '@/bot/bot.service';
+import { BUILTIN_COMMANDS } from '@/bot/bots.controller';
 import { SearchIndexerService } from '@/search/search-indexer.service';
+import { VoicePresenceService } from '@/voice/voice-presence.service';
+import { ChatGateway } from '@/gateway/chat.gateway';
+import { SlashCommand } from '@/database/entities/slash-command.entity';
 
 export const PERM_MANAGE_GUILD = GuildPermissions.MANAGE_GUILD;
 export const PERM_MANAGE_CHANNELS = GuildPermissions.MANAGE_CHANNELS;
@@ -36,7 +50,36 @@ export class GuildsService {
     private readonly em: EntityManager,
     private readonly indexer: SearchIndexerService,
     private readonly bot: BotService,
+    private readonly voicePresence: VoicePresenceService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
   ) {}
+
+  private async writeAudit(
+    guildId: string,
+    actorId: string,
+    action: string,
+    targetId?: string | null,
+    targetType?: string | null,
+    meta?: Record<string, unknown> | null,
+  ) {
+    await this.em.save(
+      AuditLog,
+      this.em.create(AuditLog, {
+        guildId,
+        actorId,
+        action,
+        targetId: targetId ?? null,
+        targetType: targetType ?? null,
+        meta: meta ?? null,
+      }),
+    );
+  }
+
+  private async assertNotBanned(guildId: string, userId: string) {
+    const ban = await this.em.findOne(GuildBan, { where: { guildId, userId } });
+    if (ban) throw new ForbiddenException('Bu sunucudan yasaklandın');
+  }
 
   async listForUser(userId: string): Promise<GuildSummary[]> {
     const memberships = await this.em.find(GuildMember, {
@@ -46,9 +89,13 @@ export class GuildsService {
     return memberships.map((m) => this.toSummary(m.guild));
   }
 
-  async discover(): Promise<GuildSummary[]> {
+  async discover(q?: string): Promise<GuildSummary[]> {
+    const trimmed = q?.trim() ?? '';
     const guilds = await this.em.find(Guild, {
-      where: { discoverable: true },
+      where: {
+        discoverable: true,
+        ...(trimmed ? { name: ILike(`%${trimmed}%`) } : {}),
+      },
       take: 50,
       order: { createdAt: 'DESC' },
     });
@@ -145,6 +192,9 @@ export class GuildsService {
       [
         GuildPermissions.MANAGE_MESSAGES,
         GuildPermissions.KICK_MEMBERS,
+        GuildPermissions.BAN_MEMBERS,
+        GuildPermissions.MOVE_MEMBERS,
+        GuildPermissions.MODERATE_MEMBERS,
         GuildPermissions.MANAGE_CHANNELS,
         GuildPermissions.VIEW_CHANNELS,
         GuildPermissions.SEND_MESSAGES,
@@ -362,6 +412,7 @@ export class GuildsService {
     if (invite.maxUses != null && invite.uses >= invite.maxUses) {
       throw new BadRequestException('Davet kullanım limiti dolmuş');
     }
+    await this.assertNotBanned(invite.guildId, userId);
 
     const existing = await this.em.findOne(GuildMember, {
       where: { guildId: invite.guildId, userId },
@@ -384,6 +435,7 @@ export class GuildsService {
     if (!guild.discoverable) {
       throw new ForbiddenException('Bu sunucu keşiften katılmaya açık değil');
     }
+    await this.assertNotBanned(guildId, userId);
     const existing = await this.em.findOne(GuildMember, {
       where: { guildId, userId },
     });
@@ -445,6 +497,184 @@ export class GuildsService {
       where: { guildId, userId },
     });
     if (!member) throw new ForbiddenException('Not a member of this guild');
+  }
+
+  async kickMember(
+    guildId: string,
+    actorId: string,
+    targetUserId: string,
+  ): Promise<{ ok: true }> {
+    await this.requirePermission(guildId, actorId, GuildPermissions.KICK_MEMBERS);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    if (guild.ownerId === targetUserId) {
+      throw new BadRequestException('Sahip atılamaz');
+    }
+    if (actorId === targetUserId) {
+      throw new BadRequestException('Kendini atamazsın');
+    }
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId: targetUserId },
+    });
+    if (!member) throw new NotFoundException('Üye bulunamadı');
+    await this.em.remove(GuildMember, member);
+    const leaves = await this.voicePresence.leaveEverywhere(targetUserId);
+    for (const p of leaves) {
+      if (p.guildId === guildId) this.chatGateway.broadcastVoiceState(p);
+    }
+    await this.writeAudit(guildId, actorId, 'MEMBER_KICK', targetUserId, 'user');
+    return { ok: true };
+  }
+
+  async banMember(
+    guildId: string,
+    actorId: string,
+    targetUserId: string,
+    reason?: string | null,
+  ): Promise<{ ok: true }> {
+    await this.requirePermission(guildId, actorId, GuildPermissions.BAN_MEMBERS);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    if (guild.ownerId === targetUserId) {
+      throw new BadRequestException('Sahip yasaklanamaz');
+    }
+    if (actorId === targetUserId) {
+      throw new BadRequestException('Kendini yasaklayamazsın');
+    }
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId: targetUserId },
+    });
+    if (member) await this.em.remove(GuildMember, member);
+    const existingBan = await this.em.findOne(GuildBan, {
+      where: { guildId, userId: targetUserId },
+    });
+    if (!existingBan) {
+      await this.em.save(
+        GuildBan,
+        this.em.create(GuildBan, {
+          guildId,
+          userId: targetUserId,
+          bannedById: actorId,
+          reason: reason?.trim() || null,
+        }),
+      );
+    }
+    const leaves = await this.voicePresence.leaveEverywhere(targetUserId);
+    for (const p of leaves) {
+      if (p.guildId === guildId) this.chatGateway.broadcastVoiceState(p);
+    }
+    await this.writeAudit(guildId, actorId, 'MEMBER_BAN', targetUserId, 'user', {
+      reason: reason ?? null,
+    });
+    return { ok: true };
+  }
+
+  async unbanMember(
+    guildId: string,
+    actorId: string,
+    targetUserId: string,
+  ): Promise<{ ok: true }> {
+    await this.requirePermission(guildId, actorId, GuildPermissions.BAN_MEMBERS);
+    const ban = await this.em.findOne(GuildBan, {
+      where: { guildId, userId: targetUserId },
+    });
+    if (!ban) throw new NotFoundException('Yasak kaydı yok');
+    await this.em.remove(GuildBan, ban);
+    await this.writeAudit(guildId, actorId, 'MEMBER_UNBAN', targetUserId, 'user');
+    return { ok: true };
+  }
+
+  async listBans(
+    guildId: string,
+    actorId: string,
+  ): Promise<
+    Array<{ userId: string; reason: string | null; bannedById: string; createdAt: string }>
+  > {
+    await this.requirePermission(guildId, actorId, GuildPermissions.BAN_MEMBERS);
+    const bans = await this.em.find(GuildBan, {
+      where: { guildId },
+      order: { createdAt: 'DESC' },
+      take: 100,
+    });
+    return bans.map((b) => ({
+      userId: b.userId,
+      reason: b.reason,
+      bannedById: b.bannedById,
+      createdAt: b.createdAt.toISOString(),
+    }));
+  }
+
+  async timeoutMember(
+    guildId: string,
+    actorId: string,
+    targetUserId: string,
+    minutes: number,
+  ): Promise<{ ok: true; timeoutUntil: string | null }> {
+    await this.requirePermission(guildId, actorId, GuildPermissions.MODERATE_MEMBERS);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    if (guild.ownerId === targetUserId) {
+      throw new BadRequestException('Sahibe timeout uygulanamaz');
+    }
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId: targetUserId },
+    });
+    if (!member) throw new NotFoundException('Üye bulunamadı');
+    const mins = Math.max(0, Math.min(60 * 24 * 28, Math.floor(minutes)));
+    member.timeoutUntil =
+      mins <= 0 ? null : new Date(Date.now() + mins * 60_000);
+    await this.em.save(GuildMember, member);
+    await this.writeAudit(guildId, actorId, 'MEMBER_TIMEOUT', targetUserId, 'user', {
+      minutes: mins,
+      timeoutUntil: member.timeoutUntil?.toISOString() ?? null,
+    });
+    return {
+      ok: true,
+      timeoutUntil: member.timeoutUntil?.toISOString() ?? null,
+    };
+  }
+
+  async listAuditLogs(
+    guildId: string,
+    actorId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      actorId: string;
+      action: string;
+      targetId: string | null;
+      targetType: string | null;
+      meta: Record<string, unknown> | null;
+      createdAt: string;
+    }>
+  > {
+    await this.requirePermission(guildId, actorId, GuildPermissions.MANAGE_GUILD);
+    const logs = await this.em.find(AuditLog, {
+      where: { guildId },
+      order: { createdAt: 'DESC' },
+      take: 100,
+    });
+    return logs.map((l) => ({
+      id: l.id,
+      actorId: l.actorId,
+      action: l.action,
+      targetId: l.targetId,
+      targetType: l.targetType,
+      meta: l.meta,
+      createdAt: l.createdAt.toISOString(),
+    }));
+  }
+
+  async assertNotTimedOut(guildId: string, userId: string): Promise<void> {
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId },
+    });
+    if (!member?.timeoutUntil) return;
+    if (member.timeoutUntil.getTime() > Date.now()) {
+      throw new ForbiddenException('Timeout süren dolmadan mesaj gönderemezsin');
+    }
+    member.timeoutUntil = null;
+    await this.em.save(GuildMember, member);
   }
 
   async requireOwner(guildId: string, userId: string): Promise<Guild> {
@@ -521,5 +751,174 @@ export class GuildsService {
       uses: invite.uses,
       expiresAt: invite.expiresAt?.toISOString() ?? null,
     };
+  }
+
+  private toCategoryDto(cat: Category): CategoryDto {
+    return {
+      id: cat.id,
+      guildId: cat.guildId,
+      name: cat.name,
+      position: cat.position,
+    };
+  }
+
+  async listCategories(guildId: string, userId: string): Promise<CategoryDto[]> {
+    await this.ensureMember(guildId, userId);
+    const cats = await this.em.find(Category, {
+      where: { guildId },
+      order: { position: 'ASC', name: 'ASC' },
+    });
+    return cats.map((c) => this.toCategoryDto(c));
+  }
+
+  async createCategory(
+    guildId: string,
+    userId: string,
+    name: string,
+  ): Promise<CategoryDto> {
+    await this.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
+    const trimmed = name.trim().slice(0, 100);
+    if (!trimmed) throw new BadRequestException('Kategori adı gerekli');
+    const last = await this.em.findOne(Category, {
+      where: { guildId },
+      order: { position: 'DESC' },
+    });
+    const cat = await this.em.save(
+      Category,
+      this.em.create(Category, {
+        guildId,
+        name: trimmed,
+        position: (last?.position ?? -1) + 1,
+      }),
+    );
+    return this.toCategoryDto(cat);
+  }
+
+  async updateCategory(
+    guildId: string,
+    categoryId: string,
+    userId: string,
+    data: { name?: string; position?: number },
+  ): Promise<CategoryDto> {
+    await this.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
+    const cat = await this.em.findOne(Category, { where: { id: categoryId, guildId } });
+    if (!cat) throw new NotFoundException('Kategori bulunamadı');
+    if (data.name != null) {
+      const trimmed = data.name.trim().slice(0, 100);
+      if (!trimmed) throw new BadRequestException('Kategori adı gerekli');
+      cat.name = trimmed;
+    }
+    if (data.position != null) cat.position = data.position;
+    await this.em.save(Category, cat);
+    return this.toCategoryDto(cat);
+  }
+
+  async deleteCategory(
+    guildId: string,
+    categoryId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
+    const cat = await this.em.findOne(Category, { where: { id: categoryId, guildId } });
+    if (!cat) throw new NotFoundException('Kategori bulunamadı');
+    await this.em.update(Channel, { categoryId }, { categoryId: null });
+    await this.em.remove(Category, cat);
+  }
+
+  async listSlashCommands(guildId: string, userId: string) {
+    await this.ensureMember(guildId, userId);
+    const rows = await this.em.find(SlashCommand, {
+      where: { guildId },
+      order: { name: 'ASC' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      aliases: row.aliases ?? [],
+      description: row.description,
+      usage: row.usage,
+      botUserId: row.botUserId,
+      botName: row.botName,
+      createdById: row.createdById,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async registerSlashCommand(
+    guildId: string,
+    userId: string,
+    data: {
+      name: string;
+      description: string;
+      usage?: string;
+      aliases?: string[];
+      botName?: string;
+      responseTemplate?: string;
+    },
+  ) {
+    await this.requirePermission(guildId, userId, PERM_MANAGE_GUILD);
+    const name = (data.name ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+      .slice(0, 32);
+    if (name.length < 2) {
+      throw new BadRequestException('Komut adı en az 2 karakter olmalı (a-z, 0-9, _, -)');
+    }
+    if (
+      BUILTIN_COMMANDS.some(
+        (c) => c.name === name || (c.aliases as readonly string[]).includes(name),
+      )
+    ) {
+      throw new BadRequestException('Bu komut adı sistem komutuyla çakışıyor');
+    }
+    const description = (data.description ?? '').trim().slice(0, 200);
+    if (!description) throw new BadRequestException('Açıklama gerekli');
+    const usage = (data.usage ?? `/${name}`).trim().slice(0, 120) || `/${name}`;
+    const aliases = (data.aliases ?? [])
+      .map((a) => a.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32))
+      .filter((a) => a.length >= 2 && a !== name)
+      .slice(0, 5);
+    const responseTemplate =
+      (data.responseTemplate ?? '').trim().slice(0, 2000) || null;
+
+    const existing = await this.em.findOne(SlashCommand, { where: { guildId, name } });
+    if (existing) throw new BadRequestException('Bu isimde komut zaten var');
+
+    const row = this.em.create(SlashCommand, {
+      guildId,
+      name,
+      description,
+      usage,
+      aliases: aliases.length ? aliases : null,
+      responseTemplate,
+      botUserId: null,
+      botName: (data.botName ?? 'Özel').trim().slice(0, 64) || 'Özel',
+      createdById: userId,
+    });
+    await this.em.save(SlashCommand, row);
+    return {
+      id: row.id,
+      name: row.name,
+      aliases: row.aliases ?? [],
+      description: row.description,
+      usage: row.usage,
+      responseTemplate: row.responseTemplate,
+      botUserId: row.botUserId,
+      botName: row.botName,
+      createdById: row.createdById,
+      createdAt: (row.createdAt ?? new Date()).toISOString(),
+    };
+  }
+
+  async deleteSlashCommand(
+    guildId: string,
+    commandId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.requirePermission(guildId, userId, PERM_MANAGE_GUILD);
+    const row = await this.em.findOne(SlashCommand, { where: { id: commandId, guildId } });
+    if (!row) throw new NotFoundException('Komut bulunamadı');
+    await this.em.remove(SlashCommand, row);
   }
 }

@@ -22,6 +22,13 @@ import {
   isAdminEmail,
   parseAdminEmails,
 } from '@/auth/admin-emails';
+import {
+  generateRecoveryCodes,
+  generateTotpSecret,
+  normalizeRecoveryCode,
+  totpOtpauthUrl,
+  verifyTotpCode,
+} from '@/common/totp';
 
 @Injectable()
 export class AuthService {
@@ -43,7 +50,184 @@ export class AuthService {
     return parseAdminEmails(this.config);
   }
 
-  async devLogin(dto: DevLoginDto): Promise<AuthTokens & { user: User }> {
+  async issueLoginOrChallenge(
+    user: User,
+  ): Promise<
+    | (AuthTokens & { user: User; requires2fa?: false })
+    | { requires2fa: true; challengeToken: string; user: User }
+  > {
+    if (user.totpEnabled && user.totpSecret) {
+      const challengeToken = await this.issue2faChallenge(user.id);
+      return { requires2fa: true, challengeToken, user };
+    }
+    const tokens = await this.issueTokens(user);
+    return { ...tokens, user, requires2fa: false };
+  }
+
+  private async issue2faChallenge(userId: string): Promise<string> {
+    const secret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    return this.jwt.signAsync(
+      { sub: userId, purpose: '2fa' },
+      { secret, expiresIn: '10m' },
+    );
+  }
+
+  async verify2faChallenge(
+    challengeToken: string,
+    code: string,
+  ): Promise<AuthTokens & { user: User }> {
+    const secret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    let payload: { sub?: string; purpose?: string };
+    try {
+      payload = await this.jwt.verifyAsync(challengeToken, { secret });
+    } catch {
+      throw new UnauthorizedException('2FA oturumu süresi doldu');
+    }
+    if (payload.purpose !== '2fa' || !payload.sub) {
+      throw new UnauthorizedException('Geçersiz 2FA oturumu');
+    }
+    const user = await this.getUserById(payload.sub);
+    if (!user.totpEnabled || !user.totpSecret) {
+      throw new BadRequestException('2FA bu hesapta açık değil');
+    }
+    const totpOk = verifyTotpCode(user.totpSecret, code);
+    const recoveryOk = totpOk ? false : await this.consumeRecoveryCode(user, code);
+    if (!totpOk && !recoveryOk) {
+      throw new UnauthorizedException('Doğrulama kodu hatalı');
+    }
+    const tokens = await this.issueTokens(user);
+    return { ...tokens, user };
+  }
+
+  async get2faStatus(userId: string): Promise<{
+    enabled: boolean;
+    recoveryRemaining: number;
+  }> {
+    const user = await this.getUserById(userId);
+    return {
+      enabled: Boolean(user.totpEnabled),
+      recoveryRemaining: user.totpRecoveryHashes?.length ?? 0,
+    };
+  }
+
+  async begin2faSetup(userId: string): Promise<{ secret: string; otpauthUrl: string }> {
+    const user = await this.getUserById(userId);
+    if (user.totpEnabled) {
+      throw new BadRequestException('2FA zaten açık');
+    }
+    const secret = generateTotpSecret();
+    user.totpSecret = secret;
+    user.totpEnabled = false;
+    await this.em.save(User, user);
+    return {
+      secret,
+      otpauthUrl: totpOtpauthUrl(secret, user.email || user.username),
+    };
+  }
+
+  async confirm2faSetup(
+    userId: string,
+    code: string,
+  ): Promise<{ enabled: true; recoveryCodes: string[] }> {
+    const user = await this.getUserById(userId);
+    if (!user.totpSecret) {
+      throw new BadRequestException('Önce 2FA kurulumunu başlat');
+    }
+    if (user.totpEnabled) {
+      return { enabled: true, recoveryCodes: [] };
+    }
+    if (!verifyTotpCode(user.totpSecret, code)) {
+      throw new UnauthorizedException('Doğrulama kodu hatalı');
+    }
+    const recoveryCodes = generateRecoveryCodes(8);
+    user.totpEnabled = true;
+    user.totpRecoveryHashes = await Promise.all(
+      recoveryCodes.map((c) => bcrypt.hash(normalizeRecoveryCode(c), 10)),
+    );
+    await this.em.save(User, user);
+    return { enabled: true, recoveryCodes };
+  }
+
+  async regenerateRecoveryCodes(
+    userId: string,
+    code: string,
+  ): Promise<{ recoveryCodes: string[] }> {
+    const user = await this.getUserById(userId);
+    if (!user.totpEnabled || !user.totpSecret) {
+      throw new BadRequestException('2FA kapalı');
+    }
+    const totpOk = verifyTotpCode(user.totpSecret, code);
+    if (!totpOk) {
+      throw new UnauthorizedException('Doğrulama kodu hatalı');
+    }
+    const recoveryCodes = generateRecoveryCodes(8);
+    user.totpRecoveryHashes = await Promise.all(
+      recoveryCodes.map((c) => bcrypt.hash(normalizeRecoveryCode(c), 10)),
+    );
+    await this.em.save(User, user);
+    return { recoveryCodes };
+  }
+
+  private async consumeRecoveryCode(user: User, code: string): Promise<boolean> {
+    const hashes = user.totpRecoveryHashes ?? [];
+    if (!hashes.length) return false;
+    const normalized = normalizeRecoveryCode(code);
+    if (normalized.length < 8) return false;
+    for (let i = 0; i < hashes.length; i++) {
+      const ok = await bcrypt.compare(normalized, hashes[i]!);
+      if (ok) {
+        user.totpRecoveryHashes = hashes.filter((_, idx) => idx !== i);
+        await this.em.save(User, user);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async disable2fa(
+    userId: string,
+    opts: { code?: string; password?: string },
+  ): Promise<{ enabled: false }> {
+    const user = await this.getUserById(userId);
+    if (!user.totpEnabled) {
+      user.totpSecret = null;
+      user.totpRecoveryHashes = null;
+      await this.em.save(User, user);
+      return { enabled: false };
+    }
+    if (opts.code) {
+      const totpOk =
+        Boolean(user.totpSecret) && verifyTotpCode(user.totpSecret!, opts.code);
+      const recoveryOk = totpOk ? false : await this.consumeRecoveryCode(user, opts.code);
+      if (!totpOk && !recoveryOk) {
+        throw new UnauthorizedException('Doğrulama kodu hatalı');
+      }
+    } else if (opts.password && user.passwordHash) {
+      const ok = await bcrypt.compare(opts.password, user.passwordHash);
+      if (!ok) throw new UnauthorizedException('Şifre hatalı');
+    } else {
+      throw new BadRequestException('2FA kapatmak için kod veya şifre gerekli');
+    }
+    user.totpEnabled = false;
+    user.totpSecret = null;
+    user.totpRecoveryHashes = null;
+    await this.em.save(User, user);
+    return { enabled: false };
+  }
+
+  async cancel2faSetup(userId: string): Promise<{ ok: true }> {
+    const user = await this.getUserById(userId);
+    if (!user.totpEnabled) {
+      user.totpSecret = null;
+      await this.em.save(User, user);
+    }
+    return { ok: true };
+  }
+
+  async devLogin(dto: DevLoginDto): Promise<
+    | (AuthTokens & { user: User; requires2fa?: false })
+    | { requires2fa: true; challengeToken: string; user: User }
+  > {
     const usernameRaw = dto.username?.trim() || 'vampiredev';
     const username = usernameRaw.toLowerCase().replace(/[^a-z0-9_]/g, '');
     const email = (dto.email ?? `${username}@dracord.local`).toLowerCase();
@@ -104,8 +288,7 @@ export class AuthService {
       }
     }
 
-    const tokens = await this.issueTokens(user);
-    return { ...tokens, user };
+    return this.issueLoginOrChallenge(user);
   }
 
   async loginWithOAuthProfile(
@@ -116,7 +299,10 @@ export class AuthService {
       username: string;
       displayName: string;
     },
-  ): Promise<AuthTokens & { user: User }> {
+  ): Promise<
+    | (AuthTokens & { user: User; requires2fa?: false })
+    | { requires2fa: true; challengeToken: string; user: User }
+  > {
     const account = await this.em.findOne(Account, {
       where: {
         provider,
@@ -167,12 +353,10 @@ export class AuthService {
       }
     }
 
-    const tokens = await this.issueTokens(user);
-    // Kullanıcı adı onaylanana kadar seed sunucuya otomatik katılma
     if (!isBrandNew && user.usernameConfirmed !== false) {
       await this.ensureSeedGuildMembership(user.id);
     }
-    return { ...tokens, user };
+    return this.issueLoginOrChallenge(user);
   }
 
   /** displayName / öneriden benzersiz kullanıcı adı üretir. */
@@ -212,7 +396,10 @@ export class AuthService {
     }
   }
 
-  async appleLogin(dto: AppleAuthDto): Promise<AuthTokens & { user: User }> {
+  async appleLogin(dto: AppleAuthDto): Promise<
+    | (AuthTokens & { user: User; requires2fa?: false })
+    | { requires2fa: true; challengeToken: string; user: User }
+  > {
     const appleClientId = this.config.get<string>('APPLE_CLIENT_ID');
     const stubMode =
       !appleClientId || this.config.get<string>('APPLE_STUB_MODE') === 'true';
@@ -239,7 +426,10 @@ export class AuthService {
   async googleCallback(
     profile: GoogleProfile,
     options?: { admin?: boolean },
-  ): Promise<AuthTokens & { user: User }> {
+  ): Promise<
+    | (AuthTokens & { user: User; requires2fa?: false })
+    | { requires2fa: true; challengeToken: string; user: User }
+  > {
     if (options?.admin) {
       this.assertAdminEmail(profile.email);
     }

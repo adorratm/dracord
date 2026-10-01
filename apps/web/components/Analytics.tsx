@@ -1,13 +1,24 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useUserPreferences } from '@/lib/user-preferences';
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
 
-/** GA4 — NEXT_PUBLIC_GA_MEASUREMENT_ID tanımlıysa yüklenir */
+/** GA4 — NEXT_PUBLIC_GA_MEASUREMENT_ID + privacy.dataCollection */
 export function Analytics() {
+  const { prefs } = useUserPreferences();
+  const enabled = Boolean(prefs.privacy.dataCollection);
+
   useEffect(() => {
     if (!GA_ID || typeof window === 'undefined') return;
+
+    if (!enabled) {
+      const existing = document.getElementById('dracord-ga4');
+      if (existing) existing.remove();
+      return;
+    }
+
     if (document.getElementById('dracord-ga4')) return;
 
     const s = document.createElement('script');
@@ -22,7 +33,7 @@ export function Analytics() {
     }
     gtag('js', new Date());
     gtag('config', GA_ID, { anonymize_ip: true });
-  }, []);
+  }, [enabled]);
 
   return null;
 }

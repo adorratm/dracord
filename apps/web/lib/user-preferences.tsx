@@ -90,7 +90,7 @@ type PrefsContextValue = {
 const PrefsContext = createContext<PrefsContextValue | null>(null);
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const { client, user, ready: authReady } = useAuth();
+  const { client, user, setUser, ready: authReady } = useAuth();
   const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [ready, setReady] = useState(false);
 
@@ -123,6 +123,29 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     applyDomClasses(prefs);
   }, [prefs, ready]);
+
+  // Etkinlik paylaşımı kapalıysa özel durumu temizle (arkadaşlar görmesin)
+  useEffect(() => {
+    if (!authReady || !user) return;
+    const share =
+      prefs.privacy.shareActivityStatus !== false &&
+      prefs.activity.displayActivity !== false;
+    if (share) return;
+    if (!user.customStatus) return;
+    void client
+      .updatePresence({ status: user.status ?? 'ONLINE', customStatus: null })
+      .then((me) => setUser(me))
+      .catch(() => undefined);
+  }, [
+    authReady,
+    user?.id,
+    user?.customStatus,
+    user?.status,
+    prefs.privacy.shareActivityStatus,
+    prefs.activity.displayActivity,
+    client,
+    setUser,
+  ]);
 
   const update = useCallback(
     (patch: Partial<UserPreferences>) => {

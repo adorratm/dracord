@@ -8,10 +8,13 @@ import * as bcrypt from 'bcrypt';
 import { EntityManager, In } from 'typeorm';
 import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
 import { GuildsService, PERM_MANAGE_CHANNELS } from '@/guilds/guilds.service';
+import { GuildPermissions } from '@/common/permissions';
 import { Channel } from '@/database/entities/channel.entity';
 import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Guild } from '@/database/entities/guild.entity';
+import { GuildMember } from '@/database/entities/guild-member.entity';
+import { GuildMemberRole } from '@/database/entities/guild-member-role.entity';
 import { ChannelType } from '@/database/enums';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
@@ -20,11 +23,27 @@ export type ChannelUpdateInput = {
   name?: string;
   topic?: string | null;
   categoryId?: string | null;
+  position?: number;
   locked?: boolean;
   /** Düz şifre; null/'' = şifreyi kaldır */
   password?: string | null;
   deniedUserIds?: string[];
+  permissionOverwrites?: ChannelOverwriteDto[] | null;
 };
+
+export type ChannelOverwriteDto = {
+  id: string;
+  type: 'role' | 'member';
+  allow: string[];
+  deny: string[];
+};
+
+export const CHANNEL_OVERWRITE_PERMS = [
+  'VIEW_CHANNEL',
+  'SEND_MESSAGES',
+  'CONNECT',
+  'SPEAK',
+] as const;
 
 @Injectable()
 export class ChannelsService {
@@ -44,19 +63,26 @@ export class ChannelsService {
     const voiceMap = await this.voicePresence.listGuildVoice(guildId);
     const unreadMap = await this.unreadByChannelIds(
       userId,
-      channels.filter((c) => c.type === ChannelType.TEXT).map((c) => c.id),
+      channels
+        .filter((c) => c.type === ChannelType.TEXT || c.type === ChannelType.FORUM)
+        .map((c) => c.id),
     );
     const canManage = await this.canManageChannels(guildId, userId);
-    return channels.map((c) =>
-      this.toSummary(
-        c,
-        {
+    const summaries = await Promise.all(
+      channels.map(async (c) => {
+        const canView = canManage || (await this.memberCanInChannel(c, userId, 'VIEW_CHANNEL'));
+        if (!canView) return null;
+        return this.toSummary(c, {
           voiceMembers: c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
-          unreadCount: c.type === ChannelType.TEXT ? unreadMap.get(c.id) : undefined,
+          unreadCount:
+            c.type === ChannelType.TEXT || c.type === ChannelType.FORUM
+              ? unreadMap.get(c.id)
+              : undefined,
           includeDenied: canManage,
-        },
-      ),
+        });
+      }),
     );
+    return summaries.filter((s): s is ChannelSummary => Boolean(s));
   }
 
   async getChannel(channelId: string, userId: string): Promise<ChannelSummary> {
@@ -85,7 +111,7 @@ export class ChannelsService {
     userId: string,
     data: {
       name: string;
-      type: 'TEXT' | 'VOICE';
+      type: 'TEXT' | 'VOICE' | 'FORUM';
       categoryId?: string | null;
       topic?: string | null;
     },
@@ -101,12 +127,18 @@ export class ChannelsService {
       order: { position: 'DESC' },
     });
     const maxPos = last?.position ?? -1;
+    const channelType =
+      data.type === 'VOICE'
+        ? ChannelType.VOICE
+        : data.type === 'FORUM'
+          ? ChannelType.FORUM
+          : ChannelType.TEXT;
     const channel = await this.em.save(
       Channel,
       this.em.create(Channel, {
         guildId,
         name,
-        type: data.type === 'VOICE' ? ChannelType.VOICE : ChannelType.TEXT,
+        type: channelType,
         categoryId: data.categoryId ?? null,
         topic: data.topic ?? null,
         position: maxPos + 1,
@@ -148,12 +180,40 @@ export class ChannelsService {
     if (data.deniedUserIds !== undefined) {
       channel.deniedUserIds = [...new Set(data.deniedUserIds.filter(Boolean))];
     }
+    if (data.position !== undefined) {
+      channel.position = data.position;
+    }
+    if (data.permissionOverwrites !== undefined) {
+      channel.permissionOverwrites = data.permissionOverwrites;
+    }
     if (channel.locked === false && data.password === undefined) {
       // kilit kapatılırsa şifreyi de temizle (açıkça password verilmediyse)
       if (data.locked === false) channel.passwordHash = null;
     }
     await this.em.save(Channel, channel);
     return this.toSummary(channel, { includeDenied: true });
+  }
+
+  async reorderChannels(
+    guildId: string,
+    userId: string,
+    items: Array<{ id: string; position: number; categoryId?: string | null }>,
+  ): Promise<ChannelSummary[]> {
+    await this.guilds.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
+    if (!items.length) return this.listGuildChannels(guildId, userId);
+    const ids = items.map((i) => i.id);
+    const channels = await this.em.find(Channel, {
+      where: { guildId, id: In(ids) },
+    });
+    const byId = new Map(channels.map((c) => [c.id, c]));
+    for (const item of items) {
+      const ch = byId.get(item.id);
+      if (!ch) continue;
+      ch.position = item.position;
+      if (item.categoryId !== undefined) ch.categoryId = item.categoryId;
+    }
+    await this.em.save(Channel, [...byId.values()]);
+    return this.listGuildChannels(guildId, userId);
   }
 
   async deleteChannel(channelId: string, userId: string): Promise<void> {
@@ -171,11 +231,25 @@ export class ChannelsService {
   ): Promise<Channel> {
     const channel = await this.em.findOne(Channel, { where: { id: channelId } });
     if (!channel) throw new NotFoundException('Channel not found');
+
+    // DM araması: TEXT + dmChannelId
+    if (channel.dmChannelId && channel.type === ChannelType.TEXT) {
+      const member = await this.em.findOne(DMChannelMember, {
+        where: { dmChannelId: channel.dmChannelId, userId },
+      });
+      if (!member) throw new ForbiddenException('Bu DM’nin üyesi değilsin');
+      return channel;
+    }
+
     if (channel.type !== ChannelType.VOICE) {
       throw new BadRequestException('Channel is not a voice channel');
     }
     if (channel.guildId) {
       await this.guilds.ensureMember(channel.guildId, userId);
+      const canConnect = await this.memberCanInChannel(channel, userId, 'CONNECT');
+      if (!canConnect) {
+        throw new ForbiddenException('Bu ses kanalına bağlanma iznin yok');
+      }
     }
     const denied = channel.deniedUserIds ?? [];
     if (denied.includes(userId)) {
@@ -249,7 +323,8 @@ export class ChannelsService {
       if (!readId) {
         const rows = (await this.em.query(
           `SELECT COUNT(*)::int AS c FROM messages
-           WHERE "channelId" = $1 AND "deletedAt" IS NULL`,
+           WHERE "channelId" = $1 AND "deletedAt" IS NULL
+             AND "threadRootId" IS NULL`,
           [channelId],
         )) as Array<{ c: number }>;
         map.set(channelId, Number(rows[0]?.c ?? 0));
@@ -258,6 +333,7 @@ export class ChannelsService {
       const rows = (await this.em.query(
         `SELECT COUNT(*)::int AS c FROM messages m
          WHERE m."channelId" = $1 AND m."deletedAt" IS NULL
+           AND m."threadRootId" IS NULL
            AND m."createdAt" > COALESCE(
              (SELECT m2."createdAt" FROM messages m2 WHERE m2.id = $2),
              '-infinity'::timestamptz
@@ -300,10 +376,77 @@ export class ChannelsService {
       voiceMembers: opts?.voiceMembers,
       unread,
       unreadCount,
+      dmChannelId: channel.dmChannelId ?? null,
       locked: isVoice ? Boolean(channel.locked) : undefined,
       hasPassword: isVoice ? Boolean(channel.passwordHash) : undefined,
       deniedUserIds:
         isVoice && opts?.includeDenied ? (channel.deniedUserIds ?? []) : undefined,
+      permissionOverwrites: channel.permissionOverwrites ?? undefined,
     };
+  }
+
+  /** Kanal overwrite + sunucu izni birleşimi */
+  async memberCanInChannel(
+    channel: Channel,
+    userId: string,
+    perm: 'VIEW_CHANNEL' | 'SEND_MESSAGES' | 'CONNECT' | 'SPEAK',
+  ): Promise<boolean> {
+    if (!channel.guildId) return true;
+    const guild = await this.em.findOne(Guild, { where: { id: channel.guildId } });
+    if (!guild) return false;
+    if (guild.ownerId === userId) return true;
+    if (
+      await this.guilds.memberHasPermission(
+        channel.guildId,
+        userId,
+        GuildPermissions.ADMINISTRATOR,
+      )
+    ) {
+      return true;
+    }
+
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId: channel.guildId, userId },
+    });
+    if (!member) return false;
+    const links = await this.em.find(GuildMemberRole, {
+      where: { guildMemberId: member.id },
+    });
+    const roleIds = links.map((l) => l.roleId);
+
+    const overwrites = channel.permissionOverwrites ?? [];
+    const memberOw = overwrites.find((o) => o.type === 'member' && o.id === userId);
+    if (memberOw) {
+      if (memberOw.deny?.includes(perm)) return false;
+      if (memberOw.allow?.includes(perm)) return true;
+    }
+    let roleAllow = false;
+    let roleDeny = false;
+    for (const roleId of roleIds) {
+      const ow = overwrites.find((o) => o.type === 'role' && o.id === roleId);
+      if (!ow) continue;
+      if (ow.deny?.includes(perm)) roleDeny = true;
+      if (ow.allow?.includes(perm)) roleAllow = true;
+    }
+    if (roleDeny && !roleAllow) return false;
+    if (roleAllow) return true;
+
+    // Varsayılan: sunucu izni
+    if (perm === 'VIEW_CHANNEL') {
+      return this.guilds.memberHasPermission(
+        channel.guildId,
+        userId,
+        GuildPermissions.VIEW_CHANNELS,
+      );
+    }
+    if (perm === 'SEND_MESSAGES') {
+      return this.guilds.memberHasPermission(
+        channel.guildId,
+        userId,
+        GuildPermissions.SEND_MESSAGES,
+      );
+    }
+    // CONNECT / SPEAK: üye olmak yeterli (overwrite yoksa)
+    return true;
   }
 }

@@ -24,6 +24,10 @@ export class GuildMember extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   nickname!: string | null;
 
+  /** Timeout bitiş zamanı; null = yok */
+  @Column({ type: 'timestamptz', nullable: true })
+  timeoutUntil!: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   joinedAt!: Date;
 

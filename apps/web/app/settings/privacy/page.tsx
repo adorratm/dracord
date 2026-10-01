@@ -1,53 +1,42 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/components/AuthProvider';
 import {
   SettingsPage,
   SettingsSection,
   SettingsToggle,
   SettingsSelect,
+  SettingsNote,
 } from '@/components/settings/SettingsControls';
+import { useI18n } from '@/lib/i18n';
 import { useUserPreferences } from '@/lib/user-preferences';
 
 export default function PrivacySettingsPage() {
-  const { user, client, setUser } = useAuth();
   const { prefs, setSection } = useUserPreferences();
-  const [censor, setCensor] = useState(Boolean(user?.censorLinkPreviews));
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setCensor(Boolean(user?.censorLinkPreviews));
-  }, [user?.censorLinkPreviews]);
-
-  const toggleCensor = async (next: boolean) => {
-    setCensor(next);
-    setBusy(true);
-    try {
-      const me = await client.updateProfile({ censorLinkPreviews: next });
-      setUser(me);
-    } catch {
-      setCensor(Boolean(user?.censorLinkPreviews));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { t, locale } = useI18n();
 
   return (
     <SettingsPage
-      title="Veri ve Gizlilik"
-      description="Kimlerle etkileşime geçtiğini ve hangi verilerin toplandığını kontrol et."
+      title={locale === 'en' ? 'Data & Privacy' : 'Veri ve Gizlilik'}
+      description={
+        locale === 'en'
+          ? 'Control who can interact with you and what you share.'
+          : 'Kimlerle etkileşime geçtiğini ve profil görünürlüğünü kontrol et.'
+      }
     >
-      <SettingsSection title="Sosyal">
+      <SettingsSection title={locale === 'en' ? 'Social' : 'Sosyal'}>
         <SettingsSelect
-          label="Direkt mesaj filtresi"
-          description="Kimlerden DM alabileceğini sınırla."
+          label={locale === 'en' ? 'Direct message filter' : 'Direkt mesaj filtresi'}
+          description={
+            locale === 'en'
+              ? 'Limit who can send you DMs.'
+              : 'Kimlerden DM alabileceğini sınırla.'
+          }
           value={prefs.messaging.whoCanDm}
           options={[
-            { value: 'everyone', label: 'Herkes' },
-            { value: 'friends', label: 'Arkadaşlar' },
-            { value: 'nobody', label: 'Kimse' },
+            { value: 'everyone', label: locale === 'en' ? 'Everyone' : 'Herkes' },
+            { value: 'friends', label: locale === 'en' ? 'Friends' : 'Arkadaşlar' },
+            { value: 'nobody', label: locale === 'en' ? 'Nobody' : 'Kimse' },
           ]}
           onChange={(v) => {
             const level = v as 'everyone' | 'friends' | 'nobody';
@@ -56,67 +45,81 @@ export default function PrivacySettingsPage() {
           }}
         />
         <SettingsToggle
-          label="Arkadaşlık isteklerine izin ver"
+          label={
+            locale === 'en' ? 'Allow friend requests' : 'Arkadaşlık isteklerine izin ver'
+          }
           checked={prefs.privacy.allowFriendRequests}
           onChange={(v) => setSection('privacy', { allowFriendRequests: v })}
         />
-        <SettingsToggle
-          label="Etkinlik durumunu paylaş"
-          description="Şu an ne yaptığını arkadaşların görebilsin."
-          checked={prefs.privacy.shareActivityStatus}
-          onChange={(v) => setSection('privacy', { shareActivityStatus: v })}
-        />
         <p className="font-body-sm text-body-sm text-on-surface-variant px-1 pt-space-sm">
-          Engellenen kullanıcıları yönetmek için{' '}
-          <Link href="/channels/me" className="text-primary-container hover:underline">
-            Arkadaşlar → Engellenen
-          </Link>{' '}
-          sekmesine git.
+          {locale === 'en' ? (
+            <>
+              Manage blocked users in{' '}
+              <Link href="/channels/me" className="text-primary-container hover:underline">
+                Friends → Blocked
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              Engellenen kullanıcıları yönetmek için{' '}
+              <Link href="/channels/me" className="text-primary-container hover:underline">
+                Arkadaşlar → Engellenen
+              </Link>{' '}
+              sekmesine git.
+            </>
+          )}
         </p>
       </SettingsSection>
-      <SettingsSection title="Profil görünürlüğü">
+      <SettingsSection title={locale === 'en' ? 'Profile visibility' : 'Profil görünürlüğü'}>
         <SettingsToggle
-          label="Biyografi göster"
-          description="Başkaları profilinde bio’nu görebilsin."
+          label={locale === 'en' ? 'Show bio' : 'Biyografi göster'}
           checked={prefs.privacy.showBio !== false}
           onChange={(v) => setSection('privacy', { showBio: v })}
         />
         <SettingsToggle
-          label="Sosyal bağlantıları göster"
+          label={locale === 'en' ? 'Show social links' : 'Sosyal bağlantıları göster'}
           checked={prefs.privacy.showSocialLinks !== false}
           onChange={(v) => setSection('privacy', { showSocialLinks: v })}
         />
         <SettingsToggle
-          label="Banner göster"
+          label={locale === 'en' ? 'Show banner' : 'Banner göster'}
           checked={prefs.privacy.showBanner !== false}
           onChange={(v) => setSection('privacy', { showBanner: v })}
         />
         <SettingsToggle
-          label="Özel durum göster"
-          description="Özel durum metnini başkaları görebilsin."
+          label={locale === 'en' ? 'Show custom status' : 'Özel durum göster'}
           checked={prefs.privacy.showCustomStatus !== false}
           onChange={(v) => setSection('privacy', { showCustomStatus: v })}
         />
       </SettingsSection>
-      <SettingsSection title="Veri">
+      <SettingsSection title={locale === 'en' ? 'Data & activity' : 'Veri ve etkinlik'}>
         <SettingsToggle
-          label="Kullanım verisi toplama"
-          description="Ürünü iyileştirmek için anonim telemetri (yerel tercih)."
-          checked={prefs.privacy.dataCollection}
+          label={t('privacy.data')}
+          description={t('privacy.dataDesc')}
+          checked={Boolean(prefs.privacy.dataCollection)}
           onChange={(v) => setSection('privacy', { dataCollection: v })}
         />
         <SettingsToggle
-          label="Kişiselleştirilmiş deneyim"
-          checked={prefs.privacy.personalizeAds}
+          label={t('privacy.ads')}
+          description={t('privacy.adsDesc')}
+          checked={Boolean(prefs.privacy.personalizeAds)}
           onChange={(v) => setSection('privacy', { personalizeAds: v })}
         />
         <SettingsToggle
-          label="Link önizlemelerini sansürle"
-          description="Mesajlardaki bağlantı kartları bulanık gelir."
-          checked={censor}
-          disabled={busy || !user}
-          onChange={(v) => void toggleCensor(v)}
+          label={t('privacy.activity')}
+          description={t('privacy.activityDesc')}
+          checked={Boolean(prefs.privacy.shareActivityStatus)}
+          onChange={(v) => {
+            setSection('privacy', { shareActivityStatus: v });
+            setSection('activity', { displayActivity: v });
+          }}
         />
+        <SettingsNote>
+          {locale === 'en'
+            ? 'Link preview censorship is under Appearance.'
+            : 'Link önizleme sansürü Görünüm ayarlarında.'}
+        </SettingsNote>
       </SettingsSection>
     </SettingsPage>
   );

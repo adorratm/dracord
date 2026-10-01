@@ -89,7 +89,7 @@ export class MusicInternalController {
     return this.presence.join(body.guildId, body.channelId, botId, {
       muted: true,
       deafened: false,
-    });
+    }).then((r) => r.joined);
   }
 
   @Post('presence/leave')

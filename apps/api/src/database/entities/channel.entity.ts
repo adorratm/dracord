@@ -49,6 +49,15 @@ export class Channel extends CuidEntity {
   @Column({ type: 'simple-json', nullable: true })
   deniedUserIds!: string[] | null;
 
+  /** Kanal izin overwrite’ları (rol/üye) */
+  @Column({ type: 'simple-json', nullable: true })
+  permissionOverwrites!: Array<{
+    id: string;
+    type: 'role' | 'member';
+    allow: string[];
+    deny: string[];
+  }> | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

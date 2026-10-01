@@ -77,7 +77,7 @@ export default function VoiceSettingsPage() {
   const voice = useVoiceSession();
 
   useEffect(() => {
-    void voice.refreshAudioDevices();
+    void voice.refreshAudioDevices(true);
   }, [voice.refreshAudioDevices]);
 
   return (
@@ -142,7 +142,7 @@ export default function VoiceSettingsPage() {
           <h3 className="font-headline-md text-headline-md text-on-surface">Ses aygıtları</h3>
           <button
             type="button"
-            onClick={() => void voice.refreshAudioDevices()}
+            onClick={() => void voice.refreshAudioDevices(true)}
             className="font-label-sm text-primary-container hover:underline"
           >
             Yenile
@@ -174,7 +174,7 @@ export default function VoiceSettingsPage() {
           <h3 className="font-headline-md text-headline-md text-on-surface">Kamera</h3>
           <button
             type="button"
-            onClick={() => void voice.refreshAudioDevices()}
+            onClick={() => void voice.refreshAudioDevices(true)}
             className="font-label-sm text-primary-container hover:underline"
           >
             Yenile

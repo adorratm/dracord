@@ -63,7 +63,7 @@ export class UsersService {
       ],
       take: limit,
     });
-    return users.map(toPublicUser);
+    return users.map((u) => toPublicUser(u));
   }
 
   async listFriends(userId: string): Promise<PublicUser[]> {

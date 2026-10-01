@@ -25,12 +25,9 @@ export default function SystemSettingsPage() {
       <SettingsSection>
         <SettingsToggle
           label="Başlangıçta aç"
-          description={
-            isElectron
-              ? 'İşletim sistemi açılışında Dracord başlar.'
-              : 'Masaüstü uygulamasında geçerlidir (web’de kaydedilir).'
-          }
+          description="İşletim sistemi açılışında Dracord başlar."
           checked={prefs.system.openOnStartup}
+          disabled={!isElectron}
           onChange={(v) => setSection('system', { openOnStartup: v })}
         />
         <SettingsToggle
@@ -41,17 +38,15 @@ export default function SystemSettingsPage() {
         />
         <SettingsToggle
           label="Sistem tepsisine küçült"
-          description={
-            isElectron
-              ? 'Kapatırken pencere gizlenir.'
-              : 'Masaüstü uygulamasında kapatmayı gizlemeye çevirir.'
-          }
+          description="Kapatırken pencere gizlenir."
           checked={prefs.system.minimizeToTray}
+          disabled={!isElectron}
           onChange={(v) => setSection('system', { minimizeToTray: v })}
         />
         <SettingsToggle
           label="Otomatik güncelleme"
           checked={prefs.system.autoUpdate}
+          disabled={!isElectron}
           onChange={(v) => setSection('system', { autoUpdate: v })}
         />
       </SettingsSection>
@@ -59,7 +54,7 @@ export default function SystemSettingsPage() {
         <SettingsNote>
           {isElectron
             ? 'Electron algılandı — başlangıç ve tepsi tercihleri anında uygulanır.'
-            : 'Tercihler hesabına senkronize edilir; masaüstü uygulamasında otomatik uygulanır.'}
+            : 'Web’de yalnızca donanım hızlandırma etkisi vardır. Başlangıç, tepsi ve güncelleme masaüstü uygulamasında çalışır.'}
         </SettingsNote>
       </SettingsSection>
     </SettingsPage>

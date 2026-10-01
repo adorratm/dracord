@@ -2,16 +2,17 @@
 
 import { SettingsShell, type SettingsNavSection } from '@dracord/ui';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { useI18n } from '@/lib/i18n';
 import { getSettingsReturnPath } from '@/lib/settings-return';
 
 type NavDef = {
   id: string;
-  title?: string;
+  titleKey?: string;
   items: Array<{
     id: string;
-    label: string;
+    labelKey: string;
     icon?: string;
     href?: string;
     variant?: 'default' | 'danger';
@@ -22,92 +23,62 @@ type NavDef = {
 const NAV: NavDef[] = [
   {
     id: 'account',
-    title: 'Hesap',
+    titleKey: 'nav.account',
     items: [
-      { id: 'account', label: 'Hesap Bilgileri', icon: 'person', href: '/settings/account' },
-      { id: 'profile', label: 'Profil', icon: 'badge', href: '/settings/profile' },
-      { id: 'password', label: 'Şifre ve Güvenlik', icon: 'lock', href: '/settings/password' },
+      { id: 'account', labelKey: 'nav.accountInfo', icon: 'person', href: '/settings/account' },
+      { id: 'profile', labelKey: 'nav.profile', icon: 'badge', href: '/settings/profile' },
+      { id: 'password', labelKey: 'nav.password', icon: 'lock', href: '/settings/password' },
       {
         id: 'account-status',
-        label: 'Hesap Durumu',
+        labelKey: 'nav.accountStatus',
         icon: 'manage_accounts',
         href: '/settings/account-status',
       },
-      { id: 'family', label: 'Aile Merkezi', icon: 'family_restroom', href: '/settings/family' },
-      { id: 'privacy', label: 'Veri ve Gizlilik', icon: 'shield', href: '/settings/privacy' },
-      { id: 'messaging', label: 'Mesajlaşma İzinleri', icon: 'forum', href: '/settings/messaging' },
+      { id: 'privacy', labelKey: 'nav.privacy', icon: 'shield', href: '/settings/privacy' },
+      { id: 'messaging', labelKey: 'nav.messaging', icon: 'forum', href: '/settings/messaging' },
+      { id: 'bookmarks', labelKey: 'nav.bookmarks', icon: 'bookmark', href: '/settings/bookmarks' },
       {
         id: 'notifications',
-        label: 'Bildirimler',
+        labelKey: 'nav.notifications',
         icon: 'notifications',
         href: '/settings/notifications',
       },
     ],
   },
   {
-    id: 'billing',
-    title: 'Faturalandırma',
-    items: [
-      { id: 'nitro', label: 'Nitro', icon: 'workspace_premium', href: '/settings/nitro' },
-      { id: 'boost', label: 'Sunucu Takviyesi', icon: 'rocket_launch', href: '/settings/boost' },
-      {
-        id: 'subscriptions',
-        label: 'Abonelikler',
-        icon: 'card_membership',
-        href: '/settings/subscriptions',
-      },
-      { id: 'gifts', label: 'Hediye Envanteri', icon: 'card_giftcard', href: '/settings/gifts' },
-      { id: 'billing', label: 'Faturalandırma', icon: 'payments', href: '/settings/billing' },
-    ],
-  },
-  {
     id: 'experience',
-    title: 'Deneyimler',
+    titleKey: 'nav.experience',
     items: [
-      { id: 'voice', label: 'Ses ve Görüntü', icon: 'mic', href: '/settings/voice' },
-      { id: 'appearance', label: 'Görünüm', icon: 'palette', href: '/settings/appearance' },
+      { id: 'voice', labelKey: 'nav.voice', icon: 'mic', href: '/settings/voice' },
+      { id: 'appearance', labelKey: 'nav.appearance', icon: 'palette', href: '/settings/appearance' },
       {
         id: 'accessibility',
-        label: 'Erişilebilirlik',
+        labelKey: 'nav.accessibility',
         icon: 'accessibility_new',
         href: '/settings/accessibility',
       },
-      { id: 'system', label: 'Sistem', icon: 'dns', href: '/settings/system' },
-      { id: 'language', label: 'Dil ve Zaman', icon: 'language', href: '/settings/language' },
-    ],
-  },
-  {
-    id: 'apps',
-    title: 'Oyunlar ve Uygulamalar',
-    items: [
-      {
-        id: 'activity-privacy',
-        label: 'Etkinlik Gizliliği',
-        icon: 'sports_esports',
-        href: '/settings/activity-privacy',
-      },
-      { id: 'connections', label: 'Bağlı Uygulamalar', icon: 'link', href: '/settings/connections' },
+      { id: 'system', labelKey: 'nav.system', icon: 'dns', href: '/settings/system' },
+      { id: 'language', labelKey: 'nav.language', icon: 'language', href: '/settings/language' },
     ],
   },
   {
     id: 'developer',
-    title: 'Geliştirici',
-    items: [{ id: 'developer', label: 'Gelişmiş', icon: 'code', href: '/settings/developer' }],
+    titleKey: 'nav.developer',
+    items: [{ id: 'developer', labelKey: 'nav.advanced', icon: 'code', href: '/settings/developer' }],
   },
   {
     id: 'other',
     items: [
-      { id: 'logout', label: 'Çıkış Yap', icon: 'logout', variant: 'danger', action: 'logout' },
+      { id: 'logout', labelKey: 'nav.logout', icon: 'logout', variant: 'danger', action: 'logout' },
       {
         id: 'privacy-policy',
-        label: 'Gizlilik Politikası',
+        labelKey: 'nav.privacyPolicy',
         icon: 'policy',
         href: '/settings/privacy-policy',
       },
-      { id: 'terms', label: 'Hizmet Koşulları', icon: 'gavel', href: '/settings/terms' },
-      { id: 'kvkk', label: 'KVKK', icon: 'verified_user', href: '/legal/kvkk' },
-      { id: 'cookies', label: 'Çerezler', icon: 'cookie', href: '/legal/cookies' },
-      { id: 'community', label: 'Topluluk', icon: 'diversity_3', href: '/legal/community' },
+      { id: 'terms', labelKey: 'nav.terms', icon: 'gavel', href: '/settings/terms' },
+      { id: 'kvkk', labelKey: 'nav.kvkk', icon: 'verified_user', href: '/legal/kvkk' },
+      { id: 'cookies', labelKey: 'nav.cookies', icon: 'cookie', href: '/legal/cookies' },
     ],
   },
 ];
@@ -116,6 +87,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { logout } = useAuth();
+  const { t } = useI18n();
 
   const closeSettings = useCallback(() => {
     router.push(getSettingsReturnPath('/channels/@me'));
@@ -129,37 +101,38 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [closeSettings]);
 
-  const sections: SettingsNavSection[] = NAV.map((section) => ({
-    id: section.id,
-    title: section.title,
-    items: section.items.map((item) => {
-      const href = item.href;
-      const active = href ? pathname === href || pathname.startsWith(`${href}/`) : false;
-      return {
-        id: item.id,
-        label: item.label,
-        icon: item.icon,
-        variant: item.variant,
-        active,
-        onClick: () => {
-          if (item.action === 'logout') {
-            logout();
-            router.replace('/');
-            return;
-          }
-          if (href) router.push(href);
-        },
-      };
-    }),
-  }));
+  const sections: SettingsNavSection[] = useMemo(
+    () =>
+      NAV.map((section) => ({
+        id: section.id,
+        title: section.titleKey ? t(section.titleKey) : undefined,
+        items: section.items.map((item) => {
+          const href = item.href;
+          const active = href
+            ? pathname === href || pathname.startsWith(`${href}/`)
+            : false;
+          return {
+            id: item.id,
+            label: t(item.labelKey),
+            icon: item.icon,
+            variant: item.variant,
+            active,
+            onClick: () => {
+              if (item.action === 'logout') {
+                logout();
+                router.replace('/');
+                return;
+              }
+              if (href) router.push(href);
+            },
+          };
+        }),
+      })),
+    [t, pathname, logout, router],
+  );
 
   return (
-    <SettingsShell
-      title="Dracord Ayarları"
-      sections={sections}
-      onClose={closeSettings}
-      className="h-screen overflow-hidden"
-    >
+    <SettingsShell title="Dracord" onClose={closeSettings} sections={sections}>
       {children}
     </SettingsShell>
   );

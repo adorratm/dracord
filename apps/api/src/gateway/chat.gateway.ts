@@ -11,7 +11,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { SocketEvents, type VoiceStatePayload } from '@dracord/types';
+import { SocketEvents, type DmCallPayload, type VoiceStatePayload } from '@dracord/types';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { Server, Socket } from 'socket.io';
@@ -257,12 +257,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     let payload: VoiceStatePayload | null = null;
 
     if (body.channelId) {
-      payload = await this.voicePresence.join(
+      const result = await this.voicePresence.join(
         body.guildId,
         body.channelId,
         user.sub,
         { muted: body.muted, deafened: body.deafened },
       );
+      for (const left of result.left) {
+        this.server.emit(SocketEvents.VOICE_STATE, left);
+      }
+      payload = result.joined;
       void client.join(this.guildRoom(body.guildId));
     } else {
       const map = await this.voicePresence.listGuildVoice(body.guildId);
@@ -281,6 +285,15 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   broadcastVoiceState(payload: VoiceStatePayload) {
     this.server.emit(SocketEvents.VOICE_STATE, payload);
+  }
+
+  emitToUser(userId: string, payload: DmCallPayload) {
+    this.server.to(`user:${userId}`).emit(SocketEvents.DM_CALL, payload);
+  }
+
+  async emitDmCallToChannel(channelId: string, payload: DmCallPayload) {
+    // Üye listesine erişmeden user odalarına yayın için channel room da kullanılır
+    this.server.to(this.channelRoom(channelId)).emit(SocketEvents.DM_CALL, payload);
   }
 
   broadcastPresence(payload: {

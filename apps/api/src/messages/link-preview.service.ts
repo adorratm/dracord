@@ -25,6 +25,11 @@ export class LinkPreviewService {
   }
 
   async buildEmbeds(content: string): Promise<MessageEmbed[]> {
+    const trimmed = content.trim();
+    // Sticker / emoji-only — link preview üretme (URL kartı görselin altında tekrarlanır)
+    if (/^sticker:\S+$/u.test(trimmed) || /^\p{Extended_Pictographic}$/u.test(trimmed)) {
+      return [];
+    }
     const urls = this.extractUrls(content);
     if (!urls.length) return [];
     const embeds: MessageEmbed[] = [];

@@ -20,7 +20,10 @@ export default function ActivityPrivacyPage() {
           label="Etkinliği göster"
           description="Şu anki etkinliğin profilinde görünsün."
           checked={prefs.activity.displayActivity}
-          onChange={(v) => setSection('activity', { displayActivity: v })}
+          onChange={(v) => {
+            setSection('activity', { displayActivity: v });
+            setSection('privacy', { shareActivityStatus: v });
+          }}
         />
         <SettingsToggle
           label="Oyunları paylaş"

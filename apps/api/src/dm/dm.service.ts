@@ -222,6 +222,7 @@ export class DmService {
       categoryId: null,
       position: channel.position,
       topic: channel.topic,
+      dmChannelId: channel.dmChannelId,
       selfNotes: selfNotes || undefined,
       peerUserId: peer?.peerUserId,
       peerAvatarUrl: peer?.peerAvatarUrl,

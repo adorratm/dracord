@@ -40,6 +40,8 @@ export function VoiceSideChat({
     sendPoll,
     votePoll,
     error,
+    typingUsers,
+    notifyTyping,
   } = useChatChannel(effectiveId);
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -148,6 +150,7 @@ export function VoiceSideChat({
               prefs.accessibility.messageGrouping &&
               prefs.appearance.messageDensity !== 'compact'
             }
+            dense={prefs.appearance.messageDensity === 'compact'}
             hour24={prefs.language.hour24}
             locale={prefs.language.locale === 'en' ? 'en-US' : 'tr-TR'}
             hasMore={hasMore}
@@ -171,6 +174,13 @@ export function VoiceSideChat({
 
       {effectiveId && (
         <div className="relative shrink-0 z-[100] border-t border-surface-container-high">
+          {typingUsers.length > 0 && (
+            <p className="px-space-sm pt-1 font-label-sm text-outline truncate">
+              {typingUsers.length === 1
+                ? `${typingUsers[0]!.username} yazıyor…`
+                : `${typingUsers.length} kişi yazıyor…`}
+            </p>
+          )}
           <ChatInput
             key={effectiveId}
             channelName={active?.name}
@@ -182,6 +192,7 @@ export function VoiceSideChat({
               setHeadingText('');
               setHeadingOpen(true);
             }}
+            onTyping={notifyTyping}
             spellCheck={prefs.messaging.spellcheck}
             uploadStickerFile={async (file) => {
               const uploaded = await client.uploadFile(file, 'stickers');

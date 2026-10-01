@@ -10,7 +10,7 @@
     "build": "echo ok"
   },
   "dependencies": {
-    "expo": "~57.0.25",
+    "expo": "~57.0.26",
     "react": "19.3.0",
     "react-native": "0.87.1"
   },

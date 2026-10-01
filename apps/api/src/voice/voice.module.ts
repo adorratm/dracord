@@ -1,12 +1,20 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ChannelsModule } from '@/channels/channels.module';
+import { DmModule } from '@/dm/dm.module';
 import { ChatGatewayModule } from '@/gateway/chat-gateway.module';
+import { GuildsModule } from '@/guilds/guilds.module';
 import { VoicePresenceModule } from './voice-presence.module';
 import { VoiceController } from './voice.controller';
 import { VoiceService } from './voice.service';
 
 @Module({
-  imports: [ChannelsModule, VoicePresenceModule, forwardRef(() => ChatGatewayModule)],
+  imports: [
+    ChannelsModule,
+    GuildsModule,
+    VoicePresenceModule,
+    forwardRef(() => ChatGatewayModule),
+    forwardRef(() => DmModule),
+  ],
   controllers: [VoiceController],
   providers: [VoiceService],
   exports: [VoiceService],

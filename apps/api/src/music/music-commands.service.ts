@@ -129,7 +129,7 @@ export class MusicCommandsService {
 
     let state =
       (await this.state.get(ctx.guildId, ctx.voiceChannelId)) ??
-      this.state.emptyState(ctx.guildId, ctx.voiceChannelId, textChannelId);
+      (await this.state.emptyState(ctx.guildId, ctx.voiceChannelId, textChannelId));
     state.textChannelId = textChannelId;
 
     const tracks: MusicTrack[] = resolvedList.map((r) =>
@@ -247,7 +247,7 @@ export class MusicCommandsService {
     }
     let state =
       (await this.state.get(ctx.guildId, ctx.voiceChannelId)) ??
-      this.state.emptyState(ctx.guildId, ctx.voiceChannelId, textChannelId);
+      (await this.state.emptyState(ctx.guildId, ctx.voiceChannelId, textChannelId));
     state.volume = Math.round(n);
     state.textChannelId = textChannelId;
     await this.state.save(state);
