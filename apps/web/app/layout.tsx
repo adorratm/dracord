@@ -66,11 +66,21 @@ export const metadata: Metadata = {
     siteName: 'Dracord',
     title: 'Dracord — Topluluğun için yeni bir zindan',
     description: siteDescription,
+    images: [
+      {
+        url: '/og.png',
+        width: 1200,
+        height: 630,
+        alt: 'Dracord — Draco maskotu',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Dracord — Topluluğun için yeni bir zindan',
     description: siteDescription,
+    images: ['/og.png'],
   },
   robots: {
     index: true,
