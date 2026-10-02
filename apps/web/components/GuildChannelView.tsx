@@ -669,7 +669,7 @@ export function GuildChannelView({
         try {
           if (!voice.muted) await voice.toggleMute();
           if (!voice.deafened) await voice.toggleDeafen();
-          voice.join(afkId, guildId);
+          await voice.join(afkId, guildId);
           router.push(`/channels/${guildId}/${afkId}`);
         } finally {
           window.setTimeout(() => {
@@ -833,8 +833,13 @@ export function GuildChannelView({
   );
 
   const joinVoiceChannel = useCallback(
-    (ch: ChannelSummary, password?: string) => {
-      voice.join(ch.id, guildId, password ? { password } : undefined);
+    async (ch: ChannelSummary, password?: string) => {
+      try {
+        // iOS: mikrofon izni router.push öncesinde (jest içinde) alınmalı
+        await voice.join(ch.id, guildId, password ? { password } : undefined);
+      } catch {
+        return;
+      }
       setChannelsOpen(false);
       router.push(`/channels/${guildId}/${ch.id}`);
     },
@@ -1790,6 +1795,12 @@ export function GuildChannelView({
           </button>
         </div>
       )}
+      {voice.error && !voice.voiceChannelId && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
+          <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">mic_off</span>
+          <p className="font-body-sm flex-1 min-w-0">{voice.error}</p>
+        </div>
+      )}
       {voice.voiceOnOtherTab && voice.voiceChannelId && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
           <span className="material-symbols-outlined text-primary-container text-[20px]">tab</span>
@@ -1801,7 +1812,7 @@ export function GuildChannelView({
             className="h-8 px-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm shrink-0"
             onClick={() => {
               if (voice.voiceChannelId && voice.voiceGuildId) {
-                voice.join(voice.voiceChannelId, voice.voiceGuildId);
+                void voice.join(voice.voiceChannelId, voice.voiceGuildId);
               }
             }}
           >

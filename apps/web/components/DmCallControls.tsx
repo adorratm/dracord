@@ -71,12 +71,14 @@ export function DmCallControls({
     setBusy(true);
     setError(null);
     try {
+      // iOS: mikrofon iznini API await’inden ÖNCE al (jest zinciri)
+      await voice.prepareMicrophone();
       if (inGuildVoice || (voice.voiceChannelId && voice.voiceChannelId !== channelId)) {
         voice.leave();
         await new Promise((r) => window.setTimeout(r, 250));
       }
       await client.startDmCall(channelId, mode);
-      voice.join(channelId, DM_CALL_GUILD_ID);
+      await voice.join(channelId, DM_CALL_GUILD_ID);
       if (mode === 'video') {
         window.setTimeout(() => {
           void voice.toggleCamera().catch(() => undefined);
@@ -410,21 +412,27 @@ export function DmIncomingCallListener() {
             const ch = incoming.channelId;
             const mode = incoming.mode;
             setIncoming(null);
-            if (
-              voice.voiceChannelId &&
-              voice.voiceGuildId &&
-              voice.voiceGuildId !== DM_CALL_GUILD_ID
-            ) {
-              voice.leave();
-            }
-            window.setTimeout(() => {
-              voice.join(ch, DM_CALL_GUILD_ID);
-              if (mode === 'video') {
-                window.setTimeout(() => {
-                  void voice.toggleCamera().catch(() => undefined);
-                }, 1200);
+            void (async () => {
+              try {
+                // iOS: setTimeout jest’i kırar — izin burada, tıklamada
+                await voice.prepareMicrophone();
+                if (
+                  voice.voiceChannelId &&
+                  voice.voiceGuildId &&
+                  voice.voiceGuildId !== DM_CALL_GUILD_ID
+                ) {
+                  voice.leave();
+                }
+                await voice.join(ch, DM_CALL_GUILD_ID);
+                if (mode === 'video') {
+                  window.setTimeout(() => {
+                    void voice.toggleCamera().catch(() => undefined);
+                  }, 1200);
+                }
+              } catch {
+                // voice.error set
               }
-            }, 200);
+            })();
           }}
         >
           Kabul et

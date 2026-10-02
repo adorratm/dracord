@@ -101,7 +101,13 @@ interface VoiceSessionValue {
   setAudioBitrate: (kbps: VoiceBitrateKbps) => Promise<void>;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
-  join: (channelId: string, guildId: string, opts?: { password?: string }) => void;
+  join: (
+    channelId: string,
+    guildId: string,
+    opts?: { password?: string },
+  ) => Promise<void>;
+  /** iOS: tıklama jesti içinde mikrofon izni al (join öncesi / API await öncesi) */
+  prepareMicrophone: () => Promise<void>;
   leave: () => string | null;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
@@ -262,12 +268,25 @@ function screenShareErrorMessage(err: unknown): string {
   return msg || 'Ekran paylaşımı başarısız';
 }
 
+function isIOSWebKit(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // iPhone/iPad/iPod + iPadOS desktop UA
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
 function micPermissionErrorMessage(err: unknown): string {
   const name =
     err && typeof err === 'object' && 'name' in err
       ? String((err as { name?: string }).name)
       : '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    if (isIOSWebKit()) {
+      return 'Mikrofon izni gerekli. iOS’ta Chrome Safari motorunu kullanır: Ayarlar → Safari → Mikrofon’dan bu siteye izin ver, sonra kanala tekrar dokun. İzin penceresi açılırsa sayfa değişmeden “İzin Ver”e bas.';
+    }
     return 'Mikrofon izni gerekli. Tarayıcı ayarlarından Dracord için mikrofonu aç, sonra ses odasına tekrar gir.';
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
@@ -276,37 +295,49 @@ function micPermissionErrorMessage(err: unknown): string {
   if (name === 'NotReadableError' || name === 'TrackStartError') {
     return 'Mikrofon başka bir uygulama tarafından kullanılıyor olabilir.';
   }
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    return 'Mikrofon yalnızca HTTPS (veya localhost) üzerinde çalışır.';
+  }
   return err instanceof Error ? err.message : 'Mikrofon izni alınamadı';
 }
 
-/** Ses odasına girmeden önce mikrofon izni — reddedilirse işlem devam etmesin */
+/**
+ * Mikrofon izni — iOS WebKit’te mutlaka kullanıcı jesti (click/touch) içinde çağrılmalı.
+ * Navigasyon / await arkasından çağrılırsa izin penceresi anında kapanır.
+ */
 async function ensureMicrophonePermission(): Promise<void> {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('Bu tarayıcı mikrofon erişimini desteklemiyor');
   }
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    throw Object.assign(new Error('Güvenli bağlam gerekli'), { name: 'NotAllowedError' });
+  }
 
-  try {
-    const status = await navigator.permissions?.query?.({
-      name: 'microphone' as PermissionName,
-    });
-    if (status?.state === 'denied') {
-      throw Object.assign(new Error('Mikrofon izni reddedildi'), {
-        name: 'NotAllowedError',
+  // iOS’ta Permissions API mikrofon için güvenilir değil; doğrudan getUserMedia
+  if (!isIOSWebKit()) {
+    try {
+      const status = await navigator.permissions?.query?.({
+        name: 'microphone' as PermissionName,
       });
-    }
-    if (status?.state === 'granted') return;
-  } catch (err) {
-    // permissions API yoksa / desteklenmiyorsa getUserMedia'ya düş
-    if (
-      err &&
-      typeof err === 'object' &&
-      'name' in err &&
-      (err as { name: string }).name === 'NotAllowedError'
-    ) {
-      throw err;
+      if (status?.state === 'denied') {
+        throw Object.assign(new Error('Mikrofon izni reddedildi'), {
+          name: 'NotAllowedError',
+        });
+      }
+      if (status?.state === 'granted') return;
+    } catch (err) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'name' in err &&
+        (err as { name: string }).name === 'NotAllowedError'
+      ) {
+        throw err;
+      }
     }
   }
 
+  // Basit constraint — iOS’ta karmaşık audio constraints prompt’u bozabiliyor
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: true,
     video: false,
@@ -1028,7 +1059,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        // Önce mikrofon izni — reddedilirse odaya hiç girme
+        // join() jest içinde izin aldı; restore gibi jestsiz yollar için güvenlik ağı
         try {
           await ensureMicrophonePermission();
         } catch (permErr) {
@@ -1202,10 +1233,28 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [user, voiceChannelId]);
 
+  const prepareMicrophone = useCallback(async () => {
+    setError(null);
+    try {
+      await ensureMicrophonePermission();
+    } catch (permErr) {
+      const msg = micPermissionErrorMessage(permErr);
+      setError(msg);
+      throw Object.assign(new Error(msg), {
+        name:
+          permErr && typeof permErr === 'object' && 'name' in permErr
+            ? String((permErr as { name?: string }).name)
+            : 'NotAllowedError',
+      });
+    }
+  }, []);
+
   const join = useCallback(
-    (channelId: string, guildId: string, opts?: { password?: string }) => {
+    async (channelId: string, guildId: string, opts?: { password?: string }) => {
       intentionalLeaveRef.current = false;
       voicePasswordRef.current = opts?.password;
+      // iOS WebKit: getUserMedia tıklama zincirinde olmalı; router.push / useEffect sonra prompt kapanır
+      await prepareMicrophone();
       saveActiveVoice({ guildId, channelId });
       setVoiceChannelId((prev) => {
         if (prev === channelId) return prev;
@@ -1215,7 +1264,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       // Aynı kanalda bile odak sekmesi liderliği alsın (çoklu sekme)
       claimVoiceLeadership(channelId, guildId);
     },
-    [claimVoiceLeadership],
+    [claimVoiceLeadership, prepareMicrophone],
   );
 
   const leave = useCallback(() => {
@@ -1695,6 +1744,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setParticipantVolume,
       getParticipantVolume,
       join,
+      prepareMicrophone,
       leave,
       toggleMute,
       toggleDeafen,
@@ -1739,6 +1789,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setParticipantVolume,
       getParticipantVolume,
       join,
+      prepareMicrophone,
       leave,
       toggleMute,
       toggleDeafen,
