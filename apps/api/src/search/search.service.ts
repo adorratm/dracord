@@ -48,6 +48,36 @@ export class SearchService {
     }
   }
 
+  /** Platform admin: üyelik filtresi olmadan tüm indeksler */
+  async searchPlatformAdmin(
+    q: string,
+    opts: {
+      types?: string[];
+      guildId?: string;
+      channelId?: string;
+      limit?: number;
+    } = {},
+  ): Promise<SearchResponse> {
+    if (!this.es.client || !this.es.isReady()) {
+      throw new ServiceUnavailableException('Arama servisi kullanılamıyor');
+    }
+    const query = q.trim();
+    if (query.length < 1) {
+      return { query, hits: [] };
+    }
+    try {
+      return await this.runSearch('__platform_admin__', query, {
+        ...opts,
+        platformAdmin: true,
+      });
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) throw err;
+      throw new ServiceUnavailableException(
+        `Arama başarısız: ${(err as Error).message?.slice(0, 120) || 'bilinmeyen hata'}`,
+      );
+    }
+  }
+
   private async runSearch(
     userId: string,
     query: string,
@@ -56,6 +86,7 @@ export class SearchService {
       guildId?: string;
       channelId?: string;
       limit?: number;
+      platformAdmin?: boolean;
     },
   ): Promise<SearchResponse> {
     const client = this.es.client;
@@ -68,30 +99,37 @@ export class SearchService {
         t.toLowerCase(),
       ),
     );
+    const isAdmin = Boolean(opts.platformAdmin);
 
-    const memberships = await this.em.find(GuildMember, {
-      where: { userId },
-      select: { guildId: true },
-    });
+    const memberships = isAdmin
+      ? []
+      : await this.em.find(GuildMember, {
+          where: { userId },
+          select: { guildId: true },
+        });
     const memberGuildIds = memberships.map((m) => m.guildId);
 
-    const dmMemberships = await this.em.find(DMChannelMember, {
-      where: { userId },
-      select: { dmChannelId: true },
-    });
+    const dmMemberships = isAdmin
+      ? []
+      : await this.em.find(DMChannelMember, {
+          where: { userId },
+          select: { dmChannelId: true },
+        });
     const dmIds = dmMemberships.map((m) => m.dmChannelId);
 
-    const friendships = await this.em.find(Friendship, {
-      where: [
-        { userId, status: FriendshipStatus.ACCEPTED },
-        { friendId: userId, status: FriendshipStatus.ACCEPTED },
-      ],
-    });
+    const friendships = isAdmin
+      ? []
+      : await this.em.find(Friendship, {
+          where: [
+            { userId, status: FriendshipStatus.ACCEPTED },
+            { friendId: userId, status: FriendshipStatus.ACCEPTED },
+          ],
+        });
     const friendIds = friendships.map((f) => (f.userId === userId ? f.friendId : f.userId));
 
     // Users who share a guild
     let coMemberIds: string[] = [];
-    if (memberGuildIds.length) {
+    if (!isAdmin && memberGuildIds.length) {
       const co = await this.em.find(GuildMember, {
         where: { guildId: In(memberGuildIds) },
         select: { userId: true },
@@ -106,16 +144,20 @@ export class SearchService {
       const res = await client.search({
         index: IDX_GUILDS,
         size: limit,
-        query: {
-          bool: {
-            must: [{ multi_match: { query, fields: ['name'], fuzziness: 'AUTO' } }],
-            should: [
-              { term: { memberIds: userId } },
-              { term: { discoverable: true } },
-            ],
-            minimum_should_match: 1,
-          },
-        },
+        query: isAdmin
+          ? {
+              multi_match: { query, fields: ['name'], fuzziness: 'AUTO' },
+            }
+          : {
+              bool: {
+                must: [{ multi_match: { query, fields: ['name'], fuzziness: 'AUTO' } }],
+                should: [
+                  { term: { memberIds: userId } },
+                  { term: { discoverable: true } },
+                ],
+                minimum_should_match: 1,
+              },
+            },
       });
       for (const hit of res.hits.hits) {
         const src = hit._source as {
@@ -133,21 +175,19 @@ export class SearchService {
       }
     }
 
-    if (types.has('channels') && memberGuildIds.length) {
-      const guildFilter = opts.guildId
-        ? { term: { guildId: opts.guildId } }
-        : { terms: { guildId: memberGuildIds } };
+    if (types.has('channels') && (isAdmin || memberGuildIds.length)) {
+      const must: object[] = [
+        { multi_match: { query, fields: ['name'], fuzziness: 'AUTO' } },
+      ];
+      if (opts.guildId) {
+        must.push({ term: { guildId: opts.guildId } });
+      } else if (!isAdmin) {
+        must.push({ terms: { guildId: memberGuildIds } });
+      }
       const res = await client.search({
         index: IDX_CHANNELS,
         size: limit,
-        query: {
-          bool: {
-            must: [
-              { multi_match: { query, fields: ['name'], fuzziness: 'AUTO' } },
-              guildFilter,
-            ],
-          },
-        },
+        query: { bool: { must } },
       });
       for (const hit of res.hits.hits) {
         const src = hit._source as {
@@ -165,24 +205,23 @@ export class SearchService {
       }
     }
 
-    if (types.has('users') && visibleUserIds.length) {
+    if (types.has('users') && (isAdmin || visibleUserIds.length)) {
+      const must: object[] = [
+        {
+          multi_match: {
+            query,
+            fields: ['username', 'displayName'],
+            fuzziness: 'AUTO',
+          },
+        },
+      ];
+      if (!isAdmin) {
+        must.push({ ids: { values: visibleUserIds } });
+      }
       const res = await client.search({
         index: IDX_USERS,
         size: limit,
-        query: {
-          bool: {
-            must: [
-              {
-                multi_match: {
-                  query,
-                  fields: ['username', 'displayName'],
-                  fuzziness: 'AUTO',
-                },
-              },
-              { ids: { values: visibleUserIds } },
-            ],
-          },
-        },
+        query: { bool: { must } },
       });
       for (const hit of res.hits.hits) {
         const src = hit._source as {
@@ -206,6 +245,8 @@ export class SearchService {
         accessShould.push({ term: { channelId: opts.channelId } });
       } else if (opts.guildId) {
         accessShould.push({ term: { guildId: opts.guildId } });
+      } else if (isAdmin) {
+        // platform admin: tüm mesajlar
       } else {
         if (memberGuildIds.length) {
           accessShould.push({ terms: { guildId: memberGuildIds } });
@@ -214,9 +255,8 @@ export class SearchService {
           accessShould.push({ terms: { dmChannelId: dmIds } });
         }
       }
-      if (accessShould.length === 0) {
-        // no accessible channels
-      } else {
+      const canSearchMessages = isAdmin || accessShould.length > 0;
+      if (canSearchMessages) {
         const res = await client.search({
           index: IDX_MESSAGES,
           size: limit,
@@ -255,7 +295,9 @@ export class SearchService {
                   },
                 },
               ],
-              filter: [{ bool: { should: accessShould, minimum_should_match: 1 } }],
+              ...(accessShould.length
+                ? { filter: [{ bool: { should: accessShould, minimum_should_match: 1 } }] }
+                : {}),
             },
           },
           highlight: {
@@ -271,6 +313,7 @@ export class SearchService {
             authorName: string;
             content: string;
             createdAt: string;
+            threadRootId?: string | null;
           };
           const snippet =
             (hit.highlight?.content?.[0] as string | undefined) ??
@@ -286,6 +329,7 @@ export class SearchService {
             content: src.content,
             snippet,
             createdAt: src.createdAt,
+            threadRootId: src.threadRootId ?? null,
           });
         }
       }

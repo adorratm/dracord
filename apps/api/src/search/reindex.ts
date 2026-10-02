@@ -135,6 +135,7 @@ async function main() {
         authorName: m.author.displayName,
         content: m.content,
         attachmentNames: (m.attachments ?? []).map((a) => a.filename).join(' '),
+        threadRootId: m.threadRootId ?? null,
         createdAt: m.createdAt.toISOString(),
       },
     });

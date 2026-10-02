@@ -140,11 +140,18 @@ export function GlobalSearch() {
   const onSelectMessage = (hit: SearchHitMessage) => {
     setPanelOpen(false);
     setPanelQ('');
-    if (hit.guildId) {
-      router.push(`/channels/${hit.guildId}/${hit.channelId}?around=${hit.id}`);
-    } else {
-      router.push(`/channels/@me/${hit.channelId}?around=${hit.id}`);
+    const threadId = hit.threadRootId || undefined;
+    const aroundId = threadId ? threadId : hit.id;
+    const qs = new URLSearchParams();
+    qs.set('around', aroundId);
+    if (threadId) {
+      qs.set('thread', threadId);
+      if (hit.id !== threadId) qs.set('threadMessage', hit.id);
     }
+    const path = hit.guildId
+      ? `/channels/${hit.guildId}/${hit.channelId}`
+      : `/channels/@me/${hit.channelId}`;
+    router.push(`${path}?${qs.toString()}`);
   };
 
   return (

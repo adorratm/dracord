@@ -7,7 +7,7 @@ import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
-import { RoleBadge } from '@dracord/ui';
+import { RoleBadge, SearchableSelect } from '@dracord/ui';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
@@ -454,12 +454,13 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 </p>
                 <label className="flex flex-col gap-space-xs">
                   <span className="font-label-sm text-on-surface-variant">AFK ses kanalı</span>
-                  <select
-                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  <SearchableSelect
+                    fullWidth
                     value={detail?.afkChannelId ?? ''}
                     disabled={busy || !canManage}
-                    onChange={(e) => {
-                      const afkChannelId = e.target.value || null;
+                    placeholder="Kapalı"
+                    onChange={(v) => {
+                      const afkChannelId = v || null;
                       void (async () => {
                         setBusy(true);
                         try {
@@ -473,25 +474,22 @@ export default function GuildSettingsPage({ params }: PageProps) {
                         }
                       })();
                     }}
-                  >
-                    <option value="">Kapalı</option>
-                    {channels
-                      .filter((c) => c.type === 'VOICE')
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                  </select>
+                    options={[
+                      { value: '', label: 'Kapalı' },
+                      ...channels
+                        .filter((c) => c.type === 'VOICE')
+                        .map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                  />
                 </label>
                 <label className="flex flex-col gap-space-xs">
                   <span className="font-label-sm text-on-surface-variant">Zaman aşımı (dakika)</span>
-                  <select
-                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  <SearchableSelect
+                    fullWidth
                     value={String(detail?.afkTimeoutMinutes ?? 0)}
                     disabled={busy || !canManage || !detail?.afkChannelId}
-                    onChange={(e) => {
-                      const afkTimeoutMinutes = Number(e.target.value);
+                    onChange={(v) => {
+                      const afkTimeoutMinutes = Number(v);
                       void (async () => {
                         setBusy(true);
                         try {
@@ -505,13 +503,11 @@ export default function GuildSettingsPage({ params }: PageProps) {
                         }
                       })();
                     }}
-                  >
-                    {[0, 1, 5, 10, 15, 30, 60].map((m) => (
-                      <option key={m} value={m}>
-                        {m === 0 ? 'Kapalı' : `${m} dk`}
-                      </option>
-                    ))}
-                  </select>
+                    options={[0, 1, 5, 10, 15, 30, 60].map((m) => ({
+                      value: String(m),
+                      label: m === 0 ? 'Kapalı' : `${m} dk`,
+                    }))}
+                  />
                 </label>
               </div>
 
@@ -550,28 +546,18 @@ export default function GuildSettingsPage({ params }: PageProps) {
                       className="h-9 w-12 rounded cursor-pointer bg-transparent"
                       title="Renk"
                     />
-                    <select
+                    <SearchableSelect
                       value={newBadge}
-                      onChange={(e) => setNewBadge(e.target.value as RoleBadgeKey)}
-                      className="h-9 rounded-lg bg-surface-container-highest px-2 font-label-sm"
-                    >
-                      {BADGE_OPTIONS.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
+                      onChange={(v) => setNewBadge(v as RoleBadgeKey)}
+                      className="!min-w-[8rem]"
+                      options={BADGE_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+                    />
+                    <SearchableSelect
                       value={newBg}
-                      onChange={(e) => setNewBg(e.target.value as RoleProfileBgKey)}
-                      className="h-9 rounded-lg bg-surface-container-highest px-2 font-label-sm"
-                    >
-                      {BG_OPTIONS.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setNewBg(v as RoleProfileBgKey)}
+                      className="!min-w-[8rem]"
+                      options={BG_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+                    />
                     <button
                       type="button"
                       disabled={busy || !newRoleName.trim()}
@@ -607,32 +593,23 @@ export default function GuildSettingsPage({ params }: PageProps) {
                       />
                       {role.name !== '@everyone' && (
                         <>
-                          <select
+                          <SearchableSelect
                             value={role.badgeKey || 'none'}
                             disabled={busy}
-                            onChange={(e) => void patchRole(role, { badgeKey: e.target.value })}
-                            className="h-8 rounded-lg bg-surface-container-highest px-2 font-label-sm"
-                          >
-                            {BADGE_OPTIONS.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                          <select
+                            onChange={(v) => void patchRole(role, { badgeKey: v })}
+                            className="!min-w-[7.5rem]"
+                            options={BADGE_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+                          />
+                          <SearchableSelect
                             value={role.profileBgKey || 'none'}
                             disabled={busy}
-                            onChange={(e) =>
-                              void patchRole(role, { profileBgKey: e.target.value })
-                            }
-                            className="h-8 rounded-lg bg-surface-container-highest px-2 font-label-sm"
-                          >
-                            {BG_OPTIONS.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                Arka plan: {o.label}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(v) => void patchRole(role, { profileBgKey: v })}
+                            className="!min-w-[8rem]"
+                            options={BG_OPTIONS.map((o) => ({
+                              value: o.id,
+                              label: `Arka plan: ${o.label}`,
+                            }))}
+                          />
                           <input
                             type="color"
                             value={role.color}

@@ -28,9 +28,11 @@ import { useUserPreferences } from '@/lib/user-preferences';
 function DmChatInner({
   channelId,
   aroundMessageId,
+  openThreadId,
 }: {
   channelId: string;
   aroundMessageId?: string | null;
+  openThreadId?: string | null;
 }) {
   const router = useRouter();
   const { client, user } = useAuth();
@@ -130,6 +132,26 @@ function DmChatInner({
     setThreadDraft('');
     void client.markChannelRead(channelId).catch(() => undefined);
   }, [client, channelId]);
+
+  useEffect(() => {
+    if (!openThreadId) return;
+    let cancelled = false;
+    void client
+      .getMessageThread(openThreadId)
+      .then((page) => {
+        if (cancelled) return;
+        const items = page.items ?? [];
+        const root = items.find((m) => m.id === openThreadId) ?? items[0];
+        if (root) {
+          setThreadRoot(root);
+          setThreadMessages(items.length ? items : [root]);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [openThreadId, client, channelId]);
 
   useEffect(() => {
     if (!threadRoot) {
@@ -726,7 +748,12 @@ function DmChatInner({
 
 interface PageProps {
   params: Promise<{ channelId: string }>;
-  searchParams: Promise<{ around?: string; messageId?: string }>;
+  searchParams: Promise<{
+    around?: string;
+    messageId?: string;
+    thread?: string;
+    threadMessage?: string;
+  }>;
 }
 
 export default function DmChannelPage({ params, searchParams }: PageProps) {
@@ -738,6 +765,7 @@ export default function DmChannelPage({ params, searchParams }: PageProps) {
         <DmChatInner
           channelId={channelId}
           aroundMessageId={sp.messageId ?? sp.around ?? null}
+          openThreadId={sp.thread ?? null}
         />
       </Suspense>
     </RequireAuth>

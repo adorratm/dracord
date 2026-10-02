@@ -16,6 +16,7 @@ import {
   MemberList,
   MessageList,
   Modal,
+  SearchableSelect,
   UserProfileCard,
   VoiceStage,
   VolumeSlider,
@@ -53,6 +54,8 @@ interface GuildChannelViewProps {
   guildId: string;
   channelId: string;
   aroundMessageId?: string | null;
+  /** Arama / deep-link ile thread aç */
+  openThreadId?: string | null;
 }
 
 type ConfirmState =
@@ -65,6 +68,7 @@ export function GuildChannelView({
   guildId,
   channelId,
   aroundMessageId,
+  openThreadId,
 }: GuildChannelViewProps) {
   const router = useRouter();
   const { user, client, setUser } = useAuth();
@@ -525,6 +529,27 @@ export function GuildChannelView({
     setThreadDraft('');
   }, [channelId]);
 
+  // Arama deep-link: ?thread= kök id
+  useEffect(() => {
+    if (!openThreadId) return;
+    let cancelled = false;
+    void client
+      .getMessageThread(openThreadId)
+      .then((page) => {
+        if (cancelled) return;
+        const items = page.items ?? [];
+        const root = items.find((m) => m.id === openThreadId) ?? items[0];
+        if (root) {
+          setThreadRoot(root);
+          setThreadMessages(items.length ? items : [root]);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [openThreadId, client, channelId]);
+
   useEffect(() => {
     if (!threadRoot) {
       setThreadMessages([]);
@@ -571,17 +596,27 @@ export function GuildChannelView({
     const map: Record<string, VoiceMemberSummary[]> = {};
     for (const ch of channels) {
       if (ch.type !== 'VOICE') continue;
-      let members = ch.voiceMembers ?? [];
+      let members = [...(ch.voiceMembers ?? [])];
       // Sunucudan gelen hayalet self kaydını daha en başta ele
       if (user && voice.voiceChannelId !== ch.id) {
         members = members.filter((m) => m.id !== user.id);
       }
-      if (members.length) map[ch.id] = members;
+      // Anahtarı her zaman yaz — boş dizi API fallback’ini engeller (hayalet ikon)
+      map[ch.id] = members;
     }
     setVoiceMembersByChannel((prev) => {
       const next = { ...map };
       if (voice.voiceChannelId && prev[voice.voiceChannelId]) {
-        next[voice.voiceChannelId] = prev[voice.voiceChannelId]!;
+        const local = prev[voice.voiceChannelId]!;
+        const api = next[voice.voiceChannelId] ?? [];
+        const byId = new Map(api.map((m) => [m.id, m]));
+        for (const m of local) byId.set(m.id, m);
+        next[voice.voiceChannelId] = [...byId.values()];
+      }
+      if (user && !voice.voiceChannelId) {
+        for (const key of Object.keys(next)) {
+          next[key] = (next[key] ?? []).filter((m) => m.id !== user.id);
+        }
       }
       return next;
     });
@@ -754,11 +789,15 @@ export function GuildChannelView({
 
   const leaveVoiceAndMaybeNavigate = useCallback(() => {
     const leftId = voice.leave();
-    if (user && leftId) {
-      setVoiceMembersByChannel((prev) => ({
-        ...prev,
-        [leftId]: (prev[leftId] ?? []).filter((m) => m.id !== user.id),
-      }));
+    if (user) {
+      setVoiceMembersByChannel((prev) => {
+        const next: Record<string, VoiceMemberSummary[]> = {};
+        for (const [id, list] of Object.entries(prev)) {
+          next[id] = list.filter((m) => m.id !== user.id);
+        }
+        if (leftId && !(leftId in next)) next[leftId] = [];
+        return next;
+      });
     }
     if (isVoiceView || (leftId && channelId === leftId)) {
       const text =
@@ -2103,29 +2142,27 @@ export function GuildChannelView({
             )}
             {isForumView && (
               <div className="flex items-center gap-1 ml-2 min-w-0">
-                <select
+                <SearchableSelect
                   value={forumSort}
-                  onChange={(e) => setForumSort(e.target.value as ForumSort)}
-                  className="h-8 rounded-lg bg-surface-container-highest px-2 font-label-sm outline-none"
+                  onChange={(v) => setForumSort(v as ForumSort)}
                   aria-label="Sıralama"
-                >
-                  <option value="newest">En yeni</option>
-                  <option value="oldest">En eski</option>
-                  <option value="pinned">Sabitlenenler önce</option>
-                </select>
-                <select
+                  className="!min-w-[8rem] sm:!min-w-[9rem]"
+                  options={[
+                    { value: 'newest', label: 'En yeni' },
+                    { value: 'oldest', label: 'En eski' },
+                    { value: 'pinned', label: 'Sabitlenenler önce' },
+                  ]}
+                />
+                <SearchableSelect
                   value={forumTag ?? ''}
-                  onChange={(e) => setForumTag(e.target.value || null)}
-                  className="h-8 max-w-[9rem] rounded-lg bg-surface-container-highest px-2 font-label-sm outline-none"
+                  onChange={(v) => setForumTag(v || null)}
                   aria-label="Etiket"
-                >
-                  <option value="">Tüm etiketler</option>
-                  {forumTags.map((tag) => (
-                    <option key={tag} value={tag}>
-                      #{tag}
-                    </option>
-                  ))}
-                </select>
+                  className="!min-w-[7rem] sm:!min-w-[9rem] max-w-[10rem]"
+                  options={[
+                    { value: '', label: 'Tüm etiketler' },
+                    ...forumTags.map((tag) => ({ value: tag, label: `#${tag}` })),
+                  ]}
+                />
               </div>
             )}
             {prefs.developer.developerMode && (
@@ -2645,22 +2682,23 @@ export function GuildChannelView({
                           >
                             {role.name}
                           </span>
-                          <select
-                            className="h-8 rounded-md bg-surface-container-high px-space-xs font-label-sm"
+                          <SearchableSelect
+                            className="!min-w-[7.5rem]"
                             value={mode}
-                            onChange={(e) =>
+                            onChange={(v) =>
                               setOverwritePerm(
                                 role.id,
                                 'role',
                                 perm.id,
-                                e.target.value as 'inherit' | 'allow' | 'deny',
+                                v as 'inherit' | 'allow' | 'deny',
                               )
                             }
-                          >
-                            <option value="inherit">Varsayılan</option>
-                            <option value="allow">İzin ver</option>
-                            <option value="deny">Reddet</option>
-                          </select>
+                            options={[
+                              { value: 'inherit', label: 'Varsayılan' },
+                              { value: 'allow', label: 'İzin ver' },
+                              { value: 'deny', label: 'Reddet' },
+                            ]}
+                          />
                         </div>
                       );
                     })}
@@ -3084,21 +3122,21 @@ export function GuildChannelView({
         )}
         <label className="flex flex-col gap-space-xs mb-space-md">
           <span className="font-label-sm text-on-surface-variant">Hedef kanal</span>
-          <select
+          <SearchableSelect
+            fullWidth
             value={forwardChannelId}
-            onChange={(e) => setForwardChannelId(e.target.value)}
-            className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
-          >
-            <option value="">Kanal seç…</option>
-            {channels
-              .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.type === 'FORUM' ? 'forum:' : '#'}
-                  {c.name}
-                </option>
-              ))}
-          </select>
+            onChange={setForwardChannelId}
+            placeholder="Kanal seç…"
+            options={[
+              { value: '', label: 'Kanal seç…' },
+              ...channels
+                .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
+                .map((c) => ({
+                  value: c.id,
+                  label: `${c.type === 'FORUM' ? 'forum: ' : '#'}${c.name}`,
+                })),
+            ]}
+          />
         </label>
         <label className="flex flex-col gap-space-xs">
           <span className="font-label-sm text-on-surface-variant">Not (isteğe bağlı)</span>

@@ -73,6 +73,7 @@ export class SearchIndexerService implements OnModuleInit {
           authorName: message.author.displayName,
           content: message.content,
           attachmentNames: (message.attachments ?? []).map((a) => a.filename).join(' '),
+          threadRootId: message.threadRootId ?? null,
           createdAt: message.createdAt,
         },
         refresh: opts?.refresh ?? 'wait_for',
@@ -86,6 +87,15 @@ export class SearchIndexerService implements OnModuleInit {
     if (!this.es.client || !this.es.isReady()) return;
     try {
       await this.es.client.delete({ index: IDX_MESSAGES, id: messageId, refresh: false });
+    } catch {
+      // ignore missing
+    }
+  }
+
+  async deleteUser(userId: string) {
+    if (!this.es.client || !this.es.isReady()) return;
+    try {
+      await this.es.client.delete({ index: IDX_USERS, id: userId, refresh: false });
     } catch {
       // ignore missing
     }
@@ -205,6 +215,7 @@ export class SearchIndexerService implements OnModuleInit {
           },
           content: m.content,
           attachments: m.attachments ?? undefined,
+          threadRootId: m.threadRootId ?? null,
           createdAt: m.createdAt.toISOString(),
           updatedAt: m.updatedAt?.toISOString() ?? null,
         },

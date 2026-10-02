@@ -352,6 +352,8 @@ export interface SearchHitMessage {
   content: string;
   snippet: string;
   createdAt: string;
+  /** Thread içi mesajlarda kök mesaj id; kökte null */
+  threadRootId?: string | null;
 }
 
 export type SearchHit =

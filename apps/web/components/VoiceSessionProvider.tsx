@@ -1351,7 +1351,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       tabId: tabIdRef.current,
       at: Date.now(),
     });
-    if (channelId && isLeaderRef.current) {
+    // Lider olmasa bile presence temizle — aksi halde sol panelde hayalet avatar kalır.
+    if (channelId) {
       void (async () => {
         try {
           await client.leaveVoiceState(channelId);

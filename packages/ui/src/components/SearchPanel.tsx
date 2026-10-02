@@ -107,7 +107,12 @@ export function SearchPanel({
                 onClick={() => onSelectMessage(hit)}
               >
                 <div className="flex items-baseline justify-between gap-space-sm">
-                  <span className="font-label-md text-on-surface">{hit.authorName}</span>
+                  <span className="font-label-md text-on-surface">
+                    {hit.authorName}
+                    {hit.threadRootId ? (
+                      <span className="ml-2 font-label-sm text-primary">Thread</span>
+                    ) : null}
+                  </span>
                   <time className="font-label-sm text-outline">
                     {new Date(hit.createdAt).toLocaleString('tr-TR')}
                   </time>

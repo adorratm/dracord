@@ -98,6 +98,12 @@ export type { ModalProps } from './components/Modal';
 export { ConfirmDialog } from './components/ConfirmDialog';
 export type { ConfirmDialogProps } from './components/ConfirmDialog';
 
+export { SearchableSelect, SearchableSelectField } from './components/SearchableSelect';
+export type {
+  SearchableSelectProps,
+  SearchableSelectOption,
+} from './components/SearchableSelect';
+
 export { MessageAttachmentView, MediaLightbox } from './components/MessageAttachmentView';
 export type {
   MessageAttachmentViewProps,

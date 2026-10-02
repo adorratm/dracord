@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { SearchableSelect } from '@dracord/ui';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { VOICE_BITRATE_PRESETS, type VoiceBitrateKbps } from '@/lib/voice-settings';
 
@@ -57,18 +58,20 @@ function DeviceSelect({
         <span className="material-symbols-outlined text-[18px]">{icon}</span>
         {label}
       </span>
-      <select
+      <SearchableSelect
+        fullWidth
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-10 px-space-sm rounded-lg bg-surface-container-highest text-on-surface font-body-sm outline-none"
-      >
-        <option value="">Sistem varsayılanı</option>
-        {devices.map((d) => (
-          <option key={d.deviceId} value={d.deviceId}>
-            {d.label || `Aygıt (${d.deviceId.slice(0, 8)})`}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        aria-label={label}
+        placeholder="Sistem varsayılanı"
+        options={[
+          { value: '', label: 'Sistem varsayılanı' },
+          ...devices.map((d) => ({
+            value: d.deviceId,
+            label: d.label || `Aygıt (${d.deviceId.slice(0, 8)})`,
+          })),
+        ]}
+      />
     </label>
   );
 }
@@ -118,17 +121,16 @@ export default function VoiceSettingsPage() {
             <span className="material-symbols-outlined text-[18px]">high_quality</span>
             Yayın kalitesi
           </span>
-          <select
-            value={voice.audioSettings.audioBitrateKbps}
-            onChange={(e) => void voice.setAudioBitrate(Number(e.target.value) as VoiceBitrateKbps)}
-            className="h-10 px-space-sm rounded-lg bg-surface-container-highest text-on-surface font-body-sm outline-none"
-          >
-            {VOICE_BITRATE_PRESETS.map((kbps) => (
-              <option key={kbps} value={kbps}>
-                {kbps} kbps{kbps === 320 ? ' — En yüksek' : kbps === 32 ? ' — En düşük' : ''}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            fullWidth
+            value={String(voice.audioSettings.audioBitrateKbps)}
+            onChange={(v) => void voice.setAudioBitrate(Number(v) as VoiceBitrateKbps)}
+            aria-label="Yayın kalitesi"
+            options={VOICE_BITRATE_PRESETS.map((kbps) => ({
+              value: String(kbps),
+              label: `${kbps} kbps${kbps === 320 ? ' — En yüksek' : kbps === 32 ? ' — En düşük' : ''}`,
+            }))}
+          />
         </label>
         {voice.connected && (
           <p className="font-body-sm text-outline">

@@ -48,9 +48,13 @@ export function buildSidebarCategories(
   for (const [categoryId, list] of byCategory) {
     list.sort((a, b) => a.position - b.position);
     const items: SidebarChannelItem[] = list.map((ch) => {
+      const localMap = extras?.voiceMembersByChannel;
+      const hasLocal = Boolean(localMap && Object.prototype.hasOwnProperty.call(localMap, ch.id));
       let voiceMembers =
         ch.type === 'VOICE'
-          ? (extras?.voiceMembersByChannel?.[ch.id] ?? ch.voiceMembers ?? [])
+          ? hasLocal
+            ? (localMap![ch.id] ?? [])
+            : (ch.voiceMembers ?? [])
           : undefined;
       if (voiceMembers && extras?.selfUserId) {
         const inThis =

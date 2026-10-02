@@ -83,6 +83,7 @@ export class ElasticsearchService implements OnModuleInit, OnModuleDestroy {
               authorName: { type: 'text', fields: { keyword: { type: 'keyword' } } },
               content: { type: 'text', analyzer: 'standard' },
               attachmentNames: { type: 'text' },
+              threadRootId: { type: 'keyword' },
               createdAt: { type: 'date' },
             },
           },
@@ -135,6 +136,18 @@ export class ElasticsearchService implements OnModuleInit, OnModuleDestroy {
           index: spec.index,
           mappings: (spec.body as { mappings: Record<string, unknown> }).mappings,
         } as never);
+      } else if (spec.index === IDX_MESSAGES) {
+        // Mevcut indekse threadRootId ekle (yoksa)
+        try {
+          await this.client.indices.putMapping({
+            index: IDX_MESSAGES,
+            properties: {
+              threadRootId: { type: 'keyword' },
+            },
+          });
+        } catch {
+          // ignore
+        }
       }
     }
   }

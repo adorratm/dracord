@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 
 const nav = [
   { href: '/dashboard', label: 'Panel' },
+  { href: '/search', label: 'Arama' },
   { href: '/users', label: 'Kullanıcılar' },
   { href: '/guilds', label: 'Sunucular' },
   { href: '/queues', label: 'Kuyruklar' },
