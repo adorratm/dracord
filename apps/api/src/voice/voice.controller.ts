@@ -7,7 +7,7 @@ import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { DM_CALL_GUILD_ID } from '@dracord/types';
 import { ChannelsService } from '@/channels/channels.service';
 import { DmCallService } from '@/dm/dm-call.service';
-import { ChatGateway } from '@/gateway/chat.gateway';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { Channel } from '@/database/entities/channel.entity';
 import { EntityManager } from 'typeorm';
 import { VoiceTokenDto } from '@/voice/dto/voice-token.dto';
@@ -21,7 +21,7 @@ export class VoiceController {
     private readonly voiceService: VoiceService,
     private readonly presence: VoicePresenceService,
     private readonly channels: ChannelsService,
-    private readonly chatGateway: ChatGateway,
+    private readonly broadcast: SocketBroadcastService,
     private readonly em: EntityManager,
     private readonly dmCalls: DmCallService,
   ) {}
@@ -53,12 +53,12 @@ export class VoiceController {
       deafened: body.deafened,
     });
     for (const payload of left) {
-      this.chatGateway.broadcastVoiceState(payload);
+      this.broadcast.broadcastVoiceState(payload);
       if (payload.guildId === DM_CALL_GUILD_ID && payload.channelId) {
         await this.dmCalls.endCallIfEmpty(payload.channelId);
       }
     }
-    this.chatGateway.broadcastVoiceState(joined);
+    this.broadcast.broadcastVoiceState(joined);
     return joined;
   }
 
@@ -84,7 +84,7 @@ export class VoiceController {
     const guildId = await this.resolvePresenceGuildId(channelId);
     if (!guildId) return null;
     const payload = await this.presence.leave(guildId, channelId, user.sub);
-    if (payload) this.chatGateway.broadcastVoiceState(payload);
+    if (payload) this.broadcast.broadcastVoiceState(payload);
     if (guildId === DM_CALL_GUILD_ID) {
       await this.dmCalls.endCallIfEmpty(channelId);
     }
@@ -111,7 +111,7 @@ export class VoiceController {
     const summary = await this.channels.denyUserFromVoice(channelId, user.sub, body.userId);
     if (summary.guildId) {
       const payload = await this.presence.leave(summary.guildId, channelId, body.userId);
-      if (payload) this.chatGateway.broadcastVoiceState(payload);
+      if (payload) this.broadcast.broadcastVoiceState(payload);
     }
     return summary;
   }
@@ -135,7 +135,7 @@ export class VoiceController {
     if (!channel.guildId) return { ok: false };
     await this.voiceService.assertCanMoveMembers(channel.guildId, user.sub);
     const payload = await this.presence.leave(channel.guildId, channelId, body.userId);
-    if (payload) this.chatGateway.broadcastVoiceState(payload);
+    if (payload) this.broadcast.broadcastVoiceState(payload);
     return { ok: true };
   }
 

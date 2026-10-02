@@ -22,6 +22,7 @@ import { NotificationsRealtimeService } from '@/notifications/notifications-real
 import { PresenceService } from '@/presence/presence.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { WsJwtGuard } from './ws-jwt.guard';
+import { SocketBroadcastService } from './socket-broadcast.service';
 
 interface WsUser {
   sub: string;
@@ -58,11 +59,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly voicePresence: VoicePresenceService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly messagesRealtime: MessagesRealtimeService,
+    private readonly broadcast: SocketBroadcastService,
   ) {}
 
   afterInit(server: Server) {
     this.notificationsRealtime.setServer(server);
     this.messagesRealtime.setServer(server);
+    this.broadcast.setServer(server);
     const redisUrl = this.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
     try {
       const pubClient = new Redis(redisUrl, {
@@ -284,16 +287,15 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   broadcastVoiceState(payload: VoiceStatePayload) {
-    this.server.emit(SocketEvents.VOICE_STATE, payload);
+    this.broadcast.broadcastVoiceState(payload);
   }
 
   emitToUser(userId: string, payload: DmCallPayload) {
-    this.server.to(`user:${userId}`).emit(SocketEvents.DM_CALL, payload);
+    this.broadcast.emitDmCallToUser(userId, payload);
   }
 
   async emitDmCallToChannel(channelId: string, payload: DmCallPayload) {
-    // Üye listesine erişmeden user odalarına yayın için channel room da kullanılır
-    this.server.to(this.channelRoom(channelId)).emit(SocketEvents.DM_CALL, payload);
+    this.broadcast.emitDmCallToChannel(channelId, payload);
   }
 
   broadcastPresence(payload: {
@@ -301,7 +303,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     status: string;
     customStatus?: string | null;
   }) {
-    this.server.emit(SocketEvents.PRESENCE_UPDATE, payload);
+    this.broadcast.broadcastPresence(payload);
   }
 
   private channelRoom(channelId: string) {

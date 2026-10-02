@@ -1,6 +1,6 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { BotModule } from '@/bot/bot.module';
-import { ChatGatewayModule } from '@/gateway/chat-gateway.module';
+import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 import { SearchModule } from '@/search/search.module';
 import { VoicePresenceModule } from '@/voice/voice-presence.module';
 import { GuildsController, InvitesController } from './guilds.controller';
@@ -11,7 +11,7 @@ import { GuildsService } from './guilds.service';
     SearchModule,
     BotModule,
     VoicePresenceModule,
-    forwardRef(() => ChatGatewayModule),
+    SocketBroadcastModule,
   ],
   controllers: [GuildsController, InvitesController],
   providers: [GuildsService],

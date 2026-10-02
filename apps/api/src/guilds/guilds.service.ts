@@ -1,10 +1,8 @@
 import {
   BadRequestException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
 import { EntityManager, ILike } from 'typeorm';
 import type {
@@ -36,7 +34,7 @@ import { BotService } from '@/bot/bot.service';
 import { BUILTIN_COMMANDS } from '@/bot/bots.controller';
 import { SearchIndexerService } from '@/search/search-indexer.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
-import { ChatGateway } from '@/gateway/chat.gateway';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { SlashCommand } from '@/database/entities/slash-command.entity';
 
 export const PERM_MANAGE_GUILD = GuildPermissions.MANAGE_GUILD;
@@ -51,8 +49,7 @@ export class GuildsService {
     private readonly indexer: SearchIndexerService,
     private readonly bot: BotService,
     private readonly voicePresence: VoicePresenceService,
-    @Inject(forwardRef(() => ChatGateway))
-    private readonly chatGateway: ChatGateway,
+    private readonly broadcast: SocketBroadcastService,
   ) {}
 
   private async writeAudit(
@@ -520,7 +517,7 @@ export class GuildsService {
     await this.em.remove(GuildMember, member);
     const leaves = await this.voicePresence.leaveEverywhere(targetUserId);
     for (const p of leaves) {
-      if (p.guildId === guildId) this.chatGateway.broadcastVoiceState(p);
+      if (p.guildId === guildId) this.broadcast.broadcastVoiceState(p);
     }
     await this.writeAudit(guildId, actorId, 'MEMBER_KICK', targetUserId, 'user');
     return { ok: true };
@@ -561,7 +558,7 @@ export class GuildsService {
     }
     const leaves = await this.voicePresence.leaveEverywhere(targetUserId);
     for (const p of leaves) {
-      if (p.guildId === guildId) this.chatGateway.broadcastVoiceState(p);
+      if (p.guildId === guildId) this.broadcast.broadcastVoiceState(p);
     }
     await this.writeAudit(guildId, actorId, 'MEMBER_BAN', targetUserId, 'user', {
       reason: reason ?? null,

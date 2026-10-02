@@ -20,11 +20,13 @@ import { HealthModule } from '@/health/health.module';
 import { SearchModule } from '@/search/search.module';
 import { DmModule } from '@/dm/dm.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
+import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
+    SocketBroadcastModule,
     QueuesModule,
     BotModule,
     AuthModule,

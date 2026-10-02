@@ -10,7 +10,7 @@ import { EntityManager } from 'typeorm';
 import type { VoiceTokenResponse } from '@dracord/types';
 import { ChannelsService } from '@/channels/channels.service';
 import { GuildPermissions } from '@/common/permissions';
-import { ChatGateway } from '@/gateway/chat.gateway';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { Channel } from '@/database/entities/channel.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { User } from '@/database/entities/user.entity';
@@ -26,7 +26,7 @@ export class VoiceService {
     private readonly channels: ChannelsService,
     private readonly guilds: GuildsService,
     private readonly presence: VoicePresenceService,
-    private readonly chatGateway: ChatGateway,
+    private readonly broadcast: SocketBroadcastService,
   ) {}
 
   async createToken(
@@ -132,7 +132,7 @@ export class VoiceService {
         fromChannelId,
         targetUserId,
       );
-      if (leavePayload) this.chatGateway.broadcastVoiceState(leavePayload);
+      if (leavePayload) this.broadcast.broadcastVoiceState(leavePayload);
     }
 
     const joinResult = await this.presence.join(
@@ -141,15 +141,15 @@ export class VoiceService {
       targetUserId,
     );
     for (const left of joinResult.left) {
-      this.chatGateway.broadcastVoiceState(left);
+      this.broadcast.broadcastVoiceState(left);
     }
-    this.chatGateway.broadcastVoiceState({
+    this.broadcast.broadcastVoiceState({
       ...joinResult.joined,
       action: 'move',
       channelId: fromChannelId,
       targetChannelId,
     });
-    this.chatGateway.broadcastVoiceState(joinResult.joined);
+    this.broadcast.broadcastVoiceState(joinResult.joined);
 
     return { ok: true, targetChannelId };
   }

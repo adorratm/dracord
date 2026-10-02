@@ -5,6 +5,7 @@ import { NotificationsModule } from '@/notifications/notifications.module';
 import { PresenceModule } from '@/presence/presence.module';
 import { VoicePresenceModule } from '@/voice/voice-presence.module';
 import { ChatGateway } from './chat.gateway';
+import { SocketBroadcastModule } from './socket-broadcast.module';
 import { WsJwtGuard } from './ws-jwt.guard';
 
 @Module({
@@ -14,6 +15,7 @@ import { WsJwtGuard } from './ws-jwt.guard';
     PresenceModule,
     VoicePresenceModule,
     NotificationsModule,
+    SocketBroadcastModule,
   ],
   providers: [ChatGateway, WsJwtGuard],
   exports: [ChatGateway],

@@ -20,7 +20,7 @@ import { Friendship } from '@/database/entities/friendship.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType, FriendshipStatus, UserStatus } from '@/database/enums';
 import { toPublicUser } from '@/common/user.mapper';
-import { ChatGateway } from '@/gateway/chat.gateway';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 
 type CallMeta = {
@@ -39,7 +39,7 @@ export class DmCallService implements OnModuleDestroy {
     private readonly em: EntityManager,
     private readonly config: ConfigService,
     private readonly presence: VoicePresenceService,
-    private readonly chatGateway: ChatGateway,
+    private readonly broadcast: SocketBroadcastService,
   ) {
     const redisUrl = this.config.get<string>('REDIS_URL');
     if (redisUrl) {
@@ -198,7 +198,7 @@ export class DmCallService implements OnModuleDestroy {
       fromDisplayName: user.displayName,
     };
     for (const m of onlinePeers) {
-      this.chatGateway.emitToUser(m.userId, payload);
+      this.broadcast.emitDmCallToUser(m.userId, payload);
     }
     return { ok: true, mode: payload.mode };
   }
@@ -221,7 +221,7 @@ export class DmCallService implements OnModuleDestroy {
     };
     await this.writeMeta(meta);
     const actor = await this.em.findOneOrFail(User, { where: { id: actorId } });
-    this.chatGateway.emitToUser(targetUserId, {
+    this.broadcast.emitDmCallToUser(targetUserId, {
       action: 'invite',
       channelId,
       mode: meta.mode,
@@ -243,8 +243,8 @@ export class DmCallService implements OnModuleDestroy {
       channelId,
       targetUserId,
     );
-    if (payload) this.chatGateway.broadcastVoiceState(payload);
-    this.chatGateway.emitToUser(targetUserId, {
+    if (payload) this.broadcast.broadcastVoiceState(payload);
+    this.broadcast.emitDmCallToUser(targetUserId, {
       action: 'leave',
       channelId,
       mode: (await this.readMeta(channelId))?.mode ?? 'audio',
@@ -254,7 +254,7 @@ export class DmCallService implements OnModuleDestroy {
     const remaining = await this.presence.listChannel(DM_CALL_GUILD_ID, channelId);
     if (remaining.length === 0) {
       await this.clearMeta(channelId);
-      this.chatGateway.emitDmCallToChannel(channelId, {
+      this.broadcast.emitDmCallToChannel(channelId, {
         action: 'ended',
         channelId,
         mode: 'audio',
@@ -279,7 +279,7 @@ export class DmCallService implements OnModuleDestroy {
     };
     for (const m of members) {
       if (m.userId === userId) continue;
-      this.chatGateway.emitToUser(m.userId, payload);
+      this.broadcast.emitDmCallToUser(m.userId, payload);
     }
     return { ok: true };
   }
