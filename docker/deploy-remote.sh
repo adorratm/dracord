@@ -13,6 +13,16 @@ DEPLOY_PATH="${DRACORD_DEPLOY_PATH:-/opt/dracord}"
 BRANCH="${DRACORD_DEPLOY_BRANCH:-main}"
 REPLICAS="${DRACORD_REPLICAS:-2}"
 
+DEPLOY_LOCK="${DEPLOY_LOCK:-/var/lock/hetzner-site-deploy.lock}"
+mkdir -p "$(dirname "$DEPLOY_LOCK")"
+exec 9>"$DEPLOY_LOCK"
+echo "==> waiting for shared deploy lock ($DEPLOY_LOCK)"
+if ! flock -w 3600 9; then
+  echo "ERROR: another site deploy still holds $DEPLOY_LOCK" >&2
+  exit 1
+fi
+echo "==> acquired deploy lock"
+
 cd "$DEPLOY_PATH"
 
 if [[ ! -f .env ]]; then
