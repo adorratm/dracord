@@ -97,6 +97,14 @@ export class GuildsController {
     return this.guildsService.joinDiscoverable(guildId, user.sub);
   }
 
+  @Post(':guildId/leave')
+  leave(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.leaveGuild(guildId, user.sub);
+  }
+
   @Post(':guildId/members/:userId/kick')
   kick(
     @Param('guildId') guildId: string,

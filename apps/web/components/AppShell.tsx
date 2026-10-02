@@ -1,7 +1,13 @@
 'use client';
 
 import type { TitleBarNavId } from '@dracord/ui';
-import { Modal, ServerRail, TitleBar, type ServerRailGuild } from '@dracord/ui';
+import {
+  Modal,
+  ServerRail,
+  TitleBar,
+  type ServerRailGuild,
+  type ServerRailGuildAction,
+} from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -50,7 +56,7 @@ export function AppShell({
   onGuildsChanged,
 }: AppShellProps) {
   const router = useRouter();
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -62,6 +68,16 @@ export function AppShell({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serversOpen, setServersOpen] = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState<ServerRailGuild | null>(null);
+  const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
+  /** Ayrılma sonrası parent reload olana kadar rayı anında güncelle */
+  const [guildsOverride, setGuildsOverride] = useState<ServerRailGuild[] | null>(null);
+
+  useEffect(() => {
+    setGuildsOverride(null);
+  }, [guilds]);
+
+  const displayGuilds = guildsOverride ?? guilds;
 
   const openGuild = useCallback(
     async (guildId: string) => {
@@ -180,8 +196,89 @@ export function AppShell({
     }
   };
 
+  const createGuildInvite = useCallback(
+    async (guildId: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const invite = await client.createInvite(guildId);
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const url = `${origin}/invite/${invite.code}`;
+        setCreatedInviteUrl(url);
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          // panoya yazılamazsa modal yine gösterilir
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Davet oluşturulamadı');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [client],
+  );
+
+  const leaveGuild = useCallback(async () => {
+    if (!leaveTarget) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const leftId = leaveTarget.id;
+      await client.leaveGuild(leftId);
+      setLeaveTarget(null);
+      setGuildsOverride((prev) => (prev ?? guilds).filter((g) => g.id !== leftId));
+      onGuildsChanged?.();
+      if (activeGuildId === leftId) {
+        router.push('/channels/@me');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sunucudan ayrılınamadı');
+    } finally {
+      setBusy(false);
+    }
+  }, [leaveTarget, client, onGuildsChanged, activeGuildId, router, guilds]);
+
+  const getGuildActions = useCallback(
+    (guild: ServerRailGuild): ServerRailGuildAction[] => {
+      const isOwner = Boolean(user?.id && guild.ownerId && guild.ownerId === user.id);
+      const actions: ServerRailGuildAction[] = [
+        {
+          id: 'invite',
+          label: 'Davet oluştur',
+          onSelect: () => {
+            setServersOpen(false);
+            void createGuildInvite(guild.id);
+          },
+        },
+        {
+          id: 'settings',
+          label: 'Sunucu ayarları',
+          onSelect: () => {
+            setServersOpen(false);
+            router.push(`/guilds/${guild.id}/settings`);
+          },
+        },
+      ];
+      if (!isOwner) {
+        actions.push({
+          id: 'leave',
+          label: 'Sunucudan ayrıl',
+          danger: true,
+          onSelect: () => {
+            setServersOpen(false);
+            setError(null);
+            setLeaveTarget(guild);
+          },
+        });
+      }
+      return actions;
+    },
+    [user?.id, createGuildInvite, router],
+  );
+
   const serverRailProps = {
-    guilds,
+    guilds: displayGuilds,
     activeGuildId,
     homeActive,
     onHomeClick: () => {
@@ -199,6 +296,7 @@ export function AppShell({
       setServersOpen(false);
       setExploreOpen(true);
     },
+    getGuildActions,
   };
 
   return (
@@ -374,6 +472,78 @@ export function AppShell({
         >
           Davet kodu ile katıl
         </button>
+      </Modal>
+
+      <Modal
+        open={Boolean(createdInviteUrl)}
+        title="Davet linki"
+        onClose={() => setCreatedInviteUrl(null)}
+        footer={
+          <button
+            type="button"
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container"
+            onClick={() => {
+              if (createdInviteUrl) {
+                void navigator.clipboard.writeText(createdInviteUrl).catch(() => undefined);
+              }
+              setCreatedInviteUrl(null);
+            }}
+          >
+            Kopyala ve kapat
+          </button>
+        }
+      >
+        <p className="font-body-sm text-on-surface-variant mb-space-sm">
+          Link panoya kopyalandı (destekleniyorsa). Paylaşmak için:
+        </p>
+        <input
+          readOnly
+          value={createdInviteUrl ?? ''}
+          className="w-full h-10 px-space-sm rounded-lg bg-surface-container-highest text-on-surface outline-none"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      </Modal>
+
+      <Modal
+        open={Boolean(leaveTarget)}
+        title="Sunucudan ayrıl"
+        onClose={() => {
+          if (!busy) {
+            setLeaveTarget(null);
+            setError(null);
+          }
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              className="px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-50"
+              onClick={() => {
+                setLeaveTarget(null);
+                setError(null);
+              }}
+            >
+              Vazgeç
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className="px-space-md py-space-sm rounded-lg bg-error text-on-error hover:opacity-90 transition-opacity disabled:opacity-50"
+              onClick={() => void leaveGuild()}
+            >
+              Ayrıl
+            </button>
+          </>
+        }
+      >
+        <p className="font-body-md text-on-surface">
+          <strong>{leaveTarget?.name}</strong> sunucusundan ayrılmak istediğine emin misin?
+        </p>
+        <p className="mt-space-sm font-body-sm text-on-surface-variant">
+          Yeniden katılmak için davet gerekir.
+        </p>
+        {error && <p className="mt-space-sm text-error font-body-sm">{error}</p>}
       </Modal>
     </div>
   );

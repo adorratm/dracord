@@ -9,6 +9,7 @@ import type {
   RoleDto,
   RoleProfileBgKey,
 } from '@dracord/types';
+import { PlatformAdminService } from '@/auth/platform-admin.service';
 import { GuildPermissions } from '@/common/permissions';
 import { GuildsService } from '@/guilds/guilds.service';
 import { GuildMember } from '@/database/entities/guild-member.entity';
@@ -54,6 +55,7 @@ export class RolesService {
   constructor(
     private readonly em: EntityManager,
     private readonly guilds: GuildsService,
+    private readonly platformAdmin: PlatformAdminService,
   ) {}
 
   private toDto(r: Role): RoleDto {
@@ -201,6 +203,7 @@ export class RolesService {
     roleIds: string[],
   ): Promise<{ ok: true; roleIds: string[] }> {
     await this.guilds.requirePermission(guildId, actorId, GuildPermissions.MANAGE_ROLES);
+    await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
     const member = await this.em.findOne(GuildMember, {
       where: { guildId, userId: targetUserId },
       relations: { roles: true },
@@ -238,6 +241,7 @@ export class RolesService {
     roleId: string,
   ): Promise<{ ok: true }> {
     await this.guilds.requirePermission(guildId, actorId, GuildPermissions.MANAGE_ROLES);
+    await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
     const member = await this.em.findOne(GuildMember, {
       where: { guildId, userId: targetUserId },
     });
@@ -266,6 +270,7 @@ export class RolesService {
     roleId: string,
   ): Promise<{ ok: true }> {
     await this.guilds.requirePermission(guildId, actorId, GuildPermissions.MANAGE_ROLES);
+    await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
     const member = await this.em.findOne(GuildMember, {
       where: { guildId, userId: targetUserId },
     });

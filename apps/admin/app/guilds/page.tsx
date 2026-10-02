@@ -1,12 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import type { GuildSummary } from '@dracord/types';
 import { AdminShell } from '@/components/AdminShell';
-import { listGuilds } from '@/lib/api';
+import { listAllGuilds, type PlatformAdminGuildDetail } from '@/lib/api';
 
 export default function GuildsPage() {
-  const [guilds, setGuilds] = useState<GuildSummary[]>([]);
+  const [guilds, setGuilds] = useState<PlatformAdminGuildDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +17,7 @@ export default function GuildsPage() {
       setLoading(true);
       setError(null);
       try {
-        const list = await listGuilds();
+        const list = await listAllGuilds();
         if (!cancelled) setGuilds(list);
       } catch (err) {
         if (!cancelled) {
@@ -40,7 +40,9 @@ export default function GuildsPage() {
       <div className="space-y-6">
         <div>
           <h2 className="text-xl font-semibold text-dracula-fg">Sunucular</h2>
-          <p className="text-sm text-dracula-comment">Oturumunuzla erişilebilen sunucular.</p>
+          <p className="text-sm text-dracula-comment">
+            Platformdaki tüm sunucular — detay için seçin.
+          </p>
         </div>
         {error ? <p className="text-sm text-dracula-red">{error}</p> : null}
         {loading ? (
@@ -51,12 +53,20 @@ export default function GuildsPage() {
               <li className="px-4 py-6 text-center text-dracula-comment">Sunucu yok</li>
             ) : (
               guilds.map((g) => (
-                <li key={g.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="font-medium text-dracula-fg">{g.name}</p>
-                    <p className="text-sm text-dracula-comment">Sahip: {g.ownerId}</p>
-                  </div>
-                  <code className="text-xs text-dracula-cyan">{g.id}</code>
+                <li key={g.id}>
+                  <Link
+                    href={`/guilds/${g.id}`}
+                    className="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-dracula-current/40"
+                  >
+                    <div>
+                      <p className="font-medium text-dracula-fg">{g.name}</p>
+                      <p className="text-sm text-dracula-comment">
+                        {g.memberCount} üye · {g.channelCount} kanal · sahip:{' '}
+                        <code className="text-xs">{g.ownerId}</code>
+                      </p>
+                    </div>
+                    <code className="shrink-0 text-xs text-dracula-cyan">{g.id}</code>
+                  </Link>
                 </li>
               ))
             )}

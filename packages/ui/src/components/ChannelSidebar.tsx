@@ -19,6 +19,8 @@ export interface SidebarVoiceMember {
   deafened?: boolean;
   speaking?: boolean;
   isBot?: boolean;
+  /** MOVE_MEMBERS ile başka ses kanalına sürükle */
+  draggable?: boolean;
 }
 
 export interface SidebarCategory {
@@ -900,9 +902,19 @@ function ChannelRow({
           {voiceMembers.map((m) => (
             <li
               key={m.id}
+              draggable={Boolean(m.draggable)}
+              onDragStart={
+                m.draggable
+                  ? (e) => {
+                      e.dataTransfer.setData('application/x-dracord-user', m.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }
+                  : undefined
+              }
               className={cn(
                 'flex items-center gap-space-sm px-space-sm py-1 rounded-md text-on-surface-variant',
                 m.speaking && 'bg-primary-container/10',
+                m.draggable && 'cursor-grab active:cursor-grabbing',
               )}
             >
               <div

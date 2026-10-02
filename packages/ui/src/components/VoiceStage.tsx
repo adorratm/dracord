@@ -36,9 +36,12 @@ export interface VoiceStageProps {
   participants: VoiceParticipant[];
   /** Yerel katılımcı id — ses kaydırıcısı gösterilmez */
   localParticipantId?: string | null;
-  /** 0–100 kişi başı ses */
+  /** 0–100 kişi başı ses (mikrofon) */
   participantVolumes?: Record<string, number>;
   onParticipantVolumeChange?: (participantId: string, volume: number) => void;
+  /** 0–100 ekran paylaşımı / yayın sistemi sesi */
+  screenShareVolumes?: Record<string, number>;
+  onScreenShareVolumeChange?: (identity: string, volume: number) => void;
   onCameraVideoRef?: (participantId: string, el: HTMLVideoElement | null) => void;
   /** Ekran paylaşan katılımcıya tıklanınca o yayını odakla */
   onFocusScreenShare?: (identity: string) => void;
@@ -112,6 +115,8 @@ export function VoiceStage({
   localParticipantId,
   participantVolumes,
   onParticipantVolumeChange,
+  screenShareVolumes,
+  onScreenShareVolumeChange,
   onCameraVideoRef,
   onFocusScreenShare,
   rtcConnected = true,
@@ -349,9 +354,36 @@ export function VoiceStage({
                       autoPlay
                       muted={screenShare.isLocal}
                     />
-                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1]">
-                      {screenShare.displayName}
-                      {screenShare.isLocal ? ' (sen)' : ''}
+                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1] flex items-center gap-2 max-w-[min(100%-5rem,20rem)]">
+                      <span className="truncate">
+                        {screenShare.displayName}
+                        {screenShare.isLocal ? ' (sen)' : ''}
+                      </span>
+                      {!screenShare.isLocal &&
+                        screenShare.identity &&
+                        onScreenShareVolumeChange && (
+                          <div
+                            className="flex items-center gap-1.5 shrink-0 w-28"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <span
+                              className="material-symbols-outlined text-[16px] text-white/80"
+                              aria-hidden
+                            >
+                              volume_up
+                            </span>
+                            <VolumeSlider
+                              value={screenShareVolumes?.[screenShare.identity] ?? 100}
+                              onChange={(v) =>
+                                onScreenShareVolumeChange(screenShare.identity!, v)
+                              }
+                              size="sm"
+                              tone="neutral"
+                              aria-label="Yayın sesi"
+                            />
+                          </div>
+                        )}
                     </div>
                     <button
                       type="button"

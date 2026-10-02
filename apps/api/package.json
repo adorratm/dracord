@@ -11,8 +11,8 @@
     "lint": "echo ok"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1144.0",
-    "@aws-sdk/s3-request-presigner": "^3.1144.0",
+    "@aws-sdk/client-s3": "^3.1145.0",
+    "@aws-sdk/s3-request-presigner": "^3.1145.0",
     "@bull-board/api": "^9.10.2",
     "@bull-board/express": "^9.10.2",
     "@bull-board/ui": "^9.10.2",
@@ -56,7 +56,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.4",
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-jwt": "^4.0.1",
     "@types/web-push": "^3.6.4",

@@ -11,7 +11,11 @@ export { TitleBar } from './components/TitleBar';
 export type { TitleBarProps, TitleBarNavId, TitleBarWindowControls } from './components/TitleBar';
 
 export { ServerRail } from './components/ServerRail';
-export type { ServerRailProps, ServerRailGuild } from './components/ServerRail';
+export type {
+  ServerRailProps,
+  ServerRailGuild,
+  ServerRailGuildAction,
+} from './components/ServerRail';
 
 export { ChannelSidebar, UserPanel } from './components/ChannelSidebar';
 export type {

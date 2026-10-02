@@ -115,6 +115,7 @@ export function GuildChannelView({
   const { prefs } = useUserPreferences();
   const lastSpokeAtRef = useRef(Date.now());
   const afkMovingRef = useRef(false);
+  const afkMuteAppliedRef = useRef(false);
 
   const voiceChannel = channels.find((c) => c.id === voice.voiceChannelId);
   const inVoice = Boolean(voice.voiceChannelId);
@@ -646,7 +647,7 @@ export function GuildChannelView({
     };
   }, [client, user, channels, channelId, patchChannelUnread]);
 
-  // AFK kanalı: konuşma yoksa süre dolunca AFK’ya taşı + mute/deafen
+  // AFK kanalı: konuşma yoksa süre dolunca AFK’ya taşı (mute girişte uygulanır)
   useEffect(() => {
     const afkId = guild?.afkChannelId;
     const timeoutMin = guild?.afkTimeoutMinutes ?? 0;
@@ -667,8 +668,6 @@ export function GuildChannelView({
       afkMovingRef.current = true;
       void (async () => {
         try {
-          if (!voice.muted) await voice.toggleMute();
-          if (!voice.deafened) await voice.toggleDeafen();
           await voice.join(afkId, guildId);
           router.push(`/channels/${guildId}/${afkId}`);
         } finally {
@@ -689,6 +688,22 @@ export function GuildChannelView({
     router,
   ]);
 
+  // AFK kanalına her girişte (elle veya otomatik) mic + kulaklık mute
+  useEffect(() => {
+    const afkId = guild?.afkChannelId;
+    if (!afkId || !voice.connected || voice.voiceChannelId !== afkId) {
+      afkMuteAppliedRef.current = false;
+      return;
+    }
+    if (afkMuteAppliedRef.current) return;
+    afkMuteAppliedRef.current = true;
+    sessionStorage.setItem('dracord:was-afk', '1');
+    void (async () => {
+      if (!voice.muted) await voice.toggleMute();
+      if (!voice.deafened) await voice.toggleDeafen();
+    })();
+  }, [guild?.afkChannelId, voice.voiceChannelId, voice.connected, voice]);
+
   // AFK’dan başka kanala geçince mute/deafen kaldır
   useEffect(() => {
     const afkId = guild?.afkChannelId;
@@ -703,12 +718,6 @@ export function GuildChannelView({
       })();
     }
   }, [guild?.afkChannelId, voice.voiceChannelId, voice.connected, voice]);
-
-  useEffect(() => {
-    if (guild?.afkChannelId && voice.voiceChannelId === guild.afkChannelId) {
-      sessionStorage.setItem('dracord:was-afk', '1');
-    }
-  }, [guild?.afkChannelId, voice.voiceChannelId]);
 
   useEffect(() => {
     if (!voice.voiceChannelId) {
@@ -929,6 +938,7 @@ export function GuildChannelView({
               void moveToVoiceChannel(userId, channel.id);
             }
           : undefined,
+        canDragVoiceMembers: canMoveMembers,
         collapsedCategoryIds: collapsedCats,
         onToggleCategory: toggleCategoryCollapse,
         onReorderChannels: canManageChannels
@@ -1866,6 +1876,8 @@ export function GuildChannelView({
           localParticipantId={user?.id}
           participantVolumes={voice.participantVolumes}
           onParticipantVolumeChange={voice.setParticipantVolume}
+          screenShareVolumes={voice.screenShareVolumes}
+          onScreenShareVolumeChange={voice.setScreenShareVolume}
           onCameraVideoRef={voice.setCameraVideoElement}
           rtcConnected={voice.connected}
           muted={voice.muted}

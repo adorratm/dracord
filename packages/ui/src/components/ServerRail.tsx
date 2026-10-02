@@ -1,12 +1,22 @@
 'use client';
 
 import type { GuildSummary } from '@dracord/types';
+import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Logo } from './Logo';
 
 export interface ServerRailGuild extends Pick<GuildSummary, 'id' | 'name' | 'iconUrl'> {
   initials?: string;
   accentClassName?: string;
+  ownerId?: string;
+}
+
+export interface ServerRailGuildAction {
+  id: string;
+  label: string;
+  danger?: boolean;
+  onSelect: () => void;
 }
 
 export interface ServerRailProps {
@@ -17,6 +27,8 @@ export interface ServerRailProps {
   onGuildClick?: (guildId: string) => void;
   onAddClick?: () => void;
   onExploreClick?: () => void;
+  /** Sağ tık menü aksiyonları */
+  getGuildActions?: (guild: ServerRailGuild) => ServerRailGuildAction[];
   className?: string;
 }
 
@@ -61,6 +73,14 @@ function HoverPill({ show }: { show: boolean }) {
   );
 }
 
+type MenuState = {
+  x: number;
+  y: number;
+  guildId: string;
+  displayName: string;
+  actions: ServerRailGuildAction[];
+};
+
 export function ServerRail({
   guilds,
   activeGuildId,
@@ -69,8 +89,65 @@ export function ServerRail({
   onGuildClick,
   onAddClick,
   onExploreClick,
+  getGuildActions,
   className,
 }: ServerRailProps) {
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!menu) return;
+    let removeClose: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      const onPointerDown = (e: PointerEvent) => {
+        const node = menuRef.current;
+        if (node && e.target instanceof Node && node.contains(e.target)) return;
+        setMenu(null);
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setMenu(null);
+      };
+      document.addEventListener('pointerdown', onPointerDown, true);
+      document.addEventListener('keydown', onKey);
+      removeClose = () => {
+        document.removeEventListener('pointerdown', onPointerDown, true);
+        document.removeEventListener('keydown', onKey);
+      };
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      removeClose?.();
+    };
+  }, [menu]);
+
+  useEffect(() => {
+    if (!menu || !menuRef.current) return;
+    const el = menuRef.current;
+    const rect = el.getBoundingClientRect();
+    let x = menu.x;
+    let y = menu.y;
+    if (x + rect.width > window.innerWidth - 8) x = Math.max(8, window.innerWidth - rect.width - 8);
+    if (y + rect.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - rect.height - 8);
+    if (x !== menu.x || y !== menu.y) {
+      setMenu((prev) => (prev ? { ...prev, x, y } : prev));
+    }
+  }, [menu]);
+
+  const openMenu = (e: MouseEvent, guild: ServerRailGuild) => {
+    const actions = getGuildActions?.(guild) ?? [];
+    if (!actions.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      guildId: guild.id,
+      displayName: guild.name,
+      actions,
+    });
+  };
+
   return (
     <aside
       className={cn(
@@ -110,7 +187,9 @@ export function ServerRail({
               <button
                 type="button"
                 onClick={() => onGuildClick?.(guild.id)}
+                onContextMenu={(e) => openMenu(e, guild)}
                 title={guild.name}
+                aria-haspopup={getGuildActions ? 'menu' : undefined}
                 className={cn(
                   'relative z-[1] w-12 h-12 flex items-center justify-center font-headline-md text-headline-md overflow-hidden',
                   railBtnEase,
@@ -165,6 +244,42 @@ export function ServerRail({
           <span className="material-symbols-outlined">explore</span>
         </button>
       </div>
+
+      {menu &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            id={menuId}
+            ref={menuRef}
+            role="menu"
+            className="fixed z-[200] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
+            style={{ left: menu.x, top: menu.y }}
+          >
+            <p className="px-3 py-1.5 font-label-sm text-outline truncate border-b border-surface-container-highest mb-0.5">
+              {menu.displayName}
+            </p>
+            {menu.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                className={cn(
+                  'w-full text-left px-3 py-2 font-body-sm hover:bg-surface-bright transition-colors',
+                  action.danger ? 'text-error' : 'text-on-surface',
+                )}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenu(null);
+                  action.onSelect();
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </aside>
   );
 }

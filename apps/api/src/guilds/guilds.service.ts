@@ -30,6 +30,7 @@ import { Role } from '@/database/entities/role.entity';
 import { RolePermission } from '@/database/entities/role-permission.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
+import { PlatformAdminService } from '@/auth/platform-admin.service';
 import { BotService } from '@/bot/bot.service';
 import { BUILTIN_COMMANDS } from '@/bot/bots.controller';
 import { SearchIndexerService } from '@/search/search-indexer.service';
@@ -50,6 +51,7 @@ export class GuildsService {
     private readonly bot: BotService,
     private readonly voicePresence: VoicePresenceService,
     private readonly broadcast: SocketBroadcastService,
+    private readonly platformAdmin: PlatformAdminService,
   ) {}
 
   private async writeAudit(
@@ -78,7 +80,73 @@ export class GuildsService {
     if (ban) throw new ForbiddenException('Bu sunucudan yasaklandın');
   }
 
+  /** Discord: @everyone tüm üyelere örtük uygulanır. */
+  async getEveryoneRoleId(guildId: string): Promise<string | null> {
+    const everyone = await this.em.findOne(Role, {
+      where: { guildId, name: '@everyone' },
+    });
+    return everyone?.id ?? null;
+  }
+
+  /** Üyeye @everyone rolünü bağla (yoksa). */
+  async ensureEveryoneRole(guildId: string, guildMemberId: string): Promise<void> {
+    const everyoneId = await this.getEveryoneRoleId(guildId);
+    if (!everyoneId) return;
+    const existing = await this.em.findOne(GuildMemberRole, {
+      where: { guildMemberId, roleId: everyoneId },
+    });
+    if (existing) return;
+    await this.em.save(
+      GuildMemberRole,
+      this.em.create(GuildMemberRole, {
+        guildMemberId,
+        roleId: everyoneId,
+      }),
+    );
+  }
+
+  /** Üye rol id'leri + her zaman @everyone (link olmasa bile). */
+  async resolveMemberRoleIds(guildId: string, guildMemberId: string): Promise<string[]> {
+    const links = await this.em.find(GuildMemberRole, {
+      where: { guildMemberId },
+    });
+    const roleIds = new Set(links.map((l) => l.roleId));
+    const everyoneId = await this.getEveryoneRoleId(guildId);
+    if (everyoneId) roleIds.add(everyoneId);
+    return [...roleIds];
+  }
+
+  /** Eksik @everyone linklerini tüm sunucu üyelerine backfill et. */
+  async backfillEveryoneRoles(): Promise<number> {
+    const everyoneRoles = await this.em.find(Role, { where: { name: '@everyone' } });
+    let added = 0;
+    for (const role of everyoneRoles) {
+      const members = await this.em.find(GuildMember, {
+        where: { guildId: role.guildId },
+      });
+      for (const member of members) {
+        const existing = await this.em.findOne(GuildMemberRole, {
+          where: { guildMemberId: member.id, roleId: role.id },
+        });
+        if (existing) continue;
+        await this.em.save(
+          GuildMemberRole,
+          this.em.create(GuildMemberRole, {
+            guildMemberId: member.id,
+            roleId: role.id,
+          }),
+        );
+        added += 1;
+      }
+    }
+    return added;
+  }
+
   async listForUser(userId: string): Promise<GuildSummary[]> {
+    if (await this.platformAdmin.isPlatformAdmin(userId)) {
+      const all = await this.em.find(Guild, { order: { name: 'ASC' } });
+      return all.map((g) => this.toSummary(g));
+    }
     const memberships = await this.em.find(GuildMember, {
       where: { userId },
       relations: { guild: true },
@@ -335,10 +403,11 @@ export class GuildsService {
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     const owner = guild.ownerId === userId;
-    if (owner) {
+    const platformAdmin = await this.platformAdmin.isPlatformAdmin(userId);
+    if (owner || platformAdmin) {
       return {
         guildId,
-        owner: true,
+        owner: owner || platformAdmin,
         permissions: Object.values(GuildPermissions) as GuildPermissionsDto['permissions'],
       };
     }
@@ -354,11 +423,8 @@ export class GuildsService {
       where: { guildId, userId },
     });
     if (!member) return [];
-    const links = await this.em.find(GuildMemberRole, {
-      where: { guildMemberId: member.id },
-    });
-    if (!links.length) return [];
-    const roleIds = links.map((l) => l.roleId);
+    const roleIds = await this.resolveMemberRoleIds(guildId, member.id);
+    if (!roleIds.length) return [];
     const perms = await this.em
       .createQueryBuilder(RolePermission, 'rp')
       .where('rp.roleId IN (:...roleIds)', { roleIds })
@@ -415,12 +481,15 @@ export class GuildsService {
       where: { guildId: invite.guildId, userId },
     });
     if (!existing) {
-      await this.em.save(
+      const member = await this.em.save(
         GuildMember,
         this.em.create(GuildMember, { guildId: invite.guildId, userId }),
       );
+      await this.ensureEveryoneRole(invite.guildId, member.id);
       invite.uses += 1;
       await this.em.save(GuildInvite, invite);
+    } else {
+      await this.ensureEveryoneRole(invite.guildId, existing.id);
     }
     return this.toSummary(invite.guild);
   }
@@ -441,18 +510,9 @@ export class GuildsService {
         GuildMember,
         this.em.create(GuildMember, { guildId, userId }),
       );
-      const everyone = await this.em.findOne(Role, {
-        where: { guildId, name: '@everyone' },
-      });
-      if (everyone) {
-        await this.em.save(
-          GuildMemberRole,
-          this.em.create(GuildMemberRole, {
-            guildMemberId: member.id,
-            roleId: everyone.id,
-          }),
-        );
-      }
+      await this.ensureEveryoneRole(guildId, member.id);
+    } else {
+      await this.ensureEveryoneRole(guildId, existing.id);
     }
     return this.toSummary(guild);
   }
@@ -490,10 +550,33 @@ export class GuildsService {
   }
 
   async ensureMember(guildId: string, userId: string): Promise<void> {
+    if (await this.platformAdmin.isPlatformAdmin(userId)) return;
     const member = await this.em.findOne(GuildMember, {
       where: { guildId, userId },
     });
     if (!member) throw new ForbiddenException('Not a member of this guild');
+  }
+
+  /** Kullanıcının kendi isteğiyle sunucudan ayrılması. */
+  async leaveGuild(guildId: string, userId: string): Promise<{ ok: true }> {
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    if (guild.ownerId === userId) {
+      throw new BadRequestException(
+        'Sunucu sahibi ayrılamaz. Önce sahipliği devret veya sunucuyu sil.',
+      );
+    }
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId },
+    });
+    if (!member) throw new NotFoundException('Bu sunucunun üyesi değilsin');
+    await this.em.remove(GuildMember, member);
+    const leaves = await this.voicePresence.leaveEverywhere(userId);
+    for (const p of leaves) {
+      if (p.guildId === guildId) this.broadcast.broadcastVoiceState(p);
+    }
+    await this.writeAudit(guildId, userId, 'MEMBER_LEAVE', userId, 'user');
+    return { ok: true };
   }
 
   async kickMember(
@@ -502,6 +585,7 @@ export class GuildsService {
     targetUserId: string,
   ): Promise<{ ok: true }> {
     await this.requirePermission(guildId, actorId, GuildPermissions.KICK_MEMBERS);
+    await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     if (guild.ownerId === targetUserId) {
@@ -530,6 +614,7 @@ export class GuildsService {
     reason?: string | null,
   ): Promise<{ ok: true }> {
     await this.requirePermission(guildId, actorId, GuildPermissions.BAN_MEMBERS);
+    await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     if (guild.ownerId === targetUserId) {
@@ -608,6 +693,7 @@ export class GuildsService {
     minutes: number,
   ): Promise<{ ok: true; timeoutUntil: string | null }> {
     await this.requirePermission(guildId, actorId, GuildPermissions.MODERATE_MEMBERS);
+    await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     if (guild.ownerId === targetUserId) {
@@ -677,10 +763,9 @@ export class GuildsService {
   async requireOwner(guildId: string, userId: string): Promise<Guild> {
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
-    if (guild.ownerId !== userId) {
-      throw new ForbiddenException('Only the owner can manage this guild');
-    }
-    return guild;
+    if (guild.ownerId === userId) return guild;
+    if (await this.platformAdmin.isPlatformAdmin(userId)) return guild;
+    throw new ForbiddenException('Only the owner can manage this guild');
   }
 
   async requirePermission(
@@ -691,6 +776,7 @@ export class GuildsService {
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     if (guild.ownerId === userId) return guild;
+    if (await this.platformAdmin.isPlatformAdmin(userId)) return guild;
 
     const allowed = await this.memberHasPermission(guildId, userId, permission);
     if (!allowed) {
@@ -704,17 +790,16 @@ export class GuildsService {
     userId: string,
     permission: string,
   ): Promise<boolean> {
+    if (await this.platformAdmin.isPlatformAdmin(userId)) return true;
+
     const member = await this.em.findOne(GuildMember, {
       where: { guildId, userId },
     });
     if (!member) return false;
 
-    const links = await this.em.find(GuildMemberRole, {
-      where: { guildMemberId: member.id },
-    });
-    if (!links.length) return false;
+    const roleIds = await this.resolveMemberRoleIds(guildId, member.id);
+    if (!roleIds.length) return false;
 
-    const roleIds = links.map((l) => l.roleId);
     const perms = await this.em
       .createQueryBuilder(RolePermission, 'rp')
       .where('rp.roleId IN (:...roleIds)', { roleIds })

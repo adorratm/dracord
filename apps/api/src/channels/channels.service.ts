@@ -14,7 +14,6 @@ import { ChannelReadState } from '@/database/entities/channel-read-state.entity'
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
-import { GuildMemberRole } from '@/database/entities/guild-member-role.entity';
 import { ChannelType } from '@/database/enums';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
@@ -88,8 +87,14 @@ export class ChannelsService {
   async getChannel(channelId: string, userId: string): Promise<ChannelSummary> {
     const channel = await this.em.findOne(Channel, { where: { id: channelId } });
     if (!channel) throw new NotFoundException('Channel not found');
+    let canManage = false;
     if (channel.guildId) {
       await this.guilds.ensureMember(channel.guildId, userId);
+      canManage = await this.canManageChannels(channel.guildId, userId);
+      if (!canManage) {
+        const canView = await this.memberCanInChannel(channel, userId, 'VIEW_CHANNEL');
+        if (!canView) throw new ForbiddenException('Bu kanalı görme yetkin yok');
+      }
     } else if (channel.dmChannelId) {
       const member = await this.em.findOne(DMChannelMember, {
         where: { dmChannelId: channel.dmChannelId, userId },
@@ -100,9 +105,6 @@ export class ChannelsService {
     if (channel.type === ChannelType.VOICE && channel.guildId) {
       voiceMembers = await this.voicePresence.listChannel(channel.guildId, channel.id);
     }
-    const canManage = channel.guildId
-      ? await this.canManageChannels(channel.guildId, userId)
-      : false;
     return this.toSummary(channel, { voiceMembers, includeDenied: canManage });
   }
 
@@ -257,7 +259,12 @@ export class ChannelsService {
     }
     const canBypass =
       channel.guildId != null &&
-      (await this.canManageChannels(channel.guildId, userId));
+      ((await this.canManageChannels(channel.guildId, userId)) ||
+        (await this.guilds.memberHasPermission(
+          channel.guildId,
+          userId,
+          GuildPermissions.ADMINISTRATOR,
+        )));
     if (channel.locked && !canBypass) {
       if (!channel.passwordHash) {
         throw new ForbiddenException('Bu oda kilitli');
@@ -395,6 +402,7 @@ export class ChannelsService {
     const guild = await this.em.findOne(Guild, { where: { id: channel.guildId } });
     if (!guild) return false;
     if (guild.ownerId === userId) return true;
+    // memberHasPermission platform admin için true döner
     if (
       await this.guilds.memberHasPermission(
         channel.guildId,
@@ -409,10 +417,7 @@ export class ChannelsService {
       where: { guildId: channel.guildId, userId },
     });
     if (!member) return false;
-    const links = await this.em.find(GuildMemberRole, {
-      where: { guildMemberId: member.id },
-    });
-    const roleIds = links.map((l) => l.roleId);
+    const roleIds = await this.guilds.resolveMemberRoleIds(channel.guildId, member.id);
 
     const overwrites = channel.permissionOverwrites ?? [];
     const memberOw = overwrites.find((o) => o.type === 'member' && o.id === userId);

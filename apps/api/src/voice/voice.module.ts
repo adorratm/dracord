@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { AuthModule } from '@/auth/auth.module';
 import { ChannelsModule } from '@/channels/channels.module';
 import { DmModule } from '@/dm/dm.module';
 import { GuildsModule } from '@/guilds/guilds.module';
@@ -8,6 +9,7 @@ import { VoiceService } from './voice.service';
 
 @Module({
   imports: [
+    AuthModule,
     ChannelsModule,
     GuildsModule,
     VoicePresenceModule,

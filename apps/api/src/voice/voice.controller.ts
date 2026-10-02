@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { PlatformAdminService } from '@/auth/platform-admin.service';
 import {
   CurrentUser,
   type JwtPayloadUser,
@@ -24,6 +25,7 @@ export class VoiceController {
     private readonly broadcast: SocketBroadcastService,
     private readonly em: EntityManager,
     private readonly dmCalls: DmCallService,
+    private readonly platformAdmin: PlatformAdminService,
   ) {}
 
   private async resolvePresenceGuildId(channelId: string): Promise<string | null> {
@@ -66,13 +68,19 @@ export class VoiceController {
   async update(
     @CurrentUser() user: JwtPayloadUser,
     @Body()
-    body: { channelId: string; muted?: boolean; deafened?: boolean },
+    body: {
+      channelId: string;
+      muted?: boolean;
+      deafened?: boolean;
+      screenSharing?: boolean;
+    },
   ) {
     const guildId = await this.resolvePresenceGuildId(body.channelId);
     if (!guildId) return null;
     return this.presence.updateFlags(guildId, body.channelId, user.sub, {
       muted: body.muted,
       deafened: body.deafened,
+      screenSharing: body.screenSharing,
     });
   }
 
@@ -134,6 +142,7 @@ export class VoiceController {
     const channel = await this.channels.getChannel(channelId, user.sub);
     if (!channel.guildId) return { ok: false };
     await this.voiceService.assertCanMoveMembers(channel.guildId, user.sub);
+    await this.platformAdmin.assertNotPlatformAdminTarget(body.userId);
     const payload = await this.presence.leave(channel.guildId, channelId, body.userId);
     if (payload) this.broadcast.broadcastVoiceState(payload);
     return { ok: true };

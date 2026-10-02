@@ -85,6 +85,8 @@ export interface VoiceMemberSummary {
   deafened?: boolean;
   isBot?: boolean;
   speaking?: boolean;
+  /** Ekran paylaşımı aktif */
+  screenSharing?: boolean;
 }
 
 /** Müzik kuyruk parçası */

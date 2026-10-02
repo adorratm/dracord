@@ -7,7 +7,11 @@ import { getApiBaseUrl } from '@/lib/client';
 
 const links = [
   { href: '/users', title: 'Kullanıcılar', desc: 'Kayıtlı kullanıcıları ara ve görüntüle.' },
-  { href: '/guilds', title: 'Sunucular', desc: 'Hesabınıza bağlı sunucu listesi.' },
+  {
+    href: '/guilds',
+    title: 'Sunucular',
+    desc: 'Tüm sunucular, kanallar, mesajlar, ses ve ekran paylaşımları.',
+  },
   {
     href: '/queues',
     title: 'Kuyruklar',

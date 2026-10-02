@@ -115,7 +115,7 @@ export class VoicePresenceService implements OnModuleDestroy {
     guildId: string,
     channelId: string,
     userId: string,
-    flags: { muted?: boolean; deafened?: boolean },
+    flags: { muted?: boolean; deafened?: boolean; screenSharing?: boolean },
   ): Promise<VoiceStatePayload | null> {
     const members = await this.listChannel(guildId, channelId);
     const current = members.find((m) => m.id === userId);
@@ -124,6 +124,7 @@ export class VoicePresenceService implements OnModuleDestroy {
       ...current,
       muted: flags.muted ?? current.muted,
       deafened: flags.deafened ?? current.deafened,
+      screenSharing: flags.screenSharing ?? current.screenSharing,
     };
     await this.setMember(guildId, channelId, next);
     return { guildId, channelId, user: next, action: 'update' };

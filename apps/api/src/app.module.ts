@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from '@/admin/admin.module';
 import { AuthModule } from '@/auth/auth.module';
+import { PlatformAdminModule } from '@/platform-admin/platform-admin.module';
 import { BotModule } from '@/bot/bot.module';
 import { ChannelsModule } from '@/channels/channels.module';
 import { DatabaseModule } from '@/database/database.module';
@@ -40,6 +41,7 @@ import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
     VoiceModule,
     UploadsModule,
     AdminModule,
+    PlatformAdminModule,
     ChatGatewayModule,
     MediaModule,
     HealthModule,

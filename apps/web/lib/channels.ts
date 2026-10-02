@@ -17,6 +17,8 @@ export function buildSidebarCategories(
     onEditCategory?: (category: CategoryDto) => void;
     onDeleteCategory?: (category: CategoryDto) => void;
     onDropMember?: (userId: string, channel: ChannelSummary) => void;
+    /** Sol panel ses üyelerini sürükleyerek taşı */
+    canDragVoiceMembers?: boolean;
     collapsedCategoryIds?: Set<string>;
     onToggleCategory?: (categoryId: string) => void;
     onReorderChannels?: (categoryId: string | null, orderedIds: string[]) => void;
@@ -77,6 +79,10 @@ export function buildSidebarCategories(
           deafened: m.deafened,
           speaking: m.speaking,
           isBot: m.isBot,
+          draggable:
+            Boolean(extras?.canDragVoiceMembers) &&
+            m.id !== extras?.selfUserId &&
+            !m.isBot,
         })),
         onClick: () => onChannelClick(ch),
         onContextMenu: extras?.onEditChannel

@@ -413,6 +413,10 @@ export class DracordClient {
     return this.request(`/guilds/${guildId}/join`, { method: 'POST', body: '{}' });
   }
 
+  async leaveGuild(guildId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/leave`, { method: 'POST', body: '{}' });
+  }
+
   async getGuildChannels(guildId: string): Promise<ChannelSummary[]> {
     return this.request(`/guilds/${guildId}/channels`);
   }
@@ -908,7 +912,7 @@ export class DracordClient {
 
   async updateVoiceState(
     channelId: string,
-    flags: { muted?: boolean; deafened?: boolean },
+    flags: { muted?: boolean; deafened?: boolean; screenSharing?: boolean },
   ): Promise<VoiceStatePayload | null> {
     return this.request('/voice/state', {
       method: 'PATCH',
