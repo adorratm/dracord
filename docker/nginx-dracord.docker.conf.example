@@ -3,6 +3,8 @@
 # Install: bash docker/sync-dracord-nginx.sh https
 #
 # Do NOT put these domains on the TTEN default.conf server_name list.
+# SSL: TTEN alpine image may lack certbot's options-ssl-nginx.conf / ssl-dhparams —
+# use inline settings (same style as TTEN https.conf).
 
 map $http_upgrade $dracord_connection_upgrade {
   default upgrade;
@@ -54,8 +56,11 @@ server {
 
   ssl_certificate     /etc/letsencrypt/live/dracord.com.tr/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/dracord.com.tr/privkey.pem;
-  include /etc/letsencrypt/options-ssl-nginx.conf;
-  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_timeout 10m;
+  ssl_stapling off;
 
   client_max_body_size 50m;
 
@@ -81,8 +86,11 @@ server {
 
   ssl_certificate     /etc/letsencrypt/live/dracord.com.tr/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/dracord.com.tr/privkey.pem;
-  include /etc/letsencrypt/options-ssl-nginx.conf;
-  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_timeout 10m;
+  ssl_stapling off;
 
   client_max_body_size 50m;
 
@@ -108,8 +116,11 @@ server {
 
   ssl_certificate     /etc/letsencrypt/live/dracord.com.tr/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/dracord.com.tr/privkey.pem;
-  include /etc/letsencrypt/options-ssl-nginx.conf;
-  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_timeout 10m;
+  ssl_stapling off;
 
   client_max_body_size 20m;
 
@@ -134,8 +145,11 @@ server {
 
   ssl_certificate     /etc/letsencrypt/live/dracord.com.tr/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/dracord.com.tr/privkey.pem;
-  include /etc/letsencrypt/options-ssl-nginx.conf;
-  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_timeout 10m;
+  ssl_stapling off;
 
   location / {
     proxy_pass http://dracord_livekit;
