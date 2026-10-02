@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
+import { AdminSearchBar } from '@/components/AdminSearchBar';
 import { listAllGuilds, type PlatformAdminGuildDetail } from '@/lib/api';
 
 export default function GuildsPage() {
@@ -44,6 +45,10 @@ export default function GuildsPage() {
             Platformdaki tüm sunucular — detay için seçin.
           </p>
         </div>
+        <AdminSearchBar
+          placeholder="Elasticsearch: sunucu / kanal / mesaj ara…"
+          types={['guilds', 'channels', 'messages']}
+        />
         {error ? <p className="text-sm text-dracula-red">{error}</p> : null}
         {loading ? (
           <p className="text-dracula-comment">Yükleniyor…</p>

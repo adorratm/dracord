@@ -36,6 +36,8 @@ export interface PublicUser {
   isBot?: boolean;
   /** Yalnızca kendi profilinde: 2FA açık mı */
   twoFactorEnabled?: boolean;
+  /** Platform süper admin (ADMIN_EMAILS) */
+  isPlatformAdmin?: boolean;
   /** Sunucu üyeliğinde dolu — rol rozetleri */
   roles?: MemberRoleSummary[];
 }
@@ -310,6 +312,8 @@ export interface GuildPermissionsDto {
   guildId: string;
   owner: boolean;
   permissions: GuildPermission[];
+  /** Platform süper admin — tüm yetkiler */
+  platformAdmin?: boolean;
 }
 
 export interface MessagePage {

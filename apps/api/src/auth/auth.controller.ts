@@ -23,7 +23,11 @@ import type { GoogleProfile } from '@/auth/strategies/google.strategy';
 import { GoogleAuthGuard } from '@/auth/guards/google-auth.guard';
 import { GoogleOAuthRedirectFilter } from '@/auth/filters/google-oauth-redirect.filter';
 import { JwtRefreshAuthGuard } from '@/auth/guards/jwt-refresh-auth.guard';
-import { isAdminOAuthIntent, isDesktopOAuthIntent } from '@/auth/admin-emails';
+import {
+  isAdminEmail,
+  isAdminOAuthIntent,
+  isDesktopOAuthIntent,
+} from '@/auth/admin-emails';
 
 @Controller('auth')
 export class AuthController {
@@ -36,7 +40,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: { sub: string }) {
     const row = await this.authService.getUserById(user.sub);
-    return toPublicUser(row, { viewerId: user.sub });
+    return {
+      ...toPublicUser(row, { viewerId: user.sub }),
+      isPlatformAdmin: isAdminEmail(this.config, row.email),
+    };
   }
 
   /** Admin paneli oturum doğrulama — yalnızca ADMIN_EMAILS allowlist */
@@ -44,7 +51,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async adminMe(@CurrentUser() user: { sub: string }) {
     const row = await this.authService.assertAdminUser(user.sub);
-    return toPublicUser(row, { viewerId: user.sub });
+    return {
+      ...toPublicUser(row, { viewerId: user.sub }),
+      isPlatformAdmin: true,
+    };
   }
 
   @Post('dev-login')

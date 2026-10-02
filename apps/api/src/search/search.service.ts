@@ -141,16 +141,38 @@ export class SearchService {
     const hits: SearchHit[] = [];
 
     if (types.has('guilds')) {
+      const nameMatch = {
+        bool: {
+          should: [
+            {
+              multi_match: {
+                query,
+                fields: ['name'],
+                fuzziness: 'AUTO',
+                operator: 'or' as const,
+              },
+            },
+            { match_phrase_prefix: { name: { query, max_expansions: 50 } } },
+            {
+              wildcard: {
+                'name.keyword': {
+                  value: `*${query.toLowerCase().replace(/[*?\\]/g, '')}*`,
+                  case_insensitive: true,
+                },
+              },
+            },
+          ],
+          minimum_should_match: 1,
+        },
+      };
       const res = await client.search({
         index: IDX_GUILDS,
         size: limit,
         query: isAdmin
-          ? {
-              multi_match: { query, fields: ['name'], fuzziness: 'AUTO' },
-            }
+          ? nameMatch
           : {
               bool: {
-                must: [{ multi_match: { query, fields: ['name'], fuzziness: 'AUTO' } }],
+                must: [nameMatch],
                 should: [
                   { term: { memberIds: userId } },
                   { term: { discoverable: true } },
@@ -177,7 +199,30 @@ export class SearchService {
 
     if (types.has('channels') && (isAdmin || memberGuildIds.length)) {
       const must: object[] = [
-        { multi_match: { query, fields: ['name'], fuzziness: 'AUTO' } },
+        {
+          bool: {
+            should: [
+              {
+                multi_match: {
+                  query,
+                  fields: ['name'],
+                  fuzziness: 'AUTO',
+                  operator: 'or',
+                },
+              },
+              { match_phrase_prefix: { name: { query, max_expansions: 50 } } },
+              {
+                wildcard: {
+                  'name.keyword': {
+                    value: `*${query.toLowerCase().replace(/[*?\\]/g, '')}*`,
+                    case_insensitive: true,
+                  },
+                },
+              },
+            ],
+            minimum_should_match: 1,
+          },
+        },
       ];
       if (opts.guildId) {
         must.push({ term: { guildId: opts.guildId } });
@@ -208,10 +253,33 @@ export class SearchService {
     if (types.has('users') && (isAdmin || visibleUserIds.length)) {
       const must: object[] = [
         {
-          multi_match: {
-            query,
-            fields: ['username', 'displayName'],
-            fuzziness: 'AUTO',
+          bool: {
+            should: [
+              {
+                multi_match: {
+                  query,
+                  fields: ['username^2', 'displayName'],
+                  fuzziness: 'AUTO',
+                  operator: 'or',
+                },
+              },
+              {
+                multi_match: {
+                  query,
+                  fields: ['username', 'displayName'],
+                  type: 'phrase_prefix',
+                },
+              },
+              {
+                wildcard: {
+                  'username.keyword': {
+                    value: `*${query.toLowerCase().replace(/[*?\\]/g, '')}*`,
+                    case_insensitive: true,
+                  },
+                },
+              },
+            ],
+            minimum_should_match: 1,
           },
         },
       ];
@@ -257,6 +325,7 @@ export class SearchService {
       }
       const canSearchMessages = isAdmin || accessShould.length > 0;
       if (canSearchMessages) {
+        const escaped = query.replace(/([+\-=&|><!(){}\[\]^"~*?:\\/])/g, '\\$1');
         const res = await client.search({
           index: IDX_MESSAGES,
           size: limit,
@@ -267,27 +336,37 @@ export class SearchService {
                   bool: {
                     should: [
                       {
-                        match: {
-                          content: {
-                            query,
-                            operator: 'and',
-                            fuzziness: 'AUTO',
+                        multi_match: {
+                          query,
+                          fields: ['content^3', 'authorName^2', 'attachmentNames'],
+                          type: 'best_fields',
+                          operator: 'or',
+                          fuzziness: 'AUTO',
+                          prefix_length: 1,
+                        },
+                      },
+                      {
+                        multi_match: {
+                          query,
+                          fields: ['content', 'authorName', 'attachmentNames'],
+                          type: 'phrase_prefix',
+                          max_expansions: 50,
+                        },
+                      },
+                      {
+                        simple_query_string: {
+                          query: escaped,
+                          fields: ['content', 'authorName', 'attachmentNames'],
+                          default_operator: 'or',
+                          analyze_wildcard: true,
+                        },
+                      },
+                      {
+                        wildcard: {
+                          'authorName.keyword': {
+                            value: `*${escaped.toLowerCase()}*`,
+                            case_insensitive: true,
                           },
-                        },
-                      },
-                      {
-                        match_phrase_prefix: {
-                          content: { query, max_expansions: 50 },
-                        },
-                      },
-                      {
-                        match: {
-                          attachmentNames: { query, fuzziness: 'AUTO' },
-                        },
-                      },
-                      {
-                        match: {
-                          authorName: { query, fuzziness: 'AUTO' },
                         },
                       },
                     ],

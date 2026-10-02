@@ -15,6 +15,7 @@ import { Channel } from '@/database/entities/channel.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
+import { PlatformAdminService } from '@/auth/platform-admin.service';
 import { GuildsService } from '@/guilds/guilds.service';
 import { VoicePresenceService } from './voice-presence.service';
 
@@ -27,6 +28,7 @@ export class VoiceService {
     private readonly guilds: GuildsService,
     private readonly presence: VoicePresenceService,
     private readonly broadcast: SocketBroadcastService,
+    private readonly platformAdmin: PlatformAdminService,
   ) {}
 
   async createToken(
@@ -79,6 +81,7 @@ export class VoiceService {
     const guild = await this.em.findOne(Guild, { where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
     if (guild.ownerId === actorId) return;
+    if (await this.platformAdmin.isPlatformAdmin(actorId)) return;
     const allowed =
       (await this.guilds.memberHasPermission(
         guildId,
@@ -109,7 +112,11 @@ export class VoiceService {
     if (!target?.guildId || target.type !== ChannelType.VOICE) {
       throw new BadRequestException('Hedef bir ses kanalı olmalı');
     }
-    await this.assertCanMoveMembers(target.guildId, actorId);
+    const isSelf = actorId === targetUserId;
+    if (!isSelf) {
+      await this.platformAdmin.assertNotPlatformAdminTarget(targetUserId);
+      await this.assertCanMoveMembers(target.guildId, actorId);
+    }
 
     // Hedef kanal erişimi (engel listesi vs.)
     try {

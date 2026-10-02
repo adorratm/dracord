@@ -227,9 +227,21 @@ export function listGuildMembers(guildId: string): Promise<PublicUser[]> {
 
 export function listGuildMessages(
   guildId: string,
-  limit = 50,
-): Promise<PlatformAdminMessageRow[]> {
-  return adminFetch(`/platform-admin/guilds/${guildId}/messages?limit=${limit}`);
+  limit = 40,
+  before?: string | null,
+): Promise<{ items: PlatformAdminMessageRow[]; hasMore: boolean }> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (before) params.set('before', before);
+  return adminFetch(`/platform-admin/guilds/${guildId}/messages?${params.toString()}`);
+}
+
+export function reindexSearch(): Promise<Record<string, number>> {
+  return adminFetch('/platform-admin/reindex', { method: 'POST', json: {} });
+}
+
+export function searchHealth(): Promise<{ ok: boolean; detail: string }> {
+  return adminFetch('/platform-admin/search/health');
 }
 
 export function listGuildVoice(guildId: string): Promise<PlatformAdminVoiceRow[]> {

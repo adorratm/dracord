@@ -10,6 +10,8 @@ export function buildSidebarCategories(
     /** Kullanıcı gerçekten bu LiveKit oturumundaysa id; değilse kendisini listeden çıkar. */
     selfUserId?: string;
     selfVoiceChannelId?: string | null;
+    /** Platform admin id'leri — sürüklenemez */
+    platformAdminIds?: Set<string>;
     guildCategories?: CategoryDto[];
     onAddChannel?: (categoryId: string | null) => void;
     onEditChannel?: (channel: ChannelSummary) => void;
@@ -17,8 +19,10 @@ export function buildSidebarCategories(
     onEditCategory?: (category: CategoryDto) => void;
     onDeleteCategory?: (category: CategoryDto) => void;
     onDropMember?: (userId: string, channel: ChannelSummary) => void;
-    /** Sol panel ses üyelerini sürükleyerek taşı */
+    /** Diğer üyeleri sürükleyerek taşı (MOVE_MEMBERS / süperadmin) */
     canDragVoiceMembers?: boolean;
+    /** Kendi avatarını başka ses kanalına sürükle */
+    canDragSelf?: boolean;
     collapsedCategoryIds?: Set<string>;
     onToggleCategory?: (categoryId: string) => void;
     onReorderChannels?: (categoryId: string | null, orderedIds: string[]) => void;
@@ -75,19 +79,23 @@ export function buildSidebarCategories(
           (ch.type === 'TEXT' || ch.type === 'FORUM') && ch.id !== activeChannelId
             ? (ch.unreadCount ?? (ch.unread ? 1 : 0)) || undefined
             : undefined,
-        voiceMembers: voiceMembers?.map((m) => ({
-          id: m.id,
-          displayName: m.displayName,
-          avatarUrl: m.avatarUrl,
-          muted: m.muted,
-          deafened: m.deafened,
-          speaking: m.speaking,
-          isBot: m.isBot,
-          draggable:
-            Boolean(extras?.canDragVoiceMembers) &&
-            m.id !== extras?.selfUserId &&
-            !m.isBot,
-        })),
+        voiceMembers: voiceMembers?.map((m) => {
+          const isSelf = Boolean(extras?.selfUserId && m.id === extras.selfUserId);
+          const isSuperAdmin = Boolean(extras?.platformAdminIds?.has(m.id));
+          const draggable = isSelf
+            ? Boolean(extras?.canDragSelf) && !m.isBot
+            : Boolean(extras?.canDragVoiceMembers) && !m.isBot && !isSuperAdmin;
+          return {
+            id: m.id,
+            displayName: m.displayName,
+            avatarUrl: m.avatarUrl,
+            muted: m.muted,
+            deafened: m.deafened,
+            speaking: m.speaking,
+            isBot: m.isBot,
+            draggable,
+          };
+        }),
         onClick: () => onChannelClick(ch),
         onContextMenu: extras?.onEditChannel
           ? () => extras.onEditChannel?.(ch)

@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChannelSummary, PublicUser, RoleDto } from '@dracord/types';
 import { AdminShell } from '@/components/AdminShell';
+import { AdminSearchBar } from '@/components/AdminSearchBar';
 import {
   createChannel,
   createGuildRole,
@@ -60,6 +61,10 @@ export default function GuildDetailPage() {
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [members, setMembers] = useState<PublicUser[]>([]);
   const [messages, setMessages] = useState<PlatformAdminMessageRow[]>([]);
+  const [messagesHasMore, setMessagesHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
   const [roles, setRoles] = useState<RoleDto[]>([]);
   const [voice, setVoice] = useState<PlatformAdminVoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,18 +89,20 @@ export default function GuildDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [g, ch, mem, msg, vo, ro] = await Promise.all([
+      const [g, ch, mem, msgPage, vo, ro] = await Promise.all([
         getGuildDetail(guildId),
         listGuildChannels(guildId),
         listGuildMembers(guildId),
-        listGuildMessages(guildId, 100),
+        listGuildMessages(guildId, 40),
         listGuildVoice(guildId),
         listGuildRoles(guildId),
       ]);
       setGuild(g);
       setChannels(ch);
       setMembers(mem);
-      setMessages(msg);
+      setMessages(msgPage.items);
+      setMessagesHasMore(msgPage.hasMore);
+      stickToBottomRef.current = true;
       setVoice(vo);
       setRoles(ro);
       setEditName(g.name);
@@ -108,6 +115,38 @@ export default function GuildDetailPage() {
       setLoading(false);
     }
   }, [guildId]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!guildId || !messagesHasMore || loadingOlder || messages.length === 0) return;
+    const oldest = messages[0];
+    const el = messagesScrollRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    setLoadingOlder(true);
+    try {
+      const page = await listGuildMessages(guildId, 40, oldest.id);
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const merged = [...page.items.filter((m) => !seen.has(m.id)), ...prev];
+        return merged;
+      });
+      setMessagesHasMore(page.hasMore);
+      requestAnimationFrame(() => {
+        if (!el) return;
+        el.scrollTop = el.scrollHeight - prevHeight;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Eski mesajlar yüklenemedi');
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [guildId, messages, messagesHasMore, loadingOlder]);
+
+  useEffect(() => {
+    if (tab !== 'messages') return;
+    const el = messagesScrollRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, tab]);
 
   useEffect(() => {
     void reload();
@@ -185,6 +224,11 @@ export default function GuildDetailPage() {
 
         {!loading && guild ? (
           <>
+            <AdminSearchBar
+              guildId={guildId}
+              placeholder="Bu sunucuda Elasticsearch ara…"
+              types={['messages', 'channels', 'users']}
+            />
             <div className="flex flex-wrap gap-2 border-b border-dracula-current pb-2">
               {tabs.map((t) => (
                 <button
@@ -539,9 +583,31 @@ export default function GuildDetailPage() {
             {tab === 'messages' ? (
               <section className="space-y-3">
                 <p className="text-sm text-dracula-comment">
-                  Sticker, GIF, video, ek, embed ve anketler dahil son mesajlar.
+                  Aşağı = güncel. Yukarı kaydırınca geçmiş yüklenir (frontend sohbet akışı).
                 </p>
-                <ul className="divide-y divide-dracula-current rounded-lg border border-dracula-current">
+                <div
+                  ref={messagesScrollRef}
+                  className="max-h-[min(70vh,40rem)] overflow-y-auto rounded-lg border border-dracula-current"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    const distBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+                    stickToBottomRef.current = distBottom < 80;
+                    if (el.scrollTop < 80 && messagesHasMore && !loadingOlder) {
+                      void loadOlderMessages();
+                    }
+                  }}
+                >
+                  {loadingOlder ? (
+                    <p className="px-4 py-2 text-center text-xs text-dracula-comment">
+                      Geçmiş yükleniyor…
+                    </p>
+                  ) : null}
+                  {!messagesHasMore && messages.length > 0 ? (
+                    <p className="px-4 py-2 text-center text-xs text-dracula-comment">
+                      Başlangıç
+                    </p>
+                  ) : null}
+                  <ul className="divide-y divide-dracula-current">
                   {messages.length === 0 ? (
                     <li className="px-4 py-6 text-center text-dracula-comment">Mesaj yok</li>
                   ) : (
@@ -656,6 +722,7 @@ export default function GuildDetailPage() {
                     ))
                   )}
                 </ul>
+                </div>
               </section>
             ) : null}
           </>

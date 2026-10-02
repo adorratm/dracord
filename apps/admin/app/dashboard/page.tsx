@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { AdminShell } from '@/components/AdminShell';
+import { AdminSearchBar } from '@/components/AdminSearchBar';
 import { HealthStatus } from '@/components/HealthStatus';
 import { getApiBaseUrl } from '@/lib/client';
 
 const links = [
+  { href: '/search', title: 'Arama', desc: 'Elasticsearch — mesaj, kullanıcı, sunucu.' },
   { href: '/users', title: 'Kullanıcılar', desc: 'Kayıtlı kullanıcıları ara ve görüntüle.' },
   {
     href: '/guilds',
@@ -30,6 +32,9 @@ export default function DashboardPage() {
           <p className="mt-1 text-sm text-dracula-comment">
             Dracord yönetim özeti ve hızlı bağlantılar.
           </p>
+          <div className="mt-4">
+            <AdminSearchBar placeholder="Her yerde Elasticsearch ara…" />
+          </div>
         </section>
 
         <section className="space-y-3">

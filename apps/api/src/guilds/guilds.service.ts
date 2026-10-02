@@ -408,11 +408,12 @@ export class GuildsService {
       return {
         guildId,
         owner: owner || platformAdmin,
+        platformAdmin,
         permissions: Object.values(GuildPermissions) as GuildPermissionsDto['permissions'],
       };
     }
     const permissions = await this.collectMemberPermissions(guildId, userId);
-    return { guildId, owner: false, permissions };
+    return { guildId, owner: false, platformAdmin: false, permissions };
   }
 
   async collectMemberPermissions(
@@ -528,25 +529,27 @@ export class GuildsService {
       take: 250,
       order: { joinedAt: 'ASC' },
     });
-    return members
-      .filter((m) => m.user)
-      .map((m) => {
-        const pub = toPublicUser(m.user, { viewerId: userId });
-        const roles = (m.roles ?? [])
-          .map((mr) => mr.role)
-          .filter((r): r is NonNullable<typeof r> => Boolean(r))
-          .sort((a, b) => b.position - a.position)
-          .map((r) => ({
-            id: r.id,
-            name: r.name,
-            color: r.color,
-            position: r.position,
-            badgeKey: (r.badgeKey || 'none') as import('@dracord/types').RoleBadgeKey,
-            profileBgKey: (r.profileBgKey || 'none') as import('@dracord/types').RoleProfileBgKey,
-            hoist: Boolean(r.hoist),
-          }));
-        return { ...pub, roles };
-      });
+    const out: PublicUser[] = [];
+    for (const m of members) {
+      if (!m.user) continue;
+      const pub = toPublicUser(m.user, { viewerId: userId });
+      const roles = (m.roles ?? [])
+        .map((mr) => mr.role)
+        .filter((r): r is NonNullable<typeof r> => Boolean(r))
+        .sort((a, b) => b.position - a.position)
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          color: r.color,
+          position: r.position,
+          badgeKey: (r.badgeKey || 'none') as import('@dracord/types').RoleBadgeKey,
+          profileBgKey: (r.profileBgKey || 'none') as import('@dracord/types').RoleProfileBgKey,
+          hoist: Boolean(r.hoist),
+        }));
+      const isPlatformAdmin = await this.platformAdmin.isPlatformAdmin(m.user.id);
+      out.push({ ...pub, roles, isPlatformAdmin });
+    }
+    return out;
   }
 
   async ensureMember(guildId: string, userId: string): Promise<void> {

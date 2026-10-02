@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { SearchHit } from '@dracord/types';
 import { AdminShell } from '@/components/AdminShell';
-import { platformSearch } from '@/lib/api';
+import { platformSearch, reindexSearch, searchHealth } from '@/lib/api';
 
 const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(
   /\/$/,
@@ -17,6 +17,14 @@ export default function AdminSearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [types, setTypes] = useState('messages,guilds,channels,users');
+  const [health, setHealth] = useState<string>('…');
+  const [reindexing, setReindexing] = useState(false);
+
+  useEffect(() => {
+    void searchHealth()
+      .then((h) => setHealth(h.ok ? `OK (${h.detail})` : `DOWN (${h.detail})`))
+      .catch(() => setHealth('erişilemedi'));
+  }, []);
 
   useEffect(() => {
     if (q.trim().length < 1) {
@@ -44,11 +52,35 @@ export default function AdminSearchPage() {
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold text-dracula-fg">Elasticsearch arama</h2>
-          <p className="mt-1 text-sm text-dracula-comment">
-            Tüm sunucu, kanal, kullanıcı ve mesajlar (thread dahil).
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-dracula-fg">Elasticsearch arama</h2>
+            <p className="mt-1 text-sm text-dracula-comment">
+              Tüm sunucu, kanal, kullanıcı ve mesajlar (thread dahil). Durum: {health}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={reindexing}
+            className="rounded border border-dracula-purple px-3 py-1.5 text-sm text-dracula-purple hover:bg-dracula-purple/10 disabled:opacity-50"
+            onClick={() => {
+              if (!window.confirm('Tüm indeksler yeniden oluşturulsun mu?')) return;
+              setReindexing(true);
+              void reindexSearch()
+                .then((r) => {
+                  window.alert(`Reindex tamam: ${JSON.stringify(r)}`);
+                  void searchHealth().then((h) =>
+                    setHealth(h.ok ? `OK (${h.detail})` : `DOWN (${h.detail})`),
+                  );
+                })
+                .catch((err) =>
+                  setError(err instanceof Error ? err.message : 'Reindex başarısız'),
+                )
+                .finally(() => setReindexing(false));
+            }}
+          >
+            {reindexing ? 'Reindex…' : 'Reindex çalıştır'}
+          </button>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

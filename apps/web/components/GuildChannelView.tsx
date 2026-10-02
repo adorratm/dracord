@@ -412,36 +412,42 @@ export function GuildChannelView({
     [guildId],
   );
 
+  const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
+
   useEffect(() => {
     if (!guildId || !user) return;
     void client
       .getGuildPermissions(guildId)
       .then((p) => {
         const set = new Set(p.permissions);
-        setCanManageGuild(p.owner || set.has('MANAGE_GUILD') || set.has('ADMINISTRATOR'));
+        const god = Boolean(p.platformAdmin) || Boolean(user.isPlatformAdmin);
+        setCanManageGuild(
+          god || p.owner || set.has('MANAGE_GUILD') || set.has('ADMINISTRATOR'),
+        );
         setCanManageChannels(
-          p.owner || set.has('MANAGE_CHANNELS') || set.has('ADMINISTRATOR'),
+          god || p.owner || set.has('MANAGE_CHANNELS') || set.has('ADMINISTRATOR'),
         );
         setCanManageMessages(
-          p.owner || set.has('MANAGE_MESSAGES') || set.has('ADMINISTRATOR'),
+          god || p.owner || set.has('MANAGE_MESSAGES') || set.has('ADMINISTRATOR'),
         );
         setCanManageRoles(
-          p.owner || set.has('MANAGE_ROLES') || set.has('ADMINISTRATOR'),
+          god || p.owner || set.has('MANAGE_ROLES') || set.has('ADMINISTRATOR'),
         );
         setCanMoveMembers(
-          p.owner ||
+          god ||
+            p.owner ||
             set.has('MOVE_MEMBERS') ||
             set.has('MANAGE_CHANNELS') ||
             set.has('ADMINISTRATOR'),
         );
         setCanKickMembers(
-          p.owner || set.has('KICK_MEMBERS') || set.has('ADMINISTRATOR'),
+          god || p.owner || set.has('KICK_MEMBERS') || set.has('ADMINISTRATOR'),
         );
         setCanBanMembers(
-          p.owner || set.has('BAN_MEMBERS') || set.has('ADMINISTRATOR'),
+          god || p.owner || set.has('BAN_MEMBERS') || set.has('ADMINISTRATOR'),
         );
         setCanModerateMembers(
-          p.owner || set.has('MODERATE_MEMBERS') || set.has('ADMINISTRATOR'),
+          god || p.owner || set.has('MODERATE_MEMBERS') || set.has('ADMINISTRATOR'),
         );
       })
       .catch(() => {
@@ -925,18 +931,53 @@ export function GuildChannelView({
     [voice.voiceChannelId, isVoiceView, channelId, canMoveMembers, client, reload],
   );
 
+  const platformAdminIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of guildMembers) {
+      if (m.isPlatformAdmin) ids.add(m.id);
+    }
+    if (user?.isPlatformAdmin && user.id) ids.add(user.id);
+    return ids;
+  }, [guildMembers, user?.id, user?.isPlatformAdmin]);
+
   const moveToVoiceChannel = useCallback(
     async (targetUserId: string, targetChannelId: string) => {
-      if (!canMoveMembers) return;
+      const isSelf = Boolean(user?.id && targetUserId === user.id);
+      if (!isSelf && !canMoveMembers) return;
+      if (!isSelf && platformAdminIds.has(targetUserId)) {
+        setDmError('Süper admin başka kanala taşınamaz');
+        return;
+      }
       try {
-        await client.moveVoiceUser(targetUserId, targetChannelId);
+        if (isSelf) {
+          const ch = channels.find((c) => c.id === targetChannelId);
+          if (!ch || ch.type !== 'VOICE') return;
+          if (ch.locked && ch.hasPassword && !canManageChannels && !isPlatformAdmin) {
+            setVoicePasswordDraft('');
+            setVoicePasswordPrompt({ channel: ch });
+            return;
+          }
+          await joinVoiceChannel(ch);
+        } else {
+          await client.moveVoiceUser(targetUserId, targetChannelId);
+          await reload();
+        }
         setMoveTargetUser(null);
-        await reload();
       } catch (err) {
         setDmError(err instanceof Error ? err.message : 'Taşıma başarısız');
       }
     },
-    [canMoveMembers, client, reload],
+    [
+      canMoveMembers,
+      canManageChannels,
+      isPlatformAdmin,
+      platformAdminIds,
+      user?.id,
+      channels,
+      client,
+      reload,
+      joinVoiceChannel,
+    ],
   );
 
   const categories = useMemo(
@@ -945,6 +986,7 @@ export function GuildChannelView({
         voiceMembersByChannel,
         selfUserId: user?.id,
         selfVoiceChannelId: voice.voiceChannelId,
+        platformAdminIds,
         guildCategories,
         onAddChannel: canManageChannels
           ? (categoryId) => {
@@ -971,13 +1013,14 @@ export function GuildChannelView({
         onDeleteCategory: canManageChannels
           ? (cat) => setConfirm({ kind: 'category', category: cat })
           : undefined,
-        onDropMember: canMoveMembers
-          ? (userId, channel) => {
-              if (channel.type !== 'VOICE') return;
-              void moveToVoiceChannel(userId, channel.id);
-            }
-          : undefined,
+        onDropMember: (userId, channel) => {
+          if (channel.type !== 'VOICE') return;
+          const isSelf = Boolean(user?.id && userId === user.id);
+          if (!isSelf && !canMoveMembers) return;
+          void moveToVoiceChannel(userId, channel.id);
+        },
         canDragVoiceMembers: canMoveMembers,
+        canDragSelf: Boolean(voice.voiceChannelId),
         collapsedCategoryIds: collapsedCats,
         onToggleCategory: toggleCategoryCollapse,
         onReorderChannels: canManageChannels
@@ -1008,6 +1051,7 @@ export function GuildChannelView({
       openEditChannel,
       user?.id,
       voice.voiceChannelId,
+      platformAdminIds,
       guildCategories,
       canManageChannels,
       canMoveMembers,
@@ -1425,7 +1469,9 @@ export function GuildChannelView({
               ? `Engelli · ${presenceLabelTr(liveMemberStatus(m.id, m.status), m.customStatus)}`
               : presenceLabelTr(liveMemberStatus(m.id, m.status), m.customStatus),
             onClick: () => setProfileUser(m),
-            draggable: canMoveMembers && !isSelf,
+            draggable:
+              (isSelf && inVoice) ||
+              (canMoveMembers && !isSelf && !m.isPlatformAdmin && !isBot),
             contextActions: actions.length ? actions : undefined,
           };
         }),

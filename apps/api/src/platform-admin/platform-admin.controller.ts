@@ -13,7 +13,9 @@ import {
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { PlatformAdminGuard } from '@/platform-admin/platform-admin.guard';
 import { PlatformAdminService } from '@/platform-admin/platform-admin.service';
+import { SearchIndexerService } from '@/search/search-indexer.service';
 import { SearchService } from '@/search/search.service';
+import { ElasticsearchService } from '@/search/elasticsearch.service';
 
 @Controller('platform-admin')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
@@ -21,6 +23,8 @@ export class PlatformAdminController {
   constructor(
     private readonly admin: PlatformAdminService,
     private readonly search: SearchService,
+    private readonly indexer: SearchIndexerService,
+    private readonly es: ElasticsearchService,
   ) {}
 
   @Get('guilds')
@@ -168,9 +172,24 @@ export class PlatformAdminController {
   listMessages(
     @Param('guildId') guildId: string,
     @Query('limit') limit?: string,
+    @Query('before') before?: string,
   ) {
-    const n = limit ? Number(limit) : 50;
-    return this.admin.listRecentMessages(guildId, Number.isFinite(n) ? n : 50);
+    const n = limit ? Number(limit) : 40;
+    return this.admin.listRecentMessages(
+      guildId,
+      Number.isFinite(n) ? n : 40,
+      before || null,
+    );
+  }
+
+  @Get('search/health')
+  searchHealth() {
+    return this.es.health();
+  }
+
+  @Post('reindex')
+  reindex() {
+    return this.indexer.reindexAll();
   }
 
   @Get('guilds/:guildId/voice')

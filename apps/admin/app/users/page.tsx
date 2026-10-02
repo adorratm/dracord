@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
+import { AdminSearchBar } from '@/components/AdminSearchBar';
 import {
   disableAdminUser,
   enableAdminUser,
@@ -65,11 +66,16 @@ export default function UsersPage() {
             Arama, engelleme, düzenleme, sunucu ban/uzaklaştırma ve hesap silme.
           </p>
         </div>
+        <AdminSearchBar
+          placeholder="Elasticsearch: kullanıcı / mesaj ara…"
+          types={['users', 'messages']}
+          className="mb-2"
+        />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Kullanıcı adı, görünen ad veya e-posta…"
+          placeholder="Kullanıcı adı, görünen ad veya e-posta (DB)…"
           className="w-full max-w-md rounded border border-dracula-current bg-dracula-bg-darker px-3 py-2 text-dracula-fg outline-none focus:border-dracula-purple"
         />
         {error ? <p className="text-sm text-dracula-red whitespace-pre-wrap">{error}</p> : null}

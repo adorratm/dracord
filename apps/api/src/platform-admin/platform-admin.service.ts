@@ -180,29 +180,49 @@ export class PlatformAdminService {
 
   async listRecentMessages(
     guildId: string,
-    limit = 50,
-  ): Promise<PlatformAdminMessageRow[]> {
+    limit = 40,
+    before?: string | null,
+  ): Promise<{ items: PlatformAdminMessageRow[]; hasMore: boolean }> {
     await this.getGuild(guildId);
     const channels = await this.em.find(Channel, {
       where: { guildId },
       select: { id: true, name: true },
     });
-    if (!channels.length) return [];
+    if (!channels.length) return { items: [], hasMore: false };
     const channelIds = channels.map((c) => c.id);
     const nameById = new Map(channels.map((c) => [c.id, c.name]));
-    const take = Math.max(1, Math.min(200, Math.floor(limit)));
-    const messages = await this.em.find(Message, {
-      where: { channelId: In(channelIds) },
-      order: { createdAt: 'DESC' },
-      take,
-    });
-    const authorIds = [...new Set(messages.map((m) => m.authorId))];
+    const take = Math.max(1, Math.min(100, Math.floor(limit)));
+
+    const qb = this.em
+      .createQueryBuilder(Message, 'm')
+      .where('m.channelId IN (:...channelIds)', { channelIds })
+      .orderBy('m.createdAt', 'DESC')
+      .addOrderBy('m.id', 'DESC')
+      .take(take + 1);
+
+    if (before) {
+      const pivot = await this.em.findOne(Message, { where: { id: before } });
+      if (pivot) {
+        qb.andWhere(
+          '(m.createdAt < :pivotAt OR (m.createdAt = :pivotAt AND m.id < :pivotId))',
+          { pivotAt: pivot.createdAt, pivotId: pivot.id },
+        );
+      }
+    }
+
+    const rows = await qb.getMany();
+    const hasMore = rows.length > take;
+    const slice = hasMore ? rows.slice(0, take) : rows;
+    // UI: eski → yeni (aşağı kaydır = günümüz)
+    const chronological = [...slice].reverse();
+
+    const authorIds = [...new Set(chronological.map((m) => m.authorId))];
     const authors =
       authorIds.length === 0
         ? []
         : await this.em.find(User, { where: { id: In(authorIds) } });
     const authorById = new Map(authors.map((u) => [u.id, u]));
-    return messages.map((m) => {
+    const items = chronological.map((m) => {
       const author = authorById.get(m.authorId);
       return {
         id: m.id,
@@ -226,6 +246,7 @@ export class PlatformAdminService {
           : null,
       };
     });
+    return { items, hasMore };
   }
 
   async listRoles(guildId: string): Promise<RoleDto[]> {
