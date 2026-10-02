@@ -34,19 +34,50 @@ fi
 
 COMPOSE=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ROOT/.env")
 REPLICAS="${DRACORD_REPLICAS:-2}"
-SERVICES=("${@:-api web admin}")
-PROJECT="$("${COMPOSE[@]}" ls --all --format json 2>/dev/null | head -1 | sed -n 's/.*"Name":"\([^"]*\)".*/\1/p' || true)"
-# Compose project name for default image tags: {project}-{service}
-# Fallback: directory name of compose project (often "docker")
+if [[ $# -eq 0 ]]; then
+  SERVICES=(api web admin)
+else
+  SERVICES=("$@")
+fi
+
+# Project name = compose project label (containers are docker-api-N → project "docker")
+# Do NOT use `compose ls` (lists unrelated stacks like ttengamesstudio).
+detect_project() {
+  local id
+  id="$("${COMPOSE[@]}" ps -q api 2>/dev/null | head -n 1 || true)"
+  if [[ -n "${id:-}" ]]; then
+    docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$id" 2>/dev/null || true
+  fi
+}
+PROJECT="$(detect_project)"
 if [[ -z "${PROJECT:-}" ]]; then
-  PROJECT="$(basename "$(dirname "$ROOT/docker")")"
-  # When compose file is in docker/, project often becomes "docker"
-  PROJECT="docker"
+  # compose files live in docker/ → default project name is "docker"
+  PROJECT="${COMPOSE_PROJECT_NAME:-docker}"
 fi
 
 image_ref() {
+  echo "${PROJECT}-$1"
+}
+
+wait_healthy() {
   local svc="$1"
-  echo "${PROJECT}-${svc}"
+  local want="$2"
+  local healthy=0 running=0
+  for _ in $(seq 1 90); do
+    healthy="$("${COMPOSE[@]}" ps "$svc" 2>/dev/null | grep -c '(healthy)' || true)"
+    running="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null | wc -l | tr -d ' ')"
+    if [[ "${running:-0}" -ge "$want" && "${healthy:-0}" -ge "$want" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "!! Timeout waiting for $svc (want=$want running=${running:-0} healthy=${healthy:-0})"
+  "${COMPOSE[@]}" ps "$svc" || true
+  for id in $("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true); do
+    echo "----- $svc logs ${id:0:12} -----"
+    docker logs --tail 100 "$id" 2>&1 || true
+  done
+  return 1
 }
 
 snapshot_previous() {
@@ -75,44 +106,32 @@ rollback_service() {
   wait_healthy "$svc" "$REPLICAS" || true
 }
 
-echo "==> Compose: ${COMPOSE_FILES[*]} (project≈$PROJECT)"
+# Oldest container id for a service (by Created timestamp)
+oldest_container() {
+  local svc="$1"
+  local best_id="" best_ts=""
+  local id created
+  for id in $("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true); do
+    created="$(docker inspect -f '{{.Created}}' "$id" 2>/dev/null || true)"
+    if [[ -z "$best_ts" || "$created" < "$best_ts" ]]; then
+      best_ts="$created"
+      best_id="$id"
+    fi
+  done
+  echo "$best_id"
+}
 
-# Snapshot BEFORE build so :latest rebuild does not erase rollback target
-# (running containers still pin old digests — build alone never stops traffic)
+echo "==> Compose: ${COMPOSE_FILES[*]} (project=$PROJECT)"
+
 echo "==> Snapshot running images as :previous"
 for svc in "${SERVICES[@]}"; do
   snapshot_previous "$svc"
 done
 
-# Define health wait early (used by roll + rollback)
-wait_healthy() {
-  local svc="$1"
-  local want="$2"
-  local healthy=0 running=0
-  for _ in $(seq 1 90); do
-    healthy="$("${COMPOSE[@]}" ps "$svc" 2>/dev/null | grep -c '(healthy)' || true)"
-    running="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null | wc -l | tr -d ' ')"
-    if [[ "${running:-0}" -ge "$want" && "${healthy:-0}" -ge "$want" ]]; then
-      return 0
-    fi
-    sleep 2
-  done
-  echo "!! Timeout waiting for $svc (want=$want running=${running:-0} healthy=${healthy:-0})"
-  "${COMPOSE[@]}" ps "$svc" || true
-  for id in $("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true); do
-    echo "----- $svc logs ${id:0:12} -----"
-    docker logs --tail 100 "$id" 2>&1 || true
-  done
-  return 1
-}
-
-# Build does not stop running containers (they pin old image digests)
 if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
   echo "==> Building (parallel): ${SERVICES[*]}"
-  if "${COMPOSE[@]}" build --parallel "${SERVICES[@]}" 2>/dev/null; then
-    :
-  else
-    echo "    --parallel unsupported; sequential build"
+  if ! "${COMPOSE[@]}" build --parallel "${SERVICES[@]}"; then
+    echo "    --parallel failed; sequential build"
     for svc in "${SERVICES[@]}"; do
       echo "==> Building: $svc"
       "${COMPOSE[@]}" build "$svc"
@@ -145,7 +164,6 @@ release_host_ports_if_needed() {
   done
 }
 
-# Start one NEW replica first; only remove an old one after the fleet is healthy at N+1 / N.
 roll_service() {
   local svc="$1"
   echo "==> Rolling $svc (replicas=$REPLICAS) — scale-up then drain"
@@ -153,10 +171,10 @@ roll_service() {
   "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" --no-recreate "$svc" || \
     "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" "$svc"
 
-  local i
+  local i target old
   for i in $(seq 1 "$REPLICAS"); do
-    local target=$((REPLICAS + 1))
-    echo "--> $svc wave $i/$REPLICAS: scale to $target (bring new :latest online)"
+    target=$((REPLICAS + 1))
+    echo "--> $svc wave $i/$REPLICAS: scale to $target"
     "${COMPOSE[@]}" up -d --scale "$svc=$target" --no-recreate "$svc"
 
     if ! wait_healthy "$svc" "$target"; then
@@ -165,27 +183,19 @@ roll_service() {
       return 1
     fi
 
-    # Remove oldest container (pre-roll) so we keep the newer ones
-    mapfile -t containers < <("${COMPOSE[@]}" ps -q "$svc" | while read -r id; do
-      created="$(docker inspect -f '{{.Created}}' "$id" 2>/dev/null || echo '')"
-      echo "$created $id"
-    done | sort | awk '{print $2}')"
-
-    if [[ ${#containers[@]} -gt "$REPLICAS" ]]; then
-      local old="${containers[0]:-}"
-      if [[ -n "$old" ]]; then
-        echo "--> Draining old $svc ${old:0:12}"
-        docker stop -t 25 "$old" >/dev/null || true
-        docker rm "$old" >/dev/null || true
-      fi
+    old="$(oldest_container "$svc")"
+    if [[ -n "$old" ]]; then
+      echo "--> Draining old $svc ${old:0:12}"
+      docker stop -t 25 "$old" >/dev/null || true
+      docker rm "$old" >/dev/null || true
     fi
 
     "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" --no-recreate "$svc" || true
-    wait_healthy "$svc" "$REPLICAS" || {
+    if ! wait_healthy "$svc" "$REPLICAS"; then
       echo "!! $svc unhealthy after drain — rollback"
       rollback_service "$svc"
       return 1
-    }
+    fi
   done
 
   echo "==> $svc roll complete"
@@ -227,17 +237,18 @@ if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then
   mkdir -p "$(dirname "$COOKIES_HOST")"
   ENV_FILE="${COMPOSE_ENV_FILE:-/opt/dracord/.env}"
   if [[ -f "$ENV_FILE" ]] && grep -q '^YTDLP_COOKIES_B64=' "$ENV_FILE"; then
-    python3 - <<PY || true
+    ENV_FILE="$ENV_FILE" COOKIES_HOST="$COOKIES_HOST" python3 - <<'PY' || true
 import base64, os, re
-env = open("${ENV_FILE}", encoding="utf-8", errors="ignore").read()
+env_path = os.environ["ENV_FILE"]
+cookies_host = os.environ["COOKIES_HOST"]
+env = open(env_path, encoding="utf-8", errors="ignore").read()
 m = re.search(r"^YTDLP_COOKIES_B64=(.+)$", env, re.M)
 if not m:
     raise SystemExit(0)
 raw = base64.b64decode(m.group(1).strip().encode("ascii"), validate=False)
-path = "${COOKIES_HOST}"
-open(path, "wb").write(raw)
-os.chmod(path, 0o600)
-print(f"==> Synced cookies from YTDLP_COOKIES_B64 → {path} ({len(raw)} bytes)")
+open(cookies_host, "wb").write(raw)
+os.chmod(cookies_host, 0o600)
+print(f"==> Synced cookies from YTDLP_COOKIES_B64 → {cookies_host} ({len(raw)} bytes)")
 PY
   elif [[ ! -e "$COOKIES_HOST" ]]; then
     echo "# Netscape HTTP Cookie File" > "$COOKIES_HOST"

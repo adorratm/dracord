@@ -18,6 +18,14 @@ COMPOSE=(docker compose
 
 PROJECT=docker
 
+# Prefer label from a running api container (compose project name)
+_id="$("${COMPOSE[@]}" ps -q api 2>/dev/null | head -n 1 || true)"
+if [[ -n "${_id:-}" ]]; then
+  _p="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$_id" 2>/dev/null || true)"
+  [[ -n "${_p:-}" ]] && PROJECT="$_p"
+fi
+PROJECT="${COMPOSE_PROJECT_NAME:-$PROJECT}"
+
 restore_previous() {
   local svc="$1"
   local img="${PROJECT}-${svc}"
