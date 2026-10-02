@@ -2,34 +2,18 @@
 # Upstream = compose `edge` (+ livekit) on the shared TTEN docker network.
 # Install: bash docker/sync-dracord-nginx.sh https
 #
-# Do NOT put these domains on the TTEN default.conf server_name list.
-# SSL: TTEN alpine image may lack certbot's options-ssl-nginx.conf / ssl-dhparams —
-# use inline settings (same style as TTEN https.conf).
+# IMPORTANT: proxy_pass uses variables + Docker DNS (127.0.0.11) so nginx -t
+# succeeds even while edge is recreating. Static `upstream { server host:port }`
+# would fail nginx -t when alias is briefly missing → sync used to DELETE this
+# vhost → "No vhost for this host. Check sibling nginx sync."
 
 map $http_upgrade $dracord_connection_upgrade {
   default upgrade;
   ''      close;
 }
 
-upstream dracord_edge_web {
-  server dracord-edge:13000;
-  keepalive 32;
-}
-
-upstream dracord_edge_admin {
-  server dracord-edge:13001;
-  keepalive 16;
-}
-
-upstream dracord_edge_api {
-  server dracord-edge:14000;
-  keepalive 32;
-}
-
-upstream dracord_livekit {
-  server dracord-livekit:7880;
-  keepalive 16;
-}
+# Docker Compose embedded DNS — re-resolve after edge recreate
+resolver 127.0.0.11 valid=10s ipv6=off;
 
 # --- HTTP (ACME + redirect) ---
 server {
@@ -65,7 +49,8 @@ server {
   client_max_body_size 50m;
 
   location / {
-    proxy_pass http://dracord_edge_web;
+    set $dracord_upstream dracord-edge:13000;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -95,7 +80,8 @@ server {
   client_max_body_size 50m;
 
   location / {
-    proxy_pass http://dracord_edge_api;
+    set $dracord_upstream dracord-edge:14000;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -125,7 +111,8 @@ server {
   client_max_body_size 20m;
 
   location / {
-    proxy_pass http://dracord_edge_admin;
+    set $dracord_upstream dracord-edge:13001;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -152,7 +139,8 @@ server {
   ssl_stapling off;
 
   location / {
-    proxy_pass http://dracord_livekit;
+    set $dracord_upstream dracord-livekit:7880;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

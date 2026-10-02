@@ -147,12 +147,13 @@ curl -fsS -o /dev/null -w "api %{http_code}\n" http://127.0.0.1:14000/health/rea
 curl -fsS -o /dev/null -w "admin %{http_code}\n" http://127.0.0.1:13001/health || true
 
 # Public routing is Docker Nginx — ensure edge is on TTEN network + vhost present
+# (rolling-deploy also syncs after edge recreate; this is a final guarantee)
 if [[ "${DRACORD_SYNC_NGINX:-1}" == "1" ]]; then
-  echo "==> Sync Dracord → ttengamesstudio-nginx"
-  if docker exec ttengamesstudio-nginx test -f /etc/letsencrypt/live/dracord.com.tr/fullchain.pem 2>/dev/null; then
-    bash docker/sync-dracord-nginx.sh https || bash docker/sync-dracord-nginx.sh http || true
-  else
-    bash docker/sync-dracord-nginx.sh http || true
+  echo "==> Sync Dracord → ttengamesstudio-nginx (final)"
+  if ! bash docker/sync-dracord-nginx.sh auto; then
+    echo "!! nginx sync failed — retry" >&2
+    sleep 3
+    bash docker/sync-dracord-nginx.sh auto
   fi
 fi
 

@@ -240,6 +240,16 @@ if [[ "$USE_PROD" == "1" ]]; then
 
   echo "==> Starting edge LB (--no-deps; 127.0.0.1:13000/13001/14000)"
   "${COMPOSE[@]}" up -d --no-deps --force-recreate edge
+  # Edge recreate drops network aliases briefly — always re-wire sibling nginx
+  if [[ "${DRACORD_SYNC_NGINX:-1}" == "1" ]]; then
+    echo "==> Sync sibling nginx (ttengamesstudio-nginx) after edge recreate"
+    sleep 2
+    if ! bash "$ROOT/docker/sync-dracord-nginx.sh" auto; then
+      echo "!! nginx sync failed — retry once" >&2
+      sleep 3
+      bash "$ROOT/docker/sync-dracord-nginx.sh" auto
+    fi
+  fi
 fi
 
 if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then

@@ -87,5 +87,15 @@ echo "==> Smoke"
 curl -fsS -o /dev/null -w "web %{http_code}\n" http://127.0.0.1:13000/health || true
 curl -fsS -o /dev/null -w "api %{http_code}\n" http://127.0.0.1:14000/health/ready || true
 curl -fsS -o /dev/null -w "admin %{http_code}\n" http://127.0.0.1:13001/health || true
+
+if [[ "${DRACORD_SYNC_NGINX:-1}" == "1" ]]; then
+  echo "==> Sync sibling nginx after recover"
+  sleep 2
+  bash "$ROOT/docker/sync-dracord-nginx.sh" auto || {
+    sleep 3
+    bash "$ROOT/docker/sync-dracord-nginx.sh" auto
+  }
+fi
+
 "${COMPOSE[@]}" ps
-echo "Done. Public HTTPS needs: bash docker/sync-dracord-nginx.sh http|https"
+echo "Done."

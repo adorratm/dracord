@@ -1,30 +1,14 @@
 # HTTP-only Dracord vhosts (no TLS yet) — use until certbot issues certs.
 # Install: bash docker/sync-dracord-nginx.sh http
+#
+# Variable proxy_pass + Docker DNS so edge recreate does not break nginx -t.
 
 map $http_upgrade $dracord_connection_upgrade {
   default upgrade;
   ''      close;
 }
 
-upstream dracord_edge_web {
-  server dracord-edge:13000;
-  keepalive 32;
-}
-
-upstream dracord_edge_admin {
-  server dracord-edge:13001;
-  keepalive 16;
-}
-
-upstream dracord_edge_api {
-  server dracord-edge:14000;
-  keepalive 32;
-}
-
-upstream dracord_livekit {
-  server dracord-livekit:7880;
-  keepalive 16;
-}
+resolver 127.0.0.11 valid=10s ipv6=off;
 
 server {
   listen 80;
@@ -36,7 +20,8 @@ server {
   }
 
   location / {
-    proxy_pass http://dracord_edge_web;
+    set $dracord_upstream dracord-edge:13000;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -58,7 +43,8 @@ server {
   }
 
   location / {
-    proxy_pass http://dracord_edge_api;
+    set $dracord_upstream dracord-edge:14000;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -80,7 +66,8 @@ server {
   }
 
   location / {
-    proxy_pass http://dracord_edge_admin;
+    set $dracord_upstream dracord-edge:13001;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -99,7 +86,8 @@ server {
   }
 
   location / {
-    proxy_pass http://dracord_livekit;
+    set $dracord_upstream dracord-livekit:7880;
+    proxy_pass http://$dracord_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header Upgrade $http_upgrade;
