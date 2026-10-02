@@ -25,7 +25,7 @@
     "search:reindex": "yarn workspace @dracord/api search:reindex"
   },
   "devDependencies": {
-    "turbo": "^2.11.5",
+    "turbo": "^2.11.6",
     "typescript": "^6.0.3"
   },
   "volta": {
@@ -33,7 +33,7 @@
     "yarn": "4.18.1"
   },
   "dependencies": {
-    "framer-motion": "^13.4.6"
+    "framer-motion": "^13.5.0"
   },
   "resolutions": {
     "uuid": "11.1.1"

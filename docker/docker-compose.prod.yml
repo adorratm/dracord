@@ -39,8 +39,8 @@ services:
         aliases:
           - dracord-livekit
 
-  # No host ports — scaled replicas share Docker DNS name only
   api:
+    image: ${DRACORD_API_IMAGE:-docker-api:latest}
     ports: !reset []
     expose:
       - "4000"
@@ -86,6 +86,7 @@ services:
       - ${YTDLP_COOKIES_HOST_PATH:-/opt/dracord/secrets/youtube-cookies.txt}:/cookies/youtube.txt:ro
 
   web:
+    image: ${DRACORD_WEB_IMAGE:-docker-web:latest}
     ports: !reset []
     expose:
       - "3000"
@@ -102,6 +103,7 @@ services:
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://dracord.com.tr}
 
   admin:
+    image: ${DRACORD_ADMIN_IMAGE:-docker-admin:latest}
     ports: !reset []
     expose:
       - "3000"

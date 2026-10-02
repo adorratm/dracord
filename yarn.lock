@@ -481,7 +481,7 @@ __metadata:
     "@types/passport-jwt": "npm:^4.0.1"
     "@types/web-push": "npm:^3.6.4"
     bcrypt: "npm:^6.0.0"
-    bullmq: "npm:^6.3.10"
+    bullmq: "npm:^6.3.11"
     class-transformer: "npm:^0.5.1"
     class-validator: "npm:^0.15.1"
     concurrently: "npm:^10.0.5"
@@ -535,7 +535,7 @@ __metadata:
     "@livekit/rtc-ffi-bindings": "npm:0.12.81"
     "@livekit/rtc-node": "npm:^1.1.0"
     "@types/node": "npm:^26.6.3"
-    bullmq: "npm:^6.3.10"
+    bullmq: "npm:^6.3.11"
     dotenv: "npm:^18.0.5"
     ioredis: "npm:^6.0.0"
     tsx: "npm:^4.23.15"
@@ -593,7 +593,7 @@ __metadata:
     "@types/react-dom": "npm:^19.3.0"
     autoprefixer: "npm:^10.6.1"
     denoise-voice-clarity: "npm:0.2.2"
-    framer-motion: "npm:^13.4.6"
+    framer-motion: "npm:^13.5.0"
     livekit-client: "npm:^2.22.3"
     next: "npm:^16.3.8"
     postcss: "npm:^8.5.28"
@@ -2600,44 +2600,44 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@turbo/darwin-64@npm:2.11.5":
-  version: 2.11.5
-  resolution: "@turbo/darwin-64@npm:2.11.5"
+"@turbo/darwin-64@npm:2.11.6":
+  version: 2.11.6
+  resolution: "@turbo/darwin-64@npm:2.11.6"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/darwin-arm64@npm:2.11.5":
-  version: 2.11.5
-  resolution: "@turbo/darwin-arm64@npm:2.11.5"
+"@turbo/darwin-arm64@npm:2.11.6":
+  version: 2.11.6
+  resolution: "@turbo/darwin-arm64@npm:2.11.6"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/linux-64@npm:2.11.5":
-  version: 2.11.5
-  resolution: "@turbo/linux-64@npm:2.11.5"
+"@turbo/linux-64@npm:2.11.6":
+  version: 2.11.6
+  resolution: "@turbo/linux-64@npm:2.11.6"
   conditions: (os=android | os=linux) & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/linux-arm64@npm:2.11.5":
-  version: 2.11.5
-  resolution: "@turbo/linux-arm64@npm:2.11.5"
+"@turbo/linux-arm64@npm:2.11.6":
+  version: 2.11.6
+  resolution: "@turbo/linux-arm64@npm:2.11.6"
   conditions: (os=android | os=linux) & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/windows-64@npm:2.11.5":
-  version: 2.11.5
-  resolution: "@turbo/windows-64@npm:2.11.5"
+"@turbo/windows-64@npm:2.11.6":
+  version: 2.11.6
+  resolution: "@turbo/windows-64@npm:2.11.6"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/windows-arm64@npm:2.11.5":
-  version: 2.11.5
-  resolution: "@turbo/windows-arm64@npm:2.11.5"
+"@turbo/windows-arm64@npm:2.11.6":
+  version: 2.11.6
+  resolution: "@turbo/windows-arm64@npm:2.11.6"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
@@ -3483,9 +3483,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bullmq@npm:^6.3.10":
-  version: 6.3.10
-  resolution: "bullmq@npm:6.3.10"
+"bullmq@npm:^6.3.11":
+  version: 6.3.11
+  resolution: "bullmq@npm:6.3.11"
   dependencies:
     cron-parser: "npm:5.10.1"
     msgpackr: "npm:2.1.0"
@@ -3506,7 +3506,7 @@ __metadata:
       optional: true
     redis:
       optional: true
-  checksum: 10c0/c91a0c8d52cc2d7876b3e67cdb9177bdc481b07bccca098c3cf1648324dfadb6b114223cec80ba3cd8549d88c70bcdd363717fbd24246d182b478fa748f37b6e
+  checksum: 10c0/9f859d223c9d40aca7ca0ca69766b92693f370e3946e89211f7442ef2d07b23919ad305a900a8731ac3a4da62e63e48c50a8115d53a73cd3aa64083dd0632403
   languageName: node
   linkType: hard
 
@@ -4206,8 +4206,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "dracord@workspace:."
   dependencies:
-    framer-motion: "npm:^13.4.6"
-    turbo: "npm:^2.11.5"
+    framer-motion: "npm:^13.5.0"
+    turbo: "npm:^2.11.6"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -4820,12 +4820,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"framer-motion@npm:^13.4.6":
-  version: 13.4.6
-  resolution: "framer-motion@npm:13.4.6"
+"framer-motion@npm:^13.5.0":
+  version: 13.5.0
+  resolution: "framer-motion@npm:13.5.0"
   dependencies:
-    motion-dom: "npm:^13.4.5"
-    motion-utils: "npm:^13.3.0"
+    motion-dom: "npm:^13.5.0"
+    motion-utils: "npm:^13.5.0"
     tslib: "npm:^2.4.0"
   peerDependencies:
     react: ^18.0.0 || ^19.0.0
@@ -4835,7 +4835,7 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/507d4d7077310412c4c379a5be5dad672baa6927738c47701db7448395bffb6b5fc64be55ec406ca5502192df2c98f165cbf975ee6b8c442256a262bdad31e5e
+  checksum: 10c0/b70b622d1790b5a3818faed8ac7621dd2dc37f66cce3b043d5ff675fcbc5c8435d5a000d505cbca084564dacad9986051bd3c328d4f0e42c5e502fdef844f634
   languageName: node
   linkType: hard
 
@@ -5941,19 +5941,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"motion-dom@npm:^13.4.5":
-  version: 13.4.5
-  resolution: "motion-dom@npm:13.4.5"
+"motion-dom@npm:^13.5.0":
+  version: 13.5.0
+  resolution: "motion-dom@npm:13.5.0"
   dependencies:
-    motion-utils: "npm:^13.3.0"
-  checksum: 10c0/b9443ef8e8ddc9a347959202c9d70f23d99c152c7d5f1b4e0aef416ccca5306d110bd0b06eecab6460cfee60c546ce7d953032fa72211e37c56a0c3c0f22b11b
+    motion-utils: "npm:^13.5.0"
+  checksum: 10c0/ab91758628b52bc3191a998e2fda63e2f039d260b090def64d4d55406523ea8c456ed83a1755eee240821360c0b2797eca35ba6990752c3e6999261e3c11072b
   languageName: node
   linkType: hard
 
-"motion-utils@npm:^13.3.0":
-  version: 13.3.0
-  resolution: "motion-utils@npm:13.3.0"
-  checksum: 10c0/9efb8388cc43501d1d6d1f2997fdd3a9e4c2bd42c57c3979586fdbcc83969a3b9aae7e3108cfb53312db0a46d945ad1b4d54ad388a6585f2eb5f5e742a58d927
+"motion-utils@npm:^13.5.0":
+  version: 13.5.0
+  resolution: "motion-utils@npm:13.5.0"
+  checksum: 10c0/25182af58dafe8aafd596106529ee3bcf39f1295c2cf1016eded6f8876cfd28c550c368fe2d4167dad0782c5ea106c06c39efaedbbb1be2a7cb325b1a827ed11
   languageName: node
   linkType: hard
 
@@ -8097,16 +8097,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo@npm:^2.11.5":
-  version: 2.11.5
-  resolution: "turbo@npm:2.11.5"
+"turbo@npm:^2.11.6":
+  version: 2.11.6
+  resolution: "turbo@npm:2.11.6"
   dependencies:
-    "@turbo/darwin-64": "npm:2.11.5"
-    "@turbo/darwin-arm64": "npm:2.11.5"
-    "@turbo/linux-64": "npm:2.11.5"
-    "@turbo/linux-arm64": "npm:2.11.5"
-    "@turbo/windows-64": "npm:2.11.5"
-    "@turbo/windows-arm64": "npm:2.11.5"
+    "@turbo/darwin-64": "npm:2.11.6"
+    "@turbo/darwin-arm64": "npm:2.11.6"
+    "@turbo/linux-64": "npm:2.11.6"
+    "@turbo/linux-arm64": "npm:2.11.6"
+    "@turbo/windows-64": "npm:2.11.6"
+    "@turbo/windows-arm64": "npm:2.11.6"
   dependenciesMeta:
     "@turbo/darwin-64":
       optional: true
@@ -8122,7 +8122,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: 10c0/2fc7e68ec2d56e038d84f2d3ee528e356fcf4bc6af4434e39b96d4c63518e406ff04fb35c912b0a5bbbcf5bf5431ba054ebb0ca26921e34e117ad19e6a06e6d6
+  checksum: 10c0/51a174dbc7d65a85730c101920fa8ea393906e4afa7f68ff3210160dc8d98fec92b22ec14d0b15ab5451f03bf8b08ce6a5922f1e6bb64e40c574f3575468e6f8
   languageName: node
   linkType: hard
 

@@ -84,6 +84,17 @@ snapshot_previous() {
   local svc="$1"
   local img
   img="$(image_ref "$svc")"
+  # Önemli: registry pull :latest’i ezmiş olabilir — çalışan container’ın image’ını kaydet
+  local id running
+  id="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null | head -n 1 || true)"
+  if [[ -n "${id:-}" ]]; then
+    running="$(docker inspect -f '{{.Image}}' "$id" 2>/dev/null || true)"
+    if [[ -n "${running:-}" ]]; then
+      docker tag "$running" "${img}:previous"
+      echo "    tagged running → ${img}:previous"
+      return 0
+    fi
+  fi
   if docker image inspect "${img}:latest" >/dev/null 2>&1; then
     docker tag "${img}:latest" "${img}:previous"
     echo "    tagged ${img}:previous"
@@ -129,14 +140,13 @@ for svc in "${SERVICES[@]}"; do
 done
 
 if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
-  echo "==> Building (parallel): ${SERVICES[*]}"
-  if ! "${COMPOSE[@]}" build --parallel "${SERVICES[@]}"; then
-    echo "    --parallel failed; sequential build"
-    for svc in "${SERVICES[@]}"; do
-      echo "==> Building: $svc"
-      "${COMPOSE[@]}" build "$svc"
-    done
-  fi
+  # Never --parallel on a shared VPS: yarn+Next×3 starves nginx → 502 on sibling sites.
+  echo "==> Building (sequential, nice): ${SERVICES[*]}"
+  for svc in "${SERVICES[@]}"; do
+    echo "==> Building: $svc"
+    nice -n 15 ionice -c2 -n7 "${COMPOSE[@]}" build "$svc" \
+      || nice -n 15 "${COMPOSE[@]}" build "$svc"
+  done
 fi
 
 release_host_ports_if_needed() {
@@ -257,7 +267,12 @@ PY
     echo "==> UYARI: $COOKIES_HOST boş/stub" >&2
   fi
   echo "==> Recreating music-bot"
-  "${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot || true
+  if [[ "${DRACORD_USE_REGISTRY:-0}" == "1" ]] || [[ -n "${DRACORD_IMAGE_TAG:-}" ]]; then
+    # Don't compile on VPS during registry deploys
+    "${COMPOSE[@]}" up -d --no-build --force-recreate --no-deps music-bot || true
+  else
+    nice -n 15 "${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot || true
+  fi
 fi
 
 echo "Done."

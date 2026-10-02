@@ -17,7 +17,7 @@
     "@tanstack/react-virtual": "^3.14.13",
     "autoprefixer": "^10.6.1",
     "denoise-voice-clarity": "0.2.2",
-    "framer-motion": "^13.4.6",
+    "framer-motion": "^13.5.0",
     "livekit-client": "^2.22.3",
     "next": "^16.3.8",
     "postcss": "^8.5.28",

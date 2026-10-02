@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Remote entrypoint for GitHub Actions → Hetzner.
 # Secrets live only in server .env (never in the public git tree).
+#
+# Preferred path (CI sets DRACORD_USE_REGISTRY=1):
+#   pull GHCR images → schema sync → rolling restart
+#   NO yarn/next build on the VPS (protects shared nginx / other sites).
+#
+# Fallback (manual / no registry): capped sequential build on the VPS.
 set -euo pipefail
 
 DEPLOY_PATH="${DRACORD_DEPLOY_PATH:-/opt/dracord}"
@@ -41,10 +47,9 @@ export DRACORD_ROLL_MUSIC_BOT="${DRACORD_ROLL_MUSIC_BOT:-1}"
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 
-echo "==> Disk / Docker usage (slow yarn fetch often = full disk or no BuildKit cache)"
+echo "==> Disk / Docker usage"
 df -h / /var/lib/docker 2>/dev/null || df -h /
 docker system df 2>/dev/null || true
-# If root filesystem is critically full, free dangling build junk (safe for other stacks)
 ROOT_USE="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
 if [[ "${ROOT_USE:-0}" -ge 90 ]]; then
   echo "==> Disk >=90% — pruning dangling images/build cache (containers kept)"
@@ -63,19 +68,46 @@ docker compose \
   --env-file .env \
   up -d postgres pgbouncer redis elasticsearch livekit
 
-# Build first so schema sync uses the new image (new columns/tables/enums).
-echo "==> Build app images (before schema sync)"
-docker compose \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.zd.yml \
-  -f docker/docker-compose.prod.yml \
-  --env-file .env \
-  build api web admin
+USE_REGISTRY="${DRACORD_USE_REGISTRY:-0}"
+if [[ -n "${DRACORD_IMAGE_TAG:-}" ]]; then
+  USE_REGISTRY=1
+fi
+
+if [[ "$USE_REGISTRY" == "1" ]]; then
+  echo "==> Registry deploy (no on-server app build — other sites stay up)"
+  # Snapshot BEFORE pull overwrites :latest (rollback safety)
+  for svc in api web admin; do
+    if docker image inspect "docker-${svc}:latest" >/dev/null 2>&1; then
+      docker tag "docker-${svc}:latest" "docker-${svc}:previous" || true
+      echo "    pre-pull snapshot docker-${svc}:previous"
+    fi
+  done
+  bash docker/pull-prebuilt.sh
+else
+  echo "==> Local build fallback (SEQUENTIAL + nice — avoids nuking shared VPS)"
+  echo "    Prefer CI registry deploy (DRACORD_IMAGE_TAG). Parallel Next builds cause 502 on sibling sites."
+  # One service at a time; low priority so nginx/other stacks keep CPU
+  for svc in api web admin; do
+    echo "==> Building (nice): $svc"
+    nice -n 15 ionice -c2 -n7 docker compose \
+      -f docker/docker-compose.yml \
+      -f docker/docker-compose.zd.yml \
+      -f docker/docker-compose.prod.yml \
+      --env-file .env \
+      build "$svc" \
+      || nice -n 15 docker compose \
+        -f docker/docker-compose.yml \
+        -f docker/docker-compose.zd.yml \
+        -f docker/docker-compose.prod.yml \
+        --env-file .env \
+        build "$svc"
+  done
+fi
 
 echo "==> Schema sync (direct Postgres — required after entity changes)"
 DRACORD_SCHEMA_SKIP_RECREATE=1 bash docker/schema-sync-once.sh .env
 
-echo "==> Rolling deploy (images already built)"
+echo "==> Rolling deploy (images already ready)"
 if ! DRACORD_SKIP_BUILD=1 bash docker/rolling-deploy.sh api web admin; then
   echo "==> Rolling deploy failed — dumping api logs + attempting recover"
   docker compose \
