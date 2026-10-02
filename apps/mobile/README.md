@@ -1,17 +1,18 @@
 # @dracord/mobile
 
-Mobil istemci **bilinçli olarak ertelendi**. Bu klasör, monorepo içinde `@dracord/mobile` ad alanını ve gelecekteki Expo uygulaması için minimum bir iskelet tutar; tam derlenebilir bir Expo projesi henüz hedeflenmiyor.
+Mobil istemci **bilinçli olarak ertelendi**. Bu klasör yalnızca monorepo ad alanını tutar.
+
+## Neden Expo yok?
+
+`expo` → `node-forge` zinciri monorepo `yarn.lock` üzerinde GitHub Dependabot/advisory
+üretiyordu (CVE-2026-85393; npm’de yama sürümü henüz yok, `<=1.4.0` etkileniyor).
+Mobil prod’a çıkana kadar Expo bağımlılığı eklenmez.
 
 ## Planlanan
 
-- **Google** ve **Apple** ile oturum açma (OAuth / Sign in with Apple)
-- Apple App Store gereksinimleri için **Apple Sign-In** entegrasyonu
-- `@dracord/sdk` ve `@dracord/types` paylaşımlı paketleri
+- Expo SDK + `@dracord/sdk` / `@dracord/types`
+- Google ve Apple ile oturum (Sign in with Apple)
 
 ## Şimdilik
 
-`App.tsx` yalnızca “Dracord Mobile — yakında” placeholder metnini gösterir. Yerel geliştirme için ileride `expo start` akışı eklenecek; şu an `yarn workspace @dracord/mobile dev` bilgilendirme mesajı verir.
-
-## Not
-
-Web ve masaüstü önceliklidir. Mobil çalışmaya başlandığında Expo SDK 52+ tabanı genişletilecektir.
+`yarn workspace @dracord/mobile dev` bilgilendirme mesajı verir. Web / API / desktop önceliklidir.

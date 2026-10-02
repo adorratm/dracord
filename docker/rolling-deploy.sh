@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # Zero-downtime rolling deploy for api/web/admin (Docker Compose).
-# Requires replicas >= 2 and docker-compose.zd.yml (no host port clash).
-# Production: api/web/admin have NO host ports; `edge` LB owns 127.0.0.1:13000/13001/14000.
+#
+# Model (blue-green lite):
+#   1) Tag currently running images as :previous (rollback hedefi)
+#   2) Build NEW images as :latest — running containers keep old layers (build ≠ downtime)
+#   3) Roll: scale N→N+1 (yeni healthy olunca), sonra en eski container’ı kaldır
+#   4) Fail: :previous’a geri dön; bozuk :latest ile force-recreate YAPMA
 #
 # Env:
 #   DRACORD_REPLICAS=2
-#   DRACORD_COMPOSE_PROD=1|0   include docker-compose.prod.yml (default: 1 if file exists)
-#   DRACORD_SKIP_BUILD=1       skip image build
-#   DRACORD_ROLL_MUSIC_BOT=1   recreate music-bot after roll (default 1)
+#   DRACORD_COMPOSE_PROD=1|0
+#   DRACORD_SKIP_BUILD=1
+#   DRACORD_ROLL_MUSIC_BOT=1
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,17 +35,56 @@ fi
 COMPOSE=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ROOT/.env")
 REPLICAS="${DRACORD_REPLICAS:-2}"
 SERVICES=("${@:-api web admin}")
-
-echo "==> Compose: ${COMPOSE_FILES[*]}"
-
-# Sequential builds — parallel yarn focus thrashs small VPS disks/network
-if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
-  for svc in "${SERVICES[@]}"; do
-    echo "==> Building: $svc"
-    "${COMPOSE[@]}" build "$svc"
-  done
+PROJECT="$("${COMPOSE[@]}" ls --all --format json 2>/dev/null | head -1 | sed -n 's/.*"Name":"\([^"]*\)".*/\1/p' || true)"
+# Compose project name for default image tags: {project}-{service}
+# Fallback: directory name of compose project (often "docker")
+if [[ -z "${PROJECT:-}" ]]; then
+  PROJECT="$(basename "$(dirname "$ROOT/docker")")"
+  # When compose file is in docker/, project often becomes "docker"
+  PROJECT="docker"
 fi
 
+image_ref() {
+  local svc="$1"
+  echo "${PROJECT}-${svc}"
+}
+
+snapshot_previous() {
+  local svc="$1"
+  local img
+  img="$(image_ref "$svc")"
+  if docker image inspect "${img}:latest" >/dev/null 2>&1; then
+    docker tag "${img}:latest" "${img}:previous"
+    echo "    tagged ${img}:previous"
+  else
+    echo "    (no ${img}:latest yet — first deploy)"
+  fi
+}
+
+rollback_service() {
+  local svc="$1"
+  local img
+  img="$(image_ref "$svc")"
+  if ! docker image inspect "${img}:previous" >/dev/null 2>&1; then
+    echo "!! No ${img}:previous — cannot rollback $svc"
+    return 1
+  fi
+  echo "==> Rollback $svc → ${img}:previous"
+  docker tag "${img}:previous" "${img}:latest"
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate --scale "$svc=$REPLICAS" "$svc"
+  wait_healthy "$svc" "$REPLICAS" || true
+}
+
+echo "==> Compose: ${COMPOSE_FILES[*]} (project≈$PROJECT)"
+
+# Snapshot BEFORE build so :latest rebuild does not erase rollback target
+# (running containers still pin old digests — build alone never stops traffic)
+echo "==> Snapshot running images as :previous"
+for svc in "${SERVICES[@]}"; do
+  snapshot_previous "$svc"
+done
+
+# Define health wait early (used by roll + rollback)
 wait_healthy() {
   local svc="$1"
   local want="$2"
@@ -63,7 +106,20 @@ wait_healthy() {
   return 1
 }
 
-# Only when app containers still publish loopback ports that edge needs.
+# Build does not stop running containers (they pin old image digests)
+if [[ "${DRACORD_SKIP_BUILD:-0}" != "1" ]]; then
+  echo "==> Building (parallel): ${SERVICES[*]}"
+  if "${COMPOSE[@]}" build --parallel "${SERVICES[@]}" 2>/dev/null; then
+    :
+  else
+    echo "    --parallel unsupported; sequential build"
+    for svc in "${SERVICES[@]}"; do
+      echo "==> Building: $svc"
+      "${COMPOSE[@]}" build "$svc"
+    done
+  fi
+fi
+
 release_host_ports_if_needed() {
   [[ "$USE_PROD" == "1" ]] || return 0
   local clash=0
@@ -89,25 +145,47 @@ release_host_ports_if_needed() {
   done
 }
 
+# Start one NEW replica first; only remove an old one after the fleet is healthy at N+1 / N.
 roll_service() {
   local svc="$1"
-  echo "==> Rolling $svc (replicas=$REPLICAS)"
+  echo "==> Rolling $svc (replicas=$REPLICAS) — scale-up then drain"
 
   "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" --no-recreate "$svc" || \
     "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" "$svc"
 
-  mapfile -t containers < <("${COMPOSE[@]}" ps -q "$svc")
-  if [[ ${#containers[@]} -lt 2 ]]; then
-    echo "!! $svc has <2 containers; scaling and recreating may briefly interrupt."
-  fi
+  local i
+  for i in $(seq 1 "$REPLICAS"); do
+    local target=$((REPLICAS + 1))
+    echo "--> $svc wave $i/$REPLICAS: scale to $target (bring new :latest online)"
+    "${COMPOSE[@]}" up -d --scale "$svc=$target" --no-recreate "$svc"
 
-  for id in "${containers[@]}"; do
-    [[ -n "${id:-}" ]] || continue
-    echo "--> Recreating $svc container ${id:0:12}"
-    docker stop -t 25 "$id" >/dev/null
-    docker rm "$id" >/dev/null
-    "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" --no-recreate "$svc"
-    wait_healthy "$svc" "$REPLICAS"
+    if ! wait_healthy "$svc" "$target"; then
+      echo "!! New $svc replica unhealthy — rolling back to :previous"
+      rollback_service "$svc"
+      return 1
+    fi
+
+    # Remove oldest container (pre-roll) so we keep the newer ones
+    mapfile -t containers < <("${COMPOSE[@]}" ps -q "$svc" | while read -r id; do
+      created="$(docker inspect -f '{{.Created}}' "$id" 2>/dev/null || echo '')"
+      echo "$created $id"
+    done | sort | awk '{print $2}')"
+
+    if [[ ${#containers[@]} -gt "$REPLICAS" ]]; then
+      local old="${containers[0]:-}"
+      if [[ -n "$old" ]]; then
+        echo "--> Draining old $svc ${old:0:12}"
+        docker stop -t 25 "$old" >/dev/null || true
+        docker rm "$old" >/dev/null || true
+      fi
+    fi
+
+    "${COMPOSE[@]}" up -d --scale "$svc=$REPLICAS" --no-recreate "$svc" || true
+    wait_healthy "$svc" "$REPLICAS" || {
+      echo "!! $svc unhealthy after drain — rollback"
+      rollback_service "$svc"
+      return 1
+    }
   done
 
   echo "==> $svc roll complete"
@@ -115,13 +193,20 @@ roll_service() {
 
 release_host_ports_if_needed
 
+ROLL_FAILED=0
 for svc in "${SERVICES[@]}"; do
-  roll_service "$svc"
+  if ! roll_service "$svc"; then
+    ROLL_FAILED=1
+    break
+  fi
 done
 
+if [[ "$ROLL_FAILED" -eq 1 ]]; then
+  echo "==> Deploy aborted after rollback attempt (old :previous should be serving)"
+  exit 1
+fi
+
 if [[ "$USE_PROD" == "1" ]]; then
-  # CRITICAL: plain `up -d edge` reconciles the project and can scale api/web/admin
-  # back to 1 (or leave orphaned *-3/*-4 unhealthy). Lock scales, then edge --no-deps.
   echo "==> Locking replica scales before edge"
   "${COMPOSE[@]}" up -d \
     --scale "api=$REPLICAS" \
@@ -138,11 +223,9 @@ if [[ "$USE_PROD" == "1" ]]; then
 fi
 
 if [[ "${DRACORD_ROLL_MUSIC_BOT:-1}" == "1" ]]; then
-  # Docker dosya yoksa dizin yaratır; cookies mount bozulmasın
   COOKIES_HOST="${YTDLP_COOKIES_HOST_PATH:-/opt/dracord/secrets/youtube-cookies.txt}"
   mkdir -p "$(dirname "$COOKIES_HOST")"
   ENV_FILE="${COMPOSE_ENV_FILE:-/opt/dracord/.env}"
-  # .env’de B64 varsa her recreate’te dosyayı senkronla (reboot/stub sonrası boş kalmasın)
   if [[ -f "$ENV_FILE" ]] && grep -q '^YTDLP_COOKIES_B64=' "$ENV_FILE"; then
     python3 - <<PY || true
 import base64, os, re
@@ -159,9 +242,8 @@ PY
   elif [[ ! -e "$COOKIES_HOST" ]]; then
     echo "# Netscape HTTP Cookie File" > "$COOKIES_HOST"
     chmod 600 "$COOKIES_HOST" || true
-    echo "==> Created empty cookies stub: $COOKIES_HOST (YouTube bot duvarı için gerçek cookie gerekli)"
   elif ! grep -q $'\t' "$COOKIES_HOST" 2>/dev/null; then
-    echo "==> UYARI: $COOKIES_HOST boş/stub — YTDLP_COOKIES_B64 yok. push-youtube-cookies.ps1 çalıştır." >&2
+    echo "==> UYARI: $COOKIES_HOST boş/stub" >&2
   fi
   echo "==> Recreating music-bot"
   "${COMPOSE[@]}" up -d --build --force-recreate --no-deps music-bot || true

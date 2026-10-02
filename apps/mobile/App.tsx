@@ -1,37 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+/**
+ * Mobil istemci ertelendi — Expo/React Native bağımlılıkları bilinçli olarak
+ * kaldırıldı (transitive node-forge CVE; prod Docker imajlarına girmiyor olsa da
+ * monorepo yarn.lock alert üretiyordu).
+ *
+ * Aktifleştirirken: expo + react-native ekle, bu dosyayı gerçek App ile değiştir.
+ */
+export {};
 
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Dracord Mobile — yakında</Text>
-      <Text style={styles.note}>
-        Tam Expo projesi henüz oluşturulmadı. Google ve Apple ile oturum açma (özellikle Apple
-        Sign-In) burada uygulanacak.
-      </Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#282a36',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    color: '#bd93f9',
-    fontSize: 22,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  note: {
-    color: '#6272a4',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-});
+console.log('Dracord Mobile — yakında (iskelet; Expo henüz yok)');
