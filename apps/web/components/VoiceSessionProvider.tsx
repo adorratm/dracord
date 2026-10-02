@@ -246,9 +246,9 @@ function setRemoteSourceVolume(
   level: number,
 ) {
   const pub = participant.getTrackPublication(source);
-  const track = pub?.track;
-  if (track && typeof (track as { setVolume?: (v: number) => void }).setVolume === 'function') {
-    (track as { setVolume: (v: number) => void }).setVolume(level);
+  const track = pub?.track as unknown as { setVolume?: (v: number) => void } | undefined;
+  if (track && typeof track.setVolume === 'function') {
+    track.setVolume(level);
   }
 }
 
