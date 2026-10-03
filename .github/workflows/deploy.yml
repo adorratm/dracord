@@ -51,6 +51,8 @@ jobs:
             dockerfile: docker/Dockerfile.admin
             build_args: |
               NEXT_PUBLIC_API_URL=https://api.dracord.com.tr
+              NEXT_PUBLIC_WEB_URL=https://dracord.com.tr
+              NEXT_PUBLIC_SITE_URL=https://dracord.com.tr
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
       image_prefix: ${{ env.IMAGE_PREFIX }}

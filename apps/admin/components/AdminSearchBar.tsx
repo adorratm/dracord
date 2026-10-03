@@ -1,25 +1,24 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SearchHit } from '@dracord/types';
 import { platformSearch } from '@/lib/api';
+import { getWebAppUrl } from '@/lib/site';
 
-const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(
-  /\/$/,
-  '',
-);
+const WEB_URL = getWebAppUrl();
+
+const DEFAULT_SEARCH_TYPES = ['messages', 'users', 'channels', 'guilds'] as const;
 
 type Props = {
   placeholder?: string;
-  types?: string[];
+  types?: readonly string[];
   guildId?: string;
   className?: string;
 };
 
 export function AdminSearchBar({
   placeholder = 'Elasticsearch ile ara…',
-  types = ['messages', 'users', 'channels', 'guilds'],
+  types = DEFAULT_SEARCH_TYPES,
   guildId,
   className,
 }: Props) {
@@ -28,52 +27,78 @@ export function AdminSearchBar({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const typesKey = types.join(',');
 
   useEffect(() => {
     if (q.trim().length < 1) {
-      setHits([]);
-      setError(null);
+      setHits((prev) => (prev.length === 0 ? prev : []));
+      setError((prev) => (prev === null ? prev : null));
       return;
     }
+
+    const resolvedTypes = typesKey.split(',').filter(Boolean);
+    let cancelled = false;
     const t = window.setTimeout(() => {
       setLoading(true);
       setError(null);
       void platformSearch({
         q,
-        types,
+        types: resolvedTypes,
         guildId,
         limit: 20,
       })
         .then((r) => {
+          if (cancelled) return;
           setHits(r.hits);
           setOpen(true);
         })
         .catch((err) => {
+          if (cancelled) return;
           setHits([]);
           setError(err instanceof Error ? err.message : 'Arama başarısız');
           setOpen(true);
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }, 280);
-    return () => window.clearTimeout(t);
-  }, [q, types, guildId]);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [q, typesKey, guildId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
 
   return (
-    <div className={`relative ${className ?? ''}`}>
+    <div ref={rootRef} className={`relative z-30 max-w-xl ${className ?? ''}`}>
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         onFocus={() => {
-          if (hits.length || error) setOpen(true);
-        }}
-        onBlur={() => {
-          window.setTimeout(() => setOpen(false), 180);
+          if (hits.length || error || q.trim()) setOpen(true);
         }}
         placeholder={placeholder}
-        className="h-9 w-full max-w-xl rounded border border-dracula-current bg-dracula-bg px-3 text-sm text-dracula-fg outline-none focus:border-dracula-purple"
+        className="h-9 w-full rounded border border-dracula-current bg-dracula-bg px-3 text-sm text-dracula-fg outline-none focus:border-dracula-purple"
       />
       {open && q.trim() ? (
-        <div className="absolute left-0 right-0 z-40 mt-1 max-h-80 overflow-y-auto rounded-lg border border-dracula-current bg-dracula-bg-darker shadow-lg">
+        <div
+          className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border border-dracula-current bg-dracula-bg-darker shadow-lg"
+          onMouseDown={(e) => {
+            const t = e.target as HTMLElement | null;
+            if (t?.closest?.('a')) return;
+            e.preventDefault();
+          }}
+        >
           {loading ? (
             <p className="px-3 py-2 text-sm text-dracula-comment">Aranıyor…</p>
           ) : null}
@@ -97,7 +122,8 @@ export function AdminSearchBar({
                       href={href}
                       target="_blank"
                       rel="noreferrer"
-                      className="block px-3 py-2 text-sm hover:bg-dracula-current/40"
+                      className="block cursor-pointer px-3 py-2 text-sm hover:bg-dracula-current/40"
+                      onClick={() => setOpen(false)}
                     >
                       <span className="text-xs text-dracula-purple">
                         mesaj{hit.threadRootId ? ' · thread' : ''}
@@ -114,39 +140,39 @@ export function AdminSearchBar({
               if (hit.type === 'guild') {
                 return (
                   <li key={`g-${hit.id}`}>
-                    <Link
+                    <a
                       href={`/guilds/${hit.id}`}
-                      className="block px-3 py-2 text-sm hover:bg-dracula-current/40"
+                      className="block cursor-pointer px-3 py-2 text-sm hover:bg-dracula-current/40"
                     >
                       <span className="text-xs text-dracula-cyan">sunucu</span>{' '}
                       <span className="text-dracula-fg">{hit.name}</span>
-                    </Link>
+                    </a>
                   </li>
                 );
               }
               if (hit.type === 'channel') {
                 return (
                   <li key={`c-${hit.id}`}>
-                    <Link
+                    <a
                       href={hit.guildId ? `/guilds/${hit.guildId}` : '/guilds'}
-                      className="block px-3 py-2 text-sm hover:bg-dracula-current/40"
+                      className="block cursor-pointer px-3 py-2 text-sm hover:bg-dracula-current/40"
                     >
                       <span className="text-xs text-dracula-green">kanal</span>{' '}
                       <span className="text-dracula-fg">{hit.name}</span>
-                    </Link>
+                    </a>
                   </li>
                 );
               }
               return (
                 <li key={`u-${hit.id}`}>
-                  <Link
+                  <a
                     href={`/users/${hit.id}`}
-                    className="block px-3 py-2 text-sm hover:bg-dracula-current/40"
+                    className="block cursor-pointer px-3 py-2 text-sm hover:bg-dracula-current/40"
                   >
                     <span className="text-xs text-dracula-pink">kullanıcı</span>{' '}
                     <span className="text-dracula-fg">{hit.displayName}</span>
                     <span className="text-dracula-comment"> @{hit.username}</span>
-                  </Link>
+                  </a>
                 </li>
               );
             })}

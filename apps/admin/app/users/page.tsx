@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { AdminSearchBar } from '@/components/AdminSearchBar';
@@ -10,6 +9,8 @@ import {
   listAdminUsers,
   type PlatformAdminUserRow,
 } from '@/lib/api';
+
+const USER_SEARCH_TYPES = ['users', 'messages'] as const;
 
 export default function UsersPage() {
   const [query, setQuery] = useState('');
@@ -68,7 +69,7 @@ export default function UsersPage() {
         </div>
         <AdminSearchBar
           placeholder="Elasticsearch: kullanıcı / mesaj ara…"
-          types={['users', 'messages']}
+          types={USER_SEARCH_TYPES}
           className="mb-2"
         />
         <input
@@ -117,12 +118,12 @@ export default function UsersPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
+                    <a
                       href={`/users/${u.id}`}
-                      className="rounded border border-dracula-cyan px-2 py-1 text-xs text-dracula-cyan hover:bg-dracula-cyan/10"
+                      className="cursor-pointer rounded border border-dracula-cyan px-2 py-1 text-xs text-dracula-cyan hover:bg-dracula-cyan/10"
                     >
                       Yönet
-                    </Link>
+                    </a>
                     <button
                       type="button"
                       disabled={Boolean(busyId) || u.isPlatformAdmin}

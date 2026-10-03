@@ -1,15 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { SearchHit } from '@dracord/types';
 import { AdminShell } from '@/components/AdminShell';
 import { platformSearch, reindexSearch, searchHealth } from '@/lib/api';
+import { getWebAppUrl } from '@/lib/site';
 
-const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(
-  /\/$/,
-  '',
-);
+const WEB_URL = getWebAppUrl();
 
 export default function AdminSearchPage() {
   const [q, setQ] = useState('');
@@ -28,9 +25,10 @@ export default function AdminSearchPage() {
 
   useEffect(() => {
     if (q.trim().length < 1) {
-      setHits([]);
+      setHits((prev) => (prev.length === 0 ? prev : []));
       return;
     }
+    let cancelled = false;
     const t = window.setTimeout(() => {
       setLoading(true);
       setError(null);
@@ -39,14 +37,22 @@ export default function AdminSearchPage() {
         types: types.split(',').map((s) => s.trim()).filter(Boolean),
         limit: 40,
       })
-        .then((r) => setHits(r.hits))
+        .then((r) => {
+          if (!cancelled) setHits(r.hits);
+        })
         .catch((err) => {
+          if (cancelled) return;
           setHits([]);
           setError(err instanceof Error ? err.message : 'Arama başarısız');
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }, 280);
-    return () => window.clearTimeout(t);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [q, types]);
 
   return (
@@ -130,12 +136,12 @@ export default function AdminSearchPage() {
                       {new Date(hit.createdAt).toLocaleString('tr-TR')}
                     </time>
                     {hit.guildId ? (
-                      <Link
+                      <a
                         href={`/guilds/${hit.guildId}`}
-                        className="text-xs text-dracula-cyan hover:underline"
+                        className="cursor-pointer text-xs text-dracula-cyan hover:underline"
                       >
                         Sunucu
-                      </Link>
+                      </a>
                     ) : null}
                     <a
                       href={href}
@@ -159,9 +165,9 @@ export default function AdminSearchPage() {
                   <span className="rounded bg-dracula-cyan/20 px-1.5 py-0.5 text-xs text-dracula-cyan">
                     sunucu
                   </span>{' '}
-                  <Link href={`/guilds/${hit.id}`} className="font-medium text-dracula-fg hover:underline">
+                  <a href={`/guilds/${hit.id}`} className="cursor-pointer font-medium text-dracula-fg hover:underline">
                     {hit.name}
-                  </Link>
+                  </a>
                 </li>
               );
             }
@@ -174,12 +180,12 @@ export default function AdminSearchPage() {
                   <span className="font-medium text-dracula-fg">{hit.name}</span>
                   <span className="ml-2 text-xs text-dracula-comment">{hit.channelType}</span>
                   {hit.guildId ? (
-                    <Link
+                    <a
                       href={`/guilds/${hit.guildId}`}
-                      className="ml-2 text-xs text-dracula-cyan hover:underline"
+                      className="ml-2 cursor-pointer text-xs text-dracula-cyan hover:underline"
                     >
                       Sunucu
-                    </Link>
+                    </a>
                   ) : null}
                 </li>
               );

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChannelSummary, PublicUser, RoleDto } from '@dracord/types';
@@ -25,6 +24,7 @@ import {
   type PlatformAdminMessageRow,
   type PlatformAdminVoiceRow,
 } from '@/lib/api';
+import { getWebAppUrl } from '@/lib/site';
 
 const ROLE_PERMS = [
   'ADMINISTRATOR',
@@ -39,10 +39,8 @@ const ROLE_PERMS = [
   'SEND_MESSAGES',
 ] as const;
 
-const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(
-  /\/$/,
-  '',
-);
+const WEB_URL = getWebAppUrl();
+const GUILD_DETAIL_SEARCH_TYPES = ['messages', 'channels', 'users'] as const;
 
 function isImage(ct: string) {
   return ct.startsWith('image/');
@@ -184,9 +182,9 @@ export default function GuildDetailPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <Link href="/guilds" className="text-sm text-dracula-cyan hover:underline">
+            <a href="/guilds" className="cursor-pointer text-sm text-dracula-cyan hover:underline">
               ← Sunucular
-            </Link>
+            </a>
             <h2 className="mt-2 text-xl font-semibold text-dracula-fg">
               {guild?.name ?? 'Sunucu'}
             </h2>
@@ -227,7 +225,7 @@ export default function GuildDetailPage() {
             <AdminSearchBar
               guildId={guildId}
               placeholder="Bu sunucuda Elasticsearch ara…"
-              types={['messages', 'channels', 'users']}
+              types={GUILD_DETAIL_SEARCH_TYPES}
             />
             <div className="flex flex-wrap gap-2 border-b border-dracula-current pb-2">
               {tabs.map((t) => (

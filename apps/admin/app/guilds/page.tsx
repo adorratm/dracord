@@ -1,10 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { AdminSearchBar } from '@/components/AdminSearchBar';
 import { listAllGuilds, type PlatformAdminGuildDetail } from '@/lib/api';
+
+const GUILD_SEARCH_TYPES = ['guilds', 'channels', 'messages'] as const;
 
 export default function GuildsPage() {
   const [guilds, setGuilds] = useState<PlatformAdminGuildDetail[]>([]);
@@ -47,7 +48,7 @@ export default function GuildsPage() {
         </div>
         <AdminSearchBar
           placeholder="Elasticsearch: sunucu / kanal / mesaj ara…"
-          types={['guilds', 'channels', 'messages']}
+          types={GUILD_SEARCH_TYPES}
         />
         {error ? <p className="text-sm text-dracula-red">{error}</p> : null}
         {loading ? (
@@ -59,9 +60,9 @@ export default function GuildsPage() {
             ) : (
               guilds.map((g) => (
                 <li key={g.id}>
-                  <Link
+                  <a
                     href={`/guilds/${g.id}`}
-                    className="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-dracula-current/40"
+                    className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition hover:bg-dracula-current/40"
                   >
                     <div>
                       <p className="font-medium text-dracula-fg">{g.name}</p>
@@ -71,7 +72,7 @@ export default function GuildsPage() {
                       </p>
                     </div>
                     <code className="shrink-0 text-xs text-dracula-cyan">{g.id}</code>
-                  </Link>
+                  </a>
                 </li>
               ))
             )}

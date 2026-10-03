@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
@@ -77,9 +76,9 @@ export default function UserDetailPage() {
     <AdminShell>
       <div className="space-y-6">
         <div>
-          <Link href="/users" className="text-sm text-dracula-cyan hover:underline">
+          <a href="/users" className="cursor-pointer text-sm text-dracula-cyan hover:underline">
             ← Kullanıcılar
-          </Link>
+          </a>
           <h2 className="mt-2 text-xl font-semibold text-dracula-fg">
             {user?.displayName ?? 'Kullanıcı'}
           </h2>
@@ -354,12 +353,12 @@ export default function UserDetailPage() {
                       className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm"
                     >
                       <div>
-                        <Link
+                        <a
                           href={`/guilds/${g.id}`}
-                          className="font-medium text-dracula-fg hover:underline"
+                          className="cursor-pointer font-medium text-dracula-fg hover:underline"
                         >
                           {g.name}
-                        </Link>
+                        </a>
                         <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-dracula-comment">
                           {g.owner ? <span>sahip</span> : null}
                           {g.banned ? (

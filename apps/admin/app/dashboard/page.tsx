@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { AdminShell } from '@/components/AdminShell';
 import { AdminSearchBar } from '@/components/AdminSearchBar';
 import { HealthStatus } from '@/components/HealthStatus';
@@ -46,14 +45,14 @@ export default function DashboardPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((item) => (
-            <Link
+            <a
               key={item.href}
               href={item.href}
-              className="rounded-lg border border-dracula-current bg-dracula-bg p-5 transition hover:border-dracula-purple"
+              className="cursor-pointer rounded-lg border border-dracula-current bg-dracula-bg p-5 transition hover:border-dracula-purple"
             >
               <h3 className="font-semibold text-dracula-purple">{item.title}</h3>
               <p className="mt-2 text-sm text-dracula-comment">{item.desc}</p>
-            </Link>
+            </a>
           ))}
         </section>
 

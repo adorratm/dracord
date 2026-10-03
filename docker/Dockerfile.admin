@@ -23,8 +23,12 @@ RUN --mount=type=cache,id=dracord-yarn,target=/root/.yarn/berry/cache \
     yarn workspaces focus @dracord/admin
 
 FROM deps AS build
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_API_URL=https://api.dracord.com.tr
+ARG NEXT_PUBLIC_WEB_URL=https://dracord.com.tr
+ARG NEXT_PUBLIC_SITE_URL=https://dracord.com.tr
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY packages ./packages
 COPY apps/admin ./apps/admin
 RUN yarn workspace @dracord/types build \
