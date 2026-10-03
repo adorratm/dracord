@@ -55,6 +55,7 @@ export class ChannelsService {
 
   async listGuildChannels(guildId: string, userId: string): Promise<ChannelSummary[]> {
     await this.guilds.ensureMember(guildId, userId);
+    await this.guilds.ensureDefaultEveryoneRole(guildId);
     const channels = await this.em.find(Channel, {
       where: { guildId },
       order: { categoryId: 'ASC', position: 'ASC' },
@@ -436,13 +437,9 @@ export class ChannelsService {
     if (roleDeny && !roleAllow) return false;
     if (roleAllow) return true;
 
-    // Varsayılan: sunucu izni
+    // Overwrite yok / inherit → üye kanalı görür. Gizli kanallar @everyone deny ile kapatılır.
     if (perm === 'VIEW_CHANNEL') {
-      return this.guilds.memberHasPermission(
-        channel.guildId,
-        userId,
-        GuildPermissions.VIEW_CHANNELS,
-      );
+      return true;
     }
     if (perm === 'SEND_MESSAGES') {
       return this.guilds.memberHasPermission(

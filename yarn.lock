@@ -3422,14 +3422,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"braces@npm:^3.0.3, braces@npm:~3.0.2":
-  version: 3.0.3
-  resolution: "braces@npm:3.0.3"
+"braces@portal:./vendor/braces::locator=dracord%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "braces@portal:./vendor/braces::locator=dracord%40workspace%3A."
   dependencies:
     fill-range: "npm:^7.1.1"
-  checksum: 10c0/7c6dfd30c338d2997ba77500539227b9d1f85e388a5f43220865201e407e076783d0881f2d297b9f80951b4c957fcf0b51c1d2d24227631643c3f7c284b0aa04
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "browserslist@npm:^4.28.9":
   version: 4.29.1
@@ -5165,12 +5164,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"http-cache-semantics@npm:^4.0.0":
-  version: 4.2.0
-  resolution: "http-cache-semantics@npm:4.2.0"
-  checksum: 10c0/45b66a945cf13ec2d1f29432277201313babf4a01d9e52f44b31ca923434083afeca03f18417f599c9ab3d0e7b618ceb21257542338b57c54b710463b4a53e37
+"http-cache-semantics@portal:./vendor/http-cache-semantics::locator=dracord%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "http-cache-semantics@portal:./vendor/http-cache-semantics::locator=dracord%40workspace%3A."
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "http-errors@npm:^2.0.0, http-errors@npm:^2.0.1, http-errors@npm:~2.0.1":
   version: 2.0.1

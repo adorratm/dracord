@@ -147,11 +147,12 @@ export class RolesService {
       relations: { permissions: true },
     });
     if (!role) throw new NotFoundException('Rol bulunamadı');
-    if (role.name === '@everyone') {
+    const isEveryone = role.name === '@everyone';
+    if (isEveryone && input.name != null && input.name.trim() !== '@everyone') {
       throw new BadRequestException('@everyone rolü yeniden adlandırılamaz');
     }
 
-    if (input.name != null) {
+    if (input.name != null && !isEveryone) {
       const name = input.name.trim();
       if (!name) throw new BadRequestException('Rol adı gerekli');
       role.name = name.slice(0, 32);
@@ -167,11 +168,16 @@ export class RolesService {
 
     if (input.permissions) {
       await this.em.delete(RolePermission, { roleId: role.id });
-      const perms = [...new Set(input.permissions)].filter(Boolean);
-      if (perms.length) {
+      const perms = new Set(input.permissions.filter(Boolean));
+      // @everyone her zaman kanalları görebilmeli (katılan üyeler boş sunucu görmesin)
+      if (isEveryone) {
+        perms.add(GuildPermissions.VIEW_CHANNELS);
+        perms.add(GuildPermissions.SEND_MESSAGES);
+      }
+      if (perms.size) {
         await this.em.save(
           RolePermission,
-          perms.map((permission) =>
+          [...perms].map((permission) =>
             this.em.create(RolePermission, { roleId: role.id, permission }),
           ),
         );
@@ -220,10 +226,17 @@ export class RolesService {
     }
 
     await this.em.delete(GuildMemberRole, { guildMemberId: member.id });
-    if (roles.length) {
+    const everyoneId = await this.guilds.ensureDefaultEveryoneRole(guildId);
+    const withEveryone = roles.some((r) => r.id === everyoneId)
+      ? roles
+      : [
+          ...roles,
+          ...(await this.em.find(Role, { where: { id: everyoneId } })),
+        ];
+    if (withEveryone.length) {
       await this.em.save(
         GuildMemberRole,
-        roles.map((r) =>
+        withEveryone.map((r) =>
           this.em.create(GuildMemberRole, {
             guildMemberId: member.id,
             roleId: r.id,
@@ -231,7 +244,7 @@ export class RolesService {
         ),
       );
     }
-    return { ok: true, roleIds: roles.map((r) => r.id) };
+    return { ok: true, roleIds: withEveryone.map((r) => r.id) };
   }
 
   async addMemberRole(

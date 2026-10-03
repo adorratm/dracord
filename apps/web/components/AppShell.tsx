@@ -84,7 +84,12 @@ export function AppShell({
     async (guildId: string) => {
       invalidateGuildNavCache(guildId);
       try {
-        const channels = await client.getGuildChannels(guildId);
+        let channels = await client.getGuildChannels(guildId);
+        // İlk istek boş dönerse (üyelik/izin race) bir kez daha dene
+        if (!channels.length) {
+          await new Promise((r) => setTimeout(r, 250));
+          channels = await client.getGuildChannels(guildId);
+        }
         const text =
           channels.find((c) => c.type === 'TEXT') ??
           channels.find((c) => c.type === 'FORUM') ??

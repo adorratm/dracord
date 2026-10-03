@@ -88,10 +88,51 @@ export class GuildsService {
     return everyone?.id ?? null;
   }
 
+  /** @everyone + varsayılan kanal görünürlük izinleri (katılma / eski sunucular). */
+  async ensureDefaultEveryoneRole(guildId: string): Promise<string> {
+    let everyone = await this.em.findOne(Role, {
+      where: { guildId, name: '@everyone' },
+    });
+    if (!everyone) {
+      everyone = await this.em.save(
+        Role,
+        this.em.create(Role, {
+          guildId,
+          name: '@everyone',
+          color: '#99AAB5',
+          position: 0,
+          badgeKey: 'none',
+          profileBgKey: 'none',
+          hoist: false,
+        }),
+      );
+    }
+
+    const defaults = [
+      GuildPermissions.VIEW_CHANNELS,
+      GuildPermissions.SEND_MESSAGES,
+      GuildPermissions.ADD_REACTIONS,
+      GuildPermissions.CREATE_POLLS,
+    ] as const;
+    const existing = await this.em.find(RolePermission, {
+      where: { roleId: everyone.id },
+    });
+    const have = new Set(existing.map((p) => p.permission));
+    const missing = defaults.filter((p) => !have.has(p));
+    if (missing.length) {
+      await this.em.save(
+        RolePermission,
+        missing.map((permission) =>
+          this.em.create(RolePermission, { roleId: everyone.id, permission }),
+        ),
+      );
+    }
+    return everyone.id;
+  }
+
   /** Üyeye @everyone rolünü bağla (yoksa). */
   async ensureEveryoneRole(guildId: string, guildMemberId: string): Promise<void> {
-    const everyoneId = await this.getEveryoneRoleId(guildId);
-    if (!everyoneId) return;
+    const everyoneId = await this.ensureDefaultEveryoneRole(guildId);
     const existing = await this.em.findOne(GuildMemberRole, {
       where: { guildMemberId, roleId: everyoneId },
     });
@@ -118,22 +159,25 @@ export class GuildsService {
 
   /** Eksik @everyone linklerini tüm sunucu üyelerine backfill et. */
   async backfillEveryoneRoles(): Promise<number> {
-    const everyoneRoles = await this.em.find(Role, { where: { name: '@everyone' } });
+    const guilds = await this.em.find(Guild, { select: ['id'] });
     let added = 0;
-    for (const role of everyoneRoles) {
+    for (const g of guilds) {
+      await this.ensureDefaultEveryoneRole(g.id);
+      const everyoneId = await this.getEveryoneRoleId(g.id);
+      if (!everyoneId) continue;
       const members = await this.em.find(GuildMember, {
-        where: { guildId: role.guildId },
+        where: { guildId: g.id },
       });
       for (const member of members) {
         const existing = await this.em.findOne(GuildMemberRole, {
-          where: { guildMemberId: member.id, roleId: role.id },
+          where: { guildMemberId: member.id, roleId: everyoneId },
         });
         if (existing) continue;
         await this.em.save(
           GuildMemberRole,
           this.em.create(GuildMemberRole, {
             guildMemberId: member.id,
-            roleId: role.id,
+            roleId: everyoneId,
           }),
         );
         added += 1;
