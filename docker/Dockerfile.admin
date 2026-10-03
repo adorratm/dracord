@@ -19,6 +19,7 @@ COPY packages/types/package.json ./packages/types/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/config/package.json ./packages/config/
 COPY packages/ui/package.json ./packages/ui/
+COPY vendor ./vendor
 RUN --mount=type=cache,id=dracord-yarn,target=/root/.yarn/berry/cache \
     yarn workspaces focus @dracord/admin
 
