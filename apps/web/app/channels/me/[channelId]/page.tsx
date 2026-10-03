@@ -36,7 +36,7 @@ function DmChatInner({
 }) {
   const router = useRouter();
   const { client, user } = useAuth();
-  const { guilds } = useGuildNav(undefined);
+  const { guilds, reload } = useGuildNav(undefined);
   const { prefs } = useUserPreferences();
   const [title, setTitle] = useState('DM');
   const [selfNotes, setSelfNotes] = useState(false);
@@ -303,7 +303,12 @@ function DmChatInner({
   }, [client]);
 
   return (
-    <AppShell guilds={guilds} homeActive titleBarNav="direct-messages">
+    <AppShell
+      guilds={guilds}
+      homeActive
+      titleBarNav="direct-messages"
+      onGuildsChanged={() => void reload()}
+    >
       <div className="flex flex-1 min-w-0 min-h-0 flex-col bg-surface">
         <header className="h-12 px-space-md flex items-center gap-space-sm border-b border-surface-container-high shadow-bar shrink-0">
           <button

@@ -12,6 +12,11 @@ type GuildNavSnapshot = {
 /** Sayfa remount / kanal geçişinde “Sunucu yükleniyor” flaşını önler. */
 const guildNavCache = new Map<string, GuildNavSnapshot>();
 
+export function invalidateGuildNavCache(guildId?: string) {
+  if (guildId) guildNavCache.delete(guildId);
+  else guildNavCache.clear();
+}
+
 function readCache(guildId: string | undefined): GuildNavSnapshot | undefined {
   if (!guildId) return undefined;
   return guildNavCache.get(guildId);
@@ -29,6 +34,7 @@ export function useGuildNav(guildId: string | undefined) {
   const [channels, setChannels] = useState<ChannelSummary[]>(cached?.channels ?? []);
   const [categories, setCategories] = useState<CategoryDto[]>(cached?.categories ?? []);
   const [loading, setLoading] = useState(!cached);
+  const [error, setError] = useState<string | null>(null);
 
   const applySnapshot = useCallback(
     (list: GuildSummary[], ch: ChannelSummary[], cats: CategoryDto[]) => {
@@ -37,6 +43,7 @@ export function useGuildNav(guildId: string | undefined) {
       setGuild(nextGuild);
       setChannels(ch);
       setCategories(cats);
+      setError(null);
       if (guildId) {
         writeCache(guildId, {
           guilds: list,
@@ -53,6 +60,7 @@ export function useGuildNav(guildId: string | undefined) {
     if (!user) return;
     const soft = Boolean(readCache(guildId)) || guilds.length > 0;
     if (!soft) setLoading(true);
+    setError(null);
     try {
       const list = await client.listGuilds();
       let ch: ChannelSummary[] = [];
@@ -64,6 +72,9 @@ export function useGuildNav(guildId: string | undefined) {
         ]);
       }
       applySnapshot(list, ch, cats);
+    } catch (e) {
+      if (guildId) invalidateGuildNavCache(guildId);
+      setError(e instanceof Error ? e.message : 'Sunucu yüklenemedi');
     } finally {
       setLoading(false);
     }
@@ -120,6 +131,7 @@ export function useGuildNav(guildId: string | undefined) {
     let cancelled = false;
     const hit = readCache(guildId);
     if (!hit) setLoading(true);
+    setError(null);
     void (async () => {
       try {
         const list = await client.listGuilds();
@@ -134,6 +146,10 @@ export function useGuildNav(guildId: string | undefined) {
         }
         if (cancelled) return;
         applySnapshot(list, ch, cats);
+      } catch (e) {
+        if (cancelled) return;
+        if (guildId) invalidateGuildNavCache(guildId);
+        setError(e instanceof Error ? e.message : 'Sunucu yüklenemedi');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -149,6 +165,7 @@ export function useGuildNav(guildId: string | undefined) {
     channels,
     categories,
     loading,
+    error,
     reload,
     patchGuild,
     patchChannelUnread,

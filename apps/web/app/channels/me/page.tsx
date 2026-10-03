@@ -16,7 +16,7 @@ import { useGuildNav } from '@/hooks/useGuildNav';
 export default function FriendsHubPage() {
   const router = useRouter();
   const { user, client } = useAuth();
-  const { guilds } = useGuildNav(undefined);
+  const { guilds, reload } = useGuildNav(undefined);
   const [friends, setFriends] = useState<FriendRow[]>([]);
   const [pending, setPending] = useState<FriendRow[]>([]);
   const [blocked, setBlocked] = useState<FriendRow[]>([]);
@@ -295,7 +295,13 @@ export default function FriendsHubPage() {
 
   return (
     <RequireAuth>
-      <AppShell guilds={guilds} homeActive titleBarNav="direct-messages" subtitle="Direkt mesajlar">
+      <AppShell
+        guilds={guilds}
+        homeActive
+        titleBarNav="direct-messages"
+        subtitle="Direkt mesajlar"
+        onGuildsChanged={() => void reload()}
+      >
         <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden bg-surface relative">
           <div className="hidden md:flex h-full min-h-0 shrink-0">{dmSidebar}</div>
 

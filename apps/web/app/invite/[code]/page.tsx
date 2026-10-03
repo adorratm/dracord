@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { Draco, DracoEmpty } from '@/components/Draco';
+import { invalidateGuildNavCache } from '@/hooks/useGuildNav';
 
 export default function InviteJoinPage() {
   const params = useParams<{ code: string }>();
@@ -22,9 +23,18 @@ export default function InviteJoinPage() {
     void (async () => {
       try {
         const guild = await client.joinInvite(code);
+        invalidateGuildNavCache(guild.id);
         const channels = await client.getGuildChannels(guild.id);
-        const text = channels.find((c) => c.type === 'TEXT') ?? channels[0];
-        router.replace(text ? `/channels/${guild.id}/${text.id}` : '/channels/@me');
+        const text =
+          channels.find((c) => c.type === 'TEXT') ??
+          channels.find((c) => c.type === 'FORUM') ??
+          channels.find((c) => c.type === 'VOICE') ??
+          channels[0];
+        if (text) {
+          router.replace(`/channels/${guild.id}/${text.id}`);
+          return;
+        }
+        setError('Bu sunucuda görüntülenebilir kanal yok.');
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Davet geçersiz');
       }

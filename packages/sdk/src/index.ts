@@ -109,6 +109,9 @@ export class DracordClient {
       ...init,
       headers,
       credentials: 'include',
+      // Browser HTTP cache can surface bare 304 (res.ok=false, empty body) for
+      // credentialed GETs — that breaks guild/channel loads after join.
+      cache: init.cache ?? 'no-store',
     });
 
     if (res.status === 401 && !retried && path !== '/auth/refresh') {

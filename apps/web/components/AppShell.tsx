@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { AppTour } from '@/components/AppTour';
 import { NotificationBell } from '@/components/NotificationBell';
+import { invalidateGuildNavCache } from '@/hooks/useGuildNav';
 
 const LAST_CHANNEL_KEY = 'dracord:last-channel';
 
@@ -81,18 +82,22 @@ export function AppShell({
 
   const openGuild = useCallback(
     async (guildId: string) => {
+      invalidateGuildNavCache(guildId);
       try {
         const channels = await client.getGuildChannels(guildId);
         const text =
           channels.find((c) => c.type === 'TEXT') ??
           channels.find((c) => c.type === 'FORUM') ??
+          channels.find((c) => c.type === 'VOICE') ??
           channels[0];
         if (text) {
           rememberChannel(guildId, text.id);
           router.push(`/channels/${guildId}/${text.id}`);
+          return;
         }
-      } catch {
-        router.push(`/channels/${guildId}`);
+        setError('Bu sunucuda görüntülenebilir kanal yok.');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Sunucu açılamadı');
       } finally {
         setServersOpen(false);
       }
@@ -170,6 +175,12 @@ export function AppShell({
       });
       setCreateOpen(false);
       setServerName('');
+      setGuildsOverride((prev) => {
+        const base = prev ?? guilds;
+        if (base.some((g) => g.id === guild.id)) return base;
+        return [...base, guild];
+      });
+      invalidateGuildNavCache();
       onGuildsChanged?.();
       await openGuild(guild.id);
     } catch (e) {
@@ -187,6 +198,12 @@ export function AppShell({
       const guild = await client.joinInvite(code);
       setInviteOpen(false);
       setInviteCode('');
+      setGuildsOverride((prev) => {
+        const base = prev ?? guilds;
+        if (base.some((g) => g.id === guild.id)) return base;
+        return [...base, guild];
+      });
+      invalidateGuildNavCache(guild.id);
       onGuildsChanged?.();
       await openGuild(guild.id);
     } catch (e) {
@@ -227,6 +244,7 @@ export function AppShell({
       const leftId = leaveTarget.id;
       await client.leaveGuild(leftId);
       setLeaveTarget(null);
+      invalidateGuildNavCache(leftId);
       setGuildsOverride((prev) => (prev ?? guilds).filter((g) => g.id !== leftId));
       onGuildsChanged?.();
       if (activeGuildId === leftId) {
@@ -447,12 +465,22 @@ export function AppShell({
               onClick={() => {
                 void (async () => {
                   try {
-                    await client.joinDiscoverableGuild(g.id);
+                    setBusy(true);
+                    setError(null);
+                    const joined = await client.joinDiscoverableGuild(g.id);
+                    setGuildsOverride((prev) => {
+                      const base = prev ?? guilds;
+                      if (base.some((x) => x.id === joined.id)) return base;
+                      return [...base, joined];
+                    });
+                    invalidateGuildNavCache(joined.id);
                     onGuildsChanged?.();
                     setExploreOpen(false);
-                    await openGuild(g.id);
+                    await openGuild(joined.id);
                   } catch (e) {
                     setError(e instanceof Error ? e.message : 'Katılınamadı');
+                  } finally {
+                    setBusy(false);
                   }
                 })();
               }}

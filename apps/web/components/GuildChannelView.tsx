@@ -78,6 +78,7 @@ export function GuildChannelView({
     channels,
     categories: guildCategories,
     loading,
+    error: navError,
     reload,
     patchGuild,
     patchChannelUnread,
@@ -87,8 +88,9 @@ export function GuildChannelView({
   const isForumView = channel?.type === 'FORUM';
   const [forumSort, setForumSort] = useState<ForumSort>('newest');
   const [forumTag, setForumTag] = useState<string | null>(null);
-  const channelPending = !channel && (loading || channels.length === 0);
+  const channelPending = !channel && loading;
   const channelMissing = !channel && !loading && channels.length > 0;
+  const channelsEmpty = !channel && !loading && channels.length === 0;
 
   const {
     messages,
@@ -2132,6 +2134,19 @@ export function GuildChannelView({
       ) : channelPending ? (
         <div className="flex flex-1 min-w-0 min-h-0 items-center justify-center bg-surface text-outline font-body-md">
           Kanal yükleniyor…
+        </div>
+      ) : channelsEmpty || navError ? (
+        <div className="flex flex-1 min-w-0 min-h-0 flex-col items-center justify-center gap-3 bg-surface px-4 text-center">
+          <p className="font-body-md text-outline">
+            {navError ?? 'Bu sunucuda görüntülenebilir kanal yok.'}
+          </p>
+          <button
+            type="button"
+            className="h-9 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-md"
+            onClick={() => void reload()}
+          >
+            Yeniden dene
+          </button>
         </div>
       ) : channelMissing ? (
         <div className="flex flex-1 min-w-0 min-h-0 items-center justify-center bg-surface text-outline font-body-md">
