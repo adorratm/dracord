@@ -363,8 +363,8 @@ export function ChatInput({
     const threadsCmd: BotSlashCommand = {
       name: 'threads',
       aliases: ['thread'],
-      description: 'Bu kanaldaki son threadleri göster',
-      usage: '/threads',
+      description: 'Thread kanalı · /threads veya /threads kanal-adı [mesaj]',
+      usage: '/threads [kanal] [mesaj]',
     };
     const source = botSlashCommands?.length
       ? botSlashCommands.some((c) => c.name === 'threads')

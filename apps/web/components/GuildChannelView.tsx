@@ -121,7 +121,6 @@ export function GuildChannelView({
   const { prefs } = useUserPreferences();
   const lastSpokeAtRef = useRef(Date.now());
   const afkMovingRef = useRef(false);
-  const afkMuteAppliedRef = useRef(false);
 
   const voiceChannel = channels.find((c) => c.id === voice.voiceChannelId);
   const inVoiceInThisGuild =
@@ -233,9 +232,6 @@ export function GuildChannelView({
     import('@dracord/types').MessageDto[]
   >([]);
   const [threadsPreviewBusy, setThreadsPreviewBusy] = useState(false);
-  const [sidebarThreads, setSidebarThreads] = useState<
-    import('@dracord/types').MessageDto[]
-  >([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
@@ -552,47 +548,24 @@ export function GuildChannelView({
     setThreadDraft('');
     setThreadsPreviewOpen(false);
     setThreadsPreview([]);
-    setSidebarThreads([]);
   }, [channelId]);
 
-  const openThreadsPreview = useCallback(() => {
-    if (!channelId) return;
-    setThreadsPreviewOpen(true);
-    setThreadsPreviewBusy(true);
-    void client
-      .listChannelThreads(channelId, 5)
-      .then((page) => {
-        setThreadsPreview(page.items);
-        setSidebarThreads(page.items);
-      })
-      .catch(() => setThreadsPreview([]))
-      .finally(() => setThreadsPreviewBusy(false));
-  }, [channelId, client]);
-
-  const refreshSidebarThreads = useCallback(() => {
-    if (!channelId || isVoiceView) {
-      setSidebarThreads([]);
-      return;
-    }
-    void client
-      .listChannelThreads(channelId, 10)
-      .then((page) => setSidebarThreads(page.items))
-      .catch(() => setSidebarThreads([]));
-  }, [channelId, client, isVoiceView]);
-
-  useEffect(() => {
-    refreshSidebarThreads();
-  }, [refreshSidebarThreads]);
-
-  useEffect(() => {
-    if (!threadRoot) return;
-    setSidebarThreads((prev) => {
-      if (prev.some((m) => m.id === threadRoot.id)) {
-        return prev.map((m) => (m.id === threadRoot.id ? { ...m, ...threadRoot } : m));
-      }
-      return [threadRoot, ...prev].slice(0, 10);
-    });
-  }, [threadRoot]);
+  const openThreadsPreview = useCallback(
+    (targetChannelId?: string) => {
+      const id = targetChannelId ?? channelId;
+      if (!id) return;
+      setThreadsPreviewOpen(true);
+      setThreadsPreviewBusy(true);
+      void client
+        .listChannelThreads(id, 10)
+        .then((page) => {
+          setThreadsPreview(page.items);
+        })
+        .catch(() => setThreadsPreview([]))
+        .finally(() => setThreadsPreviewBusy(false));
+    },
+    [channelId, client],
+  );
 
   // Arama deep-link: ?thread= kök id
   useEffect(() => {
@@ -813,70 +786,23 @@ export function GuildChannelView({
     router,
   ]);
 
-  // AFK kanalına her girişte (elle veya otomatik) mic + kulaklık mute — sürekli zorunlu
+  // AFK kanalı: zorla sessizlik (mic+kulaklık); çıkınca aç
   useEffect(() => {
     const afkId = guild?.afkChannelId;
-    if (
-      !afkId ||
-      !voice.connected ||
-      voice.voiceGuildId !== guildId ||
-      voice.voiceChannelId !== afkId
-    ) {
-      afkMuteAppliedRef.current = false;
-      return;
-    }
-    sessionStorage.setItem('dracord:was-afk', '1');
-    if (!voice.muted || !voice.deafened) {
-      afkMuteAppliedRef.current = true;
-      void (async () => {
-        if (!voice.muted) await voice.toggleMute();
-        if (!voice.deafened) await voice.toggleDeafen();
-      })();
-    } else {
-      afkMuteAppliedRef.current = true;
-    }
+    const inAfk = Boolean(
+      afkId &&
+        voice.connected &&
+        voice.voiceGuildId === guildId &&
+        voice.voiceChannelId === afkId,
+    );
+    voice.setAfkSilence(inAfk);
   }, [
     guild?.afkChannelId,
     guildId,
+    voice.connected,
     voice.voiceChannelId,
     voice.voiceGuildId,
-    voice.connected,
-    voice.muted,
-    voice.deafened,
-    voice.toggleMute,
-    voice.toggleDeafen,
-  ]);
-
-  // AFK’dan başka kanala geçince mute/deafen kaldır
-  useEffect(() => {
-    const afkId = guild?.afkChannelId;
-    if (
-      !afkId ||
-      !voice.voiceChannelId ||
-      voice.voiceGuildId !== guildId ||
-      !voice.connected
-    ) {
-      return;
-    }
-    if (voice.voiceChannelId === afkId) return;
-    const prev = sessionStorage.getItem('dracord:was-afk');
-    if (prev === '1') {
-      sessionStorage.removeItem('dracord:was-afk');
-      void (async () => {
-        if (voice.muted) await voice.toggleMute();
-        if (voice.deafened) await voice.toggleDeafen();
-      })();
-    }
-  }, [
-    guild?.afkChannelId,
-    guildId,
-    voice.voiceChannelId,
-    voice.voiceGuildId,
-    voice.connected,
-    voice.muted,
-    voice.deafened,
-    voice.toggleMute,
-    voice.toggleDeafen,
+    voice.setAfkSilence,
   ]);
 
   useEffect(() => {
@@ -911,17 +837,17 @@ export function GuildChannelView({
             id: p.id,
             displayName: p.displayName || m?.displayName || prior?.displayName || p.id,
             avatarUrl: p.avatarUrl || m?.avatarUrl || prior?.avatarUrl || null,
+            // LiveKit mute kaynağı — prior ile OR etme (hayalet toplu mute)
             muted: isAfkChannel
               ? true
               : isSelf
                 ? voice.muted
-                : Boolean(p.muted || prior?.muted),
+                : Boolean(p.muted),
             deafened: isAfkChannel
               ? true
               : isSelf
                 ? voice.deafened
                 : Boolean(prior?.deafened),
-            // AFK’da konuşma göstergesi yok (mute zorunlu)
             speaking: isAfkChannel ? false : Boolean(p.speaking),
             screenSharing: Boolean(
               (p as { screenSharing?: boolean }).screenSharing ?? prior?.screenSharing,
@@ -1065,6 +991,86 @@ export function GuildChannelView({
       router.push(`/channels/${guildId}/${ch.id}`);
     },
     [joinVoiceChannel, guildId, router, canManageChannels],
+  );
+
+  /** @threads / /threads [kanal-adı] [opsiyonel içerik] — thread hub kanalına git / oluştur */
+  const handleThreadsCommand = useCallback(
+    (raw: string) => {
+      const m = raw.trim().match(/^[@/]threads(?:\s+([\s\S]+))?$/i);
+      if (!m) {
+        openThreadsPreview();
+        return;
+      }
+      const rest = (m[1] ?? '').trim();
+
+      const norm = (s: string) =>
+        s.replace(/^@/, '').toLocaleLowerCase('tr-TR').replace(/\s+/g, '-');
+
+      const textChannels = channels.filter(
+        (c) => c.type === 'TEXT' || c.type === 'FORUM',
+      );
+
+      const defaultHub =
+        textChannels.find((c) => {
+          const n = norm(c.name);
+          return n === 'threads' || n === 'thread';
+        }) ??
+        textChannels.find((c) => norm(c.name).includes('thread')) ??
+        channel ??
+        undefined;
+
+      let target: ChannelSummary | undefined = defaultHub;
+      let body = rest;
+
+      if (rest.length > 0) {
+        const space = rest.search(/\s/);
+        const firstToken = (space === -1 ? rest : rest.slice(0, space)).replace(
+          /^#/,
+          '',
+        );
+        const remainder = space === -1 ? '' : rest.slice(space).trim();
+        const named = textChannels.find(
+          (c) => norm(c.name) === norm(firstToken),
+        );
+        if (named) {
+          target = named;
+          body = remainder;
+        } else if (space === -1) {
+          // Tek kelime kanal değilse varsayılan hub’a mesaj olarak yaz
+          body = rest;
+        }
+      }
+
+      if (!target) {
+        setDmError('Thread kanalı bulunamadı. Önce bir #threads kanalı oluşturun.');
+        return;
+      }
+
+      void (async () => {
+        try {
+          if (body) {
+            const msg = await client.sendMessage(target.id, body);
+            setThreadRoot(msg);
+            setThreadDraft('');
+          } else {
+            openThreadsPreview(target.id);
+          }
+          if (target.id !== channelId) {
+            selectChannel(target);
+          }
+        } catch (err) {
+          setDmError(err instanceof Error ? err.message : 'Thread açılamadı');
+        }
+      })();
+    },
+    [
+      channels,
+      channel,
+      channelId,
+      client,
+      openThreadsPreview,
+      selectChannel,
+    ],
   );
 
   const disconnectFromVoice = useCallback(
@@ -2063,7 +2069,7 @@ export function GuildChannelView({
         !isForumView &&
         (/^@threads\b/i.test(trimmed) || /^\/threads\b/i.test(trimmed))
       ) {
-        openThreadsPreview();
+        handleThreadsCommand(trimmed);
         return;
       }
       void sendMessage(
@@ -2117,23 +2123,7 @@ export function GuildChannelView({
       serverName={serverName}
       serverBannerUrl={guild?.bannerUrl}
       categories={categories}
-      threadsSection={
-        !isVoiceView && sidebarThreads.length > 0
-          ? {
-              items: sidebarThreads.map((m) => ({
-                id: m.id,
-                label: m.content.trim() || `${m.author.displayName} thread`,
-                replyCount: m.threadReplyCount ?? 0,
-                active: threadRoot?.id === m.id,
-                onClick: () => {
-                  setThreadRoot(m);
-                  setThreadDraft('');
-                  setChannelsOpen(false);
-                },
-              })),
-            }
-          : null
-      }
+      threadsSection={null}
       onServerHeaderClick={() => setServerMenuOpen(true)}
       className="h-full w-full md:w-72"
       userPanel={{
@@ -2317,6 +2307,7 @@ export function GuildChannelView({
               isBot: Boolean(p.isBot || m?.isBot),
               muted: inAfk ? true : p.muted,
               speaking: inAfk ? false : p.speaking,
+              deafened: inAfk ? true : voice.deafened && p.id === user?.id,
             };
           })}
           localParticipantId={user?.id}
@@ -2771,7 +2762,6 @@ export function GuildChannelView({
                       })
                         .then(() => {
                           setThreadDraft('');
-                          refreshSidebarThreads();
                         })
                         .finally(() => setThreadSending(false));
                     }
@@ -2789,7 +2779,6 @@ export function GuildChannelView({
                     })
                       .then(() => {
                         setThreadDraft('');
-                        refreshSidebarThreads();
                       })
                       .finally(() => setThreadSending(false));
                   }}
@@ -3743,7 +3732,7 @@ export function GuildChannelView({
 
       <Modal
         open={threadsPreviewOpen}
-        title="Son threadler"
+        title="Thread kanalı"
         onClose={() => setThreadsPreviewOpen(false)}
       >
         {threadsPreviewBusy && (
@@ -3760,9 +3749,16 @@ export function GuildChannelView({
                   type="button"
                   className="w-full text-left rounded-lg px-space-sm py-space-sm hover:bg-surface-container-highest"
                   onClick={() => {
-                    setThreadRoot(m);
-                    setThreadDraft('');
+                    const root = m;
                     setThreadsPreviewOpen(false);
+                    setThreadDraft('');
+                    if (root.channelId && root.channelId !== channelId) {
+                      const ch = channels.find((c) => c.id === root.channelId);
+                      if (ch) selectChannel(ch);
+                      window.setTimeout(() => setThreadRoot(root), 150);
+                    } else {
+                      setThreadRoot(root);
+                    }
                   }}
                 >
                   <p className="font-label-sm text-primary-container truncate">

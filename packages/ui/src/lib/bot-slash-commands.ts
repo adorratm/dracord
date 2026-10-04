@@ -12,8 +12,8 @@ export const BOT_SLASH_COMMANDS: BotSlashCommand[] = [
   {
     name: 'threads',
     aliases: ['thread'],
-    description: 'Bu kanaldaki son threadleri göster',
-    usage: '/threads',
+    description: 'Thread kanalı · /threads veya /threads kanal-adı [mesaj]',
+    usage: '/threads [kanal] [mesaj]',
   },
   {
     name: 'oynat',

@@ -126,6 +126,12 @@ interface VoiceSessionValue {
   leave: () => string | null;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
+  /** Mutlak mute — AFK giriş/çıkış için (toggle yarışı yok) */
+  setMute: (muted: boolean) => Promise<void>;
+  /** Mutlak deafen — açılınca mic de açılır, kapanınca mic de kapanır */
+  setDeafen: (deafened: boolean) => Promise<void>;
+  /** AFK kanalı: zorla mute+deafen, toggle’lar yok sayılır, kimse duyulmaz */
+  setAfkSilence: (enabled: boolean) => void;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
   toggleNoiseCancellation: () => Promise<void>;
@@ -157,12 +163,14 @@ function participantFromRemote(p: RemoteParticipant): VoiceParticipant {
   const cameraPub = p.getTrackPublication(Track.Source.Camera);
   const screenPub = p.getTrackPublication(Track.Source.ScreenShare);
   const meta = metaFromParticipant(p);
+  // Yayın yokken muted varsayma — aksi halde Track flicker’da herkes “mute”e yapışır
+  const muted = audioPub ? Boolean(audioPub.isMuted) : false;
   return {
     id: p.identity,
     displayName: p.name || p.identity,
     avatarUrl: meta.avatarUrl,
-    muted: audioPub?.isMuted ?? !p.isMicrophoneEnabled,
-    speaking: p.isSpeaking,
+    muted,
+    speaking: !muted && p.isSpeaking,
     camera: Boolean(cameraPub?.track && !cameraPub.isMuted),
     video: Boolean(screenPub?.track),
     isBot: meta.isBot || p.identity === 'system-dracord-bot',
@@ -244,7 +252,43 @@ async function readPublisherRttMs(room: Room): Promise<number | null> {
 function applyDeafen(room: Room, deafened: boolean) {
   room.remoteParticipants.forEach((p) => {
     p.audioTrackPublications.forEach((pub) => {
-      pub.setEnabled(!deafened);
+      try {
+        pub.setEnabled(!deafened);
+      } catch {
+        // ignore
+      }
+    });
+  });
+}
+
+/** Deafen kapalıyken uzak ses aboneliklerini yeniden aç (hayalet sessizlik) */
+function ensureRemoteAudioReceiving(room: Room, deafened: boolean) {
+  if (deafened) {
+    applyDeafen(room, true);
+    return;
+  }
+  room.remoteParticipants.forEach((p) => {
+    p.audioTrackPublications.forEach((pub) => {
+      try {
+        if (!pub.isEnabled) pub.setEnabled(true);
+      } catch {
+        // ignore
+      }
+      const track = pub.track;
+      if (!track || track.kind !== Track.Kind.Audio) return;
+      try {
+        const attached = track.attach();
+        const els = Array.isArray(attached) ? attached : [attached];
+        for (const el of els) {
+          if (el instanceof HTMLAudioElement) {
+            el.setAttribute('data-lk-remote-audio', p.identity);
+            el.autoplay = true;
+            void el.play().catch(() => undefined);
+          }
+        }
+      } catch {
+        // ignore
+      }
     });
   });
 }
@@ -293,10 +337,18 @@ function screenShareErrorMessage(err: unknown): string {
   if (name === 'NotFoundError' || /not found/i.test(msg)) {
     return 'Paylaşılacak ekran veya pencere bulunamadı.';
   }
+  if (/could not start audio source|audio source|getDisplayMedia.*audio/i.test(msg)) {
+    return 'Sistem sesi alınamadı; paylaşım sessiz video ile devam edebilir. Tekrar dene veya tarayıcıda “sekme sesini paylaş”ı işaretle.';
+  }
   if (typeof window !== 'undefined' && !window.isSecureContext) {
     return 'Ekran paylaşımı yalnızca güvenli bağlamda (localhost veya HTTPS) çalışır.';
   }
   return msg || 'Ekran paylaşımı başarısız';
+}
+
+function isScreenShareAudioFailure(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /could not start audio source|audio source|NotReadableError|AbortError/i.test(msg);
 }
 
 function isIOSWebKit(): boolean {
@@ -409,6 +461,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const clarityRef = useRef<{ setPresenceGainDb: (db: number) => void } | null>(null);
   const micGainRef = useRef<MicGainProcessor | null>(null);
   const deafenedRef = useRef(false);
+  const afkSilenceRef = useRef(false);
   const knownPeersRef = useRef(new Set<string>());
   const screenTrackRef = useRef<Track | null>(null);
   const screenVideoElRef = useRef<HTMLVideoElement | null>(null);
@@ -914,10 +967,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           clearScreenShareView();
           return;
         } else {
-          // Otomatik seçim yok — kullanıcı chip ile seçene kadar boş bırak
-          focusedScreenShareIdRef.current = '__none__';
-          clearScreenShareView();
-          return;
+          // İlk / yeni paylaşım: otomatik odakla (uzak öncelikli)
+          focusId =
+            shares.find((s) => !s.isLocal)?.identity ?? shares[0]!.identity;
+          focusedScreenShareIdRef.current = focusId;
         }
       }
 
@@ -1035,6 +1088,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     const syncMedia = () => {
       if (!disposed) {
+        ensureRemoteAudioReceiving(room, deafenedRef.current || afkSilenceRef.current);
         applyScreenShareView(room);
         syncCameraTracks(room);
       }
@@ -1123,12 +1177,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
       if (publication.source === Track.Source.ScreenShare) {
         const identity = participant?.identity;
-        // Paylaşım kapanınca bu yayıncı için pause sıfırlanır (yeniden açınca izlenebilir)
+        // Paylaşım kapanınca bu yayıncı için pause sıfırlanır; başka paylaşım varsa ona geç
         if (identity && focusedScreenShareIdRef.current === identity) {
           screenShareViewPausedRef.current = false;
           setScreenShareViewPaused(false);
           clearScreenShareView();
-          focusedScreenShareIdRef.current = '__none__';
+          focusedScreenShareIdRef.current = null;
         } else if (screenTrackRef.current === track) {
           clearScreenShareView();
         } else {
@@ -1150,6 +1204,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } catch {
         // ignore
       }
+      syncAll();
     });
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
       setAudioPlaybackBlocked(!room.canPlaybackAudio);
@@ -1213,6 +1268,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           room.disconnect();
           throw new Error(micPermissionErrorMessage(micErr));
         }
+        // AFK sessizlik kilidi oda yenilenince de geçerli kalsın
+        if (afkSilenceRef.current) {
+          try {
+            await room.localParticipant.setMicrophoneEnabled(false);
+          } catch {
+            // ignore
+          }
+          mutedRef.current = true;
+          deafenedRef.current = true;
+          setMuted(true);
+          setDeafened(true);
+          ensureRemoteAudioReceiving(room, true);
+        }
         try {
           await room.startAudio();
           setAudioPlaybackBlocked(!room.canPlaybackAudio);
@@ -1223,13 +1291,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         void refreshAudioDevices(false);
         try {
           await client.joinVoiceState(channelId, {
-            muted: false,
-            deafened: false,
+            muted: afkSilenceRef.current || mutedRef.current,
+            deafened: afkSilenceRef.current || deafenedRef.current,
             password,
           });
           if (guildId) {
             client.connectSocket();
-            client.emitVoiceState({ guildId, channelId, muted: false, deafened: false });
+            client.emitVoiceState({
+              guildId,
+              channelId,
+              muted: afkSilenceRef.current || mutedRef.current,
+              deafened: afkSilenceRef.current || deafenedRef.current,
+            });
           }
         } catch {
           // presence sync optional
@@ -1237,7 +1310,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
         playUiTone('join');
         setConnected(true);
-        refreshParticipants(room, false);
+        refreshParticipants(room, mutedRef.current);
         if (guildId) {
           saveActiveVoice({ guildId, channelId });
         }
@@ -1257,6 +1330,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void client.voiceHeartbeat(channelId).catch(() => undefined);
     }, 30_000);
 
+    // Hayalet sessizlik: deafen yokken uzak ses aboneliklerini periyodik onar
+    const audioHealth = window.setInterval(() => {
+      if (disposed || !roomRef.current) return;
+      ensureRemoteAudioReceiving(
+        room,
+        deafenedRef.current || afkSilenceRef.current,
+      );
+      if (!deafenedRef.current && !afkSilenceRef.current) {
+        void room.startAudio().catch(() => undefined);
+      }
+    }, 8_000);
+
     /** Yenilemede presence kalsın (TTL 90s); sessionStorage ile hemen rejoin. */
     const onPageHide = () => {
       if (guildId) {
@@ -1268,6 +1353,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       disposed = true;
       window.clearInterval(heartbeat);
+      window.clearInterval(audioHealth);
       window.removeEventListener('pagehide', onPageHide);
       deepFilterActiveRef.current = false;
       clarityRef.current = null;
@@ -1541,66 +1627,129 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return screenShareVolumesRef.current.get(identity) ?? 100;
   }, []);
 
-  const toggleMute = useCallback(async () => {
-    const room = roomRef.current;
-    const channelId = channelIdRef.current;
-    if (!room || !channelId) return;
-    const next = !mutedRef.current;
-    await room.localParticipant.setMicrophoneEnabled(!next);
-    setMuted(next);
-    refreshParticipants(room, next);
-    try {
-      await client.updateVoiceState(channelId, {
-        muted: next,
-        deafened: deafenedRef.current,
-      });
-      const guildId = guildIdRef.current;
-      if (guildId) {
-        client.emitVoiceState({
-          guildId,
-          channelId,
-          muted: next,
-          deafened: deafenedRef.current,
+  const publishVoiceFlags = useCallback(
+    async (nextMuted: boolean, nextDeafened: boolean) => {
+      const channelId = channelIdRef.current;
+      if (!channelId) return;
+      try {
+        await client.updateVoiceState(channelId, {
+          muted: nextMuted,
+          deafened: nextDeafened,
         });
+        const guildId = guildIdRef.current;
+        if (guildId) {
+          client.emitVoiceState({
+            guildId,
+            channelId,
+            muted: nextMuted,
+            deafened: nextDeafened,
+          });
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-  }, [client, refreshParticipants]);
+    },
+    [client],
+  );
+
+  const setMute = useCallback(
+    async (next: boolean) => {
+      const room = roomRef.current;
+      const channelId = channelIdRef.current;
+      if (!room || !channelId) return;
+      if (afkSilenceRef.current && !next) return;
+      if (mutedRef.current === next) return;
+      try {
+        await room.localParticipant.setMicrophoneEnabled(!next);
+      } catch {
+        // ignore
+      }
+      mutedRef.current = next;
+      setMuted(next);
+      refreshParticipants(room, next);
+      await publishVoiceFlags(next, deafenedRef.current);
+    },
+    [publishVoiceFlags, refreshParticipants],
+  );
+
+  const setDeafen = useCallback(
+    async (next: boolean) => {
+      const room = roomRef.current;
+      const channelId = channelIdRef.current;
+      if (!room || !channelId) return;
+      if (afkSilenceRef.current && !next) return;
+
+      const prevMuted = mutedRef.current;
+      const deafenChanged = deafenedRef.current !== next;
+      deafenedRef.current = next;
+      ensureRemoteAudioReceiving(room, next || afkSilenceRef.current);
+
+      // Kulaklık mute ↔ mikrofon birlikte
+      let nextMuted = mutedRef.current;
+      if (next) {
+        if (!mutedRef.current) {
+          try {
+            await room.localParticipant.setMicrophoneEnabled(false);
+          } catch {
+            // ignore
+          }
+          nextMuted = true;
+          mutedRef.current = true;
+          setMuted(true);
+        }
+      } else if (!afkSilenceRef.current) {
+        if (mutedRef.current) {
+          try {
+            await room.localParticipant.setMicrophoneEnabled(true);
+          } catch {
+            // ignore
+          }
+          nextMuted = false;
+          mutedRef.current = false;
+          setMuted(false);
+        }
+      }
+
+      if (!deafenChanged && nextMuted === prevMuted) return;
+
+      setDeafened(next);
+      refreshParticipants(room, nextMuted);
+      await publishVoiceFlags(nextMuted, next);
+    },
+    [publishVoiceFlags, refreshParticipants],
+  );
+
+  const setAfkSilence = useCallback(
+    (enabled: boolean) => {
+      if (!enabled) {
+        if (!afkSilenceRef.current) return;
+        afkSilenceRef.current = false;
+        const room = roomRef.current;
+        if (room) ensureRemoteAudioReceiving(room, false);
+        void (async () => {
+          await setDeafen(false);
+          await setMute(false);
+        })();
+        return;
+      }
+      afkSilenceRef.current = true;
+      void (async () => {
+        await setMute(true);
+        await setDeafen(true);
+      })();
+    },
+    [setMute, setDeafen],
+  );
+
+  const toggleMute = useCallback(async () => {
+    if (afkSilenceRef.current) return;
+    await setMute(!mutedRef.current);
+  }, [setMute]);
 
   const toggleDeafen = useCallback(async () => {
-    const room = roomRef.current;
-    const channelId = channelIdRef.current;
-    if (!room || !channelId) return;
-    const next = !deafenedRef.current;
-    deafenedRef.current = next;
-    applyDeafen(room, next);
-    let nextMuted = mutedRef.current;
-    if (next && !mutedRef.current) {
-      await room.localParticipant.setMicrophoneEnabled(false);
-      nextMuted = true;
-      setMuted(true);
-    }
-    setDeafened(next);
-    refreshParticipants(room, next ? true : nextMuted);
-    try {
-      await client.updateVoiceState(channelId, {
-        muted: next ? true : nextMuted,
-        deafened: next,
-      });
-      const guildId = guildIdRef.current;
-      if (guildId) {
-        client.emitVoiceState({
-          guildId,
-          channelId,
-          muted: next ? true : nextMuted,
-          deafened: next,
-        });
-      }
-    } catch {
-      // ignore
-    }
-  }, [client, refreshParticipants]);
+    if (afkSilenceRef.current) return;
+    await setDeafen(!deafenedRef.current);
+  }, [setDeafen]);
 
   const toggleScreenShare = useCallback(async () => {
     const room = roomRef.current;
@@ -1625,35 +1774,88 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const shareCaptureOpts = (withAudio: boolean) =>
+      ({
+        audio: withAudio,
+        resolution: { width: 1920, height: 1080, frameRate: 30 },
+        contentHint: 'detail' as const,
+      }) as const;
+
+    const sharePublishOpts = {
+      simulcast: false,
+      screenShareEncoding: { maxBitrate: 4_000_000, maxFramerate: 30 },
+    };
+
     if (screenSharing) {
+      // Paylaşımı güvenli kapat — mic/oda bağlantısına dokunma
       try {
-        await room.localParticipant.setScreenShareEnabled(false);
-        setScreenSharing(false);
-        syncSharePresence(false);
+        const pubs = [
+          ...room.localParticipant.trackPublications.values(),
+        ].filter(
+          (p) =>
+            p.source === Track.Source.ScreenShare ||
+            p.source === Track.Source.ScreenShareAudio,
+        );
+        for (const pub of pubs) {
+          const track = pub.track;
+          if (!track) continue;
+          try {
+            await room.localParticipant.unpublishTrack(track, true);
+          } catch {
+            // ignore per-track
+          }
+          try {
+            track.stop();
+          } catch {
+            // ignore
+          }
+        }
+        try {
+          await room.localParticipant.setScreenShareEnabled(false);
+        } catch {
+          // ignore — track’ler zaten kaldırılmış olabilir
+        }
+      } catch (err) {
+        // Soft fail: oda ayakta kalsın
+        console.warn('[voice] screen share stop', err);
+      }
+      setScreenSharing(false);
+      syncSharePresence(false);
+      if (focusedScreenShareIdRef.current === room.localParticipant.identity) {
+        focusedScreenShareIdRef.current = null;
+      }
+      try {
         applyScreenShareView(room);
         refreshParticipants(room, mutedRef.current);
-      } catch (err) {
-        setError(screenShareErrorMessage(err));
+      } catch {
+        // ignore
       }
       return;
     }
 
     try {
-      await room.localParticipant.setScreenShareEnabled(
-        true,
-        {
-          audio: true,
-          resolution: { width: 1920, height: 1080, frameRate: 60 },
-          contentHint: 'detail',
-        },
-        {
-          simulcast: false,
-          screenShareEncoding: { maxBitrate: 6_000_000, maxFramerate: 60 },
-        },
-      );
+      try {
+        await room.localParticipant.setScreenShareEnabled(
+          true,
+          shareCaptureOpts(true),
+          sharePublishOpts,
+        );
+      } catch (audioErr) {
+        // Windows/Chrome’da sistem sesi sık fail eder — video-only ile devam
+        if (!isScreenShareAudioFailure(audioErr)) throw audioErr;
+        try {
+          await room.localParticipant.setScreenShareEnabled(false);
+        } catch {
+          // ignore
+        }
+        await room.localParticipant.setScreenShareEnabled(
+          true,
+          shareCaptureOpts(false),
+          sharePublishOpts,
+        );
+      }
       setScreenSharing(true);
       syncSharePresence(true);
-      // Kendi paylaşımını otomatik odakla
       focusedScreenShareIdRef.current = room.localParticipant.identity;
       applyScreenShareView(room);
       refreshParticipants(room, mutedRef.current);
@@ -1663,6 +1865,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setError(screenShareErrorMessage(err));
       try {
         await room.localParticipant.setScreenShareEnabled(false);
+      } catch {
+        // ignore
+      }
+      // Mic’i yeniden doğrula — paylaşım hatası odayı düşürmesin
+      try {
+        if (!mutedRef.current && !deafenedRef.current) {
+          await room.localParticipant.setMicrophoneEnabled(true);
+        }
       } catch {
         // ignore
       }
@@ -1962,6 +2172,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       leave,
       toggleMute,
       toggleDeafen,
+      setMute,
+      setDeafen,
+      setAfkSilence,
       toggleCamera,
       toggleScreenShare,
       toggleNoiseCancellation,
@@ -2015,6 +2228,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       leave,
       toggleMute,
       toggleDeafen,
+      setMute,
+      setDeafen,
+      setAfkSilence,
       toggleCamera,
       toggleScreenShare,
       toggleNoiseCancellation,
