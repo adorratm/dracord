@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -23,6 +24,7 @@ export type MessageForwardedFrom = {
 };
 
 @Entity('messages')
+@Index(['channelId', 'createdAt'])
 export class Message extends CuidEntity {
   @Column({ type: 'varchar' })
   channelId!: string;

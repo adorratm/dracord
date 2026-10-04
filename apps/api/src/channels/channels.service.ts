@@ -7,10 +7,13 @@ import {
 import * as bcrypt from 'bcrypt';
 import { EntityManager, In } from 'typeorm';
 import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
-import { GuildsService, PERM_MANAGE_CHANNELS } from '@/guilds/guilds.service';
+import {
+  GuildsService,
+  type MemberPermContext,
+  PERM_MANAGE_CHANNELS,
+} from '@/guilds/guilds.service';
 import { GuildPermissions } from '@/common/permissions';
 import { Channel } from '@/database/entities/channel.entity';
-import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
@@ -55,7 +58,10 @@ export class ChannelsService {
 
   async listGuildChannels(guildId: string, userId: string): Promise<ChannelSummary[]> {
     await this.guilds.ensureMember(guildId, userId);
-    await this.guilds.ensureDefaultEveryoneRole(guildId);
+    const everyoneId = await this.guilds.ensureDefaultEveryoneRole(guildId);
+    const permCtx = await this.guilds.buildMemberPermContext(guildId, userId, everyoneId);
+    if (!permCtx) return [];
+
     const channels = await this.em.find(Channel, {
       where: { guildId },
       order: { categoryId: 'ASC', position: 'ASC' },
@@ -67,21 +73,20 @@ export class ChannelsService {
         .filter((c) => c.type === ChannelType.TEXT || c.type === ChannelType.FORUM)
         .map((c) => c.id),
     );
-    const canManage = await this.canManageChannels(guildId, userId);
-    const summaries = await Promise.all(
-      channels.map(async (c) => {
-        const canView = canManage || (await this.memberCanInChannel(c, userId, 'VIEW_CHANNEL'));
-        if (!canView) return null;
-        return this.toSummary(c, {
-          voiceMembers: c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
-          unreadCount:
-            c.type === ChannelType.TEXT || c.type === ChannelType.FORUM
-              ? unreadMap.get(c.id)
-              : undefined,
-          includeDenied: canManage,
-        });
-      }),
-    );
+    const canManage = permCtx.canManageChannels;
+    const summaries = channels.map((c) => {
+      const canView =
+        canManage || this.memberCanInChannelWithContext(c, userId, 'VIEW_CHANNEL', permCtx);
+      if (!canView) return null;
+      return this.toSummary(c, {
+        voiceMembers: c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
+        unreadCount:
+          c.type === ChannelType.TEXT || c.type === ChannelType.FORUM
+            ? unreadMap.get(c.id)
+            : undefined,
+        includeDenied: canManage,
+      });
+    });
     return summaries.filter((s): s is ChannelSummary => Boolean(s));
   }
 
@@ -319,36 +324,27 @@ export class ChannelsService {
     const map = new Map<string, number>();
     if (channelIds.length === 0) return map;
 
-    const states = await this.em.find(ChannelReadState, {
-      where: { userId, channelId: In(channelIds) },
-    });
-    const lastRead = new Map(
-      states.map((s) => [s.channelId, s.lastReadMessageId] as const),
-    );
+    for (const id of channelIds) map.set(id, 0);
 
-    for (const channelId of channelIds) {
-      const readId = lastRead.get(channelId) ?? null;
-      if (!readId) {
-        const rows = (await this.em.query(
-          `SELECT COUNT(*)::int AS c FROM messages
-           WHERE "channelId" = $1 AND "deletedAt" IS NULL
-             AND "threadRootId" IS NULL`,
-          [channelId],
-        )) as Array<{ c: number }>;
-        map.set(channelId, Number(rows[0]?.c ?? 0));
-        continue;
-      }
-      const rows = (await this.em.query(
-        `SELECT COUNT(*)::int AS c FROM messages m
-         WHERE m."channelId" = $1 AND m."deletedAt" IS NULL
-           AND m."threadRootId" IS NULL
-           AND m."createdAt" > COALESCE(
-             (SELECT m2."createdAt" FROM messages m2 WHERE m2.id = $2),
-             '-infinity'::timestamptz
-           )`,
-        [channelId, readId],
-      )) as Array<{ c: number }>;
-      map.set(channelId, Number(rows[0]?.c ?? 0));
+    const rows = (await this.em.query(
+      `SELECT m."channelId" AS "channelId", COUNT(*)::int AS c
+       FROM messages m
+       LEFT JOIN channel_read_states crs
+         ON crs."channelId" = m."channelId" AND crs."userId" = $1
+       LEFT JOIN messages lr ON lr.id = crs."lastReadMessageId"
+       WHERE m."channelId" = ANY($2::varchar[])
+         AND m."deletedAt" IS NULL
+         AND m."threadRootId" IS NULL
+         AND (
+           crs."lastReadMessageId" IS NULL
+           OR m."createdAt" > COALESCE(lr."createdAt", '-infinity'::timestamptz)
+         )
+       GROUP BY m."channelId"`,
+      [userId, channelIds],
+    )) as Array<{ channelId: string; c: number }>;
+
+    for (const row of rows) {
+      map.set(row.channelId, Number(row.c ?? 0));
     }
     return map;
   }
@@ -391,6 +387,42 @@ export class ChannelsService {
         isVoice && opts?.includeDenied ? (channel.deniedUserIds ?? []) : undefined,
       permissionOverwrites: channel.permissionOverwrites ?? undefined,
     };
+  }
+
+  /** Kanal overwrite + önceden yüklenmiş sunucu izinleri (listGuildChannels hot path). */
+  memberCanInChannelWithContext(
+    channel: Channel,
+    userId: string,
+    perm: 'VIEW_CHANNEL' | 'SEND_MESSAGES' | 'CONNECT' | 'SPEAK',
+    ctx: MemberPermContext,
+  ): boolean {
+    if (!channel.guildId) return true;
+    if (ctx.isOwner || ctx.isAdministrator) return true;
+
+    const overwrites = channel.permissionOverwrites ?? [];
+    const memberOw = overwrites.find((o) => o.type === 'member' && o.id === userId);
+    if (memberOw) {
+      if (memberOw.deny?.includes(perm)) return false;
+      if (memberOw.allow?.includes(perm)) return true;
+    }
+    let roleAllow = false;
+    let roleDeny = false;
+    for (const roleId of ctx.roleIds) {
+      const ow = overwrites.find((o) => o.type === 'role' && o.id === roleId);
+      if (!ow) continue;
+      if (ow.deny?.includes(perm)) roleDeny = true;
+      if (ow.allow?.includes(perm)) roleAllow = true;
+    }
+    if (roleDeny && !roleAllow) return false;
+    if (roleAllow) return true;
+
+    if (perm === 'VIEW_CHANNEL') {
+      return true;
+    }
+    if (perm === 'SEND_MESSAGES') {
+      return ctx.permissions.has(GuildPermissions.SEND_MESSAGES);
+    }
+    return true;
   }
 
   /** Kanal overwrite + sunucu izni birleşimi */

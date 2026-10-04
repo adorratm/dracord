@@ -16,13 +16,17 @@ export class PlatformAdminService {
     private readonly config: ConfigService,
   ) {}
 
+  isPlatformAdminByEmail(email: string | null | undefined): boolean {
+    return isAdminEmail(this.config, email);
+  }
+
   async isPlatformAdmin(userId: string | null | undefined): Promise<boolean> {
     if (!userId) return false;
     const user = await this.em.findOne(User, {
       where: { id: userId },
       select: { id: true, email: true },
     });
-    return isAdminEmail(this.config, user?.email);
+    return this.isPlatformAdminByEmail(user?.email);
   }
 
   async assertIsPlatformAdmin(userId: string): Promise<void> {

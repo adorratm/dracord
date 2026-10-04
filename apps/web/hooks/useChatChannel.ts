@@ -249,7 +249,19 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         opts,
       );
       // Thread yanıtları ana akışa eklenmez
-      if (message.threadRootId) return message;
+      if (message.threadRootId || opts?.threadRootId) {
+        const rootId = message.threadRootId ?? opts?.threadRootId;
+        if (rootId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === rootId
+                ? { ...m, threadReplyCount: (m.threadReplyCount ?? 0) + 1 }
+                : m,
+            ),
+          );
+        }
+        return message;
+      }
       setAtLiveEdge(true);
       setPendingNewCount(0);
       setMessages((prev) => {

@@ -53,6 +53,10 @@ export interface VoiceStageProps {
   screenShare?: VoiceStageScreenShare | null;
   /** Odadaki tüm ekran paylaşımları (çoklu seçim) */
   screenShares?: VoiceStageScreenShareOption[];
+  /** İzleyici ekranı duraklattı */
+  screenShareViewPaused?: boolean;
+  onPauseScreenShareView?: () => void;
+  onResumeScreenShareView?: () => void;
   participantsDrawerOpen?: boolean;
   chatDrawerOpen?: boolean;
   onToggleMute?: () => void;
@@ -126,6 +130,9 @@ export function VoiceStage({
   screenSharing,
   screenShare,
   screenShares = [],
+  screenShareViewPaused = false,
+  onPauseScreenShareView,
+  onResumeScreenShareView,
   participantsDrawerOpen,
   chatDrawerOpen,
   onToggleMute,
@@ -244,6 +251,30 @@ export function VoiceStage({
               Bağlı
             </span>
           )}
+          {shareOptions.length > 0 && (onPauseScreenShareView || onResumeScreenShareView) ? (
+            <button
+              type="button"
+              onClick={() =>
+                screenShareViewPaused
+                  ? onResumeScreenShareView?.()
+                  : onPauseScreenShareView?.()
+              }
+              className={cn(
+                'h-9 px-2.5 rounded-lg flex items-center gap-1 font-label-sm transition-colors duration-200',
+                screenShareViewPaused
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
+              )}
+              aria-label={screenShareViewPaused ? 'İzlemeye devam et' : 'İzlemeyi durdur'}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {screenShareViewPaused ? 'play_arrow' : 'pause'}
+              </span>
+              <span className="hidden sm:inline">
+                {screenShareViewPaused ? 'Devam et' : 'İzlemeyi durdur'}
+              </span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onToggleChat}

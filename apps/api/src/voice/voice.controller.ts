@@ -77,11 +77,13 @@ export class VoiceController {
   ) {
     const guildId = await this.resolvePresenceGuildId(body.channelId);
     if (!guildId) return null;
-    return this.presence.updateFlags(guildId, body.channelId, user.sub, {
+    const updated = await this.presence.updateFlags(guildId, body.channelId, user.sub, {
       muted: body.muted,
       deafened: body.deafened,
       screenSharing: body.screenSharing,
     });
+    if (updated) this.broadcast.broadcastVoiceState(updated);
+    return updated;
   }
 
   @Delete('state/:channelId')

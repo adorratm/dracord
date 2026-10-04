@@ -79,7 +79,13 @@ interface VoiceSessionValue {
   activeScreenShare: ActiveScreenShare | null;
   /** Odadaki tüm aktif ekran paylaşımları */
   availableScreenShares: ActiveScreenShare[];
+  /** İzleyici ekran görünümü duraklatıldı (publish devam eder) */
+  screenShareViewPaused: boolean;
   focusScreenShare: (identity: string) => void;
+  /** İzlemeyi durdur (paylaşımı kapatmaz) */
+  pauseScreenShareView: () => void;
+  /** İzlemeye devam et */
+  resumeScreenShareView: () => void;
   setScreenVideoElement: (el: HTMLVideoElement | null) => void;
   setCameraVideoElement: (identity: string, el: HTMLVideoElement | null) => void;
   participants: VoiceParticipant[];
@@ -105,6 +111,9 @@ interface VoiceSessionValue {
   setAudioBitrate: (kbps: VoiceBitrateKbps) => Promise<void>;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
+  /** Yerel mute toggle — sadece bu istemci; volume 0 / önceki seviye */
+  toggleLocalMuteParticipant: (identity: string) => void;
+  isLocalMutedParticipant: (identity: string) => boolean;
   setScreenShareVolume: (identity: string, volume: number) => void;
   getScreenShareVolume: (identity: string) => number;
   join: (
@@ -403,9 +412,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const knownPeersRef = useRef(new Set<string>());
   const screenTrackRef = useRef<Track | null>(null);
   const screenVideoElRef = useRef<HTMLVideoElement | null>(null);
-  /** Kullanıcının seçtiği ekran paylaşımı (null = otomatik) */
+  /** Kullanıcının seçtiği ekran paylaşımı; '__none__' = bilerek izleme yok */
   const focusedScreenShareIdRef = useRef<string | null>(null);
   const activeScreenShareIdRef = useRef<string | null>(null);
+  const screenShareViewPausedRef = useRef(false);
+  const preMuteVolumesRef = useRef<Map<string, number>>(new Map());
   const cameraTracksRef = useRef<Map<string, Track>>(new Map());
   const cameraElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const mutedRef = useRef(false);
@@ -433,6 +444,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [screenSharing, setScreenSharing] = useState(false);
   const [activeScreenShare, setActiveScreenShare] = useState<ActiveScreenShare | null>(null);
   const [availableScreenShares, setAvailableScreenShares] = useState<ActiveScreenShare[]>([]);
+  const [screenShareViewPaused, setScreenShareViewPaused] = useState(false);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [participantVolumes, setParticipantVolumes] = useState<Record<string, number>>({});
   const [screenShareVolumes, setScreenShareVolumes] = useState<Record<string, number>>({});
@@ -884,6 +896,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
       if (shares.length === 0) {
         focusedScreenShareIdRef.current = null;
+        screenShareViewPausedRef.current = false;
+        setScreenShareViewPaused(false);
+        clearScreenShareView();
+        return;
+      }
+
+      if (screenShareViewPausedRef.current || focusedScreenShareIdRef.current === '__none__') {
         clearScreenShareView();
         return;
       }
@@ -893,11 +912,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         const current = activeScreenShareIdRef.current;
         if (current && shares.some((s) => s.identity === current)) {
           focusId = current;
+          focusedScreenShareIdRef.current = focusId;
         } else {
-          // Yerelden ziyade uzak paylaşımı tercih et (kendi ekranın ikinci planda)
-          focusId = shares.find((s) => !s.isLocal)?.identity ?? shares[0]!.identity;
+          // Otomatik seçim yok — kullanıcı chip ile seçene kadar boş bırak
+          focusedScreenShareIdRef.current = '__none__';
+          clearScreenShareView();
+          return;
         }
-        focusedScreenShareIdRef.current = focusId;
       }
 
       const share = shares.find((s) => s.identity === focusId) ?? shares[0]!;
@@ -927,11 +948,38 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     (identity: string) => {
       const room = roomRef.current;
       if (!room) return;
+      screenShareViewPausedRef.current = false;
+      setScreenShareViewPaused(false);
       focusedScreenShareIdRef.current = identity;
       applyScreenShareView(room);
     },
     [applyScreenShareView],
   );
+
+  const pauseScreenShareView = useCallback(() => {
+    screenShareViewPausedRef.current = true;
+    setScreenShareViewPaused(true);
+    focusedScreenShareIdRef.current = '__none__';
+    clearScreenShareView();
+  }, [clearScreenShareView]);
+
+  const resumeScreenShareView = useCallback(() => {
+    const room = roomRef.current;
+    screenShareViewPausedRef.current = false;
+    setScreenShareViewPaused(false);
+    if (!room) return;
+    const shares = listScreenShares(room);
+    if (shares.length === 0) return;
+    if (
+      !focusedScreenShareIdRef.current ||
+      focusedScreenShareIdRef.current === '__none__' ||
+      !shares.some((s) => s.identity === focusedScreenShareIdRef.current)
+    ) {
+      focusedScreenShareIdRef.current =
+        shares.find((s) => !s.isLocal)?.identity ?? shares[0]!.identity;
+    }
+    applyScreenShareView(room);
+  }, [applyScreenShareView, listScreenShares]);
 
   useEffect(() => {
     if (!voiceChannelId || !user) {
@@ -1062,10 +1110,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       syncAll();
     });
-    room.on(RoomEvent.TrackUnsubscribed, (track, publication) => {
+    room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
       if (publication.source === Track.Source.ScreenShare) {
-        // Detach + state temizliği — ref'i null'layıp clear'ı atlamak siyah ekran bırakır
-        if (screenTrackRef.current === track || activeScreenShareIdRef.current) {
+        const identity = participant?.identity;
+        if (
+          identity &&
+          focusedScreenShareIdRef.current === identity &&
+          (screenTrackRef.current === track || activeScreenShareIdRef.current === identity)
+        ) {
+          clearScreenShareView();
+          focusedScreenShareIdRef.current = '__none__';
+        } else if (screenTrackRef.current === track) {
           clearScreenShareView();
         } else {
           try {
@@ -1074,7 +1129,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             // ignore
           }
         }
-        focusedScreenShareIdRef.current = null;
         syncAll();
         return;
       }
@@ -1422,7 +1476,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const setParticipantVolume = useCallback(
     (identity: string, volume: number) => {
-      const v = Math.max(0, Math.min(100, Math.round(volume)));
+      const v = Math.max(0, Math.min(200, Math.round(volume)));
+      if (v > 0) preMuteVolumesRef.current.delete(identity);
       participantVolumesRef.current.set(identity, v);
       setParticipantVolumes((prev) => {
         if (prev[identity] === v) return prev;
@@ -1430,7 +1485,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         saveParticipantVolumes(next);
         return next;
       });
-      applyParticipantVolume(identity, v);
+      applyParticipantVolume(identity, Math.min(100, v));
     },
     [applyParticipantVolume],
   );
@@ -1438,6 +1493,25 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const getParticipantVolume = useCallback((identity: string) => {
     return participantVolumesRef.current.get(identity) ?? 100;
   }, []);
+
+  const isLocalMutedParticipant = useCallback((identity: string) => {
+    return (participantVolumesRef.current.get(identity) ?? 100) === 0;
+  }, []);
+
+  const toggleLocalMuteParticipant = useCallback(
+    (identity: string) => {
+      const cur = participantVolumesRef.current.get(identity) ?? 100;
+      if (cur === 0) {
+        const restore = preMuteVolumesRef.current.get(identity) ?? 100;
+        preMuteVolumesRef.current.delete(identity);
+        setParticipantVolume(identity, restore);
+      } else {
+        preMuteVolumesRef.current.set(identity, cur);
+        setParticipantVolume(identity, 0);
+      }
+    },
+    [setParticipantVolume],
+  );
 
   const setScreenShareVolume = useCallback(
     (identity: string, volume: number) => {
@@ -1530,6 +1604,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void client
         .updateVoiceState(channelId, { screenSharing: sharing })
         .catch(() => undefined);
+      const gid = guildIdRef.current;
+      if (gid) {
+        client.emitVoiceState({
+          guildId: gid,
+          channelId,
+          screenSharing: sharing,
+          muted: mutedRef.current,
+          deafened: deafenedRef.current,
+        });
+      }
     };
 
     if (screenSharing) {
@@ -1833,7 +1917,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenSharing,
       activeScreenShare,
       availableScreenShares,
+      screenShareViewPaused,
       focusScreenShare,
+      pauseScreenShareView,
+      resumeScreenShareView,
       setScreenVideoElement,
       setCameraVideoElement,
       participants,
@@ -1857,6 +1944,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setAudioBitrate,
       setParticipantVolume,
       getParticipantVolume,
+      toggleLocalMuteParticipant,
+      isLocalMutedParticipant,
       setScreenShareVolume,
       getScreenShareVolume,
       join,
@@ -1881,7 +1970,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenSharing,
       activeScreenShare,
       availableScreenShares,
+      screenShareViewPaused,
       focusScreenShare,
+      pauseScreenShareView,
+      resumeScreenShareView,
       setScreenVideoElement,
       setCameraVideoElement,
       participants,
@@ -1905,6 +1997,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setAudioBitrate,
       setParticipantVolume,
       getParticipantVolume,
+      toggleLocalMuteParticipant,
+      isLocalMutedParticipant,
       setScreenShareVolume,
       getScreenShareVolume,
       join,

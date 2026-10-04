@@ -1,5 +1,9 @@
 import type { CategoryDto, ChannelSummary, VoiceMemberSummary } from '@dracord/types';
-import type { SidebarCategory, SidebarChannelItem } from '@dracord/ui';
+import type {
+  SidebarCategory,
+  SidebarChannelItem,
+  SidebarVoiceMember,
+} from '@dracord/ui';
 
 export function buildSidebarCategories(
   channels: ChannelSummary[],
@@ -26,6 +30,14 @@ export function buildSidebarCategories(
     collapsedCategoryIds?: Set<string>;
     onToggleCategory?: (categoryId: string) => void;
     onReorderChannels?: (categoryId: string | null, orderedIds: string[]) => void;
+    /** Ses kanalı üyesi sağ tık menüsü */
+    enrichVoiceMember?: (
+      member: VoiceMemberSummary,
+      voiceChannelId: string,
+    ) => Pick<
+      SidebarVoiceMember,
+      'contextActions' | 'participantVolume' | 'onParticipantVolumeChange'
+    >;
   },
 ): SidebarCategory[] {
   const textAndVoice = channels.filter((c) => c.type !== 'CATEGORY');
@@ -85,6 +97,7 @@ export function buildSidebarCategories(
           const draggable = isSelf
             ? Boolean(extras?.canDragSelf) && !m.isBot
             : Boolean(extras?.canDragVoiceMembers) && !m.isBot && !isSuperAdmin;
+          const enriched = extras?.enrichVoiceMember?.(m, ch.id) ?? {};
           return {
             id: m.id,
             displayName: m.displayName,
@@ -94,6 +107,7 @@ export function buildSidebarCategories(
             speaking: m.speaking,
             isBot: m.isBot,
             draggable,
+            ...enriched,
           };
         }),
         onClick: () => onChannelClick(ch),

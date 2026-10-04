@@ -43,6 +43,16 @@ export const PERM_MANAGE_CHANNELS = GuildPermissions.MANAGE_CHANNELS;
 export const PERM_ADMINISTRATOR = GuildPermissions.ADMINISTRATOR;
 export const PERM_MANAGE_MESSAGES = GuildPermissions.MANAGE_MESSAGES;
 
+/** Tek istekte kanal listesi için önceden yüklenmiş üye/sunucu izinleri. */
+export type MemberPermContext = {
+  isOwner: boolean;
+  isPlatformAdmin: boolean;
+  isAdministrator: boolean;
+  canManageChannels: boolean;
+  roleIds: string[];
+  permissions: Set<string>;
+};
+
 @Injectable()
 export class GuildsService {
   constructor(
@@ -157,9 +167,71 @@ export class GuildsService {
     return [...roleIds];
   }
 
+  /** listGuildChannels: Guild/Member/rol sorgularını kanal döngüsünden çıkarır. */
+  async buildMemberPermContext(
+    guildId: string,
+    userId: string,
+    everyoneId: string,
+  ): Promise<MemberPermContext | null> {
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) return null;
+
+    const isOwner = guild.ownerId === userId;
+    const isPlatformAdmin = await this.platformAdmin.isPlatformAdmin(userId);
+    if (isOwner || isPlatformAdmin) {
+      return {
+        isOwner,
+        isPlatformAdmin,
+        isAdministrator: true,
+        canManageChannels: true,
+        roleIds: [],
+        permissions: new Set(Object.values(GuildPermissions)),
+      };
+    }
+
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId },
+    });
+    if (!member) return null;
+
+    const links = await this.em.find(GuildMemberRole, {
+      where: { guildMemberId: member.id },
+    });
+    const roleIds = new Set(links.map((l) => l.roleId));
+    roleIds.add(everyoneId);
+
+    const roleIdList = [...roleIds];
+    if (!roleIdList.length) {
+      return {
+        isOwner: false,
+        isPlatformAdmin: false,
+        isAdministrator: false,
+        canManageChannels: false,
+        roleIds: roleIdList,
+        permissions: new Set(),
+      };
+    }
+
+    const perms = await this.em
+      .createQueryBuilder(RolePermission, 'rp')
+      .where('rp.roleId IN (:...roleIds)', { roleIds: roleIdList })
+      .getMany();
+    const permissions = new Set(perms.map((p) => p.permission));
+    const isAdministrator = permissions.has(PERM_ADMINISTRATOR);
+
+    return {
+      isOwner: false,
+      isPlatformAdmin: false,
+      isAdministrator,
+      canManageChannels: isAdministrator || permissions.has(PERM_MANAGE_CHANNELS),
+      roleIds: roleIdList,
+      permissions,
+    };
+  }
+
   /** Eksik @everyone linklerini tüm sunucu üyelerine backfill et. */
   async backfillEveryoneRoles(): Promise<number> {
-    const guilds = await this.em.find(Guild, { select: ['id'] });
+    const guilds = await this.em.find(Guild, { select: { id: true } });
     let added = 0;
     for (const g of guilds) {
       await this.ensureDefaultEveryoneRole(g.id);
@@ -590,7 +662,7 @@ export class GuildsService {
           profileBgKey: (r.profileBgKey || 'none') as import('@dracord/types').RoleProfileBgKey,
           hoist: Boolean(r.hoist),
         }));
-      const isPlatformAdmin = await this.platformAdmin.isPlatformAdmin(m.user.id);
+      const isPlatformAdmin = this.platformAdmin.isPlatformAdminByEmail(m.user.email);
       out.push({ ...pub, roles, isPlatformAdmin });
     }
     return out;

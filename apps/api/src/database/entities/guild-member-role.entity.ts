@@ -1,8 +1,9 @@
-import { Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import type { GuildMember } from './guild-member.entity';
 import type { Role } from './role.entity';
 
 @Entity('guild_member_roles')
+@Index(['roleId'])
 export class GuildMemberRole {
   @PrimaryColumn({ type: 'varchar' })
   guildMemberId!: string;

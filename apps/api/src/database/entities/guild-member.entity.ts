@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -14,6 +15,7 @@ import type { GuildMemberRole } from './guild-member-role.entity';
 
 @Entity('guild_members')
 @Unique(['guildId', 'userId'])
+@Index(['userId'])
 export class GuildMember extends CuidEntity {
   @Column({ type: 'varchar' })
   guildId!: string;

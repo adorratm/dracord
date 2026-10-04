@@ -102,9 +102,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@aws-sdk/client-s3@npm:^3.1145.0":
-  version: 3.1145.0
-  resolution: "@aws-sdk/client-s3@npm:3.1145.0"
+"@aws-sdk/client-s3@npm:^3.1146.0":
+  version: 3.1146.0
+  resolution: "@aws-sdk/client-s3@npm:3.1146.0"
   dependencies:
     "@aws-sdk/checksums": "npm:^3.1001.1"
     "@aws-sdk/core": "npm:^3.978.1"
@@ -117,7 +117,7 @@ __metadata:
     "@smithy/node-http-handler": "npm:^4.12.1"
     "@smithy/types": "npm:^4.19.0"
     tslib: "npm:^2.6.2"
-  checksum: 10c0/1aea2b513959f7874fbc809464b4baca115a681dd96f736df06bd38cd8a4cb4e5917d66731b30530d034377dfaf767c612fd694b2b911db50f639c5407809512
+  checksum: 10c0/2c5ac51be29afd167fa7b2b0b2d58a9364d9df6e448075a3d899a1be2cca0c5ebe26b1c4668cdd48120bf6674b07d304434f351a3171e2a4b97c1ee6309391d2
   languageName: node
   linkType: hard
 
@@ -291,9 +291,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@aws-sdk/s3-request-presigner@npm:^3.1145.0":
-  version: 3.1145.0
-  resolution: "@aws-sdk/s3-request-presigner@npm:3.1145.0"
+"@aws-sdk/s3-request-presigner@npm:^3.1146.0":
+  version: 3.1146.0
+  resolution: "@aws-sdk/s3-request-presigner@npm:3.1146.0"
   dependencies:
     "@aws-sdk/core": "npm:^3.978.1"
     "@aws-sdk/signature-v4-multi-region": "npm:^3.996.47"
@@ -301,7 +301,7 @@ __metadata:
     "@smithy/core": "npm:^3.35.0"
     "@smithy/types": "npm:^4.19.0"
     tslib: "npm:^2.6.2"
-  checksum: 10c0/60bfcd8c10fb02dd88da3f0a444f991b989287055b70636771f83da9d9cafbd2a7c3a706fa68a79a63c0d6f7ffcb543120faa988506084c7ef82407aeb91e0af
+  checksum: 10c0/bacce5b06a4fd7902be8702de9e2598012ed58bd44921efeabc8b07b403ea48fde072de8dfb29aff7e7e3d6165ebb97bbe5f17b524b2251fb0cd9c2b16ae45bb
   languageName: node
   linkType: hard
 
@@ -451,8 +451,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dracord/api@workspace:apps/api"
   dependencies:
-    "@aws-sdk/client-s3": "npm:^3.1145.0"
-    "@aws-sdk/s3-request-presigner": "npm:^3.1145.0"
+    "@aws-sdk/client-s3": "npm:^3.1146.0"
+    "@aws-sdk/s3-request-presigner": "npm:^3.1146.0"
     "@bull-board/api": "npm:^9.10.2"
     "@bull-board/express": "npm:^9.10.2"
     "@bull-board/ui": "npm:^9.10.2"
@@ -593,7 +593,7 @@ __metadata:
     "@types/react-dom": "npm:^19.3.0"
     autoprefixer: "npm:^10.6.1"
     denoise-voice-clarity: "npm:0.2.2"
-    framer-motion: "npm:^13.5.0"
+    framer-motion: "npm:^13.5.1"
     livekit-client: "npm:^2.22.3"
     next: "npm:^16.3.8"
     postcss: "npm:^8.5.28"
@@ -2600,44 +2600,44 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@turbo/darwin-64@npm:2.11.6":
-  version: 2.11.6
-  resolution: "@turbo/darwin-64@npm:2.11.6"
+"@turbo/darwin-64@npm:2.11.7":
+  version: 2.11.7
+  resolution: "@turbo/darwin-64@npm:2.11.7"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/darwin-arm64@npm:2.11.6":
-  version: 2.11.6
-  resolution: "@turbo/darwin-arm64@npm:2.11.6"
+"@turbo/darwin-arm64@npm:2.11.7":
+  version: 2.11.7
+  resolution: "@turbo/darwin-arm64@npm:2.11.7"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/linux-64@npm:2.11.6":
-  version: 2.11.6
-  resolution: "@turbo/linux-64@npm:2.11.6"
+"@turbo/linux-64@npm:2.11.7":
+  version: 2.11.7
+  resolution: "@turbo/linux-64@npm:2.11.7"
   conditions: (os=android | os=linux) & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/linux-arm64@npm:2.11.6":
-  version: 2.11.6
-  resolution: "@turbo/linux-arm64@npm:2.11.6"
+"@turbo/linux-arm64@npm:2.11.7":
+  version: 2.11.7
+  resolution: "@turbo/linux-arm64@npm:2.11.7"
   conditions: (os=android | os=linux) & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/windows-64@npm:2.11.6":
-  version: 2.11.6
-  resolution: "@turbo/windows-64@npm:2.11.6"
+"@turbo/windows-64@npm:2.11.7":
+  version: 2.11.7
+  resolution: "@turbo/windows-64@npm:2.11.7"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/windows-arm64@npm:2.11.6":
-  version: 2.11.6
-  resolution: "@turbo/windows-arm64@npm:2.11.6"
+"@turbo/windows-arm64@npm:2.11.7":
+  version: 2.11.7
+  resolution: "@turbo/windows-arm64@npm:2.11.7"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
@@ -4214,8 +4214,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "dracord@workspace:."
   dependencies:
-    framer-motion: "npm:^13.5.0"
-    turbo: "npm:^2.11.6"
+    framer-motion: "npm:^13.5.1"
+    turbo: "npm:^2.11.7"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -4828,12 +4828,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"framer-motion@npm:^13.5.0":
-  version: 13.5.0
-  resolution: "framer-motion@npm:13.5.0"
+"framer-motion@npm:^13.5.1":
+  version: 13.5.1
+  resolution: "framer-motion@npm:13.5.1"
   dependencies:
-    motion-dom: "npm:^13.5.0"
-    motion-utils: "npm:^13.5.0"
+    motion-dom: "npm:13.5.1"
+    motion-utils: "npm:13.5.0"
     tslib: "npm:^2.4.0"
   peerDependencies:
     react: ^18.0.0 || ^19.0.0
@@ -4843,7 +4843,7 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/b70b622d1790b5a3818faed8ac7621dd2dc37f66cce3b043d5ff675fcbc5c8435d5a000d505cbca084564dacad9986051bd3c328d4f0e42c5e502fdef844f634
+  checksum: 10c0/8e9ba69d85447c74fad726454fc25f0ebdab89f272dcd43ac3ecf0500602630db61875ecd063b3b48a07aac28b4ad4a587bd26a890e538913a7b9e810f23131f
   languageName: node
   linkType: hard
 
@@ -5948,16 +5948,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"motion-dom@npm:^13.5.0":
-  version: 13.5.0
-  resolution: "motion-dom@npm:13.5.0"
+"motion-dom@npm:13.5.1":
+  version: 13.5.1
+  resolution: "motion-dom@npm:13.5.1"
   dependencies:
-    motion-utils: "npm:^13.5.0"
-  checksum: 10c0/ab91758628b52bc3191a998e2fda63e2f039d260b090def64d4d55406523ea8c456ed83a1755eee240821360c0b2797eca35ba6990752c3e6999261e3c11072b
+    motion-utils: "npm:13.5.0"
+  checksum: 10c0/f28f63b11b0a2c192885ea58fd7e795641435d316442b1750608f28c8f44c84c16be8c8fce0413ab6b9b8c86f33e2c4c48e895ebf395f89c93e41dc6424e527f
   languageName: node
   linkType: hard
 
-"motion-utils@npm:^13.5.0":
+"motion-utils@npm:13.5.0":
   version: 13.5.0
   resolution: "motion-utils@npm:13.5.0"
   checksum: 10c0/25182af58dafe8aafd596106529ee3bcf39f1295c2cf1016eded6f8876cfd28c550c368fe2d4167dad0782c5ea106c06c39efaedbbb1be2a7cb325b1a827ed11
@@ -8104,16 +8104,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo@npm:^2.11.6":
-  version: 2.11.6
-  resolution: "turbo@npm:2.11.6"
+"turbo@npm:^2.11.7":
+  version: 2.11.7
+  resolution: "turbo@npm:2.11.7"
   dependencies:
-    "@turbo/darwin-64": "npm:2.11.6"
-    "@turbo/darwin-arm64": "npm:2.11.6"
-    "@turbo/linux-64": "npm:2.11.6"
-    "@turbo/linux-arm64": "npm:2.11.6"
-    "@turbo/windows-64": "npm:2.11.6"
-    "@turbo/windows-arm64": "npm:2.11.6"
+    "@turbo/darwin-64": "npm:2.11.7"
+    "@turbo/darwin-arm64": "npm:2.11.7"
+    "@turbo/linux-64": "npm:2.11.7"
+    "@turbo/linux-arm64": "npm:2.11.7"
+    "@turbo/windows-64": "npm:2.11.7"
+    "@turbo/windows-arm64": "npm:2.11.7"
   dependenciesMeta:
     "@turbo/darwin-64":
       optional: true
@@ -8129,7 +8129,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: 10c0/51a174dbc7d65a85730c101920fa8ea393906e4afa7f68ff3210160dc8d98fec92b22ec14d0b15ab5451f03bf8b08ce6a5922f1e6bb64e40c574f3575468e6f8
+  checksum: 10c0/42ad4f562a10b5f18be19dd13d24dec9276696818258ce5f31acbd507a8dfbdfab7bcee275b8b9c7f5446fde6549b90200950d7456f32042d604774338e6168a
   languageName: node
   linkType: hard
 

@@ -645,6 +645,12 @@ export class DracordClient {
     return this.request(`/messages/${messageId}/thread?limit=${limit}`);
   }
 
+  async listChannelThreads(channelId: string, limit = 5): Promise<MessagePage> {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    return this.request(`/channels/${channelId}/threads?${params.toString()}`);
+  }
+
   async updateMessage(messageId: string, content: string): Promise<MessageDto> {
     return this.request(`/messages/${messageId}`, {
       method: 'PATCH',
@@ -1136,6 +1142,7 @@ export class DracordClient {
     channelId: string | null;
     muted?: boolean;
     deafened?: boolean;
+    screenSharing?: boolean;
   }) {
     this.socket?.emit(SocketEvents.VOICE_STATE, payload);
   }

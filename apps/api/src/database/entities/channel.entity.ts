@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -15,6 +16,7 @@ import type { DMChannel } from './dm-channel.entity';
 import type { Message } from './message.entity';
 
 @Entity('channels')
+@Index(['guildId'])
 export class Channel extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   guildId!: string | null;

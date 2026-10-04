@@ -124,10 +124,17 @@ export function GuildChannelView({
   const afkMuteAppliedRef = useRef(false);
 
   const voiceChannel = channels.find((c) => c.id === voice.voiceChannelId);
-  const inVoice = Boolean(voice.voiceChannelId);
-  const showingVoiceStage = isVoiceView && voice.voiceChannelId === channelId;
+  const inVoiceInThisGuild =
+    Boolean(voice.voiceChannelId) && voice.voiceGuildId === guildId;
+  const inVoice = inVoiceInThisGuild;
+  const showingVoiceStage =
+    isVoiceView && inVoiceInThisGuild && voice.voiceChannelId === channelId;
   const isConnecting =
-    isVoiceView && voice.voiceChannelId === channelId && !voice.connected && !voice.error;
+    isVoiceView &&
+    inVoiceInThisGuild &&
+    voice.voiceChannelId === channelId &&
+    !voice.connected &&
+    !voice.error;
 
   const [participantsOpen, setParticipantsOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
@@ -221,6 +228,11 @@ export function GuildChannelView({
   const [pinCount, setPinCount] = useState(0);
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
   const [threadSending, setThreadSending] = useState(false);
+  const [threadsPreviewOpen, setThreadsPreviewOpen] = useState(false);
+  const [threadsPreview, setThreadsPreview] = useState<
+    import('@dracord/types').MessageDto[]
+  >([]);
+  const [threadsPreviewBusy, setThreadsPreviewBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
@@ -535,7 +547,20 @@ export function GuildChannelView({
   useEffect(() => {
     setThreadRoot(null);
     setThreadDraft('');
+    setThreadsPreviewOpen(false);
+    setThreadsPreview([]);
   }, [channelId]);
+
+  const openThreadsPreview = useCallback(() => {
+    if (!channelId) return;
+    setThreadsPreviewOpen(true);
+    setThreadsPreviewBusy(true);
+    void client
+      .listChannelThreads(channelId, 5)
+      .then((page) => setThreadsPreview(page.items))
+      .catch(() => setThreadsPreview([]))
+      .finally(() => setThreadsPreviewBusy(false));
+  }, [channelId, client]);
 
   // Arama deep-link: ?thread= kök id
   useEffect(() => {
@@ -614,21 +639,28 @@ export function GuildChannelView({
     }
     setVoiceMembersByChannel((prev) => {
       const next = { ...map };
-      if (voice.voiceChannelId && prev[voice.voiceChannelId]) {
+      if (
+        voice.voiceGuildId === guildId &&
+        voice.voiceChannelId &&
+        prev[voice.voiceChannelId]
+      ) {
         const local = prev[voice.voiceChannelId]!;
         const api = next[voice.voiceChannelId] ?? [];
         const byId = new Map(api.map((m) => [m.id, m]));
-        for (const m of local) byId.set(m.id, m);
+        for (const m of local) {
+          const existing = byId.get(m.id);
+          byId.set(m.id, existing ? { ...existing, ...m, speaking: m.speaking ?? existing.speaking } : m);
+        }
         next[voice.voiceChannelId] = [...byId.values()];
       }
-      if (user && !voice.voiceChannelId) {
+      if (user && (!voice.voiceChannelId || voice.voiceGuildId !== guildId)) {
         for (const key of Object.keys(next)) {
           next[key] = (next[key] ?? []).filter((m) => m.id !== user.id);
         }
       }
       return next;
     });
-  }, [channels, voice.voiceChannelId, user]);
+  }, [channels, voice.voiceChannelId, voice.voiceGuildId, guildId, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -694,7 +726,14 @@ export function GuildChannelView({
   useEffect(() => {
     const afkId = guild?.afkChannelId;
     const timeoutMin = guild?.afkTimeoutMinutes ?? 0;
-    if (!afkId || timeoutMin <= 0 || !voice.voiceChannelId || !voice.connected || !user) {
+    if (
+      !afkId ||
+      timeoutMin <= 0 ||
+      !voice.voiceChannelId ||
+      voice.voiceGuildId !== guildId ||
+      !voice.connected ||
+      !user
+    ) {
       return;
     }
 
@@ -725,7 +764,11 @@ export function GuildChannelView({
   }, [
     guild?.afkChannelId,
     guild?.afkTimeoutMinutes,
-    voice,
+    voice.voiceChannelId,
+    voice.voiceGuildId,
+    voice.connected,
+    voice.participants,
+    voice.join,
     user,
     guildId,
     router,
@@ -734,7 +777,12 @@ export function GuildChannelView({
   // AFK kanalına her girişte (elle veya otomatik) mic + kulaklık mute
   useEffect(() => {
     const afkId = guild?.afkChannelId;
-    if (!afkId || !voice.connected || voice.voiceChannelId !== afkId) {
+    if (
+      !afkId ||
+      !voice.connected ||
+      voice.voiceGuildId !== guildId ||
+      voice.voiceChannelId !== afkId
+    ) {
       afkMuteAppliedRef.current = false;
       return;
     }
@@ -745,12 +793,29 @@ export function GuildChannelView({
       if (!voice.muted) await voice.toggleMute();
       if (!voice.deafened) await voice.toggleDeafen();
     })();
-  }, [guild?.afkChannelId, voice.voiceChannelId, voice.connected, voice]);
+  }, [
+    guild?.afkChannelId,
+    guildId,
+    voice.voiceChannelId,
+    voice.voiceGuildId,
+    voice.connected,
+    voice.muted,
+    voice.deafened,
+    voice.toggleMute,
+    voice.toggleDeafen,
+  ]);
 
   // AFK’dan başka kanala geçince mute/deafen kaldır
   useEffect(() => {
     const afkId = guild?.afkChannelId;
-    if (!afkId || !voice.voiceChannelId || !voice.connected) return;
+    if (
+      !afkId ||
+      !voice.voiceChannelId ||
+      voice.voiceGuildId !== guildId ||
+      !voice.connected
+    ) {
+      return;
+    }
     if (voice.voiceChannelId === afkId) return;
     const prev = sessionStorage.getItem('dracord:was-afk');
     if (prev === '1') {
@@ -760,11 +825,21 @@ export function GuildChannelView({
         if (voice.deafened) await voice.toggleDeafen();
       })();
     }
-  }, [guild?.afkChannelId, voice.voiceChannelId, voice.connected, voice]);
+  }, [
+    guild?.afkChannelId,
+    guildId,
+    voice.voiceChannelId,
+    voice.voiceGuildId,
+    voice.connected,
+    voice.muted,
+    voice.deafened,
+    voice.toggleMute,
+    voice.toggleDeafen,
+  ]);
 
   useEffect(() => {
-    if (!voice.voiceChannelId) {
-      // Aktif ses yoksa kendimizi tüm lokal listelerden çıkar.
+    if (!voice.voiceChannelId || voice.voiceGuildId !== guildId) {
+      // Aktif ses yoksa / başka sunucudaysa kendimizi bu sunucu listelerinden çıkar.
       if (!user) return;
       setVoiceMembersByChannel((prev) => {
         let changed = false;
@@ -778,22 +853,40 @@ export function GuildChannelView({
       });
       return;
     }
-    setVoiceMembersByChannel((prev) => ({
-      ...prev,
-      [voice.voiceChannelId!]: voice.participants.map((p) => {
-        const m = guildMembers.find((g) => g.id === p.id);
-        return {
-          id: p.id,
-          displayName: p.displayName || m?.displayName || p.id,
-          avatarUrl: p.avatarUrl || m?.avatarUrl || null,
-          muted: p.muted,
-          deafened: false,
-          speaking: Boolean(p.speaking),
-          isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot),
-        };
-      }),
-    }));
-  }, [voice.voiceChannelId, voice.participants, user, guildMembers]);
+    setVoiceMembersByChannel((prev) => {
+      const existing = prev[voice.voiceChannelId!] ?? [];
+      const byId = new Map(existing.map((m) => [m.id, m]));
+      return {
+        ...prev,
+        [voice.voiceChannelId!]: voice.participants.map((p) => {
+          const m = guildMembers.find((g) => g.id === p.id);
+          const prior = byId.get(p.id);
+          const isSelf = p.id === user?.id;
+          return {
+            id: p.id,
+            displayName: p.displayName || m?.displayName || prior?.displayName || p.id,
+            avatarUrl: p.avatarUrl || m?.avatarUrl || prior?.avatarUrl || null,
+            muted: isSelf ? voice.muted : Boolean(p.muted || prior?.muted),
+            deafened: isSelf ? voice.deafened : Boolean(prior?.deafened),
+            speaking: Boolean(p.speaking),
+            screenSharing: Boolean(
+              (p as { screenSharing?: boolean }).screenSharing ?? prior?.screenSharing,
+            ),
+            isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot || prior?.isBot),
+          };
+        }),
+      };
+    });
+  }, [
+    guildId,
+    voice.voiceChannelId,
+    voice.voiceGuildId,
+    voice.participants,
+    voice.muted,
+    voice.deafened,
+    user,
+    guildMembers,
+  ]);
 
   const leaveVoiceAndMaybeNavigate = useCallback(() => {
     const leftId = voice.leave();
@@ -920,8 +1013,11 @@ export function GuildChannelView({
   );
 
   const disconnectFromVoice = useCallback(
-    async (targetUserId: string) => {
-      const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+    async (targetUserId: string, channelOverrideId?: string) => {
+      const chId =
+        channelOverrideId ??
+        voice.voiceChannelId ??
+        (isVoiceView ? channelId : null);
       if (!chId || !canMoveMembers) return;
       try {
         await client.disconnectVoiceUser(chId, targetUserId);
@@ -982,93 +1078,12 @@ export function GuildChannelView({
     ],
   );
 
-  const categories = useMemo(
-    () =>
-      buildSidebarCategories(channels, channelId, selectChannel, {
-        voiceMembersByChannel,
-        selfUserId: user?.id,
-        selfVoiceChannelId: voice.voiceChannelId,
-        platformAdminIds,
-        guildCategories,
-        onAddChannel: canManageChannels
-          ? (categoryId) => {
-              setChannelName('');
-              setChannelType('TEXT');
-              setChannelLocked(false);
-              setChannelPasswordDraft('');
-              setChannelDeniedIds([]);
-              setChannelOverwrites([]);
-              setShowOverwriteEditor(false);
-              setChannelModal({ mode: 'create', categoryId });
-            }
-          : undefined,
-        onEditChannel: canManageChannels ? openEditChannel : undefined,
-        onDeleteChannel: canManageChannels
-          ? (ch) => setConfirm({ kind: 'channel', channel: ch })
-          : undefined,
-        onEditCategory: canManageChannels
-          ? (cat) => {
-              setCategoryName(cat.name);
-              setCategoryModal({ mode: 'edit', category: cat });
-            }
-          : undefined,
-        onDeleteCategory: canManageChannels
-          ? (cat) => setConfirm({ kind: 'category', category: cat })
-          : undefined,
-        onDropMember: (userId, channel) => {
-          if (channel.type !== 'VOICE') return;
-          const isSelf = Boolean(user?.id && userId === user.id);
-          if (!isSelf && !canMoveMembers) return;
-          void moveToVoiceChannel(userId, channel.id);
-        },
-        canDragVoiceMembers: canMoveMembers,
-        canDragSelf: Boolean(voice.voiceChannelId),
-        collapsedCategoryIds: collapsedCats,
-        onToggleCategory: toggleCategoryCollapse,
-        onReorderChannels: canManageChannels
-          ? (categoryId, orderedIds) => {
-              void (async () => {
-                try {
-                  await client.reorderGuildChannels(
-                    guildId,
-                    orderedIds.map((id, position) => ({
-                      id,
-                      position,
-                      categoryId,
-                    })),
-                  );
-                  await reload();
-                } catch (err) {
-                  setDmError(err instanceof Error ? err.message : 'Sıralama kaydedilemedi');
-                }
-              })();
-            }
-          : undefined,
-      }),
-    [
-      channels,
-      channelId,
-      selectChannel,
-      voiceMembersByChannel,
-      openEditChannel,
-      user?.id,
-      voice.voiceChannelId,
-      platformAdminIds,
-      guildCategories,
-      canManageChannels,
-      canMoveMembers,
-      moveToVoiceChannel,
-      collapsedCats,
-      toggleCategoryCollapse,
-      client,
-      guildId,
-      reload,
-    ],
-  );
-
   const denyFromVoice = useCallback(
-    async (targetUserId: string) => {
-      const chId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+    async (targetUserId: string, channelOverrideId?: string) => {
+      const chId =
+        channelOverrideId ??
+        voice.voiceChannelId ??
+        (isVoiceView ? channelId : null);
       if (!chId || !canManageChannels) return;
       try {
         const updated = await client.denyVoiceUser(chId, targetUserId);
@@ -1208,43 +1223,280 @@ export function GuildChannelView({
     return ch?.deniedUserIds ?? channelDeniedIds;
   }, [voice.voiceChannelId, isVoiceView, channelId, channels, channelDeniedIds]);
 
+  const voiceDeniedInChannel = useCallback(
+    (targetUserId: string, voiceChannelId?: string | null) => {
+      const chId =
+        voiceChannelId ??
+        voice.voiceChannelId ??
+        (isVoiceView ? channelId : null);
+      if (!chId) return activeVoiceDeniedIds.includes(targetUserId);
+      const ch = channels.find((c) => c.id === chId);
+      return (ch?.deniedUserIds ?? []).includes(targetUserId);
+    },
+    [voice.voiceChannelId, isVoiceView, channelId, channels, activeVoiceDeniedIds],
+  );
+
+  type VoiceMemberActionTarget = {
+    id: string;
+    displayName: string;
+    isBot?: boolean;
+    voiceChannelId?: string | null;
+    inLocalVoiceSession?: boolean;
+  };
+
+  const buildVoiceMemberActions = useCallback(
+    (target: VoiceMemberActionTarget): MemberListAction[] => {
+      const gm = guildMembers.find((g) => g.id === target.id);
+      if (platformAdminIds.has(target.id) || gm?.isPlatformAdmin) return [];
+
+      const isSelf = target.id === user?.id;
+      const isBot = Boolean(target.isBot ?? gm?.isBot);
+      const voiceChId =
+        target.voiceChannelId ??
+        voice.voiceChannelId ??
+        (isVoiceView ? channelId : null);
+      const denied = voiceDeniedInChannel(target.id, voiceChId);
+      const actions: MemberListAction[] = [];
+
+      if (target.inLocalVoiceSession && !isSelf) {
+        actions.push({
+          id: 'local-mute',
+          label: voice.isLocalMutedParticipant(target.id)
+            ? 'Yerel susturmayı kaldır'
+            : 'Yerel sustur',
+          onSelect: () => voice.toggleLocalMuteParticipant(target.id),
+        });
+      }
+
+      if (!isSelf) {
+        actions.push({
+          id: 'dm',
+          label: 'Mesaj gönder',
+          onSelect: () => void openMemberDm(target.id, isBot),
+        });
+      }
+      if (!isSelf && !isBot) {
+        actions.push({
+          id: 'block',
+          label: 'Kullanıcıyı engelle',
+          danger: true,
+          onSelect: () => void blockMember(target.id),
+        });
+      }
+      if (!isSelf && canManageChannels && voiceChId) {
+        if (denied) {
+          actions.push({
+            id: 'allow-voice',
+            label: 'Ses odası engelini kaldır',
+            onSelect: () => void allowFromVoice(target.id, voiceChId),
+          });
+        } else {
+          actions.push({
+            id: 'deny-voice',
+            label: 'Ses odasından engelle',
+            danger: true,
+            onSelect: () => void denyFromVoice(target.id, voiceChId),
+          });
+        }
+      }
+      if (!isSelf && canMoveMembers && voiceChId) {
+        actions.push({
+          id: 'move-voice',
+          label: 'Ses kanalına taşı…',
+          onSelect: () =>
+            setMoveTargetUser({ id: target.id, displayName: target.displayName }),
+        });
+        actions.push({
+          id: 'disconnect-voice',
+          label: 'Odadan ayır',
+          onSelect: () => void disconnectFromVoice(target.id, voiceChId),
+        });
+      }
+      if (!isSelf && !isBot && canKickMembers) {
+        actions.push({
+          id: 'kick',
+          label: 'Sunucudan at',
+          danger: true,
+          onSelect: () => void kickMember(target.id),
+        });
+      }
+      if (!isSelf && !isBot && canBanMembers) {
+        actions.push({
+          id: 'ban',
+          label: 'Yasakla',
+          danger: true,
+          onSelect: () => void banMember(target.id),
+        });
+      }
+      if (!isSelf && !isBot && canModerateMembers) {
+        actions.push({
+          id: 'timeout',
+          label: 'Timeout (10 dk)',
+          danger: true,
+          onSelect: () => void timeoutMember(target.id, 10),
+        });
+      }
+      return actions;
+    },
+    [
+      guildMembers,
+      platformAdminIds,
+      user?.id,
+      voice,
+      isVoiceView,
+      channelId,
+      voiceDeniedInChannel,
+      openMemberDm,
+      blockMember,
+      canManageChannels,
+      allowFromVoice,
+      denyFromVoice,
+      canMoveMembers,
+      disconnectFromVoice,
+      canKickMembers,
+      canBanMembers,
+      canModerateMembers,
+      kickMember,
+      banMember,
+      timeoutMember,
+    ],
+  );
+
+  const enrichVoiceMember = useCallback(
+    (member: VoiceMemberSummary, voiceChannelId: string) => {
+      const gm = guildMembers.find((g) => g.id === member.id);
+      if (platformAdminIds.has(member.id) || gm?.isPlatformAdmin) {
+        return {};
+      }
+      const isSelf = member.id === user?.id;
+      const inLocalVoiceSession =
+        voice.voiceChannelId === voiceChannelId &&
+        voice.participants.some((p) => p.id === member.id);
+      const actions = buildVoiceMemberActions({
+        id: member.id,
+        displayName: member.displayName,
+        isBot: member.isBot,
+        voiceChannelId,
+        inLocalVoiceSession,
+      });
+      return {
+        contextActions: actions.length ? actions : undefined,
+        ...(inLocalVoiceSession && !isSelf
+          ? {
+              participantVolume: voice.participantVolumes[member.id] ?? 100,
+              onParticipantVolumeChange: (v: number) =>
+                voice.setParticipantVolume(member.id, v),
+            }
+          : {}),
+      };
+    },
+    [
+      guildMembers,
+      platformAdminIds,
+      user?.id,
+      voice,
+      buildVoiceMemberActions,
+    ],
+  );
+
+  const categories = useMemo(
+    () =>
+      buildSidebarCategories(channels, channelId, selectChannel, {
+        voiceMembersByChannel,
+        selfUserId: user?.id,
+        selfVoiceChannelId: inVoiceInThisGuild ? voice.voiceChannelId : null,
+        platformAdminIds,
+        guildCategories,
+        onAddChannel: canManageChannels
+          ? (categoryId) => {
+              setChannelName('');
+              setChannelType('TEXT');
+              setChannelLocked(false);
+              setChannelPasswordDraft('');
+              setChannelDeniedIds([]);
+              setChannelOverwrites([]);
+              setShowOverwriteEditor(false);
+              setChannelModal({ mode: 'create', categoryId });
+            }
+          : undefined,
+        onEditChannel: canManageChannels ? openEditChannel : undefined,
+        onDeleteChannel: canManageChannels
+          ? (ch) => setConfirm({ kind: 'channel', channel: ch })
+          : undefined,
+        onEditCategory: canManageChannels
+          ? (cat) => {
+              setCategoryName(cat.name);
+              setCategoryModal({ mode: 'edit', category: cat });
+            }
+          : undefined,
+        onDeleteCategory: canManageChannels
+          ? (cat) => setConfirm({ kind: 'category', category: cat })
+          : undefined,
+        onDropMember: (userId, channel) => {
+          if (channel.type !== 'VOICE') return;
+          const isSelf = Boolean(user?.id && userId === user.id);
+          if (!isSelf && !canMoveMembers) return;
+          void moveToVoiceChannel(userId, channel.id);
+        },
+        canDragVoiceMembers: canMoveMembers,
+        canDragSelf: Boolean(voice.voiceChannelId),
+        enrichVoiceMember,
+        collapsedCategoryIds: collapsedCats,
+        onToggleCategory: toggleCategoryCollapse,
+        onReorderChannels: canManageChannels
+          ? (categoryId, orderedIds) => {
+              void (async () => {
+                try {
+                  await client.reorderGuildChannels(
+                    guildId,
+                    orderedIds.map((id, position) => ({
+                      id,
+                      position,
+                      categoryId,
+                    })),
+                  );
+                  await reload();
+                } catch (err) {
+                  setDmError(err instanceof Error ? err.message : 'Sıralama kaydedilemedi');
+                }
+              })();
+            }
+          : undefined,
+      }),
+    [
+      channels,
+      channelId,
+      selectChannel,
+      voiceMembersByChannel,
+      openEditChannel,
+      user?.id,
+      voice.voiceChannelId,
+      platformAdminIds,
+      guildCategories,
+      canManageChannels,
+      canMoveMembers,
+      moveToVoiceChannel,
+      enrichVoiceMember,
+      collapsedCats,
+      toggleCategoryCollapse,
+      client,
+      guildId,
+      reload,
+    ],
+  );
+
   const memberGroups: MemberListGroup[] = useMemo(() => {
     const voiceList = inVoice
       ? voice.participants.map((p) => {
-          const isSelf = p.id === user?.id;
           const isBot = Boolean((p as { isBot?: boolean }).isBot);
-          const actions: MemberListAction[] = [];
-          if (!isSelf) {
-            actions.push({
-              id: 'dm',
-              label: 'Mesaj gönder',
-              onSelect: () => void openMemberDm(p.id, isBot),
-            });
-          }
-          if (!isSelf && !isBot) {
-            actions.push({
-              id: 'block',
-              label: 'Kullanıcıyı engelle',
-              danger: true,
-              onSelect: () => void blockMember(p.id),
-            });
-          }
-          if (!isSelf && canManageChannels) {
-            if (activeVoiceDeniedIds.includes(p.id)) {
-              actions.push({
-                id: 'allow-voice',
-                label: 'Ses odası engelini kaldır',
-                onSelect: () => void allowFromVoice(p.id),
-              });
-            } else {
-              actions.push({
-                id: 'deny-voice',
-                label: 'Ses odasından engelle',
-                danger: true,
-                onSelect: () => void denyFromVoice(p.id),
-              });
-            }
-          }
+          const voiceChId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+          const actions = buildVoiceMemberActions({
+            id: p.id,
+            displayName: p.displayName,
+            isBot,
+            voiceChannelId: voiceChId,
+            inLocalVoiceSession: true,
+          });
           return {
             id: p.id,
             displayName: p.displayName,
@@ -1489,6 +1741,7 @@ export function GuildChannelView({
     openMemberDm,
     canManageChannels,
     canManageRoles,
+    buildVoiceMemberActions,
     denyFromVoice,
     allowFromVoice,
     blockMember,
@@ -1747,6 +2000,15 @@ export function GuildChannelView({
       ? `Yeni gönderi · #${channel?.name ?? 'forum'}`
       : undefined,
     onSend: (text: string, meta?: { replyToId?: string }) => {
+      const trimmed = text.trim();
+      if (
+        !meta?.replyToId &&
+        !isForumView &&
+        (/^@threads\b/i.test(trimmed) || /^\/threads\b/i.test(trimmed))
+      ) {
+        openThreadsPreview();
+        return;
+      }
       void sendMessage(
         text,
         undefined,
@@ -1851,8 +2113,8 @@ export function GuildChannelView({
           void voice.refreshAudioDevices(true);
         },
         onVoiceReturnClick: () => {
-          if (voice.voiceChannelId) {
-            router.push(`/channels/${guildId}/${voice.voiceChannelId}`);
+          if (voice.voiceChannelId && voice.voiceGuildId) {
+            router.push(`/channels/${voice.voiceGuildId}/${voice.voiceChannelId}`);
           }
         },
         onVoiceDisconnectClick: () => {
@@ -1982,6 +2244,9 @@ export function GuildChannelView({
               : null
           }
           screenShares={voice.availableScreenShares}
+          screenShareViewPaused={voice.screenShareViewPaused}
+          onPauseScreenShareView={voice.pauseScreenShareView}
+          onResumeScreenShareView={voice.resumeScreenShareView}
           onFocusScreenShare={voice.focusScreenShare}
           participantsDrawerOpen={participantsOpen}
           chatDrawerOpen={chatOpen}
@@ -2267,6 +2532,17 @@ export function GuildChannelView({
             >
               <span className="material-symbols-outlined text-[18px]">push_pin</span>
             </button>
+            {!isForumView && (
+              <button
+                type="button"
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                aria-label="Son threadler"
+                title="Son threadler (@threads)"
+                onClick={() => openThreadsPreview()}
+              >
+                <span className="material-symbols-outlined text-[18px]">forum</span>
+              </button>
+            )}
             {channel && canManageChannels && (
               <button
                 type="button"
@@ -2306,6 +2582,8 @@ export function GuildChannelView({
           {chatError && (
             <p className="px-space-md py-space-sm text-error font-body-sm">{chatError}</p>
           )}
+          <div className="flex flex-1 min-h-0 min-w-0">
+            <div className="flex flex-1 min-h-0 min-w-0 flex-col">
           {chatLoading && messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-outline font-body-md">
               Mesajlar yükleniyor…
@@ -2444,6 +2722,111 @@ export function GuildChannelView({
               />
             )}
             <ChatInput key={channelId} {...chatInputProps} />
+          </div>
+            </div>
+            {threadRoot && (
+              <aside className="w-full max-w-sm sm:w-80 shrink-0 border-l border-surface-container-high bg-surface-container-low flex flex-col min-h-0">
+                <div className="h-12 px-space-md flex items-center gap-space-sm border-b border-surface-container-high shrink-0">
+                  <span className="material-symbols-outlined text-[18px] text-primary-container">
+                    forum
+                  </span>
+                  <span className="font-headline-sm text-on-surface truncate flex-1">
+                    {isForumView ? 'Gönderi' : 'Thread'} · {threadRoot.author.displayName}
+                  </span>
+                  <button
+                    type="button"
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                    aria-label="Thread panelini kapat"
+                    onClick={() => {
+                      setThreadRoot(null);
+                      setThreadDraft('');
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+                <p className="px-space-md pt-space-sm font-body-sm text-outline line-clamp-2 shrink-0">
+                  {threadRoot.content.trim() || 'Ek / medya'}
+                </p>
+                {threadBusy && (
+                  <p className="px-space-md py-space-sm font-body-sm text-outline">Yükleniyor…</p>
+                )}
+                <div
+                  ref={threadScrollRef}
+                  className="flex-1 min-h-0 overflow-y-auto space-y-space-sm px-space-md py-space-sm"
+                >
+                  {threadMessages.map((m, idx) => {
+                    const isRoot = idx === 0 && m.id === threadRoot?.id;
+                    return (
+                      <div
+                        key={m.id}
+                        className={
+                          isRoot
+                            ? 'rounded-lg border border-primary-container/40 bg-primary-container/10 px-space-sm py-space-xs'
+                            : 'rounded-lg bg-surface-container-highest px-space-sm py-space-xs'
+                        }
+                      >
+                        <p className="font-label-sm text-primary-container truncate flex items-center gap-1">
+                          {m.author.displayName}
+                          {isRoot && (
+                            <span className="text-outline font-normal">· başlangıç</span>
+                          )}
+                        </p>
+                        <p className="font-body-sm text-on-surface whitespace-pre-wrap break-words">
+                          {m.content || 'Ek / medya'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {!threadBusy && threadMessages.length === 0 && (
+                    <p className="font-body-sm text-outline">
+                      Henüz yanıt yok — ilk yanıtı sen yaz.
+                    </p>
+                  )}
+                </div>
+                <div className="shrink-0 p-space-md border-t border-surface-container-high flex gap-space-sm">
+                  <input
+                    value={threadDraft}
+                    onChange={(e) => setThreadDraft(e.target.value)}
+                    placeholder="Thread’e yanıt yaz…"
+                    disabled={threadSending}
+                    className="flex-1 h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none disabled:opacity-50"
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === 'Enter' &&
+                        threadDraft.trim() &&
+                        threadRoot &&
+                        !threadSending
+                      ) {
+                        e.preventDefault();
+                        setThreadSending(true);
+                        void sendMessage(threadDraft.trim(), undefined, {
+                          threadRootId: threadRoot.id,
+                        })
+                          .then(() => setThreadDraft(''))
+                          .finally(() => setThreadSending(false));
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!threadDraft.trim() || !threadRoot || threadSending}
+                    className="h-10 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                    onClick={() => {
+                      if (!threadRoot || !threadDraft.trim() || threadSending) return;
+                      setThreadSending(true);
+                      void sendMessage(threadDraft.trim(), undefined, {
+                        threadRootId: threadRoot.id,
+                      })
+                        .then(() => setThreadDraft(''))
+                        .finally(() => setThreadSending(false));
+                    }}
+                  >
+                    Gönder
+                  </button>
+                </div>
+              </aside>
+            )}
           </div>
         </div>
       )}
@@ -3246,92 +3629,43 @@ export function GuildChannelView({
       </Modal>
 
       <Modal
-        open={Boolean(threadRoot)}
-        title={
-          threadRoot
-            ? `${isForumView ? 'Gönderi' : 'Thread'} · ${threadRoot.author.displayName}`
-            : isForumView
-              ? 'Gönderi'
-              : 'Thread'
-        }
-        onClose={() => {
-          setThreadRoot(null);
-          setThreadDraft('');
-        }}
+        open={threadsPreviewOpen}
+        title="Son threadler"
+        onClose={() => setThreadsPreviewOpen(false)}
       >
-        {threadRoot && (
-          <p className="font-body-sm text-outline mb-space-sm line-clamp-2">
-            {threadRoot.content.trim() || 'Ek / medya'}
-          </p>
+        {threadsPreviewBusy && (
+          <p className="font-body-sm text-outline mb-space-sm">Yükleniyor…</p>
         )}
-        {threadBusy && <p className="font-body-sm text-outline mb-space-sm">Yükleniyor…</p>}
-        <div
-          ref={threadScrollRef}
-          className="max-h-72 overflow-y-auto space-y-space-sm mb-space-md"
-        >
-          {threadMessages.map((m, idx) => {
-            const isRoot = idx === 0 && m.id === threadRoot?.id;
-            return (
-              <div
-                key={m.id}
-                className={
-                  isRoot
-                    ? 'rounded-lg border border-primary-container/40 bg-primary-container/10 px-space-sm py-space-xs'
-                    : 'rounded-lg bg-surface-container-highest px-space-sm py-space-xs'
-                }
-              >
-                <p className="font-label-sm text-primary-container truncate flex items-center gap-1">
-                  {m.author.displayName}
-                  {isRoot && (
-                    <span className="text-outline font-normal">· başlangıç</span>
-                  )}
-                </p>
-                <p className="font-body-sm text-on-surface whitespace-pre-wrap break-words">
-                  {m.content || 'Ek / medya'}
-                </p>
-              </div>
-            );
-          })}
-          {!threadBusy && threadMessages.length === 0 && (
-            <p className="font-body-sm text-outline">Henüz yanıt yok — ilk yanıtı sen yaz.</p>
-          )}
-        </div>
-        <div className="flex gap-space-sm">
-          <input
-            value={threadDraft}
-            onChange={(e) => setThreadDraft(e.target.value)}
-            placeholder="Thread’e yanıt yaz…"
-            disabled={threadSending}
-            className="flex-1 h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none disabled:opacity-50"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && threadDraft.trim() && threadRoot && !threadSending) {
-                e.preventDefault();
-                setThreadSending(true);
-                void sendMessage(threadDraft.trim(), undefined, {
-                  threadRootId: threadRoot.id,
-                })
-                  .then(() => setThreadDraft(''))
-                  .finally(() => setThreadSending(false));
-              }
-            }}
-          />
-          <button
-            type="button"
-            disabled={!threadDraft.trim() || !threadRoot || threadSending}
-            className="h-10 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
-            onClick={() => {
-              if (!threadRoot || !threadDraft.trim() || threadSending) return;
-              setThreadSending(true);
-              void sendMessage(threadDraft.trim(), undefined, {
-                threadRootId: threadRoot.id,
-              })
-                .then(() => setThreadDraft(''))
-                .finally(() => setThreadSending(false));
-            }}
-          >
-            Gönder
-          </button>
-        </div>
+        {!threadsPreviewBusy && threadsPreview.length === 0 && (
+          <p className="font-body-sm text-outline">Bu kanalda henüz thread yok.</p>
+        )}
+        {threadsPreview.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {threadsPreview.map((m) => (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  className="w-full text-left rounded-lg px-space-sm py-space-sm hover:bg-surface-container-highest"
+                  onClick={() => {
+                    setThreadRoot(m);
+                    setThreadDraft('');
+                    setThreadsPreviewOpen(false);
+                  }}
+                >
+                  <p className="font-label-sm text-primary-container truncate">
+                    {m.author.displayName}
+                    {(m.threadReplyCount ?? 0) > 0
+                      ? ` · ${m.threadReplyCount} yanıt`
+                      : ''}
+                  </p>
+                  <p className="font-body-sm text-on-surface line-clamp-2">
+                    {m.content.trim() || 'Ek / medya'}
+                  </p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Modal>
 
       <UserProfileCard

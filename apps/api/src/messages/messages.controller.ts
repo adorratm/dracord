@@ -42,6 +42,20 @@ export class MessagesController {
     });
   }
 
+  @Get('channels/:channelId/threads')
+  listChannelThreads(
+    @Param('channelId') channelId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? Number(limit) : 5;
+    return this.messagesService.listChannelThreads(
+      channelId,
+      user.sub,
+      Number.isFinite(parsed) ? parsed : 5,
+    );
+  }
+
   @Get('channels/:channelId/pins')
   listPins(
     @Param('channelId') channelId: string,

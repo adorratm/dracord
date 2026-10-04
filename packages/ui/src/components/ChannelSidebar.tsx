@@ -1,8 +1,8 @@
 'use client';
 
 import type { PresenceStatus } from '@dracord/types';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
@@ -21,6 +21,16 @@ export interface SidebarVoiceMember {
   isBot?: boolean;
   /** MOVE_MEMBERS ile başka ses kanalına sürükle */
   draggable?: boolean;
+  contextActions?: SidebarVoiceMemberAction[];
+  participantVolume?: number;
+  onParticipantVolumeChange?: (volume: number) => void;
+}
+
+export interface SidebarVoiceMemberAction {
+  id: string;
+  label: string;
+  danger?: boolean;
+  onSelect: () => void;
 }
 
 export interface SidebarCategory {
@@ -735,12 +745,23 @@ export interface ChannelSidebarProps {
   className?: string;
 }
 
+type VoiceMemberMenuState = {
+  x: number;
+  y: number;
+  member: SidebarVoiceMember;
+  actions: SidebarVoiceMemberAction[];
+};
+
 function ChannelRow({
   channel,
   onChannelReorderDrop,
+  voiceMemberMenu,
+  onVoiceMemberContextMenu,
 }: {
   channel: SidebarChannelItem;
   onChannelReorderDrop?: (draggedId: string, targetId: string) => void;
+  voiceMemberMenu: VoiceMemberMenuState | null;
+  onVoiceMemberContextMenu: (e: ReactMouseEvent, member: SidebarVoiceMember) => void;
 }) {
   const isText = channel.type === 'text';
   const isForum = channel.type === 'forum';
@@ -899,7 +920,10 @@ function ChannelRow({
 
       {!isText && voiceMembers.length > 0 && (
         <ul className="ml-5 flex flex-col gap-1 mt-0.5">
-          {voiceMembers.map((m) => (
+          {voiceMembers.map((m) => {
+            const hasMenu =
+              (m.contextActions?.length ?? 0) > 0 || Boolean(m.onParticipantVolumeChange);
+            return (
             <li
               key={m.id}
               draggable={Boolean(m.draggable)}
@@ -911,10 +935,12 @@ function ChannelRow({
                     }
                   : undefined
               }
+              onContextMenu={hasMenu ? (e) => onVoiceMemberContextMenu(e, m) : undefined}
               className={cn(
                 'flex items-center gap-space-sm px-space-sm py-1 rounded-md text-on-surface-variant',
                 m.speaking && 'bg-primary-container/10',
                 m.draggable && 'cursor-grab active:cursor-grabbing',
+                voiceMemberMenu?.member.id === m.id && 'bg-surface-container',
               )}
             >
               <div
@@ -958,7 +984,8 @@ function ChannelRow({
                 </span>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>
@@ -975,6 +1002,62 @@ export function ChannelSidebar({
   headerExtra,
   className,
 }: ChannelSidebarProps) {
+  const [voiceMemberMenu, setVoiceMemberMenu] = useState<VoiceMemberMenuState | null>(null);
+  const voiceMenuRef = useRef<HTMLDivElement | null>(null);
+  const voiceMenuId = useId();
+
+  useEffect(() => {
+    if (!voiceMemberMenu) return;
+    let removeClose: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      const onPointerDown = (e: PointerEvent) => {
+        const node = voiceMenuRef.current;
+        if (node && e.target instanceof Node && node.contains(e.target)) return;
+        setVoiceMemberMenu(null);
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setVoiceMemberMenu(null);
+      };
+      document.addEventListener('pointerdown', onPointerDown, true);
+      document.addEventListener('keydown', onKey);
+      removeClose = () => {
+        document.removeEventListener('pointerdown', onPointerDown, true);
+        document.removeEventListener('keydown', onKey);
+      };
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      removeClose?.();
+    };
+  }, [voiceMemberMenu]);
+
+  useEffect(() => {
+    if (!voiceMemberMenu || !voiceMenuRef.current) return;
+    const el = voiceMenuRef.current;
+    const rect = el.getBoundingClientRect();
+    let x = voiceMemberMenu.x;
+    let y = voiceMemberMenu.y;
+    if (x + rect.width > window.innerWidth - 8) x = Math.max(8, window.innerWidth - rect.width - 8);
+    if (y + rect.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - rect.height - 8);
+    if (x !== voiceMemberMenu.x || y !== voiceMemberMenu.y) {
+      setVoiceMemberMenu((prev) => (prev ? { ...prev, x, y } : prev));
+    }
+  }, [voiceMemberMenu]);
+
+  const openVoiceMemberMenu = (e: ReactMouseEvent, member: SidebarVoiceMember) => {
+    const actions = member.contextActions ?? [];
+    const hasVolume = Boolean(member.onParticipantVolumeChange);
+    if (actions.length === 0 && !hasVolume) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setVoiceMemberMenu({
+      x: e.clientX,
+      y: e.clientY,
+      member,
+      actions,
+    });
+  };
+
   return (
     <aside
       className={cn(
@@ -1093,6 +1176,8 @@ export function ChannelSidebar({
                     <ChannelRow
                       key={ch.id}
                       channel={ch}
+                      voiceMemberMenu={voiceMemberMenu}
+                      onVoiceMemberContextMenu={openVoiceMemberMenu}
                       onChannelReorderDrop={
                         category.onReorderChannels
                           ? (draggedId, targetId) => {
@@ -1119,6 +1204,68 @@ export function ChannelSidebar({
       <div className="relative z-30 shrink-0 md:-ml-[72px] md:w-[calc(100%+72px)]">
         <UserPanel {...userPanel} />
       </div>
+
+      {voiceMemberMenu &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            id={voiceMenuId}
+            ref={voiceMenuRef}
+            role="menu"
+            className="fixed z-[200] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
+            style={{ left: voiceMemberMenu.x, top: voiceMemberMenu.y }}
+          >
+            <p className="px-3 py-1.5 font-label-sm text-outline truncate border-b border-surface-container-highest mb-0.5">
+              {voiceMemberMenu.member.displayName}
+            </p>
+            {voiceMemberMenu.member.onParticipantVolumeChange && (
+              <div
+                className="px-3 py-2 border-b border-surface-container-highest mb-0.5"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-label-sm text-on-surface-variant">Ses</span>
+                  <span className="font-label-sm text-outline tabular-nums">
+                    {voiceMemberMenu.member.participantVolume ?? 100}
+                  </span>
+                </div>
+                <VolumeSlider
+                  min={0}
+                  max={200}
+                  value={voiceMemberMenu.member.participantVolume ?? 100}
+                  aria-label={`${voiceMemberMenu.member.displayName} ses`}
+                  onChange={(v) => {
+                    voiceMemberMenu.member.onParticipantVolumeChange?.(v);
+                    setVoiceMemberMenu((prev) =>
+                      prev ? { ...prev, member: { ...prev.member, participantVolume: v } } : prev,
+                    );
+                  }}
+                />
+              </div>
+            )}
+            {voiceMemberMenu.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                className={cn(
+                  'w-full text-left px-3 py-2 font-body-sm hover:bg-surface-bright transition-colors',
+                  action.danger ? 'text-error' : 'text-on-surface',
+                )}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setVoiceMemberMenu(null);
+                  action.onSelect();
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </aside>
   );
 }

@@ -167,6 +167,44 @@ export class MessagesService {
     return { items, hasMore: olderHasMore };
   }
 
+  async listChannelThreads(
+    channelId: string,
+    userId: string,
+    limit = 5,
+  ): Promise<MessagePage> {
+    await this.channels.getChannel(channelId, userId);
+    const take = Math.min(Math.max(limit, 1), 50);
+    const rows = await this.em
+      .createQueryBuilder(Message, 'root')
+      .innerJoin(
+        Message,
+        'reply',
+        'reply.threadRootId = root.id AND reply.deletedAt IS NULL',
+      )
+      .where('root.channelId = :channelId', { channelId })
+      .andWhere('root.deletedAt IS NULL')
+      .andWhere('root.threadRootId IS NULL')
+      .select('root.id', 'id')
+      .addSelect('MAX(reply.createdAt)', 'lastReplyAt')
+      .addSelect('COUNT(reply.id)', 'replyCount')
+      .groupBy('root.id')
+      .orderBy('"lastReplyAt"', 'DESC')
+      .limit(take)
+      .getRawMany<{ id: string; lastReplyAt: string; replyCount: string }>();
+
+    if (!rows.length) return { items: [], hasMore: false };
+
+    const order = rows.map((r) => r.id);
+    const roots = await this.em.find(Message, {
+      where: { id: In(order) },
+      relations: { author: true },
+    });
+    const byId = new Map(roots.map((r) => [r.id, r]));
+    const ordered = order.map((id) => byId.get(id)).filter(Boolean) as Message[];
+    const items = await this.mapMessagesForViewer(ordered, userId);
+    return { items, hasMore: rows.length >= take };
+  }
+
   async listThreadMessages(
     rootMessageId: string,
     userId: string,
@@ -450,6 +488,28 @@ export class MessagesService {
         ? []
         : await this.createMessageNotifications(dto, channelRow, userId);
     this.realtime.emitCreate(channelId, dto);
+
+    if (threadRootId) {
+      const replyCount = await this.em.count(Message, {
+        where: { threadRootId, deletedAt: IsNull() },
+      });
+      const rootEntity = await this.em.findOne(Message, {
+        where: { id: threadRootId, deletedAt: IsNull() },
+        relations: { author: true },
+      });
+      if (rootEntity) {
+        const rootReactions = await this.em.find(Reaction, {
+          where: { messageId: threadRootId },
+          relations: { user: true },
+        });
+        const rootDto = await this.toDtoResolved(rootEntity, {
+          viewerId: userId,
+          reactions: rootReactions,
+          threadReplyCount: replyCount,
+        });
+        this.realtime.emitUpdate(channelId, rootDto);
+      }
+    }
 
     if (
       userId !== DRACORD_BOT_USER_ID &&

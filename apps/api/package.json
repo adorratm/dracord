@@ -11,8 +11,8 @@
     "lint": "echo ok"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1145.0",
-    "@aws-sdk/s3-request-presigner": "^3.1145.0",
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/s3-request-presigner": "^3.1146.0",
     "@bull-board/api": "^9.10.2",
     "@bull-board/express": "^9.10.2",
     "@bull-board/ui": "^9.10.2",

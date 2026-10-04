@@ -24,6 +24,7 @@ export type {
   SidebarChannelItem,
   SidebarChannelType,
   SidebarVoiceMember,
+  SidebarVoiceMemberAction,
   UserPanelProps,
   UserPanelAudioDevice,
 } from './components/ChannelSidebar';

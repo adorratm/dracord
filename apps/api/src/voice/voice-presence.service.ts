@@ -17,6 +17,8 @@ export class VoicePresenceService implements OnModuleDestroy {
     string,
     Map<string, { member: VoiceMemberSummary; expiresAt: number }>
   >();
+  /** memory: guildId -> aktif ses kanalı id'leri */
+  private readonly memoryGuildChannels = new Map<string, Set<string>>();
 
   constructor(
     private readonly config: ConfigService,
@@ -50,6 +52,10 @@ export class VoicePresenceService implements OnModuleDestroy {
 
   private userIndexKey(userId: string) {
     return `voice:u:${userId}`;
+  }
+
+  private guildChannelsKey(guildId: string) {
+    return `voice:guild:${guildId}:channels`;
   }
 
   async join(
@@ -183,27 +189,32 @@ export class VoicePresenceService implements OnModuleDestroy {
     guildId: string,
   ): Promise<Record<string, VoiceMemberSummary[]>> {
     if (this.redis?.status === 'ready') {
-      const keys = await this.redis.keys(`voice:${guildId}:*`);
+      const channelIds = await this.redis.smembers(this.guildChannelsKey(guildId));
       const out: Record<string, VoiceMemberSummary[]> = {};
-      for (const k of keys) {
-        // skip member keys voice:m:...
-        if (k.startsWith('voice:m:') || k.startsWith('voice:u:')) continue;
-        const parts = k.split(':');
-        if (parts.length !== 3) continue;
-        const channelId = parts[2]!;
+      const guildKey = this.guildChannelsKey(guildId);
+      for (const channelId of channelIds) {
         const members = await this.listChannel(guildId, channelId);
-        if (members.length) out[channelId] = members;
+        if (members.length) {
+          out[channelId] = members;
+        } else {
+          await this.redis.srem(guildKey, channelId);
+        }
       }
       return out;
     }
 
     const out: Record<string, VoiceMemberSummary[]> = {};
-    for (const [k] of this.memory) {
-      if (!k.startsWith(`voice:${guildId}:`)) continue;
-      const channelId = k.split(':')[2]!;
+    const ids = this.memoryGuildChannels.get(guildId);
+    if (!ids) return out;
+    for (const channelId of ids) {
       const members = await this.listChannel(guildId, channelId);
-      if (members.length) out[channelId] = members;
+      if (members.length) {
+        out[channelId] = members;
+      } else {
+        ids.delete(channelId);
+      }
     }
+    if (ids.size === 0) this.memoryGuildChannels.delete(guildId);
     return out;
   }
 
@@ -255,10 +266,13 @@ export class VoicePresenceService implements OnModuleDestroy {
     const loc = `${guildId}/${channelId}`;
 
     if (this.redis?.status === 'ready') {
+      const gKey = this.guildChannelsKey(guildId);
       const pipe = this.redis.pipeline();
       pipe.set(mKey, JSON.stringify(member), 'EX', MEMBER_TTL_SEC);
       pipe.sadd(chKey, member.id);
       pipe.expire(chKey, MEMBER_TTL_SEC + 30);
+      pipe.sadd(gKey, channelId);
+      pipe.expire(gKey, MEMBER_TTL_SEC + 60);
       pipe.sadd(uKey, loc);
       pipe.expire(uKey, MEMBER_TTL_SEC + 30);
       await pipe.exec();
@@ -274,6 +288,12 @@ export class VoicePresenceService implements OnModuleDestroy {
       member,
       expiresAt: Date.now() + MEMBER_TTL_SEC * 1000,
     });
+    let guildSet = this.memoryGuildChannels.get(guildId);
+    if (!guildSet) {
+      guildSet = new Set();
+      this.memoryGuildChannels.set(guildId, guildSet);
+    }
+    guildSet.add(channelId);
   }
 
   private async removeMember(guildId: string, channelId: string, userId: string) {
@@ -283,14 +303,26 @@ export class VoicePresenceService implements OnModuleDestroy {
     const loc = `${guildId}/${channelId}`;
 
     if (this.redis?.status === 'ready') {
+      const gKey = this.guildChannelsKey(guildId);
       const pipe = this.redis.pipeline();
       pipe.del(mKey);
       pipe.srem(chKey, userId);
       pipe.srem(uKey, loc);
       await pipe.exec();
+      const remaining = await this.redis.scard(chKey);
+      if (remaining === 0) {
+        await this.redis.srem(gKey, channelId);
+      }
       return;
     }
 
-    this.memory.get(chKey)?.delete(userId);
+    const map = this.memory.get(chKey);
+    map?.delete(userId);
+    if (map && map.size === 0) {
+      this.memory.delete(chKey);
+      const guildSet = this.memoryGuildChannels.get(guildId);
+      guildSet?.delete(channelId);
+      if (guildSet?.size === 0) this.memoryGuildChannels.delete(guildId);
+    }
   }
 }

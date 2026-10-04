@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  ForbiddenException,
-  Get,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import type { MusicQueueState } from '@dracord/types';
 import {
   CurrentUser,
@@ -27,10 +19,7 @@ export class MusicController {
   ) {}
 
   private async assertGuildMember(guildId: string, userId: string) {
-    const list = await this.guilds.listForUser(userId);
-    if (!list.some((g) => g.id === guildId)) {
-      throw new ForbiddenException('Bu sunucuya üye değilsin');
-    }
+    await this.guilds.ensureMember(guildId, userId);
   }
 
   @Get('state')
