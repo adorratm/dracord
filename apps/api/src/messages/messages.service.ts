@@ -632,7 +632,6 @@ export class MessagesService {
   ): Promise<{ lastReadMessageId: string | null }> {
     await this.channels.getChannel(channelId, userId);
     let lastReadMessageId: string | null = null;
-    let lastReadCreatedAt: Date | null = null;
 
     if (opts.messageId && opts.unreadFrom) {
       const target = await this.em.findOne(Message, {
@@ -648,21 +647,18 @@ export class MessagesService {
         order: { createdAt: 'DESC' },
       });
       lastReadMessageId = prev?.id ?? null;
-      lastReadCreatedAt = prev?.createdAt ?? null;
     } else if (opts.messageId) {
       const target = await this.em.findOne(Message, {
         where: { id: opts.messageId, channelId, deletedAt: IsNull() },
       });
       if (!target) throw new NotFoundException('Mesaj bulunamadı');
       lastReadMessageId = target.id;
-      lastReadCreatedAt = target.createdAt;
     } else {
       const latest = await this.em.findOne(Message, {
         where: { channelId, deletedAt: IsNull() },
         order: { createdAt: 'DESC' },
       });
       lastReadMessageId = latest?.id ?? null;
-      lastReadCreatedAt = latest?.createdAt ?? null;
     }
 
     let state = await this.em.findOne(ChannelReadState, {
@@ -672,7 +668,6 @@ export class MessagesService {
       state = this.em.create(ChannelReadState, { userId, channelId });
     }
     state.lastReadMessageId = lastReadMessageId;
-    state.lastReadCreatedAt = lastReadCreatedAt;
     state.lastReadAt = new Date();
     await this.em.save(ChannelReadState, state);
     return { lastReadMessageId };

@@ -16,10 +16,6 @@ export class ChannelReadState extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   lastReadMessageId!: string | null;
 
-  /** lastReadMessageId'nin createdAt'i — unread sayımında messages self-join'i önler */
-  @Column({ type: 'timestamptz', nullable: true })
-  lastReadCreatedAt!: Date | null;
-
   @Column({ type: 'timestamptz', nullable: true })
   lastReadAt!: Date | null;
 

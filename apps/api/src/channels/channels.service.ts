@@ -362,29 +362,29 @@ export class ChannelsService {
 
     for (const id of channelIds) map.set(id, 0);
 
-    const rows = (await this.em.query(
-      `SELECT m."channelId" AS "channelId", COUNT(*)::int AS c
-       FROM messages m
-       LEFT JOIN channel_read_states crs
-         ON crs."channelId" = m."channelId" AND crs."userId" = $1
-       LEFT JOIN messages lr ON lr.id = crs."lastReadMessageId"
-       WHERE m."channelId" = ANY($2::varchar[])
-         AND m."deletedAt" IS NULL
-         AND m."threadRootId" IS NULL
-         AND (
-           crs."lastReadMessageId" IS NULL
-           OR m."createdAt" > COALESCE(
-             crs."lastReadCreatedAt",
-             lr."createdAt",
-             '-infinity'::timestamptz
+    try {
+      const rows = (await this.em.query(
+        `SELECT m."channelId" AS "channelId", COUNT(*)::int AS c
+         FROM messages m
+         LEFT JOIN channel_read_states crs
+           ON crs."channelId" = m."channelId" AND crs."userId" = $1
+         LEFT JOIN messages lr ON lr.id = crs."lastReadMessageId"
+         WHERE m."channelId" = ANY($2::varchar[])
+           AND m."deletedAt" IS NULL
+           AND m."threadRootId" IS NULL
+           AND (
+             crs."lastReadMessageId" IS NULL
+             OR m."createdAt" > COALESCE(lr."createdAt", '-infinity'::timestamptz)
            )
-         )
-       GROUP BY m."channelId"`,
-      [userId, channelIds],
-    )) as Array<{ channelId: string; c: number }>;
+         GROUP BY m."channelId"`,
+        [userId, channelIds],
+      )) as Array<{ channelId: string; c: number }>;
 
-    for (const row of rows) {
-      map.set(row.channelId, Number(row.c ?? 0));
+      for (const row of rows) {
+        map.set(row.channelId, Number(row.c ?? 0));
+      }
+    } catch {
+      // Unread sorgusu başarısız olsa bile kanal listesini düşürme
     }
     return map;
   }
