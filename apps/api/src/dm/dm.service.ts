@@ -32,7 +32,6 @@ export class DmService {
       throw new BadRequestException('Bot’a DM açılamaz');
     }
 
-    // Self-DM (notlar)
     if (userId === otherUserId) {
       return this.openOrCreateSelfNotes(userId);
     }
@@ -49,20 +48,24 @@ export class DmService {
 
     await this.assertDmAllowed(userId, other);
 
-    const myMemberships = await this.em.find(DMChannelMember, {
-      where: { userId },
-    });
-    for (const m of myMemberships) {
-      const otherMember = await this.em.findOne(DMChannelMember, {
-        where: { dmChannelId: m.dmChannelId, userId: otherUserId },
-      });
-      if (!otherMember) continue;
-      const count = await this.em.count(DMChannelMember, {
-        where: { dmChannelId: m.dmChannelId },
-      });
-      if (count !== 2) continue;
+    // Ortak 1:1 DM: her iki kullanıcının da üye olduğu ve tam 2 üyeli kanal
+    const existing = await this.em.query(
+      `SELECT m1."dmChannelId" AS id
+       FROM dm_channel_members m1
+       INNER JOIN dm_channel_members m2
+         ON m2."dmChannelId" = m1."dmChannelId" AND m2."userId" = $2
+       WHERE m1."userId" = $1
+         AND (
+           SELECT COUNT(*) FROM dm_channel_members c
+           WHERE c."dmChannelId" = m1."dmChannelId"
+         ) = 2
+       LIMIT 1`,
+      [userId, otherUserId],
+    );
+    const existingId = (existing as Array<{ id: string }>)[0]?.id;
+    if (existingId) {
       const channel = await this.em.findOne(Channel, {
-        where: { dmChannelId: m.dmChannelId, type: ChannelType.TEXT },
+        where: { dmChannelId: existingId, type: ChannelType.TEXT },
       });
       if (channel) return this.toSummary(channel, other.displayName);
     }
@@ -92,14 +95,21 @@ export class DmService {
   }
 
   private async openOrCreateSelfNotes(userId: string): Promise<ChannelSummary> {
-    const myMemberships = await this.em.find(DMChannelMember, { where: { userId } });
-    for (const m of myMemberships) {
-      const count = await this.em.count(DMChannelMember, {
-        where: { dmChannelId: m.dmChannelId },
-      });
-      if (count !== 1) continue;
+    const existing = await this.em.query(
+      `SELECT m."dmChannelId" AS id
+       FROM dm_channel_members m
+       WHERE m."userId" = $1
+         AND (
+           SELECT COUNT(*) FROM dm_channel_members c
+           WHERE c."dmChannelId" = m."dmChannelId"
+         ) = 1
+       LIMIT 1`,
+      [userId],
+    );
+    const existingId = (existing as Array<{ id: string }>)[0]?.id;
+    if (existingId) {
       const channel = await this.em.findOne(Channel, {
-        where: { dmChannelId: m.dmChannelId, type: ChannelType.TEXT },
+        where: { dmChannelId: existingId, type: ChannelType.TEXT },
       });
       if (channel) return this.toSummary(channel, 'Notlarım', true);
     }
@@ -127,19 +137,34 @@ export class DmService {
   }
 
   async listForUser(userId: string): Promise<ChannelSummary[]> {
-    const memberships = await this.em.find(DMChannelMember, { where: { userId } });
-    const out: ChannelSummary[] = [];
-    const channelRows: Channel[] = [];
-    for (const m of memberships) {
-      const channel = await this.em.findOne(Channel, {
-        where: { dmChannelId: m.dmChannelId, type: ChannelType.TEXT },
-      });
-      if (!channel) continue;
-      channelRows.push(channel);
-      const others = await this.em.find(DMChannelMember, {
-        where: { dmChannelId: m.dmChannelId },
+    const memberships = await this.em.find(DMChannelMember, {
+      where: { userId },
+      select: { dmChannelId: true },
+    });
+    if (!memberships.length) return [];
+
+    const dmIds = memberships.map((m) => m.dmChannelId);
+    const [channels, allMembers] = await Promise.all([
+      this.em.find(Channel, {
+        where: { dmChannelId: In(dmIds), type: ChannelType.TEXT },
+      }),
+      this.em.find(DMChannelMember, {
+        where: { dmChannelId: In(dmIds) },
         relations: { user: true },
-      });
+      }),
+    ]);
+
+    const membersByDm = new Map<string, DMChannelMember[]>();
+    for (const m of allMembers) {
+      const list = membersByDm.get(m.dmChannelId) ?? [];
+      list.push(m);
+      membersByDm.set(m.dmChannelId, list);
+    }
+
+    const out: ChannelSummary[] = [];
+    for (const channel of channels) {
+      if (!channel.dmChannelId) continue;
+      const others = membersByDm.get(channel.dmChannelId) ?? [];
       const isSelfNotes = others.length === 1 && others[0]?.userId === userId;
       const peer = others.find((o) => o.userId !== userId);
       out.push(
@@ -157,9 +182,10 @@ export class DmService {
         ),
       );
     }
+
     const unreadMap = await this.channels.unreadByChannelIds(
       userId,
-      channelRows.map((c) => c.id),
+      channels.map((c) => c.id),
     );
     return out.map((s) => {
       const count = unreadMap.get(s.id) ?? 0;
@@ -186,7 +212,6 @@ export class DmService {
     });
     if (friendship) return;
 
-    // Aynı sunucudaki üyeler birbirine DM açabilir (Discord benzeri)
     const myGuilds = await this.em.find(GuildMember, {
       where: { userId: fromUserId },
       select: { guildId: true },

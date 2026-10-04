@@ -136,37 +136,69 @@ export class VoicePresenceService implements OnModuleDestroy {
     return { guildId, channelId, user: next, action: 'update' };
   }
 
-  /** Bağlı kaldığı sürece TTL yenile. */
+  /** Bağlı kaldığı sürece TTL yenile — yalnızca kendi member key'i. */
   async heartbeat(guildId: string, channelId: string, userId: string): Promise<boolean> {
-    const members = await this.listChannel(guildId, channelId);
-    const current = members.find((m) => m.id === userId);
-    if (!current) return false;
-    await this.setMember(guildId, channelId, current);
+    if (this.redis?.status === 'ready') {
+      const mKey = this.memberKey(guildId, channelId, userId);
+      const raw = await this.redis.get(mKey);
+      if (!raw) return false;
+      const chKey = this.channelKey(guildId, channelId);
+      const uKey = this.userIndexKey(userId);
+      const gKey = this.guildChannelsKey(guildId);
+      const loc = `${guildId}/${channelId}`;
+      const pipe = this.redis.pipeline();
+      pipe.set(mKey, raw, 'EX', MEMBER_TTL_SEC);
+      pipe.sadd(chKey, userId);
+      pipe.expire(chKey, MEMBER_TTL_SEC + 30);
+      pipe.sadd(gKey, channelId);
+      pipe.expire(gKey, MEMBER_TTL_SEC + 60);
+      pipe.sadd(uKey, loc);
+      pipe.expire(uKey, MEMBER_TTL_SEC + 30);
+      await pipe.exec();
+      return true;
+    }
+
+    const map = this.memory.get(this.channelKey(guildId, channelId));
+    const entry = map?.get(userId);
+    if (!entry || entry.expiresAt <= Date.now()) return false;
+    entry.expiresAt = Date.now() + MEMBER_TTL_SEC * 1000;
     return true;
   }
 
   async listChannel(guildId: string, channelId: string): Promise<VoiceMemberSummary[]> {
     if (this.redis?.status === 'ready') {
       const chKey = this.channelKey(guildId, channelId);
-      const keyType = await this.redis.type(chKey);
-      // Eski hash tabanlı presence → sil (hayalet kayıtlar)
-      if (keyType === 'hash') {
-        await this.redis.del(chKey);
-        return [];
-      }
-      if (keyType !== 'set' && keyType !== 'none') {
-        await this.redis.del(chKey);
-        return [];
-      }
+      // TYPE kontrolünü her çağrıda yapma — set bekliyoruz; hash kalıntısı SMEMBERS ile boş döner
       const ids = await this.redis.smembers(chKey);
+      if (!ids.length) {
+        // Eski hash kalıntısını tek seferlik temizle
+        const keyType = await this.redis.type(chKey);
+        if (keyType === 'hash' || (keyType !== 'set' && keyType !== 'none')) {
+          await this.redis.del(chKey);
+        }
+        return [];
+      }
+      const keys = ids.map((userId) => this.memberKey(guildId, channelId, userId));
+      const raws = await this.redis.mget(...keys);
       const out: VoiceMemberSummary[] = [];
-      for (const userId of ids) {
-        const raw = await this.redis.get(this.memberKey(guildId, channelId, userId));
+      const stale: string[] = [];
+      for (let i = 0; i < ids.length; i++) {
+        const raw = raws[i];
+        const userId = ids[i]!;
         if (!raw) {
-          await this.redis.srem(chKey, userId);
+          stale.push(userId);
           continue;
         }
-        out.push(JSON.parse(raw) as VoiceMemberSummary);
+        try {
+          out.push(JSON.parse(raw) as VoiceMemberSummary);
+        } catch {
+          stale.push(userId);
+        }
+      }
+      if (stale.length) {
+        const pipe = this.redis.pipeline();
+        for (const userId of stale) pipe.srem(chKey, userId);
+        await pipe.exec();
       }
       return out;
     }
@@ -191,14 +223,24 @@ export class VoicePresenceService implements OnModuleDestroy {
     if (this.redis?.status === 'ready') {
       const channelIds = await this.redis.smembers(this.guildChannelsKey(guildId));
       const out: Record<string, VoiceMemberSummary[]> = {};
+      if (!channelIds.length) return out;
+      // Kanalları paralel oku
+      const results = await Promise.all(
+        channelIds.map(async (channelId) => {
+          const members = await this.listChannel(guildId, channelId);
+          return { channelId, members };
+        }),
+      );
       const guildKey = this.guildChannelsKey(guildId);
-      for (const channelId of channelIds) {
-        const members = await this.listChannel(guildId, channelId);
-        if (members.length) {
-          out[channelId] = members;
-        } else {
-          await this.redis.srem(guildKey, channelId);
-        }
+      const empty: string[] = [];
+      for (const { channelId, members } of results) {
+        if (members.length) out[channelId] = members;
+        else empty.push(channelId);
+      }
+      if (empty.length) {
+        const pipe = this.redis.pipeline();
+        for (const channelId of empty) pipe.srem(guildKey, channelId);
+        await pipe.exec();
       }
       return out;
     }

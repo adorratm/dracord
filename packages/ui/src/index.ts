@@ -23,6 +23,7 @@ export type {
   SidebarCategory,
   SidebarChannelItem,
   SidebarChannelType,
+  SidebarThreadItem,
   SidebarVoiceMember,
   SidebarVoiceMemberAction,
   UserPanelProps,

@@ -48,6 +48,14 @@ export interface SidebarCategory {
   sortPosition?: number;
 }
 
+export interface SidebarThreadItem {
+  id: string;
+  label: string;
+  replyCount?: number;
+  active?: boolean;
+  onClick: () => void;
+}
+
 export interface SidebarChannelItem {
   id: string;
   name: string;
@@ -88,6 +96,11 @@ export interface UserPanelProps {
   voiceChannelName?: string | null;
   /** WebRTC ping (RTT), ms */
   voiceLatencyMs?: number | null;
+  /** Aktif ekran paylaşımı izleniyor / duraklatıldı — ses barı yanında kontrol */
+  screenShareViewControl?: {
+    paused: boolean;
+    onToggle: () => void;
+  } | null;
   /** 0–2 */
   micVolume?: number;
   /** 0–2 */
@@ -244,6 +257,7 @@ export function UserPanel({
   voiceConnected,
   voiceChannelName,
   voiceLatencyMs = null,
+  screenShareViewControl = null,
   micVolume = 1,
   outputVolume = 1,
   inputDeviceId = '',
@@ -373,6 +387,33 @@ export function UserPanel({
                 )}
               </p>
             </button>
+            {screenShareViewControl && (
+              <button
+                type="button"
+                onClick={screenShareViewControl.onToggle}
+                className={cn(
+                  'h-8 px-2 rounded-md flex items-center gap-1 font-label-sm transition-colors',
+                  'bg-surface-container-highest/40 backdrop-blur-sm border border-outline-variant/30',
+                  screenShareViewControl.paused
+                    ? 'text-primary-container hover:bg-primary-container/20'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
+                )}
+                aria-label={
+                  screenShareViewControl.paused
+                    ? 'İzlemeye devam et'
+                    : 'İzlemeyi durdur'
+                }
+                title={
+                  screenShareViewControl.paused
+                    ? 'İzlemeye devam et'
+                    : 'İzlemeyi durdur'
+                }
+              >
+                <span className="material-symbols-outlined text-[16px] leading-none">
+                  {screenShareViewControl.paused ? 'play_arrow' : 'pause'}
+                </span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onVoiceDisconnectClick}
@@ -740,6 +781,10 @@ export interface ChannelSidebarProps {
   verified?: boolean;
   onServerHeaderClick?: () => void;
   categories: SidebarCategory[];
+  /** Aktif metin kanalının threadleri (kanal listesinin altında) */
+  threadsSection?: {
+    items: SidebarThreadItem[];
+  } | null;
   userPanel: UserPanelProps;
   headerExtra?: ReactNode;
   className?: string;
@@ -998,6 +1043,7 @@ export function ChannelSidebar({
   verified,
   onServerHeaderClick,
   categories,
+  threadsSection = null,
   userPanel,
   headerExtra,
   className,
@@ -1199,6 +1245,39 @@ export function ChannelSidebar({
             </div>
           ))}
         </div>
+        {threadsSection && threadsSection.items.length > 0 && (
+          <div className="mt-space-md px-space-sm pb-space-sm">
+            <p className="px-space-sm mb-1 font-label-sm text-outline uppercase tracking-wide">
+              Threads
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {threadsSection.items.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={t.onClick}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-space-sm py-1.5 rounded-lg text-left transition-colors',
+                      t.active
+                        ? 'bg-surface-container-high text-on-surface'
+                        : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
+                    )}
+                  >
+                    <span className="material-symbols-outlined text-[16px] shrink-0 text-outline">
+                      forum
+                    </span>
+                    <span className="font-body-sm truncate flex-1">{t.label}</span>
+                    {(t.replyCount ?? 0) > 0 && (
+                      <span className="font-label-sm text-outline tabular-nums shrink-0">
+                        {t.replyCount}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       {/* Discord gibi: panel sunucu çubuğunun altına taşar (72px) */}
       <div className="relative z-30 shrink-0 md:-ml-[72px] md:w-[calc(100%+72px)]">

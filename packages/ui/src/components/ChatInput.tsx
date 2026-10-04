@@ -326,6 +326,12 @@ export function ChatInput({
   const mentionUserOptions = useMemo(() => {
     const q = (mention?.kind === 'user' ? mention.query : '').toLowerCase();
     const specials = [
+      {
+        id: '__threads',
+        username: 'threads',
+        displayName: '@threads',
+        avatarUrl: null as string | null,
+      },
       { id: '__everyone', username: 'everyone', displayName: '@everyone', avatarUrl: null as string | null },
       { id: '__all', username: 'all', displayName: '@all', avatarUrl: null as string | null },
     ].filter(
@@ -354,8 +360,16 @@ export function ChatInput({
   const slashOptions = useMemo(() => {
     if (mention?.kind !== 'slash') return [] as BotSlashCommand[];
     const q = mention.query.trim().toLocaleLowerCase('tr-TR');
+    const threadsCmd: BotSlashCommand = {
+      name: 'threads',
+      aliases: ['thread'],
+      description: 'Bu kanaldaki son threadleri göster',
+      usage: '/threads',
+    };
     const source = botSlashCommands?.length
-      ? botSlashCommands
+      ? botSlashCommands.some((c) => c.name === 'threads')
+        ? botSlashCommands
+        : [threadsCmd, ...botSlashCommands]
       : filterBotSlashCommands('');
     const filtered = !q
       ? source
@@ -1205,7 +1219,7 @@ export function ChatInput({
                             className="material-symbols-outlined leading-none"
                             style={{ fontSize: 18 }}
                           >
-                            groups
+                            {u.id === '__threads' ? 'forum' : 'groups'}
                           </span>
                         </span>
                       ) : (

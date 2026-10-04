@@ -1,6 +1,7 @@
 import {
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
@@ -9,6 +10,7 @@ import type { DMChannel } from './dm-channel.entity';
 import type { User } from './user.entity';
 
 @Entity('dm_channel_members')
+@Index(['userId'])
 export class DMChannelMember {
   @PrimaryColumn({ type: 'varchar' })
   dmChannelId!: string;

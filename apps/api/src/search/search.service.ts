@@ -4,6 +4,7 @@ import { EntityManager, In } from 'typeorm';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Friendship } from '@/database/entities/friendship.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
+import { User } from '@/database/entities/user.entity';
 import { FriendshipStatus } from '@/database/enums';
 import {
   ElasticsearchService,
@@ -127,14 +128,25 @@ export class SearchService {
         });
     const friendIds = friendships.map((f) => (f.userId === userId ? f.friendId : f.userId));
 
-    // Users who share a guild
+    // Users who share a guild — prefix aramada tüm popülasyonu çekme
     let coMemberIds: string[] = [];
     if (!isAdmin && memberGuildIds.length) {
-      const co = await this.em.find(GuildMember, {
-        where: { guildId: In(memberGuildIds) },
-        select: { userId: true },
-      });
-      coMemberIds = [...new Set(co.map((c) => c.userId).filter((id) => id !== userId))];
+      const prefix = query.trim().toLocaleLowerCase('tr-TR').slice(0, 32);
+      const qb = this.em
+        .createQueryBuilder(GuildMember, 'gm')
+        .innerJoin(User, 'u', 'u.id = gm.userId')
+        .select('DISTINCT gm.userId', 'userId')
+        .where('gm.guildId IN (:...guildIds)', { guildIds: memberGuildIds })
+        .andWhere('gm.userId != :userId', { userId })
+        .take(500);
+      if (prefix.length >= 1) {
+        qb.andWhere(
+          '(LOWER(u.username) LIKE :p OR LOWER(u.displayName) LIKE :p)',
+          { p: `${prefix.replace(/[%_]/g, '')}%` },
+        );
+      }
+      const co = await qb.getRawMany<{ userId: string }>();
+      coMemberIds = co.map((c) => c.userId);
     }
     const visibleUserIds = [...new Set([...friendIds, ...coMemberIds])];
 

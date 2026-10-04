@@ -250,8 +250,20 @@ export class MessagesService {
     const bookmarkSet = new Set(bookmarks.map((b) => b.messageId));
     const reactions = await this.em.find(Reaction, {
       where: { messageId: In(ids) },
-      relations: { user: true },
+      select: { id: true, messageId: true, userId: true, emoji: true },
     });
+    const reactionUserIds = [...new Set(reactions.map((r) => r.userId))];
+    const reactionUsers =
+      reactionUserIds.length > 0
+        ? await this.em.find(User, {
+            where: { id: In(reactionUserIds) },
+            select: { id: true, displayName: true, avatarUrl: true },
+          })
+        : [];
+    const reactionUserMap = new Map(reactionUsers.map((u) => [u.id, u]));
+    for (const r of reactions) {
+      (r as Reaction & { user?: User }).user = reactionUserMap.get(r.userId) as User;
+    }
     const reactionByMsg = new Map<string, Reaction[]>();
     for (const r of reactions) {
       const list = reactionByMsg.get(r.messageId) ?? [];
@@ -316,18 +328,27 @@ export class MessagesService {
     return out;
   }
 
+  private readonly blockedCache = new Map<
+    string,
+    { ids: Set<string>; expiresAt: number }
+  >();
+
   private async blockedUserIds(userId: string): Promise<Set<string>> {
+    const hit = this.blockedCache.get(userId);
+    if (hit && hit.expiresAt > Date.now()) return hit.ids;
     const rows = await this.em.find(Friendship, {
       where: [
         { userId, status: FriendshipStatus.BLOCKED },
         { friendId: userId, status: FriendshipStatus.BLOCKED },
       ],
+      select: { userId: true, friendId: true, status: true },
     });
     const set = new Set<string>();
     for (const r of rows) {
       if (r.status !== FriendshipStatus.BLOCKED) continue;
       set.add(r.userId === userId ? r.friendId : r.userId);
     }
+    this.blockedCache.set(userId, { ids: set, expiresAt: Date.now() + 30_000 });
     return set;
   }
 
@@ -344,8 +365,7 @@ export class MessagesService {
       forwardedFrom?: MessageForwardedFrom | null;
     } = {},
   ): Promise<{ message: MessageDto; notifications: NotificationDto[] }> {
-    await this.channels.getChannel(channelId, userId);
-    const channelRow = await this.em.findOne(Channel, { where: { id: channelId } });
+    const channelRow = await this.channels.assertChannelAccess(channelId, userId);
     if (channelRow?.guildId) {
       await this.guilds.assertNotTimedOut(channelRow.guildId, userId);
       const canSend = await this.channels.memberCanInChannel(
@@ -612,6 +632,7 @@ export class MessagesService {
   ): Promise<{ lastReadMessageId: string | null }> {
     await this.channels.getChannel(channelId, userId);
     let lastReadMessageId: string | null = null;
+    let lastReadCreatedAt: Date | null = null;
 
     if (opts.messageId && opts.unreadFrom) {
       const target = await this.em.findOne(Message, {
@@ -627,18 +648,21 @@ export class MessagesService {
         order: { createdAt: 'DESC' },
       });
       lastReadMessageId = prev?.id ?? null;
+      lastReadCreatedAt = prev?.createdAt ?? null;
     } else if (opts.messageId) {
       const target = await this.em.findOne(Message, {
         where: { id: opts.messageId, channelId, deletedAt: IsNull() },
       });
       if (!target) throw new NotFoundException('Mesaj bulunamadı');
       lastReadMessageId = target.id;
+      lastReadCreatedAt = target.createdAt;
     } else {
       const latest = await this.em.findOne(Message, {
         where: { channelId, deletedAt: IsNull() },
         order: { createdAt: 'DESC' },
       });
       lastReadMessageId = latest?.id ?? null;
+      lastReadCreatedAt = latest?.createdAt ?? null;
     }
 
     let state = await this.em.findOne(ChannelReadState, {
@@ -648,6 +672,7 @@ export class MessagesService {
       state = this.em.create(ChannelReadState, { userId, channelId });
     }
     state.lastReadMessageId = lastReadMessageId;
+    state.lastReadCreatedAt = lastReadCreatedAt;
     state.lastReadAt = new Date();
     await this.em.save(ChannelReadState, state);
     return { lastReadMessageId };
@@ -989,26 +1014,17 @@ export class MessagesService {
     const everyone =
       /(^|[\s])@(everyone|all)\b/i.test(message.content) && Boolean(channel?.guildId);
     if (everyone && channel?.guildId) {
-      const members = await this.em.find(GuildMember, {
-        where: { guildId: channel.guildId },
-        select: { userId: true },
-      });
-      for (const m of members) {
-        if (m.userId === authorId) continue;
-        if (mentionedIds.has(m.userId)) continue;
-        mentionedIds.add(m.userId);
-        inputs.push({
-          userId: m.userId,
-          type: 'MENTION',
-          title: `${authorName} herkesi etiketledi`,
-          body: snippet,
-          link: linkBase,
-          actorId: authorId,
-          guildId: channel.guildId,
-          channelId: message.channelId,
-          messageId: message.id,
-        });
-      }
+      void this.fanOutGuildNotifications({
+        guildId: channel.guildId,
+        authorId,
+        skipIds: mentionedIds,
+        type: 'MENTION',
+        title: `${authorName} herkesi etiketledi`,
+        body: snippet,
+        link: linkBase,
+        channelId: message.channelId,
+        messageId: message.id,
+      }).catch(() => undefined);
     }
 
     const channelName = (channel?.name ?? '').toLowerCase();
@@ -1018,25 +1034,17 @@ export class MessagesService {
         channelName === 'announcements' ||
         channelName.includes('duyuru'));
     if (isAnnouncement && channel?.guildId) {
-      const members = await this.em.find(GuildMember, {
-        where: { guildId: channel.guildId },
-        select: { userId: true },
-      });
-      for (const m of members) {
-        if (m.userId === authorId) continue;
-        if (mentionedIds.has(m.userId)) continue;
-        inputs.push({
-          userId: m.userId,
-          type: 'ANNOUNCEMENT',
-          title: `Duyuru: #${channel.name}`,
-          body: `${authorName}: ${snippet}`,
-          link: linkBase,
-          actorId: authorId,
-          guildId: channel.guildId,
-          channelId: message.channelId,
-          messageId: message.id,
-        });
-      }
+      void this.fanOutGuildNotifications({
+        guildId: channel.guildId,
+        authorId,
+        skipIds: mentionedIds,
+        type: 'ANNOUNCEMENT',
+        title: `Duyuru: #${channel.name}`,
+        body: `${authorName}: ${snippet}`,
+        link: linkBase,
+        channelId: message.channelId,
+        messageId: message.id,
+      }).catch(() => undefined);
     }
 
     // Düz DM mesajı bildirimi (self-DM hariç; mention varsa tekrar etme)
@@ -1065,6 +1073,47 @@ export class MessagesService {
       this.notificationsRealtime.emitMany(created);
       return created;
     });
+  }
+
+  private async fanOutGuildNotifications(opts: {
+    guildId: string;
+    authorId: string;
+    skipIds: Set<string>;
+    type: 'MENTION' | 'ANNOUNCEMENT';
+    title: string;
+    body: string;
+    link: string;
+    channelId: string;
+    messageId: string;
+  }): Promise<void> {
+    const members = await this.em.find(GuildMember, {
+      where: { guildId: opts.guildId },
+      select: { userId: true },
+    });
+    const batch: Parameters<NotificationsService['createMany']>[0] = [];
+    const flush = async () => {
+      if (!batch.length) return;
+      const chunk = batch.splice(0, batch.length);
+      const created = await this.notifications.createMany(chunk);
+      this.notificationsRealtime.emitMany(created);
+    };
+    for (const m of members) {
+      if (m.userId === opts.authorId) continue;
+      if (opts.skipIds.has(m.userId)) continue;
+      batch.push({
+        userId: m.userId,
+        type: opts.type,
+        title: opts.title,
+        body: opts.body,
+        link: opts.link,
+        actorId: opts.authorId,
+        guildId: opts.guildId,
+        channelId: opts.channelId,
+        messageId: opts.messageId,
+      });
+      if (batch.length >= 200) await flush();
+    }
+    await flush();
   }
 
   async getMessage(messageId: string, viewerId?: string): Promise<MessageDto> {

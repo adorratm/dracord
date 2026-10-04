@@ -92,14 +92,30 @@ export class GuildsService {
 
   /** Discord: @everyone tüm üyelere örtük uygulanır. */
   async getEveryoneRoleId(guildId: string): Promise<string | null> {
+    const cached = this.everyoneRoleCache.get(guildId);
+    if (cached && cached.expiresAt > Date.now()) return cached.id;
     const everyone = await this.em.findOne(Role, {
       where: { guildId, name: '@everyone' },
     });
+    if (everyone) {
+      this.everyoneRoleCache.set(guildId, {
+        id: everyone.id,
+        expiresAt: Date.now() + 60_000,
+      });
+    }
     return everyone?.id ?? null;
   }
 
+  private readonly everyoneRoleCache = new Map<
+    string,
+    { id: string; expiresAt: number }
+  >();
+
   /** @everyone + varsayılan kanal görünürlük izinleri (katılma / eski sunucular). */
   async ensureDefaultEveryoneRole(guildId: string): Promise<string> {
+    const cached = this.everyoneRoleCache.get(guildId);
+    if (cached && cached.expiresAt > Date.now()) return cached.id;
+
     let everyone = await this.em.findOne(Role, {
       where: { guildId, name: '@everyone' },
     });
@@ -137,6 +153,10 @@ export class GuildsService {
         ),
       );
     }
+    this.everyoneRoleCache.set(guildId, {
+      id: everyone.id,
+      expiresAt: Date.now() + 60_000,
+    });
     return everyone.id;
   }
 
@@ -234,33 +254,39 @@ export class GuildsService {
     const guilds = await this.em.find(Guild, { select: { id: true } });
     let added = 0;
     for (const g of guilds) {
-      await this.ensureDefaultEveryoneRole(g.id);
-      const everyoneId = await this.getEveryoneRoleId(g.id);
-      if (!everyoneId) continue;
-      const members = await this.em.find(GuildMember, {
-        where: { guildId: g.id },
-      });
-      for (const member of members) {
-        const existing = await this.em.findOne(GuildMemberRole, {
-          where: { guildMemberId: member.id, roleId: everyoneId },
-        });
-        if (existing) continue;
-        await this.em.save(
-          GuildMemberRole,
-          this.em.create(GuildMemberRole, {
-            guildMemberId: member.id,
-            roleId: everyoneId,
-          }),
-        );
-        added += 1;
-      }
+      const everyoneId = await this.ensureDefaultEveryoneRole(g.id);
+      const result = await this.em.query(
+        `INSERT INTO guild_member_roles ("guildMemberId", "roleId")
+         SELECT gm.id, $1
+         FROM guild_members gm
+         WHERE gm."guildId" = $2
+           AND NOT EXISTS (
+             SELECT 1 FROM guild_member_roles gmr
+             WHERE gmr."guildMemberId" = gm.id AND gmr."roleId" = $1
+           )
+         RETURNING "guildMemberId"`,
+        [everyoneId, g.id],
+      );
+      added += Array.isArray(result) ? result.length : 0;
     }
     return added;
   }
 
   async listForUser(userId: string): Promise<GuildSummary[]> {
     if (await this.platformAdmin.isPlatformAdmin(userId)) {
-      const all = await this.em.find(Guild, { order: { name: 'ASC' } });
+      const all = await this.em.find(Guild, {
+        order: { name: 'ASC' },
+        select: {
+          id: true,
+          name: true,
+          iconUrl: true,
+          bannerUrl: true,
+          ownerId: true,
+          discoverable: true,
+          afkChannelId: true,
+          afkTimeoutMinutes: true,
+        },
+      });
       return all.map((g) => this.toSummary(g));
     }
     const memberships = await this.em.find(GuildMember, {
@@ -280,15 +306,20 @@ export class GuildsService {
       take: 50,
       order: { createdAt: 'DESC' },
     });
-    const withCounts = await Promise.all(
-      guilds.map(async (g) => {
-        const memberCount = await this.em.count(GuildMember, {
-          where: { guildId: g.id },
-        });
-        return { ...this.toSummary(g), memberCount };
-      }),
-    );
-    return withCounts;
+    if (!guilds.length) return [];
+    const ids = guilds.map((g) => g.id);
+    const countRows = await this.em
+      .createQueryBuilder(GuildMember, 'gm')
+      .select('gm.guildId', 'guildId')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('gm.guildId IN (:...ids)', { ids })
+      .groupBy('gm.guildId')
+      .getRawMany<{ guildId: string; cnt: string }>();
+    const countMap = new Map(countRows.map((r) => [r.guildId, Number(r.cnt) || 0]));
+    return guilds.map((g) => ({
+      ...this.toSummary(g),
+      memberCount: countMap.get(g.id) ?? 0,
+    }));
   }
 
   async getGuild(guildId: string, userId: string): Promise<GuildSummary> {

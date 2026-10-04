@@ -21,7 +21,11 @@ export function tokenizeMessageContent(
   }> = [];
   const patterns: string[] = [];
   // Slash komut (mesaj başı veya satır başı)
-  patterns.push(`(?:^|\\n)/(?:oynat|play|atla|skip|duraklat|pause|devam|resume|durdur|stop|kuyruk|queue|ses|volume|kaldir|remove)\\b[^\\n]*`);
+  patterns.push(
+    `(?:^|\\n)/(?:threads|thread|oynat|play|atla|skip|duraklat|pause|devam|resume|durdur|stop|kuyruk|queue|ses|volume|kaldir|remove)\\b[^\\n]*`,
+  );
+  // @threads özel komut
+  patterns.push(`@threads(?![a-zA-Z0-9_])`);
   if (uniqueMentions.length) {
     patterns.push(
       `@(?:${uniqueMentions.map(escapeRegExp).join('|')})(?![a-zA-Z0-9_])`,
@@ -38,7 +42,11 @@ export function tokenizeMessageContent(
   const chunks = content.split(re);
   for (const chunk of chunks) {
     if (!chunk) continue;
-    if (/^\/(?:oynat|play|atla|skip|duraklat|pause|devam|resume|durdur|stop|kuyruk|queue|ses|volume|kaldir|remove)\b/i.test(chunk.trimStart())) {
+    if (/^\/(?:threads|thread|oynat|play|atla|skip|duraklat|pause|devam|resume|durdur|stop|kuyruk|queue|ses|volume|kaldir|remove)\b/i.test(chunk.trimStart())) {
+      parts.push({ type: 'slash', value: chunk });
+      continue;
+    }
+    if (/^@threads$/i.test(chunk)) {
       parts.push({ type: 'slash', value: chunk });
       continue;
     }

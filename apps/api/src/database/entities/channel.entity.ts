@@ -17,6 +17,7 @@ import type { Message } from './message.entity';
 
 @Entity('channels')
 @Index(['guildId'])
+@Index(['dmChannelId'])
 export class Channel extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   guildId!: string | null;

@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   Unique,
@@ -13,6 +14,8 @@ import type { User } from './user.entity';
 
 @Entity('friendships')
 @Unique(['userId', 'friendId'])
+@Index(['userId', 'status'])
+@Index(['friendId', 'status'])
 export class Friendship extends CuidEntity {
   @Column({ type: 'varchar' })
   userId!: string;

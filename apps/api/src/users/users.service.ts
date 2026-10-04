@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { EntityManager, ILike, Not } from 'typeorm';
+import { EntityManager, ILike, In, Not } from 'typeorm';
 import type { ClientSettings, PublicUser, SocialLinks } from '@dracord/types';
 import { toPublicUser } from '@/common/user.mapper';
 import { Friendship } from '@/database/entities/friendship.entity';
@@ -72,11 +72,17 @@ export class UsersService {
         { userId, status: FriendshipStatus.ACCEPTED },
         { friendId: userId, status: FriendshipStatus.ACCEPTED },
       ],
-      relations: { user: true, friend: true },
     });
-    return rows.map((row) =>
-      toPublicUser(row.userId === userId ? row.friend : row.user, { viewerId: userId }),
+    if (!rows.length) return [];
+    const peerIds = rows.map((row) =>
+      row.userId === userId ? row.friendId : row.userId,
     );
+    const users = await this.em.find(User, { where: { id: In(peerIds) } });
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return peerIds
+      .map((id) => byId.get(id))
+      .filter((u): u is User => Boolean(u))
+      .map((u) => toPublicUser(u, { viewerId: userId }));
   }
 
   async listBlocked(userId: string): Promise<PublicUser[]> {

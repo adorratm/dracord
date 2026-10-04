@@ -254,33 +254,69 @@ export class ChannelsService {
     }
     if (channel.guildId) {
       await this.guilds.ensureMember(channel.guildId, userId);
-      const canConnect = await this.memberCanInChannel(channel, userId, 'CONNECT');
+      const everyoneId = await this.guilds.ensureDefaultEveryoneRole(channel.guildId);
+      const permCtx = await this.guilds.buildMemberPermContext(
+        channel.guildId,
+        userId,
+        everyoneId,
+      );
+      if (!permCtx) {
+        throw new ForbiddenException('Bu ses kanalına bağlanma iznin yok');
+      }
+      const canConnect = this.memberCanInChannelWithContext(
+        channel,
+        userId,
+        'CONNECT',
+        permCtx,
+      );
       if (!canConnect) {
         throw new ForbiddenException('Bu ses kanalına bağlanma iznin yok');
       }
+      const denied = channel.deniedUserIds ?? [];
+      if (denied.includes(userId)) {
+        throw new ForbiddenException('Bu odaya girmen engellendi');
+      }
+      const canBypass =
+        permCtx.isOwner ||
+        permCtx.isAdministrator ||
+        permCtx.isPlatformAdmin ||
+        permCtx.canManageChannels;
+      if (channel.locked && !canBypass) {
+        if (!channel.passwordHash) {
+          throw new ForbiddenException('Bu oda kilitli');
+        }
+        const ok = password
+          ? await bcrypt.compare(password, channel.passwordHash)
+          : false;
+        if (!ok) {
+          throw new ForbiddenException('Oda şifresi gerekli veya hatalı');
+        }
+      }
+      return channel;
     }
     const denied = channel.deniedUserIds ?? [];
     if (denied.includes(userId)) {
       throw new ForbiddenException('Bu odaya girmen engellendi');
     }
-    const canBypass =
-      channel.guildId != null &&
-      ((await this.canManageChannels(channel.guildId, userId)) ||
-        (await this.guilds.memberHasPermission(
-          channel.guildId,
-          userId,
-          GuildPermissions.ADMINISTRATOR,
-        )));
-    if (channel.locked && !canBypass) {
-      if (!channel.passwordHash) {
-        throw new ForbiddenException('Bu oda kilitli');
+    return channel;
+  }
+
+  /** Erişim kontrolü sonrası Channel entity (mesaj/send hot path). */
+  async assertChannelAccess(channelId: string, userId: string): Promise<Channel> {
+    const channel = await this.em.findOne(Channel, { where: { id: channelId } });
+    if (!channel) throw new NotFoundException('Channel not found');
+    if (channel.guildId) {
+      await this.guilds.ensureMember(channel.guildId, userId);
+      const canManage = await this.canManageChannels(channel.guildId, userId);
+      if (!canManage) {
+        const canView = await this.memberCanInChannel(channel, userId, 'VIEW_CHANNEL');
+        if (!canView) throw new ForbiddenException('Bu kanalı görme yetkin yok');
       }
-      const ok = password
-        ? await bcrypt.compare(password, channel.passwordHash)
-        : false;
-      if (!ok) {
-        throw new ForbiddenException('Oda şifresi gerekli veya hatalı');
-      }
+    } else if (channel.dmChannelId) {
+      const member = await this.em.findOne(DMChannelMember, {
+        where: { dmChannelId: channel.dmChannelId, userId },
+      });
+      if (!member) throw new ForbiddenException('Not a participant in this DM');
     }
     return channel;
   }
@@ -337,7 +373,11 @@ export class ChannelsService {
          AND m."threadRootId" IS NULL
          AND (
            crs."lastReadMessageId" IS NULL
-           OR m."createdAt" > COALESCE(lr."createdAt", '-infinity'::timestamptz)
+           OR m."createdAt" > COALESCE(
+             crs."lastReadCreatedAt",
+             lr."createdAt",
+             '-infinity'::timestamptz
+           )
          )
        GROUP BY m."channelId"`,
       [userId, channelIds],

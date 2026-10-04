@@ -277,7 +277,7 @@ export class MusicCommandsService {
     const botId = this.bot.getBotUserId();
     await this.bot.ensureBotUser();
     const author = await this.em.findOneOrFail(User, { where: { id: botId } });
-    const saved = await this.em.save(
+    const message = await this.em.save(
       Message,
       this.em.create(Message, {
         channelId: textChannelId,
@@ -286,14 +286,10 @@ export class MusicCommandsService {
         type: 'default',
       }),
     );
-    const message = await this.em.findOneOrFail(Message, {
-      where: { id: saved.id },
-      relations: { author: true },
-    });
     const dto = {
       id: message.id,
       channelId: message.channelId,
-      author: toPublicUser(message.author ?? author),
+      author: toPublicUser(author),
       content: message.content,
       type: 'default' as const,
       attachments: undefined,

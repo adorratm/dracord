@@ -1,9 +1,10 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { CuidEntity } from './cuid-base.entity';
 import type { Guild } from './guild.entity';
 import type { Channel } from './channel.entity';
 
 @Entity('categories')
+@Index(['guildId'])
 export class Category extends CuidEntity {
   @Column({ type: 'varchar' })
   guildId!: string;

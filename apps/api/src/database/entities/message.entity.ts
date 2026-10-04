@@ -25,6 +25,8 @@ export type MessageForwardedFrom = {
 
 @Entity('messages')
 @Index(['channelId', 'createdAt'])
+@Index(['threadRootId', 'createdAt'])
+@Index(['channelId', 'pinnedAt'])
 export class Message extends CuidEntity {
   @Column({ type: 'varchar' })
   channelId!: string;

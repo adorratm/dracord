@@ -902,23 +902,28 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (screenShareViewPausedRef.current || focusedScreenShareIdRef.current === '__none__') {
-        clearScreenShareView();
-        return;
-      }
-
       let focusId = focusedScreenShareIdRef.current;
-      if (!focusId || !shares.some((s) => s.identity === focusId)) {
+      if (!focusId || focusId === '__none__' || !shares.some((s) => s.identity === focusId)) {
         const current = activeScreenShareIdRef.current;
         if (current && shares.some((s) => s.identity === current)) {
           focusId = current;
           focusedScreenShareIdRef.current = focusId;
+        } else if (screenShareViewPausedRef.current) {
+          // Duraklatılmışken odak kaybolduysa paylaşım yeniden gelene kadar boş bırak;
+          // aynı yayıncı tekrar açarsa pause sıfırlanır (aşağıda TrackUnsubscribed).
+          clearScreenShareView();
+          return;
         } else {
           // Otomatik seçim yok — kullanıcı chip ile seçene kadar boş bırak
           focusedScreenShareIdRef.current = '__none__';
           clearScreenShareView();
           return;
         }
+      }
+
+      if (screenShareViewPausedRef.current) {
+        clearScreenShareView();
+        return;
       }
 
       const share = shares.find((s) => s.identity === focusId) ?? shares[0]!;
@@ -948,8 +953,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     (identity: string) => {
       const room = roomRef.current;
       if (!room) return;
-      screenShareViewPausedRef.current = false;
-      setScreenShareViewPaused(false);
+      // Odak değişince pause korunur — kullanıcı devam et demeden video bağlanmaz
       focusedScreenShareIdRef.current = identity;
       applyScreenShareView(room);
     },
@@ -957,11 +961,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   );
 
   const pauseScreenShareView = useCallback(() => {
+    const room = roomRef.current;
+    const focus =
+      focusedScreenShareIdRef.current && focusedScreenShareIdRef.current !== '__none__'
+        ? focusedScreenShareIdRef.current
+        : activeScreenShareIdRef.current;
+    if (focus) focusedScreenShareIdRef.current = focus;
     screenShareViewPausedRef.current = true;
     setScreenShareViewPaused(true);
-    focusedScreenShareIdRef.current = '__none__';
     clearScreenShareView();
-  }, [clearScreenShareView]);
+    if (room) applyScreenShareView(room);
+  }, [applyScreenShareView, clearScreenShareView]);
 
   const resumeScreenShareView = useCallback(() => {
     const room = roomRef.current;
@@ -1113,11 +1123,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
       if (publication.source === Track.Source.ScreenShare) {
         const identity = participant?.identity;
-        if (
-          identity &&
-          focusedScreenShareIdRef.current === identity &&
-          (screenTrackRef.current === track || activeScreenShareIdRef.current === identity)
-        ) {
+        // Paylaşım kapanınca bu yayıncı için pause sıfırlanır (yeniden açınca izlenebilir)
+        if (identity && focusedScreenShareIdRef.current === identity) {
+          screenShareViewPausedRef.current = false;
+          setScreenShareViewPaused(false);
           clearScreenShareView();
           focusedScreenShareIdRef.current = '__none__';
         } else if (screenTrackRef.current === track) {

@@ -10,6 +10,12 @@ export interface BotSlashCommand {
 
 export const BOT_SLASH_COMMANDS: BotSlashCommand[] = [
   {
+    name: 'threads',
+    aliases: ['thread'],
+    description: 'Bu kanaldaki son threadleri göster',
+    usage: '/threads',
+  },
+  {
     name: 'oynat',
     aliases: ['play'],
     description: 'Şarkı veya URL çal',

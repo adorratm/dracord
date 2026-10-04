@@ -82,22 +82,11 @@ export class VoiceService {
     if (!guild) throw new NotFoundException('Guild not found');
     if (guild.ownerId === actorId) return;
     if (await this.platformAdmin.isPlatformAdmin(actorId)) return;
+    const perms = await this.guilds.collectMemberPermissions(guildId, actorId);
     const allowed =
-      (await this.guilds.memberHasPermission(
-        guildId,
-        actorId,
-        GuildPermissions.MOVE_MEMBERS,
-      )) ||
-      (await this.guilds.memberHasPermission(
-        guildId,
-        actorId,
-        GuildPermissions.MANAGE_CHANNELS,
-      )) ||
-      (await this.guilds.memberHasPermission(
-        guildId,
-        actorId,
-        GuildPermissions.ADMINISTRATOR,
-      ));
+      perms.includes(GuildPermissions.MOVE_MEMBERS) ||
+      perms.includes(GuildPermissions.MANAGE_CHANNELS) ||
+      perms.includes(GuildPermissions.ADMINISTRATOR);
     if (!allowed) {
       throw new ForbiddenException('Bu işlem için yetkin yok');
     }

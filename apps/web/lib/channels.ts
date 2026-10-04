@@ -38,6 +38,8 @@ export function buildSidebarCategories(
       SidebarVoiceMember,
       'contextActions' | 'participantVolume' | 'onParticipantVolumeChange'
     >;
+    /** AFK kanalı — speaking gizlenir, mute/deafen zorunlu gösterilir */
+    afkChannelId?: string | null;
   },
 ): SidebarCategory[] {
   const textAndVoice = channels.filter((c) => c.type !== 'CATEGORY');
@@ -98,13 +100,14 @@ export function buildSidebarCategories(
             ? Boolean(extras?.canDragSelf) && !m.isBot
             : Boolean(extras?.canDragVoiceMembers) && !m.isBot && !isSuperAdmin;
           const enriched = extras?.enrichVoiceMember?.(m, ch.id) ?? {};
+          const isAfk = Boolean(extras?.afkChannelId && ch.id === extras.afkChannelId);
           return {
             id: m.id,
             displayName: m.displayName,
             avatarUrl: m.avatarUrl,
-            muted: m.muted,
-            deafened: m.deafened,
-            speaking: m.speaking,
+            muted: isAfk ? true : m.muted,
+            deafened: isAfk ? true : m.deafened,
+            speaking: isAfk ? false : m.speaking,
             isBot: m.isBot,
             draggable,
             ...enriched,
