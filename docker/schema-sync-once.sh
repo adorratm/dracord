@@ -39,8 +39,9 @@ COMPOSE=(docker compose
 
 echo "==> One-shot API boot: synchronize=true + direct postgres (not pgbouncer)"
 # run blocks until we stop it; timeout after sync window
+# Not: docker compose run --no-build desteklemez (eski compose flag)
 set +e
-timeout 60 "${COMPOSE[@]}" run --rm --no-deps --no-build \
+timeout 60 "${COMPOSE[@]}" run --rm --no-deps \
   -e NODE_ENV=development \
   -e DATABASE_SYNCHRONIZE=true \
   -e DATABASE_URL="$DIRECT_URL" \

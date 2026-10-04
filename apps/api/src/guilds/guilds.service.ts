@@ -255,14 +255,15 @@ export class GuildsService {
     let added = 0;
     for (const g of guilds) {
       const everyoneId = await this.ensureDefaultEveryoneRole(g.id);
+      // Postgres $1 tipini INSERT + NOT EXISTS’te tutarlı çıkarsayamaz → explicit cast
       const result = await this.em.query(
         `INSERT INTO guild_member_roles ("guildMemberId", "roleId")
-         SELECT gm.id, $1
+         SELECT gm.id, $1::varchar
          FROM guild_members gm
-         WHERE gm."guildId" = $2
+         WHERE gm."guildId" = $2::varchar
            AND NOT EXISTS (
              SELECT 1 FROM guild_member_roles gmr
-             WHERE gmr."guildMemberId" = gm.id AND gmr."roleId" = $1
+             WHERE gmr."guildMemberId" = gm.id AND gmr."roleId" = $1::varchar
            )
          RETURNING "guildMemberId"`,
         [everyoneId, g.id],
