@@ -31,8 +31,16 @@ if [[ ! -f .env ]]; then
 fi
 
 # Soft-fail if .env still looks like the public example
-if grep -qE 'JWT_ACCESS_SECRET=change-me|LIVEKIT_API_SECRET=secret_dracord_livekit_dev' .env; then
-  echo "Production .env still contains example secrets — refuse to deploy." >&2
+if grep -qE 'JWT_ACCESS_SECRET=change-me|LIVEKIT_API_SECRET=secret_dracord_livekit_dev|MUSIC_BOT_INTERNAL_SECRET=dracord-music-dev|APPLE_STUB_MODE=true|ENABLE_DEV_LOGIN=true' .env; then
+  echo "Production .env still contains example/dev secrets — refuse to deploy." >&2
+  exit 1
+fi
+if ! grep -qE '^ADMIN_EMAILS=.+' .env; then
+  echo "Production .env missing ADMIN_EMAILS — refuse to deploy." >&2
+  exit 1
+fi
+if ! grep -qE '^MUSIC_BOT_INTERNAL_SECRET=.{24,}' .env; then
+  echo "MUSIC_BOT_INTERNAL_SECRET missing or too short (min 24) — refuse to deploy." >&2
   exit 1
 fi
 

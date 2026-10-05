@@ -228,6 +228,12 @@ export class AuthService {
     | (AuthTokens & { user: User; requires2fa?: false })
     | { requires2fa: true; challengeToken: string; user: User }
   > {
+    if (this.config.get<string>('NODE_ENV') === 'production') {
+      throw new UnauthorizedException('Dev login disabled');
+    }
+    if (this.config.get<string>('ENABLE_DEV_LOGIN') === 'false') {
+      throw new UnauthorizedException('Dev login disabled');
+    }
     const usernameRaw = dto.username?.trim() || 'vampiredev';
     const username = usernameRaw.toLowerCase().replace(/[^a-z0-9_]/g, '');
     const email = (dto.email ?? `${username}@dracord.local`).toLowerCase();
@@ -400,14 +406,14 @@ export class AuthService {
     | (AuthTokens & { user: User; requires2fa?: false })
     | { requires2fa: true; challengeToken: string; user: User }
   > {
-    const appleClientId = this.config.get<string>('APPLE_CLIENT_ID');
-    const stubMode =
-      !appleClientId || this.config.get<string>('APPLE_STUB_MODE') === 'true';
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    const appleClientId = this.config.get<string>('APPLE_CLIENT_ID')?.trim();
+    const stubRequested = this.config.get<string>('APPLE_STUB_MODE') === 'true';
+    // Production’da stub asla; aksi halde sahte idToken ile hesap açılır
+    const stubMode = !isProd && stubRequested && !appleClientId;
 
     if (!stubMode) {
-      throw new BadRequestException(
-        'Apple Sign In production verification is not configured in this build.',
-      );
+      throw new UnauthorizedException('Apple Sign In is not available');
     }
 
     const stubId = dto.idToken.slice(0, 64) || randomBytes(8).toString('hex');

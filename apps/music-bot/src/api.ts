@@ -1,14 +1,28 @@
 import type { MusicJobPayload, MusicQueueState, MusicTrack } from '@dracord/types';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:4000';
-const SECRET = process.env.MUSIC_BOT_INTERNAL_SECRET ?? 'dracord-music-dev';
+const SECRET = process.env.MUSIC_BOT_INTERNAL_SECRET?.trim() ?? '';
+
+function requireSecret(): string {
+  if (
+    !SECRET ||
+    SECRET.length < 24 ||
+    SECRET === 'dracord-music-dev' ||
+    SECRET === 'change-me'
+  ) {
+    throw new Error(
+      'MUSIC_BOT_INTERNAL_SECRET eksik veya zayıf (min 24 karakter, örnek secret kullanma)',
+    );
+  }
+  return SECRET;
+}
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-music-bot-secret': SECRET,
+      'x-music-bot-secret': requireSecret(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });

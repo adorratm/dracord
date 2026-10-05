@@ -30,7 +30,15 @@ export class MusicInternalController {
   ) {}
 
   private assertSecret(secret?: string) {
-    const expected = this.config.get<string>('MUSIC_BOT_INTERNAL_SECRET') ?? 'dracord-music-dev';
+    const expected = this.config.get<string>('MUSIC_BOT_INTERNAL_SECRET')?.trim() ?? '';
+    const weak =
+      !expected ||
+      expected.length < 24 ||
+      expected === 'dracord-music-dev' ||
+      expected === 'change-me';
+    if (weak) {
+      throw new UnauthorizedException('Music bot secret not configured');
+    }
     if (!secret || secret !== expected) {
       throw new UnauthorizedException('Invalid music bot secret');
     }

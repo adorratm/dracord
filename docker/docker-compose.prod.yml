@@ -53,7 +53,7 @@ services:
       MUSIC_BOT_LIVEKIT_URL: ws://livekit:7880
       FRONTEND_URL: ${FRONTEND_URL:-https://dracord.com.tr}
       ADMIN_URL: ${ADMIN_URL:-https://admin.dracord.com.tr}
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-emrekilic19983@gmail.com}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:?set ADMIN_EMAILS}
     depends_on: !reset
       pgbouncer:
         condition: service_started

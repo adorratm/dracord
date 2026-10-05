@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Post,
   Req,
   Res,
@@ -36,6 +37,15 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  private assertDevLoginEnabled() {
+    if (this.config.get<string>('NODE_ENV') === 'production') {
+      throw new NotFoundException();
+    }
+    if (this.config.get<string>('ENABLE_DEV_LOGIN') === 'false') {
+      throw new NotFoundException();
+    }
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: { sub: string }) {
@@ -62,6 +72,7 @@ export class AuthController {
     @Body() dto: DevLoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.assertDevLoginEnabled();
     const result = await this.authService.devLogin(dto);
     if ('requires2fa' in result && result.requires2fa) {
       return {

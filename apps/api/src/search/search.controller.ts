@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { PlatformAdminService } from '@/auth/platform-admin.service';
 import {
   CurrentUser,
   type JwtPayloadUser,
@@ -15,6 +16,7 @@ export class SearchController {
     private readonly search: SearchService,
     private readonly indexer: SearchIndexerService,
     private readonly es: ElasticsearchService,
+    private readonly platformAdmin: PlatformAdminService,
   ) {}
 
   @Get()
@@ -41,7 +43,8 @@ export class SearchController {
   }
 
   @Post('reindex')
-  async reindex() {
+  async reindex(@CurrentUser() user: JwtPayloadUser) {
+    await this.platformAdmin.assertIsPlatformAdmin(user.sub);
     return this.indexer.reindexAll();
   }
 }

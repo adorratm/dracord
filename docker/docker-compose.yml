@@ -107,7 +107,7 @@ services:
       MUSIC_BOT_LIVEKIT_URL: ws://host.docker.internal:7880
       # S3_* yalnızca .env (AWS). LocalStack/MinIO yok.
       PORT: "4000"
-      MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:-dracord-music-dev}
+      MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:?set MUSIC_BOT_INTERNAL_SECRET}
       MUSIC_BOT_ENABLED: ${MUSIC_BOT_ENABLED:-true}
     depends_on:
       pgbouncer:
@@ -157,7 +157,7 @@ services:
       LIVEKIT_URL: ws://host.docker.internal:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-APIdracorddevkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret_dracord_livekit_dev_key_change_me}
-      MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:-dracord-music-dev}
+      MUSIC_BOT_INTERNAL_SECRET: ${MUSIC_BOT_INTERNAL_SECRET:?set MUSIC_BOT_INTERNAL_SECRET}
       MUSIC_AUDIO_BITRATE_KBPS: ${MUSIC_AUDIO_BITRATE_KBPS:-320}
       YTDLP_PATH: yt-dlp
       FFMPEG_PATH: ffmpeg

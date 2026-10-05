@@ -1,14 +1,15 @@
 import type { ConfigService } from '@nestjs/config';
 
-/** Varsayılan platform admin — ADMIN_EMAILS ile override edilir (virgülle ayrılmış). */
-export const DEFAULT_ADMIN_EMAIL = 'emrekilic19983@gmail.com';
-
+/**
+ * Platform admin allowlist — yalnızca ADMIN_EMAILS env.
+ * Kodda kişisel e-posta hardcode etme (public repo hedef listesi olmasın).
+ */
 export function parseAdminEmails(config: ConfigService): string[] {
   const raw = config.get<string>('ADMIN_EMAILS')?.trim();
-  const source = raw && raw.length > 0 ? raw : DEFAULT_ADMIN_EMAIL;
+  if (!raw) return [];
   return [
     ...new Set(
-      source
+      raw
         .split(',')
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean),

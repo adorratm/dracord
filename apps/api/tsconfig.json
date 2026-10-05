@@ -12,6 +12,7 @@
     "target": "ESNext",
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "strict": true,

@@ -73,6 +73,14 @@ async function upsertUser(
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Refusing to seed in production (NODE_ENV=production).');
+    process.exit(1);
+  }
+  if (process.env.ALLOW_DB_SEED === 'false') {
+    console.error('Refusing to seed (ALLOW_DB_SEED=false).');
+    process.exit(1);
+  }
   try {
     const { config } = await import('dotenv');
     const path = await import('path');
