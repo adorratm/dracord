@@ -247,7 +247,10 @@ if [[ "$USE_PROD" == "1" ]]; then
     if ! bash "$ROOT/docker/sync-dracord-nginx.sh" auto; then
       echo "!! nginx sync failed — retry once" >&2
       sleep 3
-      bash "$ROOT/docker/sync-dracord-nginx.sh" auto
+      if ! bash "$ROOT/docker/sync-dracord-nginx.sh" auto; then
+        # App roll zaten healthy; nginx smoke flake yüzünden :previous’a dönme
+        echo "!! nginx sync hâlâ fail — edge loopback ayakta olabilir; app rollback YOK" >&2
+      fi
     fi
   fi
 fi

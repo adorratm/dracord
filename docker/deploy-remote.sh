@@ -175,7 +175,9 @@ if [[ "${DRACORD_SYNC_NGINX:-1}" == "1" ]]; then
   if ! bash docker/sync-dracord-nginx.sh auto; then
     echo "!! nginx sync failed — retry" >&2
     sleep 3
-    bash docker/sync-dracord-nginx.sh auto
+    if ! bash docker/sync-dracord-nginx.sh auto; then
+      echo "!! final nginx sync failed (non-fatal if edge health 200)" >&2
+    fi
   fi
 fi
 

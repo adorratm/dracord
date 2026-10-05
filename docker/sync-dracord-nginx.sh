@@ -150,8 +150,18 @@ curl -sS -o /dev/null -w "Host dracord.com.tr → %{http_code}\n" \
 curl -sS -o /dev/null -w "loopback edge web → %{http_code}\n" \
   http://127.0.0.1:13000/health || true
 
-if ! docker exec "$NGINX_CTN" nginx -T 2>/dev/null | grep -q 'server_name dracord.com.tr'; then
-  echo "!! nginx -T içinde dracord.com.tr yok" >&2
+# nginx -T config dump çoğu imajda stderr’a yazar; 2>/dev/null yanlış negatif üretiyordu.
+# Önce conf.d dosyası, yoksa nginx -T (stdout+stderr).
+vhost_ok=0
+if docker exec "$NGINX_CTN" grep -qE 'server_name[[:space:]]+[^;]*dracord\.com\.tr' \
+  "/etc/nginx/conf.d/$CONF_NAME" 2>/dev/null; then
+  vhost_ok=1
+elif docker exec "$NGINX_CTN" sh -c 'nginx -T 2>&1' \
+  | grep -qE 'server_name[[:space:]]+[^;]*dracord\.com\.tr'; then
+  vhost_ok=1
+fi
+if [[ "$vhost_ok" -ne 1 ]]; then
+  echo "!! nginx vhost dracord.com.tr bulunamadı ($CONF_NAME / nginx -T)" >&2
   exit 1
 fi
 echo "  OK  nginx vhost: dracord.com.tr"
