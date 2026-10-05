@@ -30,9 +30,23 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-# Soft-fail if .env still looks like the public example
-if grep -qE 'JWT_ACCESS_SECRET=change-me|LIVEKIT_API_SECRET=secret_dracord_livekit_dev|MUSIC_BOT_INTERNAL_SECRET=dracord-music-dev|APPLE_STUB_MODE=true|ENABLE_DEV_LOGIN=true' .env; then
+# Soft-fail if .env still looks like the public example / unsafe for prod
+fail=0
+check_bad() {
+  local label="$1" pattern="$2"
+  if grep -qE "$pattern" .env; then
+    echo "ERROR: .env contains unsafe setting: $label" >&2
+    fail=1
+  fi
+}
+check_bad 'JWT_ACCESS_SECRET=change-me…' 'JWT_ACCESS_SECRET=change-me'
+check_bad 'LIVEKIT_API_SECRET=secret_dracord_livekit_dev…' 'LIVEKIT_API_SECRET=secret_dracord_livekit_dev'
+check_bad 'MUSIC_BOT_INTERNAL_SECRET=dracord-music-dev' 'MUSIC_BOT_INTERNAL_SECRET=dracord-music-dev'
+check_bad 'APPLE_STUB_MODE=true (set false or remove)' '^APPLE_STUB_MODE=true'
+check_bad 'ENABLE_DEV_LOGIN=true (set false or remove)' '^ENABLE_DEV_LOGIN=true'
+if [[ "$fail" -ne 0 ]]; then
   echo "Production .env still contains example/dev secrets — refuse to deploy." >&2
+  echo "Edit $DEPLOY_PATH/.env on the server, then re-run deploy." >&2
   exit 1
 fi
 if ! grep -qE '^ADMIN_EMAILS=.+' .env; then
