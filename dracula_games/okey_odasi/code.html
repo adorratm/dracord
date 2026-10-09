@@ -1,0 +1,887 @@
+<!DOCTYPE html><html class="dark" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_dashboard" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"on-primary-fixed-variant":"#593090","on-surface-variant":"#ccc3d3","primary-container":"#bd93f9","on-tertiary-fixed-variant":"#860f60","on-tertiary":"#620044","on-secondary-container":"#a7b7ed","primary":"#d7baff","error":"#ffb4ab","tertiary-fixed":"#ffd8e9","background":"#11131e","on-secondary":"#1d2e5c","surface-bright":"#373845","tertiary":"#ffafd7","on-primary-fixed":"#290055","inverse-primary":"#714aaa","surface-container-high":"#272935","surface":"#11131e","tertiary-container":"#fe78c5","on-error":"#690005","secondary":"#b5c5fc","inverse-surface":"#e1e1f1","on-primary":"#411478","surface-container-lowest":"#0b0e18","on-tertiary-container":"#770054","primary-fixed":"#eddcff","surface-dim":"#11131e","on-tertiary-fixed":"#3c0029","error-container":"#93000a","surface-container-low":"#191b26","primary-fixed-dim":"#d7baff","secondary-fixed":"#dbe1ff","on-error-container":"#ffdad6","tertiary-fixed-dim":"#ffafd7","surface-container-highest":"#323440","secondary-container":"#374776","on-surface":"#e1e1f1","surface-tint":"#d7baff","on-background":"#e1e1f1","secondary-fixed-dim":"#b5c5fc","surface-container":"#1d1f2b","on-primary-container":"#4e2484","inverse-on-surface":"#2e303c","surface-variant":"#323440","on-secondary-fixed-variant":"#354574","on-secondary-fixed":"#041846","outline-variant":"#4a4451","outline":"#968e9c"},borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},spacing:{"space-xl":"1.5rem","margin":"0rem","gutter":"1rem","space-sm":"0.5rem","space-xs":"0.25rem","space-lg":"1rem","space-md":"0.75rem"},fontFamily:{"label-md":["Inter"],"body-md":["Inter"],"code-inline":["Inter"],"headline-xl":["Inter"],"headline-lg":["Inter"],"headline-md":["Inter"],"body-lg":["Inter"],"label-sm":["Inter"],"body-sm":["Inter"]},fontSize:{"label-md":["0.75rem",{"lineHeight":"1rem","letterSpacing":"0.04em","fontWeight":"700"}],"body-md":["0.9375rem",{"lineHeight":"1.375rem","fontWeight":"400"}],"code-inline":["0.875rem",{"lineHeight":"1.25rem","fontWeight":"400"}],"headline-xl":["1.5rem",{"lineHeight":"1.875rem","fontWeight":"700"}],"headline-lg":["1.25rem",{"lineHeight":"1.625rem","fontWeight":"600"}],"headline-md":["1rem",{"lineHeight":"1.375rem","fontWeight":"600"}],"body-lg":["1rem",{"lineHeight":"1.5rem","fontWeight":"400"}],"label-sm":["0.6875rem",{"lineHeight":"0.875rem","letterSpacing":"0.02em","fontWeight":"600"}],"body-sm":["0.8125rem",{"lineHeight":"1.125rem","fontWeight":"400"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface select-none antialiased"><header class="fixed top-0 left-0 right-0 h-10 bg-surface-container-lowest z-50 flex items-center justify-between px-space-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-sm"><img alt="Dracula Discord Clyde Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1XS0UlKpPtDTzM9oFeTIVzOtz3BrK31wD2KxXiezEUr9Uye0ETd3vpyHGizsTUOlQ19isYaYD-xRktbI2FjcCEZVnUHQwIzSUu1Fcgm4IWkkJ0sfe668Euz7H93pc1W1rQzpnwKDGGZjHnP1GNwE9J_0iyXqC5Udjw_1FucIuWphKVmGTdeCMDAXGWkzSL6Fs7_JBmLgASkaZ8HdCow4nCzHQWPNrl3JkJX9PDCxhEYgYKc9yh3HjixaBg"><span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Discord Dracula Edition</span></div><nav class="hidden md:flex items-center gap-space-sm" data-active-classes="bg-surface-container-high text-on-surface font-bold rounded-lg"><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="server-chat" href="#">Servers</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="direct-messages" href="#">Direct Messages</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="voice-lounge" href="#">Voice</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface px-space-sm py-space-xs transition-colors" data-path="user-settings" href="#">Settings</a></nav><div class="flex items-center gap-space-md"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><div class="flex items-center"><button class="h-8 w-8 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">minimize</span></button><button class="h-8 w-8 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">check_box_outline_blank</span></button><button class="h-8 w-8 flex items-center justify-center text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-colors"><span class="material-symbols-outlined text-[16px]">close</span></button></div></div></header><aside class="fixed left-0 top-10 bottom-0 w-[72px] bg-surface-container-lowest z-40 flex flex-col items-center py-space-md gap-space-sm"><div class="relative group flex items-center justify-center w-full"><div class="absolute left-0 w-1 h-10 bg-primary rounded-r-full transition-all duration-200"></div><a class="w-12 h-12 rounded-2xl bg-surface-container-high hover:bg-primary-container text-on-surface hover:text-on-primary-container flex items-center justify-center transition-all duration-200 group-hover:rounded-xl shadow-md" data-path="direct-messages" href="#"><img alt="Dracula Discord Clyde Logo" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1XS0UlKpPtDTzM9oFeTIVzOtz3BrK31wD2KxXiezEUr9Uye0ETd3vpyHGizsTUOlQ19isYaYD-xRktbI2FjcCEZVnUHQwIzSUu1Fcgm4IWkkJ0sfe668Euz7H93pc1W1rQzpnwKDGGZjHnP1GNwE9J_0iyXqC5Udjw_1FucIuWphKVmGTdeCMDAXGWkzSL6Fs7_JBmLgASkaZ8HdCow4nCzHQWPNrl3JkJX9PDCxhEYgYKc9yh3HjixaBg"></a></div><div class="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs"></div><div class="flex-1 flex flex-col items-center gap-space-sm w-full overflow-y-auto"><div class="relative group flex items-center justify-center w-full"><div class="absolute left-0 w-1 h-5 bg-on-surface rounded-r-full group-hover:h-8 transition-all"></div><a class="w-12 h-12 rounded-full hover:rounded-xl bg-secondary-container text-on-secondary-container hover:bg-primary hover:text-on-primary flex items-center justify-center font-headline-md text-headline-md transition-all duration-200" data-path="server-chat" href="#">DR</a></div><div class="relative group flex items-center justify-center w-full"><a class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-primary flex items-center justify-center font-headline-md text-headline-md hover:bg-primary-container hover:text-on-primary-container transition-all duration-200" data-path="server-chat" href="#"><span class="material-symbols-outlined">code</span></a></div><div class="relative group flex items-center justify-center w-full"><a class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-tertiary flex items-center justify-center font-headline-md text-headline-md hover:bg-tertiary-container hover:text-on-tertiary-container transition-all duration-200" data-path="voice-lounge" href="#"><span class="material-symbols-outlined">graphic_eq</span></a></div><div class="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs"></div><button class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-secondary hover:bg-secondary-container hover:text-on-secondary-container flex items-center justify-center transition-all duration-200"><span class="material-symbols-outlined">add</span></button><button class="w-12 h-12 rounded-full hover:rounded-xl bg-surface-container text-secondary hover:bg-secondary-container hover:text-on-secondary-container flex items-center justify-center transition-all duration-200"><span class="material-symbols-outlined">explore</span></button></div></aside><aside class="fixed left-[72px] top-10 bottom-0 w-60 bg-surface-container-low z-30 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col flex-1 min-h-0"><div class="h-12 px-space-md flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)] bg-surface-container-low cursor-pointer hover:bg-surface-container transition-colors"><span class="font-headline-md text-headline-md text-on-surface truncate">Dracula Realm</span><span class="material-symbols-outlined text-on-surface-variant text-[20px]">expand_more</span></div><div class="flex-1 overflow-y-auto px-space-sm py-space-md"><div class="px-space-sm mb-space-xs flex items-center justify-between text-on-surface-variant"><span class="font-label-sm text-label-sm uppercase font-bold tracking-wider">Text Channels</span><span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-on-surface">add</span></div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-surface-container-high text-on-surface font-bold rounded-lg"><a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="server-chat" href="#"><span class="font-body-md text-body-md text-outline">#</span><span class="font-body-sm text-body-sm truncate flex-1">general-chat</span></a><a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="server-chat" href="#"><span class="font-body-md text-body-md text-outline">#</span><span class="font-body-sm text-body-sm truncate flex-1">dracula-dev</span><span class="w-2 h-2 rounded-full bg-primary"></span></a><a class="flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="server-chat" href="#"><span class="font-body-md text-body-md text-outline">#</span><span class="font-body-sm text-body-sm truncate flex-1">theme-releases</span></a></nav>
+<!-- Rich Voice Channels Section (Watch Party, Tavla, Okey, Bowling) -->
+<div class="px-space-sm mt-space-md mb-space-xs flex items-center justify-between text-on-surface-variant"><span class="font-label-sm text-label-sm uppercase font-bold tracking-wider text-primary">Ses Kanalları</span><span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-on-surface">add</span></div>
+<nav class="flex flex-col gap-1" data-active-classes="bg-surface-container-high text-on-surface font-bold rounded-lg">
+<!-- Watch Party Hub (Active) -->
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-base">🎬</span>
+<div class="flex-1 min-w-0">
+<div class="font-body-sm text-body-sm truncate flex items-center justify-between">
+<span class="">WATCH PARTY</span>
+<span class="text-[10px] bg-[#bd93f9]/20 text-[#bd93f9] px-1.5 py-0.2 rounded font-bold">CANLI</span>
+</div>
+<div class="font-label-sm text-[10px] text-[#50fa7b] flex items-center gap-1 font-normal">
+<span class="w-1.5 h-1.5 rounded-full bg-[#50fa7b] animate-ping"></span> Sinema &amp; Canlı
+    </div>
+</div>
+</a>
+<!-- TAVLA SALONU Group -->
+<div class="pt-2">
+<div class="px-space-sm py-0.5 flex items-center justify-between text-on-surface-variant text-[11px] font-bold uppercase tracking-wider">
+<span class="flex items-center gap-1"><span class="">🎲</span> Tavla Salonu</span>
+<span class="text-[10px] text-outline">3/6</span>
+</div>
+<div class="ml-2 pl-2 border-l border-surface-container-highest flex flex-col gap-0.5 mt-0.5">
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Tavla #1</span>
+<span class="text-[10px] px-1 rounded bg-[#ff5555]/20 text-[#ff5555] font-semibold">2/2 Dolu</span>
+</a>
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Tavla #2</span>
+<span class="text-[10px] px-1 rounded bg-[#f1fa8c]/20 text-[#f1fa8c] font-semibold">1/2</span>
+</a>
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-outline hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Tavla #3</span>
+<span class="text-[10px] px-1 rounded bg-surface-container-highest text-outline">0/2 Boş</span>
+</a>
+</div>
+</div>
+<!-- OKEY 101 KULÜBÜ Group -->
+<div class="pt-2">
+<div class="px-space-sm py-0.5 flex items-center justify-between text-on-surface-variant text-[11px] font-bold uppercase tracking-wider">
+<span class="flex items-center gap-1"><span class="">🀄</span> Okey 101 Kulübü</span>
+<span class="text-[10px] text-[#50fa7b]">7/12</span>
+</div>
+<div class="ml-2 pl-2 border-l border-surface-container-highest flex flex-col gap-0.5 mt-0.5">
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Okey Masası #1</span>
+<span class="text-[10px] px-1 rounded bg-[#ff5555]/20 text-[#ff5555] font-semibold">4/4 Canlı</span>
+</a>
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Okey Masası #2</span>
+<span class="text-[10px] px-1 rounded bg-[#50fa7b]/20 text-[#50fa7b] font-semibold">3/4 Bekliyor</span>
+</a>
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-outline hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Okey Masası #3</span>
+<span class="text-[10px] px-1 rounded bg-surface-container-highest text-outline">0/4</span>
+</a>
+</div>
+</div>
+<!-- DRACULA BOWLING Group -->
+<div class="pt-2 pb-2">
+<div class="px-space-sm py-0.5 flex items-center justify-between text-on-surface-variant text-[11px] font-bold uppercase tracking-wider">
+<span class="flex items-center gap-1"><span class="">🎳</span> Dracula Bowling</span>
+<span class="text-[10px] text-[#8be9fd]">14/24</span>
+</div>
+<div class="ml-2 pl-2 border-l border-surface-container-highest flex flex-col gap-0.5 mt-0.5">
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Pist 1 (Turnuva)</span>
+<span class="text-[10px] px-1 rounded bg-[#8be9fd]/20 text-[#8be9fd] font-semibold">6/8 Maçta</span>
+</a>
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Pist 2</span>
+<span class="text-[10px] px-1 rounded bg-[#ff5555]/20 text-[#ff5555] font-semibold">8/8 Dolu</span>
+</a>
+<a class="flex items-center justify-between px-space-sm py-1 rounded text-outline hover:bg-surface-container hover:text-on-surface transition-colors" data-path="voice-lounge" href="#">
+<span class="text-xs truncate">Pist 3</span>
+<span class="text-[10px] px-1 rounded bg-surface-container-highest text-outline">0/8</span>
+</a>
+</div>
+</div>
+</nav>
+</div></div><div class="h-[52px] bg-surface-container-lowest px-space-sm flex items-center justify-between"><div class="flex items-center gap-space-xs min-w-0 cursor-pointer p-space-xs rounded-lg hover:bg-surface-container transition-colors flex-1"><div class="relative"><div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center font-headline-md text-headline-md text-on-secondary-container">VD</div><div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface-container-lowest"></div></div><div class="flex flex-col min-w-0 leading-none"><span class="font-label-md text-label-md text-on-surface truncate">VampireDev</span><span class="font-label-sm text-label-sm text-on-surface-variant truncate">Online</span></div></div><div class="flex items-center text-on-surface-variant"><button class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">mic</span></button><button class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">headphones</span></button><a class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container hover:text-on-surface transition-colors" data-path="user-settings" href="#"><span class="material-symbols-outlined text-[18px]">settings</span></a></div></div></aside><div class="pl-[312px]"><main class="relative pt-10 min-h-screen bg-surface-container w-full"><div class="flex flex-col w-full">
+<!-- Top Match Context Sub-Header (Integrated Discord Channel View) -->
+<div class="w-full bg-surface-container-lowest px-space-lg py-space-sm shadow-sm flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm flex-wrap">
+<div class="flex items-center gap-space-xs font-headline-md text-headline-md text-on-surface">
+<span class="text-tertiary">🀄</span>
+<span class="text-on-surface-variant font-body-sm text-body-sm">Dracula Realm</span>
+<span class="text-outline text-label-sm">/</span>
+<span class="text-on-surface-variant font-body-sm text-body-sm">SES KANALLARI</span>
+<span class="text-outline text-label-sm">/</span>
+<span class="text-primary font-bold">Okey 101 - Masa #1</span>
+</div>
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span class="font-label-sm text-label-sm bg-primary-container/20 text-primary px-space-sm py-0.5 rounded-full font-bold">4/4 Masa Dolu</span>
+<span class="font-label-sm text-label-sm bg-secondary-container text-on-secondary-container px-space-sm py-0.5 rounded-full">Seri Katlamalı 101</span>
+<span class="font-label-sm text-label-sm bg-error-container/40 text-error px-space-sm py-0.5 rounded-full">Ceza Puanı: Açık</span>
+<span class="font-label-sm text-label-sm bg-surface-container-high text-tertiary px-space-sm py-0.5 rounded-full flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Dracula Taş Motoru Aktif
+      </span>
+</div>
+<!-- Active Turn Pill -->
+<div class="flex items-center gap-space-sm">
+<div class="flex items-center gap-space-xs bg-tertiary-container/20 px-space-md py-1 rounded-lg">
+<span class="material-symbols-outlined text-[18px] text-tertiary animate-spin" style="animation-duration: 4s;">hourglass_top</span>
+<span class="font-label-md text-label-md text-tertiary">SIRA SİZDE: <span class="text-on-surface font-black" id="turn-timer">27</span>sn</span>
+</div>
+<div class="font-label-sm text-label-sm text-error bg-surface-container-highest px-space-sm py-1 rounded">
+        Hatalı Açma: -101 Puan
+      </div>
+</div>
+</div>
+<!-- Primary Split Grid: Arena vs Right Discord Activity / Chat -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-0 w-full">
+<!-- Arena Canvas (Left 9 cols on desktop) -->
+<div class="xl:col-span-9 p-space-md flex flex-col gap-space-md bg-surface">
+<!-- 4-Player Arena Table (Felt & Wooden Inset) -->
+<div class="relative w-full rounded-2xl p-3 md:p-5 shadow-2xl flex flex-col justify-between overflow-hidden select-none" style="background: radial-gradient(circle at 50% 45%, rgb(15, 73, 43) 0%, rgb(7, 51, 29) 55%, rgb(4, 28, 16) 85%, rgb(26, 16, 8) 100%); border: 12px solid rgb(46, 26, 13); box-shadow: rgba(0, 0, 0, 0.85) 0px 0px 80px inset, rgb(3, 20, 11) 0px 0px 20px inset, rgba(0, 0, 0, 0.9) 0px 16px 40px;">
+  <!-- Polished Oak Bevel & Brass Corner Accents -->
+  <div class="absolute top-0 left-0 w-8 h-8 pointer-events-none z-30" style="background: linear-gradient(135deg, #d4af37 0%, #aa8214 60%, transparent 60%);"></div>
+  <div class="absolute top-0 right-0 w-8 h-8 pointer-events-none z-30" style="background: linear-gradient(225deg, #d4af37 0%, #aa8214 60%, transparent 60%);"></div>
+  <div class="absolute bottom-0 left-0 w-8 h-8 pointer-events-none z-30" style="background: linear-gradient(45deg, #d4af37 0%, #aa8214 60%, transparent 60%);"></div>
+  <div class="absolute bottom-0 right-0 w-8 h-8 pointer-events-none z-30" style="background: linear-gradient(315deg, #d4af37 0%, #aa8214 60%, transparent 60%);"></div>
+  <!-- Traditional Turkish Çay Bardağı (Table Corner Ornament) -->
+  <div class="absolute top-3 right-6 z-20 hidden md:flex items-center gap-2 pointer-events-none opacity-90">
+    <div class="relative flex flex-col items-center">
+      <!-- Steam effect -->
+      <div class="w-2 h-4 rounded-full bg-white/20 blur-xs animate-pulse -mb-1"></div>
+      <!-- Thin Waist Glass & Mahogany Tea -->
+      <div class="relative w-7 h-11 rounded-t-sm rounded-b-xl flex flex-col items-center justify-end p-0.5 shadow-md" style="background: linear-gradient(to right, rgba(255,255,255,0.4), rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.3)), linear-gradient(to bottom, transparent 20%, #700b0b 35%, #420303 95%); border: 1px solid rgba(255,255,255,0.5); backdrop-filter: blur(1px);">
+        <!-- Silver Spoon -->
+        <div class="absolute -top-3 right-1 w-1 h-10 rounded-full transform rotate-12" style="background: linear-gradient(to bottom, #f0f0f0, #9e9e9e); box-shadow: 1px 1px 2px rgba(0,0,0,0.4);"></div>
+        <!-- Lemon Slice hint -->
+        <div class="w-3 h-1 bg-yellow-300/80 rounded-full mb-1"></div>
+      </div>
+      <!-- Porcelain Saucer -->
+      <div class="w-11 h-2 rounded-full -mt-0.5 shadow-lg border border-red-800/60" style="background: radial-gradient(ellipse at center, #ffffff 40%, #e0e0e0 70%, #8b1111 90%);"></div>
+    </div>
+    <div class="text-[10px] font-semibold text-emerald-200/60 leading-tight hidden lg:block">
+      Tavşan Kanı Çay<br><span class="text-[9px] text-amber-300/80">Afiyet olsun!</span>
+    </div>
+  </div>
+
+  <!-- Ambient Felt Surface Texture Grain Overlay -->
+  <div class="absolute inset-0 pointer-events-none opacity-25" style="background-image: radial-gradient(#052e18 1px, transparent 1px); background-size: 8px 8px;"></div>
+
+  <!-- NORTH PLAYER: NeonVamp with Authentic Wooden Rack Backside -->
+  <div class="flex flex-col items-center justify-center z-10">
+    <div class="flex flex-col items-center gap-1.5">
+      <div class="flex items-center gap-3 bg-black/60 px-4 py-1.5 rounded-full border border-amber-900/50 shadow-lg backdrop-blur-md">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-purple-900/80 border border-purple-400 text-purple-200 flex items-center justify-center font-bold text-xs shadow">NV</div>
+          <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-950 flex items-center justify-center border border-red-500">
+            <span class="material-symbols-outlined text-red-400 text-[10px]">mic_off</span>
+          </div>
+        </div>
+        <div class="flex flex-col leading-tight">
+          <div class="flex items-center gap-1.5">
+            <span class="font-headline-md text-sm text-amber-100 font-bold tracking-wide">NeonVamp</span>
+            <span class="text-[10px] px-1.5 py-0.2 bg-amber-950/80 text-amber-200 rounded border border-amber-700/50">14 Taş</span>
+          </div>
+          <span class="text-[11px] text-red-400 font-bold">Skor: -120 Ceza</span>
+        </div>
+      </div>
+      <!-- North Player's Wooden Rack (Reversed Angle with Melamine Tile Backs) -->
+      <div class="flex items-end justify-center px-4 py-1 rounded-sm shadow-2xl relative" style="background: linear-gradient(to bottom, #54331a, #2f190a); border-top: 2px solid #85532d; border-bottom: 2px solid #1a0c04; box-shadow: 0 4px 10px rgba(0,0,0,0.7);">
+        <div class="flex items-center gap-0.5">
+          <!-- Row of standing ivory tiles backs -->
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+          <div class="w-2.5 h-7 rounded-t-xs shadow-md" style="background: linear-gradient(to bottom, #fffdf2 0%, #eae3cc 85%, #d1c8ad 100%); border: 1px solid #c2b79b; border-bottom: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MIDDLE ROW: West Player, Center Gaming Green Mat, East Player -->
+  <div class="flex flex-col md:flex-row items-center justify-between gap-3 my-3 z-10">
+    <!-- WEST PLAYER: CyberGhost Side Wooden Rack -->
+    <div class="flex flex-row md:flex-col items-center md:items-start gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-900/40 shadow-xl w-full md:w-44 backdrop-blur-md">
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <div class="w-9 h-9 rounded-full bg-blue-900/80 border border-blue-400 text-blue-200 flex items-center justify-center font-bold text-xs shadow">CG</div>
+          <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-950 flex items-center justify-center border border-emerald-400">
+            <span class="material-symbols-outlined text-emerald-300 text-[10px]">mic</span>
+          </div>
+        </div>
+        <div>
+          <div class="font-headline-md text-xs text-amber-100 font-bold">CyberGhost</div>
+          <div class="text-[11px] text-emerald-400 font-semibold">+45 P Temiz</div>
+        </div>
+      </div>
+      <!-- West Side Angled Wooden Rack & Standing Tiles -->
+      <div class="hidden md:flex flex-col gap-1 w-full mt-1 p-1.5 rounded" style="background: linear-gradient(135deg, #422614, #241308); border-left: 3px solid #8b552c; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);">
+        <div class="text-[9px] uppercase tracking-wider text-amber-200/70 font-bold">İstaka (14 Taş)</div>
+        <div class="flex flex-wrap gap-0.5">
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER FELT MAT: Draw Pile with 5-Stacks & Real Dices, Real Melamine Indicator, Melds & Discard Bay -->
+    <div class="flex-1 max-w-2xl rounded-xl p-3 shadow-2xl flex flex-col gap-2.5 relative" style="background: rgba(3, 30, 16, 0.85); border: 2px solid #165b35; box-shadow: inset 0 0 30px rgba(0,0,0,0.7), 0 8px 24px rgba(0,0,0,0.6); backdrop-filter: blur(8px);">
+      
+      <!-- Table Status Bar (Gold/Emerald Trim) -->
+      <div class="flex items-center justify-between px-3 py-1 rounded-lg" style="background: linear-gradient(90deg, rgba(6, 44, 25, 0.9), rgba(12, 68, 39, 0.9)); border-bottom: 1px solid #238b52;">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold tracking-wider text-amber-300 uppercase flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm text-amber-400">casino</span>
+            KAHVEHANE KLASİK OKEY MASASI
+          </span>
+        </div>
+        <div class="text-[11px] text-emerald-300 font-semibold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="">Gösterge Katkısı: 1 Puan Düşüldü</span>
+        </div>
+      </div>
+
+      <!-- Action Zones: 5-Tile Draw Block Stack, Realistic Ivory Gösterge & Okey, Discard Well with Dice -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-stretch">
+        
+        <!-- 1. Real 5-Stacked Melamine Draw Pile (Kapalı Deste) & Tournament Red Dices -->
+        <div class="p-2.5 rounded-lg flex flex-col items-center justify-between shadow-md cursor-pointer hover:brightness-110 transition-all" id="btn-draw-tile" style="background: linear-gradient(180deg, #183d28 0%, #0d2618 100%); border: 1px solid #2e6946;">
+          <span class="text-[10px] text-amber-200 font-bold uppercase tracking-wider mb-1">KAPALI DESTE (38 TAŞ)</span>
+          <!-- Realistic 5-high Melamine Block Stack with Red Ivory Dice -->
+          <div class="relative flex items-center justify-center py-1">
+            <!-- Shadow beneath the tile stack -->
+            <div class="absolute -bottom-1 w-16 h-4 bg-black/70 rounded-full blur-xs"></div>
+            <!-- Melamine Tile Stack layers -->
+            <div class="relative flex flex-col items-center">
+              <!-- Bottom block layers (5 stacked tiles effect) -->
+              <div class="w-14 h-2.5 rounded-xs shadow" style="background: linear-gradient(to right, #cfc5a9, #f7f2dc, #beb395); border: 1px solid #9e9377; margin-bottom: -1px;"></div>
+              <div class="w-14 h-2.5 rounded-xs shadow" style="background: linear-gradient(to right, #cfc5a9, #f7f2dc, #beb395); border: 1px solid #9e9377; margin-bottom: -1px;"></div>
+              <div class="w-14 h-2.5 rounded-xs shadow" style="background: linear-gradient(to right, #cfc5a9, #f7f2dc, #beb395); border: 1px solid #9e9377; margin-bottom: -1px;"></div>
+              <!-- Top visible tile with Melamine Texture and 5-stack badge -->
+              <div class="w-14 h-9 rounded-sm flex flex-col items-center justify-center p-1 relative shadow-xl" style="background: linear-gradient(135deg, #fffef9 0%, #f6f0db 50%, #e2d8b8 100%); border: 1px solid #c2b695; box-shadow: inset 0 1px 2px #ffffff, 0 3px 6px rgba(0,0,0,0.5);">
+                <span class="text-xs font-black text-amber-950 leading-none">5'Lİ BLOK</span>
+                <span class="text-[10px] font-bold text-emerald-800 leading-tight">Kalan: 38</span>
+              </div>
+            </div>
+            <!-- Authentic Red Acrylic Casino / Coffeehouse Dice beside the stack -->
+            <div class="absolute -right-3 -bottom-0.5 w-5 h-5 rounded-xs flex items-center justify-center shadow-lg transform rotate-12" style="background: radial-gradient(circle at 30% 30%, #ff4d4d, #b30000 70%, #660000 100%); border: 1px solid #ff9999; box-shadow: 1px 2px 4px rgba(0,0,0,0.7);">
+              <!-- Dice 5 pips -->
+              <div class="grid grid-cols-2 gap-0.5 p-0.5">
+                <span class="w-1 h-1 rounded-full bg-white shadow-xs"></span>
+                <span class="w-1 h-1 rounded-full bg-white shadow-xs"></span>
+                <span class="w-1 h-1 rounded-full bg-white shadow-xs col-span-2 mx-auto"></span>
+                <span class="w-1 h-1 rounded-full bg-white shadow-xs"></span>
+                <span class="w-1 h-1 rounded-full bg-white shadow-xs"></span>
+              </div>
+            </div>
+          </div>
+          <button class="mt-1 text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-600/50">
+            <span class="material-symbols-outlined text-[13px]">front_hand</span> Taş Çek
+          </button>
+        </div>
+
+        <!-- 2. Gösterge & Okey on Handcrafted Wood Plinth (Gerçek Ahşap Kaide) -->
+        <div class="p-2.5 rounded-lg flex flex-col items-center justify-between shadow-md" style="background: linear-gradient(180deg, #183d28 0%, #0d2618 100%); border: 1px solid #2e6946;">
+          <span class="text-[10px] text-amber-200 font-bold uppercase tracking-wider mb-1">GÖSTERGE &amp; JOKER (OKEY)</span>
+          <!-- Wood Stand Inset -->
+          <div class="px-3 py-1.5 rounded-md flex items-center gap-3 relative shadow-inner" style="background: linear-gradient(to bottom, #422513, #2b160a); border: 2px solid #6b3e1f; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8), 0 3px 8px rgba(0,0,0,0.5);">
+            
+            <!-- Gösterge Taşı: Kırmızı 8 (Deep Carved Crimson Melamine) -->
+            <div class="flex flex-col items-center">
+              <div class="w-10 h-14 rounded flex flex-col items-center justify-between py-1 px-0.5 relative shadow-xl" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 40%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: inset 0 1px 1px #fff, 0 4px 8px rgba(0,0,0,0.6);">
+                <span class="text-[9px] font-black leading-none text-red-600">●</span>
+                <span class="text-2xl font-black leading-none text-red-600 tracking-tighter" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8), 0 -1px 1px rgba(160,0,0,0.6); font-family: 'Inter', sans-serif;">8</span>
+                <span class="text-[9px] font-black leading-none text-red-600">●</span>
+              </div>
+              <span class="text-[9px] font-bold text-amber-200 mt-1">Gösterge</span>
+            </div>
+
+            <!-- Okey / Joker Taşı: Kırmızı 9 (The Real Golden-Bordered Okey) -->
+            <div class="flex flex-col items-center">
+              <div class="w-10 h-14 rounded flex flex-col items-center justify-between py-1 px-0.5 relative shadow-xl" style="background: linear-gradient(135deg, #ffffff 0%, #fffbe6 30%, #faecc5 100%); border: 1.5px solid #d4af37; box-shadow: 0 0 12px rgba(212,175,55,0.6), inset 0 1px 2px #fff, 0 4px 8px rgba(0,0,0,0.6);">
+                <!-- Gold star stamp -->
+                <span class="material-symbols-outlined text-amber-500 text-[11px] leading-none font-bold">star</span>
+                <div class="flex flex-col items-center leading-none">
+                  <span class="text-2xl font-black text-red-600 tracking-tighter leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.9), 0 -1px 1px rgba(160,0,0,0.6);">9</span>
+                  <span class="text-[8px] font-black tracking-widest text-amber-600 uppercase mt-0.5">OKEY</span>
+                </div>
+                <span class="material-symbols-outlined text-amber-500 text-[11px] leading-none font-bold">star</span>
+              </div>
+              <span class="text-[9px] font-black text-amber-300 mt-1 uppercase tracking-wide">Okey Taşı</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 3. Discard Well (Yana Atılan Taş Alanı) with Oak Trim Tray -->
+        <div class="p-2.5 rounded-lg flex flex-col items-center justify-between shadow-md" style="background: linear-gradient(180deg, #183d28 0%, #0d2618 100%); border: 1px solid #2e6946;">
+          <span class="text-[10px] text-amber-200 font-bold uppercase tracking-wider mb-1">YANA ATILAN TAŞ</span>
+          <div class="p-1.5 rounded flex flex-col items-center relative shadow-inner" style="background: #062112; border: 2px dashed #247545;">
+            <!-- Blue 4 Tile recently discarded -->
+            <div class="w-10 h-14 rounded flex flex-col items-center justify-between py-1 px-0.5 relative shadow-xl transform -rotate-3" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 40%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: inset 0 1px 1px #fff, 0 3px 6px rgba(0,0,0,0.6);">
+              <span class="text-[9px] font-black leading-none text-blue-700">●</span>
+              <span class="text-2xl font-black leading-none text-blue-700 tracking-tighter" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8), 0 -1px 1px rgba(0,30,140,0.6);">4</span>
+              <span class="text-[9px] font-black leading-none text-blue-700">●</span>
+            </div>
+          </div>
+          <span class="text-[10px] text-emerald-200/90 font-medium mt-1">CyberGhost attı</span>
+        </div>
+
+      </div>
+
+      <!-- Opened Series on Table: Natural Green Felt Meld Deck -->
+      <div class="p-2.5 rounded-lg flex flex-col gap-1.5 shadow-inner" style="background: rgba(4, 23, 13, 0.9); border: 1px solid #165b35;">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-amber-200 uppercase tracking-wide flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-amber-300">view_timeline</span>
+            Masaya Açılan Seriler (EmreKilic: 104 Puan Açtı)
+          </span>
+          <span class="text-[10px] px-2 py-0.5 bg-amber-400 text-amber-950 font-black rounded shadow">104 Puan Serisi</span>
+        </div>
+        
+        <!-- The Opened Runs (Realistic Heavy Tiles Resting on Felt with Under-Drop Shadows) -->
+        <div class="flex flex-wrap items-center gap-3 pt-1">
+          
+          <!-- Run 1: Kırmızı [ 7 - 8 - 9 ] -->
+          <div class="flex items-center gap-0.5 p-1 rounded-sm shadow-md" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06);">
+            <!-- Kırmızı 7 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+              <span class="text-base font-black text-red-600 leading-none">7</span>
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+            </div>
+            <!-- Kırmızı 8 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+              <span class="text-base font-black text-red-600 leading-none">8</span>
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+            </div>
+            <!-- Kırmızı 9 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+              <span class="text-base font-black text-red-600 leading-none">9</span>
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+            </div>
+          </div>
+
+          <!-- Run 2: Siyah [ 10 - 11 - 12 - 13 ] -->
+          <div class="flex items-center gap-0.5 p-1 rounded-sm shadow-md" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06);">
+            <!-- Siyah 10 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+              <span class="text-sm font-black text-black leading-none">10</span>
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+            </div>
+            <!-- Siyah 11 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+              <span class="text-sm font-black text-black leading-none">11</span>
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+            </div>
+            <!-- Siyah 12 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+              <span class="text-sm font-black text-black leading-none">12</span>
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+            </div>
+            <!-- Siyah 13 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+              <span class="text-sm font-black text-black leading-none">13</span>
+              <span class="text-[8px] font-black text-black leading-none">♣</span>
+            </div>
+          </div>
+
+          <!-- Group 3: 3 Farklı Renk 11'ler [ Mavi 11 - Kırmızı 11 - Sarı/Turuncu 11 ] -->
+          <div class="flex items-center gap-0.5 p-1 rounded-sm shadow-md" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06);">
+            <!-- Mavi 11 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-blue-700 leading-none">♠</span>
+              <span class="text-sm font-black text-blue-700 leading-none">11</span>
+              <span class="text-[8px] font-black text-blue-700 leading-none">♠</span>
+            </div>
+            <!-- Kırmızı 11 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+              <span class="text-sm font-black text-red-600 leading-none">11</span>
+              <span class="text-[8px] font-black text-red-600 leading-none">♦</span>
+            </div>
+            <!-- Sarı / Canlı Turuncu 11 -->
+            <div class="w-8 h-11 rounded flex flex-col items-center justify-between p-0.5 shadow-md" style="background: linear-gradient(135deg, #ffffff, #f5efe0 60%, #e2d7ba); border: 1px solid #c9bea3; box-shadow: 0 3px 5px rgba(0,0,0,0.5);">
+              <span class="text-[8px] font-black text-amber-500 leading-none">★</span>
+              <span class="text-sm font-black text-amber-500 leading-none">11</span>
+              <span class="text-[8px] font-black text-amber-500 leading-none">★</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- EAST PLAYER: BerkeDev Side Wooden Rack -->
+    <div class="flex flex-row md:flex-col items-center md:items-end gap-2 bg-black/60 p-2.5 rounded-xl border border-amber-900/40 shadow-xl w-full md:w-44 backdrop-blur-md">
+      <div class="flex items-center gap-2 flex-row-reverse md:flex-row">
+        <div class="text-right">
+          <div class="font-headline-md text-xs text-amber-100 font-bold">BerkeDev</div>
+          <div class="text-[11px] text-red-400 font-semibold">-60 P Ceza</div>
+        </div>
+        <div class="relative">
+          <div class="w-9 h-9 rounded-full bg-purple-900/80 border border-purple-400 text-purple-200 flex items-center justify-center font-bold text-xs shadow">BD</div>
+          <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-950 flex items-center justify-center border border-emerald-400">
+            <span class="material-symbols-outlined text-emerald-300 text-[10px] animate-pulse">volume_up</span>
+          </div>
+        </div>
+      </div>
+      <!-- East Side Angled Rack -->
+      <div class="hidden md:flex flex-col items-end gap-1 w-full mt-1 p-1.5 rounded" style="background: linear-gradient(225deg, #422614, #241308); border-right: 3px solid #8b552c; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);">
+        <div class="text-[9px] uppercase tracking-wider text-amber-200/70 font-bold">İstaka (14 Taş)</div>
+        <div class="flex flex-wrap gap-0.5 justify-end">
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+          <div class="w-2 h-5 rounded-xs" style="background: #faf6e6; border: 1px solid #c2b79b;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOUTH: THE ULTIMATE REALISTIC WALNUT/BEECH WOOD RACK (2-Katlı Masif Ahşap İstaka & Gerçek Taşlar) -->
+  <div class="w-full flex flex-col gap-1.5 z-20 mt-1">
+    <!-- Player Status & Hand Value Banner with Brass Accents -->
+    <div class="flex items-center justify-between px-2">
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 bg-black/70 px-3 py-1 rounded-full border border-amber-500/50 shadow-md backdrop-blur-md">
+          <div class="w-6 h-6 rounded-full bg-amber-500 text-amber-950 flex items-center justify-center text-xs font-black shadow">EK</div>
+          <span class="font-headline-md text-xs text-amber-100 font-black">EmreKilic (Siz)</span>
+          <span class="text-[11px] text-amber-950 font-black bg-amber-400 px-2 py-0.2 rounded-full">21 Taş</span>
+        </div>
+        <span class="text-xs text-emerald-300 font-bold hidden sm:inline drop-shadow">İstaka Değeri: Toplam 104 Puan Açılabilir</span>
+      </div>
+      <!-- Sort Buttons (Wood & Brass Themed) -->
+      <div class="flex items-center gap-2">
+        <button class="text-xs font-bold px-3 py-1 rounded-lg text-amber-200 hover:text-white flex items-center gap-1 shadow-md transition-all" id="btn-sort-series" style="background: linear-gradient(180deg, #53331b, #2b170a); border: 1px solid #8e5a31;">
+          <span class="material-symbols-outlined text-[15px] text-amber-400">auto_awesome_motion</span> Seri Diz
+        </button>
+        <button class="text-xs font-bold px-3 py-1 rounded-lg text-amber-200 hover:text-white flex items-center gap-1 shadow-md transition-all" id="btn-sort-pairs" style="background: linear-gradient(180deg, #53331b, #2b170a); border: 1px solid #8e5a31;">
+          <span class="material-symbols-outlined text-[15px] text-amber-400">content_copy</span> Çift Diz
+        </button>
+      </div>
+    </div>
+
+    <!-- 2-TIER REALISTIC WOODEN ISTAKA (Ceviz Ağacı Damarlı İstaka Gövdesi) -->
+    <div class="w-full p-2.5 rounded-xl shadow-2xl relative flex flex-col gap-2" style="background: linear-gradient(to bottom, #693b1c 0%, #44220e 45%, #291206 100%); border: 3px solid #8f542b; box-shadow: inset 0 2px 4px #b8733f, 0 16px 32px rgba(0,0,0,0.9);">
+      <!-- Brass End Caps (İstakanın iki ucundaki pirinç metal plakalar) -->
+      <div class="absolute left-0 top-0 bottom-0 w-3 rounded-l-lg" style="background: linear-gradient(to right, #e8c85c, #9e7d1c); border-right: 1px solid #5a4205;"></div>
+      <div class="absolute right-0 top-0 bottom-0 w-3 rounded-r-lg" style="background: linear-gradient(to left, #e8c85c, #9e7d1c); border-left: 1px solid #5a4205;"></div>
+
+      <!-- TOP TIER RACK CHANNEL (Üst Kat - Ahşap Oluk) -->
+      <div class="grid grid-cols-11 gap-1 sm:gap-2 px-2 py-1.5 rounded-md relative shadow-inner" style="background: linear-gradient(to bottom, #1d0c03 0%, #301708 80%, #44230e 100%); border-bottom: 2px solid #733f1c; box-shadow: inset 0 4px 6px rgba(0,0,0,0.8);" id="istaka-top-row">
+        <!-- Tile 1: Siyah 1 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+          <span class="text-xl sm:text-2xl font-black text-black leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">1</span>
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+        </div>
+        <!-- Tile 2: Siyah 2 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+          <span class="text-xl sm:text-2xl font-black text-black leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">2</span>
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+        </div>
+        <!-- Tile 3: Siyah 3 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+          <span class="text-xl sm:text-2xl font-black text-black leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">3</span>
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+        </div>
+        <!-- Spacer 4: Ahşap Oluk Boşluğu -->
+        <div class="h-15 sm:h-17 rounded-sm flex items-center justify-center opacity-40">
+          <span class="text-amber-800 text-xs font-black">|</span>
+        </div>
+        <!-- Tile 5: Kırmızı 5 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+          <span class="text-xl sm:text-2xl font-black text-red-600 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">5</span>
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+        </div>
+        <!-- Tile 6: Kırmızı 6 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+          <span class="text-xl sm:text-2xl font-black text-red-600 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">6</span>
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+        </div>
+        <!-- Tile 7: Kırmızı 7 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+          <span class="text-xl sm:text-2xl font-black text-red-600 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">7</span>
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+        </div>
+        <!-- Spacer 8 -->
+        <div class="h-15 sm:h-17 rounded-sm flex items-center justify-center opacity-40">
+          <span class="text-amber-800 text-xs font-black">|</span>
+        </div>
+        <!-- Tile 9: Mavi 10 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+          <span class="text-xl sm:text-2xl font-black text-blue-700 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">10</span>
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+        </div>
+        <!-- Tile 10: Mavi 11 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+          <span class="text-xl sm:text-2xl font-black text-blue-700 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">11</span>
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+        </div>
+        <!-- Tile 11: Mavi 12 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+          <span class="text-xl sm:text-2xl font-black text-blue-700 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">12</span>
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+        </div>
+      </div>
+
+      <!-- BOTTOM TIER RACK CHANNEL (Alt Kat - Ahşap Oluk) -->
+      <div class="grid grid-cols-11 gap-1 sm:gap-2 px-2 py-1.5 rounded-md relative shadow-inner" style="background: linear-gradient(to bottom, #1d0c03 0%, #301708 80%, #44230e 100%); border-bottom: 2px solid #733f1c; box-shadow: inset 0 4px 6px rgba(0,0,0,0.8);" id="istaka-bottom-row">
+        <!-- Tile 12: Sarı 4 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-amber-500 leading-none">★</span>
+          <span class="text-xl sm:text-2xl font-black text-amber-500 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">4</span>
+          <span class="text-[9px] font-black text-amber-500 leading-none">★</span>
+        </div>
+        <!-- Tile 13: Sarı 5 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-amber-500 leading-none">★</span>
+          <span class="text-xl sm:text-2xl font-black text-amber-500 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">5</span>
+          <span class="text-[9px] font-black text-amber-500 leading-none">★</span>
+        </div>
+        <!-- Tile 14: Sarı 6 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-amber-500 leading-none">★</span>
+          <span class="text-xl sm:text-2xl font-black text-amber-500 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">6</span>
+          <span class="text-[9px] font-black text-amber-500 leading-none">★</span>
+        </div>
+        <!-- Spacer 15 -->
+        <div class="h-15 sm:h-17 rounded-sm flex items-center justify-center opacity-40">
+          <span class="text-amber-800 text-xs font-black">|</span>
+        </div>
+        <!-- Tile 16: Sahte Okey / Yıldızlı Joker Taşı (Gilded Brass Inset) -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-lg flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #fffbe6 30%, #faecc5 100%); border: 1.5px solid #d4af37; box-shadow: 0 0 10px rgba(212,175,55,0.7), inset 0 1px 2px #fff, 0 4px 8px rgba(0,0,0,0.7);">
+          <span class="material-symbols-outlined text-amber-500 text-[12px] leading-none font-black">star</span>
+          <div class="flex flex-col items-center leading-none">
+            <span class="text-xl sm:text-2xl font-black text-red-600 leading-none">9</span>
+            <span class="text-[8px] font-black tracking-widest text-amber-600 uppercase mt-0.5">OKEY</span>
+          </div>
+          <span class="material-symbols-outlined text-amber-500 text-[12px] leading-none font-black">star</span>
+        </div>
+        <!-- Tile 17: Kırmızı 9 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+          <span class="text-xl sm:text-2xl font-black text-red-600 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">9</span>
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+        </div>
+        <!-- Tile 18: Siyah 9 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+          <span class="text-xl sm:text-2xl font-black text-black leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">9</span>
+          <span class="text-[9px] font-black text-black leading-none">♣</span>
+        </div>
+        <!-- Spacer 19 -->
+        <div class="h-15 sm:h-17 rounded-sm flex items-center justify-center opacity-40">
+          <span class="text-amber-800 text-xs font-black">|</span>
+        </div>
+        <!-- Tile 20: Kırmızı 13 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+          <span class="text-xl sm:text-2xl font-black text-red-600 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">13</span>
+          <span class="text-[9px] font-black text-red-600 leading-none">♦</span>
+        </div>
+        <!-- Tile 21: Mavi 13 -->
+        <div class="h-15 sm:h-17 rounded-sm shadow-md flex flex-col items-center justify-between p-1 cursor-grab active:cursor-grabbing hover:-translate-y-1.5 transition-transform relative" style="background: linear-gradient(135deg, #ffffff 0%, #f7f3e1 45%, #e6ddc0 100%); border: 1px solid #c9bfa4; box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 2px #fff;">
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+          <span class="text-xl sm:text-2xl font-black text-blue-700 leading-none" style="text-shadow: 0 1px 1px rgba(255,255,255,0.8);">13</span>
+          <span class="text-[9px] font-black text-blue-700 leading-none">♠</span>
+        </div>
+        <!-- Tile 22: Boş / Yeni Çekilecek Taş Yuvası -->
+        <div class="h-15 sm:h-17 rounded-sm flex flex-col items-center justify-center p-1 border-2 border-dashed border-amber-600/50 bg-black/40 text-amber-500/70 hover:border-amber-400 transition-colors">
+          <span class="material-symbols-outlined text-[16px]">add</span>
+          <span class="text-[9px] font-bold uppercase">Boş</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RACK ACTION CONTROLS (Gilded Walnut & Emerald Tournament Control Buttons) -->
+    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Main Action: Yere 101 Aç -->
+        <button class="font-headline-md text-sm font-black px-5 py-2 rounded-xl shadow-xl flex items-center gap-2 transform hover:scale-[1.02] transition-all" id="btn-open-101" style="background: linear-gradient(180deg, #d4af37 0%, #aa8214 60%, #7d5e0a 100%); color: #1a0e02; border: 1px solid #fae17d; box-shadow: 0 6px 16px rgba(212,175,55,0.5);">
+          <span class="material-symbols-outlined text-[19px]">file_upload</span>
+          <span class="">Yere 101 Aç (El: 104 Puan)</span>
+        </button>
+        <!-- Çifte Git -->
+        <button class="font-body-md text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors text-amber-100 shadow-md" style="background: linear-gradient(180deg, #382112, #211208); border: 1px solid #6b3e1f;">
+          <span class="material-symbols-outlined text-[16px] text-amber-400">filter_2</span>
+          <span class="">Çifte Git (2/5 Çift)</span>
+        </button>
+        <!-- Ortaya İşle -->
+        <button class="font-body-md text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors text-amber-100 shadow-md" style="background: linear-gradient(180deg, #382112, #211208); border: 1px solid #6b3e1f;">
+          <span class="material-symbols-outlined text-[16px] text-emerald-400">vertical_align_top</span>
+          <span class="">Ortaya İşle</span>
+        </button>
+      </div>
+      <!-- Stone Draw & Discard Controls -->
+      <div class="flex items-center gap-2">
+        <button class="font-body-md text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-amber-100 shadow-md" style="background: linear-gradient(180deg, #184428, #0d2817); border: 1px solid #2d7345;">
+          <span class="material-symbols-outlined text-[17px] text-emerald-300">pan_tool</span>
+          <span class="">Yandan Taş Al</span>
+        </button>
+        <button class="font-body-md text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-red-100 shadow-md hover:brightness-110 transition-all" style="background: linear-gradient(180deg, #8a1c1c, #520b0b); border: 1px solid #b83232;">
+          <span class="material-symbols-outlined text-[17px] text-red-300">arrow_forward</span>
+          <span class="">Yana Taş At</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Quick Room Rules & Stats Bar Below Table -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md bg-surface-container-low p-space-md rounded-xl">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">gavel</span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-on-surface">Seri Katlamalı</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Min. Açılış: 101 Puan</div>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-on-surface">Ceza Katsayısı</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Okey Atma: x2 Katlama</div>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[20px]">sync</span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-on-surface">Tur / El</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">3 / 11. El Oynanıyor</div>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[20px]">verified</span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-on-surface">Kasa &amp; Bahis</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Dostluk Maçı (Özel Masa)</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Discord Side Panel (3 cols on desktop): Live Scoreboard & Room Chat -->
+<div class="xl:col-span-3 bg-surface-container-low p-space-md flex flex-col justify-between gap-space-md">
+<div class="flex flex-col gap-space-md">
+<!-- Tab Switcher: Chat & Scoreboard -->
+<div class="flex items-center justify-between bg-surface-container-lowest p-1 rounded-lg">
+<button class="flex-1 py-1 px-space-sm rounded font-label-md text-label-md bg-surface-container-high text-on-surface transition-colors flex items-center justify-center gap-1" id="tab-chat-btn">
+<span class="material-symbols-outlined text-[16px]">chat</span>
+<span class="">#okey-sohbet</span>
+</button>
+<button class="flex-1 py-1 px-space-sm rounded font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors flex items-center justify-center gap-1" id="tab-score-btn">
+<span class="material-symbols-outlined text-[16px]">leaderboard</span>
+<span class="">Skor Tablosu</span>
+</button>
+</div>
+<!-- LIVE SCOREBOARD PANEL -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-md flex flex-col gap-space-sm" id="scoreboard-panel">
+<div class="flex items-center justify-between text-on-surface">
+<span class="font-headline-md text-headline-md">Canlı Skor Durumu</span>
+<span class="font-label-sm text-label-sm bg-primary/20 text-primary px-space-xs rounded">3. El</span>
+</div>
+<!-- Score Table -->
+<div class="flex flex-col gap-space-xs mt-1">
+<!-- Player Row 1 (EmreKilic - Leading) -->
+<div class="flex items-center justify-between bg-surface-container-high p-space-sm rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-md text-label-md text-primary">1.</span>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface leading-tight">EmreKilic (Siz)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">1. El: 0 | 2. El: 0</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md text-primary font-bold">0 P</span>
+<span class="font-label-sm text-label-sm text-primary">Temiz</span>
+</div>
+</div>
+<!-- Player Row 2 (CyberGhost) -->
+<div class="flex items-center justify-between bg-surface-container-low p-space-sm rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">2.</span>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface leading-tight">CyberGhost</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">1. El: 45 | 2. El: 0</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md text-secondary font-bold">+45 P</span>
+<span class="font-label-sm text-label-sm text-outline">Ceza</span>
+</div>
+</div>
+<!-- Player Row 3 (BerkeDev) -->
+<div class="flex items-center justify-between bg-surface-container-low p-space-sm rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">3.</span>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface leading-tight">BerkeDev</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">1. El: 0 | 2. El: 60</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md text-error font-bold">-60 P</span>
+<span class="font-label-sm text-label-sm text-outline">Ceza</span>
+</div>
+</div>
+<!-- Player Row 4 (NeonVamp) -->
+<div class="flex items-center justify-between bg-surface-container-low p-space-sm rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">4.</span>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface leading-tight">NeonVamp</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">1. El: 120 | 2. El: 0</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md text-error font-bold">-120 P</span>
+<span class="font-label-sm text-label-sm text-error">Çift Kat Ceza</span>
+</div>
+</div>
+</div>
+</div>
+<!-- DISCORD ROOM CHAT STREAM -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-md flex flex-col gap-space-sm flex-1">
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-headline-md text-on-surface flex items-center gap-1">
+<span class="text-outline">#</span> okey-masa-1-sohbet
+            </span>
+<span class="font-label-sm text-label-sm text-outline">Masa Ses Kanalı</span>
+</div>
+<!-- Message List -->
+<div class="flex flex-col gap-space-sm max-h-72 overflow-y-auto pr-1" id="chat-stream">
+<!-- Message 1 -->
+<div class="flex items-start gap-space-xs">
+<div class="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-label-sm">NV</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-label-md text-label-md text-primary truncate">NeonVamp</span>
+<span class="font-label-sm text-label-sm text-outline">21:38</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface">Kim attı o 4'lüyü ya, tam ihtiyacım olan taştı 😂</p>
+</div>
+</div>
+<!-- Message 2 -->
+<div class="flex items-start gap-space-xs">
+<div class="w-7 h-7 rounded-full bg-secondary-container text-secondary flex items-center justify-center font-bold text-label-sm">CG</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-label-md text-label-md text-secondary truncate">CyberGhost</span>
+<span class="font-label-sm text-label-sm text-outline">21:39</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface">Ben attım kanka, elin açmadığını sandım valla kusura bakma!</p>
+</div>
+</div>
+<!-- Message 3 (System notice) -->
+<div class="bg-surface-container-high p-space-xs rounded font-label-sm text-label-sm text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">info</span>
+<span class="">EmreKilic masaya 104 puanlık seri açtı!</span>
+</div>
+<!-- Message 4 -->
+<div class="flex items-start gap-space-xs">
+<div class="w-7 h-7 rounded-full bg-primary/40 text-primary flex items-center justify-center font-bold text-label-sm">BD</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-label-md text-label-md text-primary truncate">BerkeDev</span>
+<span class="font-label-sm text-label-sm text-outline">21:40</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface">Beyler Emre bitmeye gidiyor okeyi saklayın aman dikkat!</p>
+</div>
+</div>
+</div>
+<!-- Chat Input -->
+<div class="mt-space-xs flex items-center gap-space-xs bg-surface-container-lowest p-space-xs rounded-lg">
+<button class="w-7 h-7 flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">add_circle</span>
+</button>
+<input class="bg-transparent flex-1 font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none" placeholder="#okey-masa-1 kanalına mesaj gönder..." type="text">
+<button class="w-7 h-7 flex items-center justify-center text-outline hover:text-primary">
+<span class="material-symbols-outlined text-[18px]">sentiment_satisfied</span>
+</button>
+</div>
+</div>
+</div>
+<!-- BOTTOM CONTROL BAR: Voice & Audio Settings (Discord Tray) -->
+<div class="bg-surface-container-lowest p-space-sm rounded-xl flex items-center justify-between shadow-md">
+<div class="flex items-center gap-space-xs">
+<div class="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-primary font-bold">Ses Bağlandı</span>
+<span class="font-label-sm text-label-sm text-outline">RTC 18ms / Okey 101 #1</span>
+</div>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button class="w-8 h-8 rounded-lg hover:bg-surface-container hover:text-on-surface flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">mic</span>
+</button>
+<button class="w-8 h-8 rounded-lg hover:bg-surface-container hover:text-on-surface flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">headphones</span>
+</button>
+<button class="w-8 h-8 rounded-lg hover:bg-error-container hover:text-error flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">call_end</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+    (function initOkeyInteractions() {
+      // Turn countdown simulation
+      let timeLeft = 24;
+      const timerEl = document.getElementById('turn-timer');
+      if (timerEl) {
+        setInterval(() => {
+          if (timeLeft > 0) {
+            timeLeft--;
+            timerEl.textContent = timeLeft;
+          } else {
+            timeLeft = 30; // reset loop
+            timerEl.textContent = timeLeft;
+          }
+        }, 1000);
+      }
+
+      // Draw tile button animation feedback
+      const btnDraw = document.getElementById('btn-draw-tile');
+      if (btnDraw) {
+        btnDraw.addEventListener('click', () => {
+          btnDraw.classList.add('scale-95');
+          setTimeout(() => btnDraw.classList.remove('scale-95'), 150);
+        });
+      }
+
+      // 101 Open Meld feedback
+      const btnOpen = document.getElementById('btn-open-101');
+      if (btnOpen) {
+        btnOpen.addEventListener('click', () => {
+          btnOpen.innerText = 'El Açıldı! (104 Puan Masada)';
+          btnOpen.classList.remove('bg-primary');
+          btnOpen.classList.add('bg-primary-container', 'text-on-primary-container');
+        });
+      }
+    })();
+  </script>
+</div></main></div>
+
+</body></html>

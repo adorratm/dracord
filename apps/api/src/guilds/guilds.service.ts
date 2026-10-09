@@ -299,14 +299,18 @@ export class GuildsService {
 
   async discover(q?: string): Promise<GuildSummary[]> {
     const trimmed = q?.trim() ?? '';
-    const guilds = await this.em.find(Guild, {
-      where: {
-        discoverable: true,
-        ...(trimmed ? { name: ILike(`%${trimmed}%`) } : {}),
-      },
-      take: 50,
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.em
+      .createQueryBuilder(Guild, 'g')
+      .where('g.discoverable = true')
+      .orderBy('CASE WHEN g.discoverPinnedAt IS NULL THEN 1 ELSE 0 END', 'ASC')
+      .addOrderBy('g.discoverPinOrder', 'ASC', 'NULLS LAST')
+      .addOrderBy('g.discoverPinnedAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('g.createdAt', 'DESC')
+      .take(50);
+    if (trimmed) {
+      qb.andWhere('g.name ILIKE :q', { q: `%${trimmed}%` });
+    }
+    const guilds = await qb.getMany();
     if (!guilds.length) return [];
     const ids = guilds.map((g) => g.id);
     const countRows = await this.em
@@ -969,6 +973,8 @@ export class GuildsService {
       bannerUrl: guild.bannerUrl ?? null,
       ownerId: guild.ownerId,
       discoverable: guild.discoverable,
+      discoverPinned: Boolean(guild.discoverPinnedAt),
+      discoverPinOrder: guild.discoverPinOrder ?? null,
       afkChannelId: guild.afkChannelId ?? null,
       afkTimeoutMinutes: guild.afkTimeoutMinutes ?? 0,
     };

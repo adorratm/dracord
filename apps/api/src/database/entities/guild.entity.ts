@@ -28,6 +28,14 @@ export class Guild extends CuidEntity {
   @Column({ type: 'boolean', default: false })
   discoverable!: boolean;
 
+  /** Keşfet’te öne çıkarma (platform admin); null = pin yok */
+  @Column({ type: 'timestamptz', nullable: true })
+  discoverPinnedAt!: Date | null;
+
+  /** Pin’ler arası sıra (küçük = üstte) */
+  @Column({ type: 'int', nullable: true })
+  discoverPinOrder!: number | null;
+
   @Column({ type: 'varchar', nullable: true })
   afkChannelId!: string | null;
 

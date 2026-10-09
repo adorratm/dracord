@@ -37,4 +37,8 @@ export class SocketBroadcastService {
   }) {
     this.server?.emit(SocketEvents.PRESENCE_UPDATE, payload);
   }
+
+  emitToChannel(channelId: string, event: string, payload: unknown) {
+    this.server?.to(`channel:${channelId}`).emit(event, payload);
+  }
 }

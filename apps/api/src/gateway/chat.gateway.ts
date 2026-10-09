@@ -10,11 +10,13 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsException,
 } from '@nestjs/websockets';
 import { SocketEvents, type DmCallPayload, type VoiceStatePayload } from '@dracord/types';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { Server, Socket } from 'socket.io';
+import { ChannelsService } from '@/channels/channels.service';
 import { UserStatus } from '@/database/enums';
 import { MessagesService } from '@/messages/messages.service';
 import { MessagesRealtimeService } from '@/messages/messages-realtime.service';
@@ -57,6 +59,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly messages: MessagesService,
     private readonly presence: PresenceService,
     private readonly voicePresence: VoicePresenceService,
+    private readonly channels: ChannelsService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly messagesRealtime: MessagesRealtimeService,
     private readonly broadcast: SocketBroadcastService,
@@ -162,10 +165,17 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage(SocketEvents.CHANNEL_JOIN)
-  handleJoin(
+  async handleJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { channelId: string },
   ) {
+    const user = client.data.user as WsUser;
+    if (!body?.channelId) throw new WsException('channelId gerekli');
+    try {
+      await this.channels.assertChannelAccess(body.channelId, user.sub);
+    } catch (err) {
+      throw new WsException((err as Error).message || 'Forbidden');
+    }
     void client.join(this.channelRoom(body.channelId));
     return { ok: true, channelId: body.channelId };
   }
@@ -176,17 +186,24 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { channelId: string },
   ) {
+    if (!body?.channelId) throw new WsException('channelId gerekli');
     void client.leave(this.channelRoom(body.channelId));
     return { ok: true, channelId: body.channelId };
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage(SocketEvents.TYPING_START)
-  handleTyping(
+  async handleTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { channelId: string },
   ) {
     const user = client.data.user as WsUser;
+    if (!body?.channelId) throw new WsException('channelId gerekli');
+    try {
+      await this.channels.assertChannelAccess(body.channelId, user.sub);
+    } catch (err) {
+      throw new WsException((err as Error).message || 'Forbidden');
+    }
     client.to(this.channelRoom(body.channelId)).emit(SocketEvents.TYPING_START, {
       channelId: body.channelId,
       userId: user.sub,

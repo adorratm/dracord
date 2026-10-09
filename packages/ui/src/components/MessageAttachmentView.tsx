@@ -1,7 +1,7 @@
 'use client';
 
 import type { MessageAttachment } from '@dracord/types';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
 import { cn } from '../lib/cn';
 
 function isImage(type: string, filename: string) {
@@ -96,14 +96,33 @@ export function MediaLightbox({ attachment, onClose }: MediaLightboxProps) {
   );
 }
 
+export type ImageModerationProps = {
+  enabled: boolean;
+  /** true = uygunsuz */
+  classify: (img: HTMLImageElement) => Promise<boolean>;
+};
+
 export interface MessageAttachmentViewProps {
   attachment: MessageAttachment;
   className?: string;
+  imageModeration?: ImageModerationProps | null;
 }
 
-export function MessageAttachmentView({ attachment, className }: MessageAttachmentViewProps) {
+export function MessageAttachmentView({
+  attachment,
+  className,
+  imageModeration = null,
+}: MessageAttachmentViewProps) {
   const [lightbox, setLightbox] = useState(false);
-  const open = useCallback(() => setLightbox(true), []);
+  const [nsfwBlocked, setNsfwBlocked] = useState(false);
+  const [nsfwChecked, setNsfwChecked] = useState(false);
+  /** Moderasyon açıkken sonuç gelene kadar blur (fail-closed) */
+  const [nsfwPending, setNsfwPending] = useState(() => Boolean(imageModeration?.enabled));
+  const [revealNsfw, setRevealNsfw] = useState(false);
+  const open = useCallback(() => {
+    if ((nsfwBlocked || nsfwPending) && !revealNsfw) return;
+    setLightbox(true);
+  }, [nsfwBlocked, nsfwPending, revealNsfw]);
   const { url, filename, contentType, size } = attachment;
   const sizeLabel =
     size > 0
@@ -112,23 +131,79 @@ export function MessageAttachmentView({ attachment, className }: MessageAttachme
         : `${Math.max(1, Math.round(size / 1024))} KB`
       : null;
 
+  const onImgLoad = useCallback(
+    (e: SyntheticEvent<HTMLImageElement>) => {
+      if (!imageModeration?.enabled || nsfwChecked) return;
+      const el = e.currentTarget;
+      void imageModeration
+        .classify(el)
+        .then((blocked) => {
+          setNsfwChecked(true);
+          setNsfwPending(false);
+          setNsfwBlocked(blocked);
+        })
+        .catch(() => {
+          setNsfwChecked(true);
+          setNsfwPending(false);
+          setNsfwBlocked(true);
+        });
+    },
+    [imageModeration, nsfwChecked],
+  );
+
+  const showBlur = (nsfwBlocked || nsfwPending) && !revealNsfw;
+
   return (
     <>
       <div className={cn('mt-space-xs max-w-md', className)}>
         {isImage(contentType, filename) && (
-          <button type="button" onClick={open} className="block text-left group relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt={filename}
-              loading="lazy"
-              className="max-w-full max-h-72 rounded-lg border border-surface-container-high object-contain bg-surface-container-low"
-            />
-            <span className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded bg-black/60 text-white text-xs flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px]">fullscreen</span>
-              Tam ekran
-            </span>
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={open}
+              className="block text-left group relative w-full"
+              disabled={showBlur}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={filename}
+                loading="lazy"
+                onLoad={onImgLoad}
+                className={cn(
+                  'max-w-full max-h-72 rounded-lg border border-surface-container-high object-contain bg-surface-container-low',
+                  showBlur && 'blur-2xl scale-105 select-none',
+                )}
+              />
+              {!showBlur && (
+                <span className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded bg-black/60 text-white text-xs flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">fullscreen</span>
+                  Tam ekran
+                </span>
+              )}
+            </button>
+            {showBlur && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/55 p-space-sm text-center">
+                <span className="material-symbols-outlined text-white text-[28px]">
+                  visibility_off
+                </span>
+                <p className="font-label-sm text-white">
+                  {nsfwPending && !nsfwBlocked
+                    ? 'İçerik taranıyor…'
+                    : 'Uygunsuz içerik tespit edildi'}
+                </p>
+                {!nsfwPending && (
+                  <button
+                    type="button"
+                    className="h-8 px-space-sm rounded-lg bg-white/15 text-white font-label-sm hover:bg-white/25"
+                    onClick={() => setRevealNsfw(true)}
+                  >
+                    Yine de göster
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {isVideo(contentType, filename) && (

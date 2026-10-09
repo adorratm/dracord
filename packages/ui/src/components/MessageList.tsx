@@ -14,7 +14,11 @@ import {
 import { cn } from '../lib/cn';
 import { contentHasSelfMention, tokenizeMessageContent } from '../lib/mentions';
 import { Avatar } from './Avatar';
-import { MediaLightbox, MessageAttachmentView } from './MessageAttachmentView';
+import {
+  MediaLightbox,
+  MessageAttachmentView,
+  type ImageModerationProps,
+} from './MessageAttachmentView';
 import { MessageEmbedView } from './MessageEmbedView';
 import { UserHoverCard } from './UserHoverCard';
 
@@ -61,6 +65,7 @@ export interface MessageItemProps {
   locale?: string;
   actions?: MessageItemActions;
   className?: string;
+  imageModeration?: ImageModerationProps | null;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -266,6 +271,7 @@ export function MessageItem({
   locale = 'tr-TR',
   actions,
   className,
+  imageModeration = null,
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactPickerOpen, setReactPickerOpen] = useState(false);
@@ -507,7 +513,12 @@ export function MessageItem({
         {!isHeading && message.attachments && message.attachments.length > 0 && (
           <ul className="flex flex-col gap-space-sm">
             {message.attachments.map((a) => (
-              <li key={a.id}><MessageAttachmentView attachment={a} /></li>
+              <li key={a.id}>
+                <MessageAttachmentView
+                  attachment={a}
+                  imageModeration={imageModeration}
+                />
+              </li>
             ))}
           </ul>
         )}
@@ -1093,6 +1104,7 @@ export interface MessageListProps {
   onLiveEdgeChange?: (atLive: boolean) => void;
   /** Arama vurgusu yerleştikten sonra (URL temizliği için) */
   onHighlightSettled?: (messageId: string) => void;
+  imageModeration?: ImageModerationProps | null;
 }
 
 function dedupeMessages(messages: MessageDto[]): MessageDto[] {
@@ -1128,6 +1140,7 @@ export function MessageList({
   onJumpToPresent,
   onLiveEdgeChange,
   onHighlightSettled,
+  imageModeration = null,
 }: MessageListProps) {
   const messages = useMemo(() => dedupeMessages(rawMessages), [rawMessages]);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -1393,6 +1406,7 @@ export function MessageList({
                   hour24={hour24}
                   locale={locale}
                   actions={messageActions}
+                  imageModeration={imageModeration}
                 />
               </div>
             );

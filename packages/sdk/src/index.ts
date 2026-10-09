@@ -1150,6 +1150,57 @@ export class DracordClient {
   startTyping(channelId: string) {
     this.socket?.emit(SocketEvents.TYPING_START, { channelId });
   }
+
+  async getChannelActivity(
+    guildId: string,
+    voiceChannelId: string,
+  ): Promise<import('@dracord/types').ActivitySessionDto | null> {
+    const q = new URLSearchParams({ guildId, voiceChannelId });
+    return this.request(`/activities/channel?${q.toString()}`);
+  }
+
+  async startActivity(data: {
+    guildId: string;
+    voiceChannelId: string;
+    kind: import('@dracord/types').ActivityKind;
+  }): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request('/activities', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async joinActivity(
+    id: string,
+    spectator = false,
+  ): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request(`/activities/${id}/join`, {
+      method: 'POST',
+      body: JSON.stringify({ spectator }),
+    });
+  }
+
+  async leaveActivity(
+    id: string,
+  ): Promise<import('@dracord/types').ActivitySessionDto | null> {
+    return this.request(`/activities/${id}/leave`, { method: 'POST' });
+  }
+
+  async patchActivityState(
+    id: string,
+    state: Record<string, unknown>,
+  ): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request(`/activities/${id}/state`, {
+      method: 'PATCH',
+      body: JSON.stringify(state),
+    });
+  }
+
+  async endActivity(
+    id: string,
+  ): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request(`/activities/${id}/end`, { method: 'POST' });
+  }
 }
 
 export { SocketEvents };

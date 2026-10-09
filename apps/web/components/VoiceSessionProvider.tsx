@@ -1347,7 +1347,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         const { token, url } = await client.getVoiceToken(channelId, password);
         const livekitUrl =
           process.env.NEXT_PUBLIC_LIVEKIT_URL?.trim() || url || 'ws://localhost:7880';
-        await room.connect(livekitUrl, token);
+        await room.connect(livekitUrl, token, {
+          // ICE/bundle: gecikme ve yeniden bağlanma maliyetini düşürür
+          rtcConfig: {
+            iceTransportPolicy: 'all',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require',
+          },
+        });
         if (disposed) {
           room.disconnect();
           return;
@@ -1546,14 +1553,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
+    let ema: number | null = null;
+    const alpha = 0.28;
     const tick = async () => {
       const room = roomRef.current;
       if (!room || cancelled) return;
       const ms = await readPublisherRttMs(room);
-      if (!cancelled && ms != null) setLatencyMs(ms);
+      if (cancelled || ms == null || !Number.isFinite(ms)) return;
+      // Spike yumuşatma: ani jitter UI’ı titretmesin
+      ema = ema == null ? ms : ema * (1 - alpha) + ms * alpha;
+      setLatencyMs(Math.max(1, Math.round(ema)));
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 1000);
+    const id = window.setInterval(() => void tick(), 1500);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -2196,10 +2208,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       try {
         const { classifyVideoElement } = await import('@/lib/nsfw-screen-guard');
         const verdict = await classifyVideoElement(el);
-        if (stopped || !verdict) return;
-        if (verdict.blocked) {
+        if (stopped) return;
+        // Fail-closed: tarama yoksa da izlemeyi durdur
+        if (!verdict || verdict.blocked) {
           hits += 1;
-          if (hits >= 2) {
+          if (hits >= (verdict?.blocked ? 2 : 3)) {
             hits = 0;
             pauseScreenShareView();
             setError(nsfwBlockMessage('view'));
@@ -2208,7 +2221,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           hits = 0;
         }
       } catch {
-        // ignore
+        hits += 1;
+        if (hits >= 3) {
+          hits = 0;
+          pauseScreenShareView();
+          setError(nsfwBlockMessage('view'));
+        }
       } finally {
         inFlight = false;
       }

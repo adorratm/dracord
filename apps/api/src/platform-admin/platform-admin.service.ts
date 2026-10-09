@@ -111,9 +111,38 @@ export class PlatformAdminService {
       bannerUrl: guild.bannerUrl ?? null,
       ownerId: guild.ownerId,
       discoverable: guild.discoverable,
+      discoverPinned: Boolean(guild.discoverPinnedAt),
+      discoverPinOrder: guild.discoverPinOrder ?? null,
       afkChannelId: guild.afkChannelId ?? null,
       afkTimeoutMinutes: guild.afkTimeoutMinutes ?? 0,
     };
+  }
+
+  async pinDiscoverGuild(guildId: string): Promise<GuildSummary> {
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    if (!guild.discoverable) {
+      guild.discoverable = true;
+    }
+    const maxRow = await this.em
+      .createQueryBuilder(Guild, 'g')
+      .select('MAX(g.discoverPinOrder)', 'max')
+      .where('g.discoverPinnedAt IS NOT NULL')
+      .getRawOne<{ max: string | null }>();
+    const nextOrder = (Number(maxRow?.max) || 0) + 1;
+    guild.discoverPinnedAt = new Date();
+    guild.discoverPinOrder = nextOrder;
+    await this.em.save(guild);
+    return this.toGuildSummary(guild);
+  }
+
+  async unpinDiscoverGuild(guildId: string): Promise<GuildSummary> {
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    guild.discoverPinnedAt = null;
+    guild.discoverPinOrder = null;
+    await this.em.save(guild);
+    return this.toGuildSummary(guild);
   }
 
   async listGuilds(): Promise<PlatformAdminGuildDetail[]> {

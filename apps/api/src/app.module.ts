@@ -22,6 +22,7 @@ import { SearchModule } from '@/search/search.module';
 import { DmModule } from '@/dm/dm.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
 import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
+import { ActivitiesModule } from '@/activities/activities.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
     SearchModule,
     DmModule,
     NotificationsModule,
+    ActivitiesModule,
   ],
 })
 export class AppModule {}

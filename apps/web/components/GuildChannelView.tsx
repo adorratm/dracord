@@ -20,13 +20,14 @@ import {
   UserProfileCard,
   VoiceStage,
   VolumeSlider,
+  cn,
   presenceLabelTr,
   type MemberListGroup,
   type MemberListAction,
 } from '@dracord/ui';
 import type { RoleDto } from '@dracord/types';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AppShell, rememberChannel } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
 import { DracoEmpty } from '@/components/Draco';
@@ -54,6 +55,8 @@ import {
 } from '@/lib/voice-settings';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { PinnedMessageBar } from '@/components/PinnedMessageBar';
+import { ActivityPanel } from '@/components/activities/ActivityPanel';
+import { useImageModeration } from '@/lib/use-image-moderation';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -124,6 +127,8 @@ export function GuildChannelView({
   } = useChatChannel(isVoiceView ? undefined : channelId, aroundMessageId);
   const voice = useVoiceSession();
   const { prefs } = useUserPreferences();
+  const imageModeration = useImageModeration();
+  const guildSkin = prefs.appearance.guildSkins?.[guildId];
   const lastSpokeAtRef = useRef(Date.now());
   const afkMovingRef = useRef(false);
 
@@ -2130,7 +2135,28 @@ export function GuildChannelView({
       categories={categories}
       threadsSection={null}
       onServerHeaderClick={() => setServerMenuOpen(true)}
-      className="h-full w-full md:w-72"
+      onVoiceMemberClick={(userId) => {
+        const m = guildMembers.find((g) => g.id === userId);
+        if (m) {
+          setProfileUser(m);
+          return;
+        }
+        const fromVoice = Object.values(voiceMembersByChannel)
+          .flat()
+          .find((v) => v.id === userId);
+        if (fromVoice) {
+          setProfileUser({
+            id: fromVoice.id,
+            displayName: fromVoice.displayName,
+            avatarUrl: fromVoice.avatarUrl,
+            isBot: fromVoice.isBot,
+          } as PublicUser);
+        }
+      }}
+      className={cn(
+        'h-full w-full md:w-72',
+        guildSkin?.sidebarTint && 'bg-[var(--guild-sidebar-tint)]',
+      )}
       userPanel={{
         displayName: user?.displayName ?? 'Kullanıcı',
         username: user?.username ?? null,
@@ -2228,6 +2254,22 @@ export function GuildChannelView({
       activeGuildId={guildId}
       onGuildsChanged={() => void reload()}
     >
+      <div
+        className={cn(
+          'contents',
+          guildSkin?.density === 'compact' && '[&_.font-body-md]:text-[13px]',
+        )}
+        style={
+          {
+            ...(guildSkin?.accent
+              ? { ['--color-primary-container' as string]: guildSkin.accent }
+              : {}),
+            ...(guildSkin?.sidebarTint
+              ? { ['--guild-sidebar-tint' as string]: guildSkin.sidebarTint }
+              : {}),
+          } as CSSProperties
+        }
+      >
       {dmError && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
           <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
@@ -2297,6 +2339,15 @@ export function GuildChannelView({
 
       {showingVoiceStage ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+          {voice.voiceChannelId && (
+            <div className="shrink-0 max-h-[42vh] sm:max-h-[46vh] overflow-hidden border-b border-surface-container-high">
+              <ActivityPanel
+                guildId={guildId}
+                voiceChannelId={voice.voiceChannelId}
+                className="h-full max-h-[42vh] sm:max-h-[46vh] rounded-none border-0"
+              />
+            </div>
+          )}
           <VoiceStage
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
           participants={voice.participants.map((p) => {
@@ -2812,6 +2863,7 @@ export function GuildChannelView({
                   messages={messagesWithRoleColors}
                   mentionNames={mentionNames}
                   channelNames={channelNames}
+                  imageModeration={imageModeration}
                   censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
                   hideEmbeds={!prefs.messaging.autoEmbed}
                   messageGrouping={
@@ -3835,6 +3887,7 @@ export function GuildChannelView({
             : []
         }
       />
+      </div>
     </AppShell>
   );
 }

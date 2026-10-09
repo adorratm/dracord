@@ -6,6 +6,7 @@ import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
 import { useGuildNav } from '@/hooks/useGuildNav';
+import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
 import { RoleBadge, SearchableSelect } from '@dracord/ui';
 
@@ -70,7 +71,9 @@ export default function GuildSettingsPage({ params }: PageProps) {
   const { guildId } = use(params);
   const router = useRouter();
   const { client, user } = useAuth();
+  const { prefs, setSection } = useUserPreferences();
   const { guilds, guild, channels, patchGuild, reload } = useGuildNav(guildId);
+  const skin = prefs.appearance.guildSkins?.[guildId] ?? {};
   const [detail, setDetail] = useState<GuildSummary | null>(guild);
   const [nameDraft, setNameDraft] = useState(guild?.name ?? '');
   const [busy, setBusy] = useState(false);
@@ -425,6 +428,70 @@ export default function GuildSettingsPage({ params }: PageProps) {
                   Keşfette göster (herkes katılabilir)
                 </span>
               </label>
+
+              <div className="rounded-xl bg-surface-container-low p-space-md space-y-space-sm border border-surface-container-high">
+                <h3 className="font-headline-md text-headline-md text-on-surface">
+                  Kişisel görünüm
+                </h3>
+                <p className="font-body-sm text-on-surface-variant">
+                  Yalnızca senin tarayıcında geçerli; diğer üyeleri etkilemez.
+                </p>
+                <label className="flex flex-col gap-space-xs">
+                  <span className="font-label-sm text-on-surface-variant">Vurgu rengi</span>
+                  <input
+                    type="color"
+                    value={skin.accent || '#bd93f9'}
+                    onChange={(e) => {
+                      const skins = { ...(prefs.appearance.guildSkins ?? {}) };
+                      skins[guildId] = { ...skins[guildId], accent: e.target.value };
+                      setSection('appearance', { guildSkins: skins });
+                    }}
+                    className="h-10 w-20 rounded cursor-pointer bg-transparent"
+                  />
+                </label>
+                <label className="flex flex-col gap-space-xs">
+                  <span className="font-label-sm text-on-surface-variant">Sidebar tonu</span>
+                  <input
+                    type="color"
+                    value={skin.sidebarTint || '#282a36'}
+                    onChange={(e) => {
+                      const skins = { ...(prefs.appearance.guildSkins ?? {}) };
+                      skins[guildId] = { ...skins[guildId], sidebarTint: e.target.value };
+                      setSection('appearance', { guildSkins: skins });
+                    }}
+                    className="h-10 w-20 rounded cursor-pointer bg-transparent"
+                  />
+                </label>
+                <label className="flex flex-col gap-space-xs">
+                  <span className="font-label-sm text-on-surface-variant">Yoğunluk</span>
+                  <select
+                    value={skin.density || 'comfy'}
+                    onChange={(e) => {
+                      const skins = { ...(prefs.appearance.guildSkins ?? {}) };
+                      skins[guildId] = {
+                        ...skins[guildId],
+                        density: e.target.value as 'compact' | 'comfy',
+                      };
+                      setSection('appearance', { guildSkins: skins });
+                    }}
+                    className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                  >
+                    <option value="comfy">Rahat</option>
+                    <option value="compact">Kompakt</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="font-label-sm text-primary-container hover:underline"
+                  onClick={() => {
+                    const skins = { ...(prefs.appearance.guildSkins ?? {}) };
+                    delete skins[guildId];
+                    setSection('appearance', { guildSkins: skins });
+                  }}
+                >
+                  Kişisel görünümü sıfırla
+                </button>
+              </div>
 
               <dl className="grid gap-space-sm">
                 <div className="rounded-lg bg-surface-container-low p-space-md">

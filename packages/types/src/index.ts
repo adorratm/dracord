@@ -141,6 +141,9 @@ export interface GuildSummary {
   ownerId: string;
   discoverable?: boolean;
   memberCount?: number;
+  /** Keşfet’te platform admin pin */
+  discoverPinned?: boolean;
+  discoverPinOrder?: number | null;
   /** AFK ses kanalı */
   afkChannelId?: string | null;
   /** Konuşmadan sonra AFK’ya taşıma (dakika); 0 = kapalı */
@@ -439,7 +442,35 @@ export const SocketEvents = {
   DM_CALL: 'dm:call',
   NOTIFICATION_CREATE: 'notification:create',
   REACTION_UPDATE: 'reaction:update',
+  ACTIVITY_UPSERT: 'activity:upsert',
+  ACTIVITY_STATE: 'activity:state',
+  ACTIVITY_LEAVE: 'activity:leave',
 } as const;
+
+export type ActivityKind =
+  | 'billiards'
+  | 'okey'
+  | 'bowling'
+  | 'tavla'
+  | 'watch_party';
+
+export type ActivityStatus = 'lobby' | 'playing' | 'ended';
+
+export interface ActivitySessionDto {
+  id: string;
+  guildId: string;
+  voiceChannelId: string;
+  kind: ActivityKind;
+  hostUserId: string;
+  minPlayers: number;
+  maxPlayers: number;
+  status: ActivityStatus;
+  playerIds: string[];
+  spectatorIds: string[];
+  state: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** DM aramalarında presence için sentetik guild id */
 export const DM_CALL_GUILD_ID = '__dm__';
@@ -512,6 +543,19 @@ export interface ClientSettings {
   appearance: {
     theme: 'dark' | 'light';
     messageDensity: 'cozy' | 'compact';
+    /** Sol rail favori sunucu id’leri (üstte) */
+    favoriteGuildIds: string[];
+    /** Sol rail özel sıra (favoriler + diğerleri) */
+    guildOrderIds: string[];
+    /** Yalnızca bu kullanıcıda görünen sunucu skin’leri */
+    guildSkins: Record<
+      string,
+      {
+        accent?: string;
+        sidebarTint?: string;
+        density?: 'compact' | 'comfy';
+      }
+    >;
   };
   system: {
     openOnStartup: boolean;
@@ -560,6 +604,14 @@ export interface ClientSettings {
   };
   connections: {
     apps: Array<{ id: string; name: string; connectedAt: string }>;
+  };
+  /** 3D lounge / watch party karakteri */
+  avatar3d: {
+    color: string;
+    xp: number;
+    speed: number;
+    x: number;
+    z: number;
   };
 }
 

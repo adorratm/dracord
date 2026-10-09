@@ -1,5 +1,6 @@
 'use client';
 
+import type { GuildSummary } from '@dracord/types';
 import type { TitleBarNavId } from '@dracord/ui';
 import {
   Modal,
@@ -9,11 +10,12 @@ import {
   type ServerRailGuildAction,
 } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { AppTour } from '@/components/AppTour';
 import { NotificationBell } from '@/components/NotificationBell';
 import { invalidateGuildNavCache } from '@/hooks/useGuildNav';
+import { useUserPreferences } from '@/lib/user-preferences';
 
 const LAST_CHANNEL_KEY = 'dracord:last-channel';
 
@@ -58,13 +60,14 @@ export function AppShell({
 }: AppShellProps) {
   const router = useRouter();
   const { client, user } = useAuth();
+  const { prefs, setSection } = useUserPreferences();
   const [createOpen, setCreateOpen] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [serverName, setServerName] = useState('');
   const [discoverable, setDiscoverable] = useState(true);
   const [inviteCode, setInviteCode] = useState('');
-  const [discover, setDiscover] = useState<ServerRailGuild[]>([]);
+  const [discover, setDiscover] = useState<GuildSummary[]>([]);
   const [discoverQuery, setDiscoverQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +81,27 @@ export function AppShell({
     setGuildsOverride(null);
   }, [guilds]);
 
-  const displayGuilds = guildsOverride ?? guilds;
+  const baseGuilds = guildsOverride ?? guilds;
+
+  const displayGuilds = useMemo(() => {
+    const favSet = new Set(prefs.appearance.favoriteGuildIds ?? []);
+    const order = prefs.appearance.guildOrderIds ?? [];
+    const byId = new Map(baseGuilds.map((g) => [g.id, g]));
+    const ordered: ServerRailGuild[] = [];
+    for (const id of order) {
+      const g = byId.get(id);
+      if (g) {
+        ordered.push({ ...g, favorite: favSet.has(g.id) });
+        byId.delete(id);
+      }
+    }
+    for (const g of byId.values()) {
+      ordered.push({ ...g, favorite: favSet.has(g.id) });
+    }
+    const favs = ordered.filter((g) => g.favorite);
+    const rest = ordered.filter((g) => !g.favorite);
+    return [...favs, ...rest];
+  }, [baseGuilds, prefs.appearance.favoriteGuildIds, prefs.appearance.guildOrderIds]);
 
   const openGuild = useCallback(
     async (guildId: string) => {
@@ -265,7 +288,19 @@ export function AppShell({
   const getGuildActions = useCallback(
     (guild: ServerRailGuild): ServerRailGuildAction[] => {
       const isOwner = Boolean(user?.id && guild.ownerId && guild.ownerId === user.id);
+      const isFav = (prefs.appearance.favoriteGuildIds ?? []).includes(guild.id);
       const actions: ServerRailGuildAction[] = [
+        {
+          id: 'favorite',
+          label: isFav ? 'Favorilerden çıkar' : 'Favorilere ekle',
+          onSelect: () => {
+            const cur = prefs.appearance.favoriteGuildIds ?? [];
+            const next = isFav
+              ? cur.filter((id) => id !== guild.id)
+              : [...cur, guild.id];
+            setSection('appearance', { favoriteGuildIds: next });
+          },
+        },
         {
           id: 'invite',
           label: 'Davet oluştur',
@@ -297,7 +332,13 @@ export function AppShell({
       }
       return actions;
     },
-    [user?.id, createGuildInvite, router],
+    [
+      user?.id,
+      createGuildInvite,
+      router,
+      prefs.appearance.favoriteGuildIds,
+      setSection,
+    ],
   );
 
   const serverRailProps = {
@@ -320,6 +361,9 @@ export function AppShell({
       setExploreOpen(true);
     },
     getGuildActions,
+    onGuildReorder: (orderedIds: string[]) => {
+      setSection('appearance', { guildOrderIds: orderedIds });
+    },
   };
 
   return (
@@ -466,7 +510,7 @@ export function AppShell({
             <button
               key={g.id}
               type="button"
-              className="flex items-center justify-between px-space-sm py-space-sm rounded-lg hover:bg-surface-container text-left transition-colors"
+              className="flex items-center justify-between gap-space-sm px-space-sm py-space-sm rounded-lg hover:bg-surface-container text-left transition-colors"
               onClick={() => {
                 void (async () => {
                   try {
@@ -490,8 +534,24 @@ export function AppShell({
                 })();
               }}
             >
-              <span className="font-body-md text-on-surface">{g.name}</span>
-              <span className="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+              <span className="flex items-center gap-space-sm min-w-0">
+                {g.discoverPinned && (
+                  <span
+                    className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary-container/25 text-primary-container font-label-sm text-[10px] uppercase"
+                    title="Öne çıkarılmış"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">push_pin</span>
+                    Pin
+                  </span>
+                )}
+                <span className="font-body-md text-on-surface truncate">{g.name}</span>
+                {typeof g.memberCount === 'number' && (
+                  <span className="font-label-sm text-outline shrink-0">{g.memberCount}</span>
+                )}
+              </span>
+              <span className="material-symbols-outlined text-outline text-[18px] shrink-0">
+                chevron_right
+              </span>
             </button>
           ))}
         </div>

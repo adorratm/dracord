@@ -788,6 +788,8 @@ export interface ChannelSidebarProps {
   userPanel: UserPanelProps;
   headerExtra?: ReactNode;
   className?: string;
+  /** Ses kanalı üyesine sol tık — Discord tarzı profil kartı */
+  onVoiceMemberClick?: (userId: string) => void;
 }
 
 type VoiceMemberMenuState = {
@@ -802,11 +804,13 @@ function ChannelRow({
   onChannelReorderDrop,
   voiceMemberMenu,
   onVoiceMemberContextMenu,
+  onVoiceMemberClick,
 }: {
   channel: SidebarChannelItem;
   onChannelReorderDrop?: (draggedId: string, targetId: string) => void;
   voiceMemberMenu: VoiceMemberMenuState | null;
   onVoiceMemberContextMenu: (e: ReactMouseEvent, member: SidebarVoiceMember) => void;
+  onVoiceMemberClick?: (userId: string) => void;
 }) {
   const isText = channel.type === 'text';
   const isForum = channel.type === 'forum';
@@ -971,6 +975,8 @@ function ChannelRow({
             return (
             <li
               key={m.id}
+              role={onVoiceMemberClick ? 'button' : undefined}
+              tabIndex={onVoiceMemberClick ? 0 : undefined}
               draggable={Boolean(m.draggable)}
               onDragStart={
                 m.draggable
@@ -980,10 +986,29 @@ function ChannelRow({
                     }
                   : undefined
               }
+              onClick={
+                onVoiceMemberClick
+                  ? (e) => {
+                      e.stopPropagation();
+                      onVoiceMemberClick(m.id);
+                    }
+                  : undefined
+              }
+              onKeyDown={
+                onVoiceMemberClick
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onVoiceMemberClick(m.id);
+                      }
+                    }
+                  : undefined
+              }
               onContextMenu={hasMenu ? (e) => onVoiceMemberContextMenu(e, m) : undefined}
               className={cn(
                 'flex items-center gap-space-sm px-space-sm py-1 rounded-md text-on-surface-variant',
                 m.speaking && 'bg-primary-container/10',
+                onVoiceMemberClick && 'cursor-pointer hover:bg-surface-container hover:text-on-surface',
                 m.draggable && 'cursor-grab active:cursor-grabbing',
                 voiceMemberMenu?.member.id === m.id && 'bg-surface-container',
               )}
@@ -1047,6 +1072,7 @@ export function ChannelSidebar({
   userPanel,
   headerExtra,
   className,
+  onVoiceMemberClick,
 }: ChannelSidebarProps) {
   const [voiceMemberMenu, setVoiceMemberMenu] = useState<VoiceMemberMenuState | null>(null);
   const voiceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1224,6 +1250,7 @@ export function ChannelSidebar({
                       channel={ch}
                       voiceMemberMenu={voiceMemberMenu}
                       onVoiceMemberContextMenu={openVoiceMemberMenu}
+                      onVoiceMemberClick={onVoiceMemberClick}
                       onChannelReorderDrop={
                         category.onReorderChannels
                           ? (draggedId, targetId) => {

@@ -24,6 +24,7 @@ import {
 } from '@/lib/content-filter';
 import { getDmReturnPath } from '@/lib/settings-return';
 import { useUserPreferences } from '@/lib/user-preferences';
+import { useImageModeration } from '@/lib/use-image-moderation';
 
 function DmChatInner({
   channelId,
@@ -38,6 +39,7 @@ function DmChatInner({
   const { client, user } = useAuth();
   const { guilds, reload } = useGuildNav(undefined);
   const { prefs } = useUserPreferences();
+  const imageModeration = useImageModeration();
   const [title, setTitle] = useState('DM');
   const [selfNotes, setSelfNotes] = useState(false);
   const [peerStatus, setPeerStatus] = useState<string | null>(null);
@@ -365,6 +367,7 @@ function DmChatInner({
             scrollKey={channelId}
             messages={displayMessages}
             mentionNames={mentionNames}
+            imageModeration={imageModeration}
             censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
             hideEmbeds={!prefs.messaging.autoEmbed}
             messageGrouping={

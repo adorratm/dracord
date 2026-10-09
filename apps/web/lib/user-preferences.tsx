@@ -74,6 +74,7 @@ function mergePrefs(
     security: { ...base.security, ...(patch.security ?? {}) },
     billing: { ...base.billing, ...(patch.billing ?? {}) },
     connections: { ...base.connections, ...(patch.connections ?? {}) },
+    avatar3d: { ...base.avatar3d, ...(patch.avatar3d ?? {}) },
   } as unknown as Record<string, unknown>);
 }
 

@@ -78,6 +78,25 @@ export default function AppearanceSettingsPage() {
           <p className="px-space-md pb-space-md font-label-sm text-secondary">Kaydedildi</p>
         )}
       </SettingsSection>
+      <SettingsSection title="Sunucu görünümü (yalnızca sende)">
+        <SettingsNote>
+          Aktif sunucudayken sol panel tonu ve vurgu rengi yalnızca senin istemcinde
+          değişir. Sunucu ayarlarından da düzenleyebilirsin.
+        </SettingsNote>
+        <SettingsSelect
+          label="Varsayılan yoğunluk (yeni sunucu skin’leri)"
+          value={prefs.appearance.messageDensity}
+          options={[
+            { value: 'cozy', label: 'Rahat' },
+            { value: 'compact', label: 'Kompakt' },
+          ]}
+          onChange={(v) =>
+            setSection('appearance', {
+              messageDensity: v as 'cozy' | 'compact',
+            })
+          }
+        />
+      </SettingsSection>
       <SettingsSection>
         <SettingsNote>
           Kompakt yoğunluk satır aralığını sıkılaştırır ve mesaj gruplamasını kapatır.

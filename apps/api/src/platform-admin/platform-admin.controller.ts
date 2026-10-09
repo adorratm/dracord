@@ -158,6 +158,16 @@ export class PlatformAdminController {
     return this.admin.getGuild(guildId);
   }
 
+  @Post('guilds/:guildId/discover-pin')
+  pinDiscover(@Param('guildId') guildId: string) {
+    return this.admin.pinDiscoverGuild(guildId);
+  }
+
+  @Delete('guilds/:guildId/discover-pin')
+  unpinDiscover(@Param('guildId') guildId: string) {
+    return this.admin.unpinDiscoverGuild(guildId);
+  }
+
   @Get('guilds/:guildId/channels')
   listChannels(@Param('guildId') guildId: string) {
     return this.admin.listChannels(guildId);

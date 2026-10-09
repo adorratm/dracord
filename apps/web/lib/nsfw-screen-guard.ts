@@ -190,6 +190,40 @@ export async function classifyVideoElement(
   }
 }
 
+/** Mesaj / DM görüntü ekleri için */
+export async function classifyImageElement(
+  img: HTMLImageElement,
+): Promise<NsfwVerdict | null> {
+  if (!img.naturalWidth || !img.complete) return null;
+  try {
+    const bitmap = await createImageBitmap(img);
+    try {
+      const canvas = downscaleBitmap(bitmap);
+      const model = await getModel();
+      const preds = await model.classify(canvas, 5);
+      return evaluateNsfwScores(scoresFromPredictions(preds));
+    } finally {
+      bitmap.close();
+    }
+  } catch (err) {
+    console.warn('[nsfw-guard] image classify failed', err);
+    return null;
+  }
+}
+
+export async function classifyImageUrl(url: string): Promise<NsfwVerdict | null> {
+  if (typeof window === 'undefined') return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      void classifyImageElement(img).then(resolve);
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 export function nsfwBlockMessage(source: 'screen' | 'camera' | 'view'): string {
   if (source === 'view') {
     return 'Uygunsuz içerik tespit edildi — izleme durduruldu.';
@@ -231,7 +265,21 @@ export function startNsfwTrackMonitor(opts: {
     inFlight = true;
     try {
       const verdict = await classifyMediaTrack(track);
-      if (stopped || !verdict) return;
+      if (stopped) return;
+      // Fail-closed: tarama başarısız / model yok → ardışık hatalarda engelle
+      if (!verdict) {
+        hits += 1;
+        if (hits >= HITS_TO_BLOCK + 1) {
+          hits = 0;
+          opts.onBlocked({
+            blocked: true,
+            score: 1,
+            labels: EMPTY_LABELS,
+            reason: 'combo',
+          });
+        }
+        return;
+      }
       if (verdict.blocked) {
         hits += 1;
         if (hits >= HITS_TO_BLOCK) {

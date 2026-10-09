@@ -39,6 +39,9 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   appearance: {
     theme: 'dark',
     messageDensity: 'cozy',
+    favoriteGuildIds: [],
+    guildOrderIds: [],
+    guildSkins: {},
   },
   system: {
     openOnStartup: false,
@@ -81,6 +84,13 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   },
   connections: {
     apps: [],
+  },
+  avatar3d: {
+    color: '#bd93f9',
+    xp: 0,
+    speed: 1,
+    x: 0,
+    z: 2.2,
   },
 };
 

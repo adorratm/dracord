@@ -25,6 +25,7 @@ import {
   RolePermission,
   Session,
   SlashCommand,
+  ActivitySession,
   User,
 } from './entities';
 import { DatabaseBootstrapService } from './database-bootstrap.service';
@@ -54,6 +55,7 @@ const entities = [
   Notification,
   PushSubscription,
   SlashCommand,
+  ActivitySession,
 ];
 
 @Module({

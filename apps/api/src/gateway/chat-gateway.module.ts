@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { ChannelsModule } from '@/channels/channels.module';
 import { MessagesModule } from '@/messages/messages.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
 import { PresenceModule } from '@/presence/presence.module';
@@ -11,6 +12,7 @@ import { WsJwtGuard } from './ws-jwt.guard';
 @Module({
   imports: [
     JwtModule.register({}),
+    ChannelsModule,
     MessagesModule,
     PresenceModule,
     VoicePresenceModule,

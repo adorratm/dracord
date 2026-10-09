@@ -110,6 +110,7 @@ export { MessageAttachmentView, MediaLightbox } from './components/MessageAttach
 export type {
   MessageAttachmentViewProps,
   MediaLightboxProps,
+  ImageModerationProps,
 } from './components/MessageAttachmentView';
 
 export {

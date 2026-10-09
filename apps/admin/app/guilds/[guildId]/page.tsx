@@ -17,6 +17,8 @@ import {
   listGuildMessages,
   listGuildRoles,
   listGuildVoice,
+  pinDiscoverGuild,
+  unpinDiscoverGuild,
   updateChannel,
   updateGuild,
   updateGuildRole,
@@ -266,6 +268,38 @@ export default function GuildDetailPage() {
                     />
                     Keşfedilebilir
                   </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="rounded border border-dracula-current px-3 py-1.5 text-sm text-dracula-fg hover:bg-dracula-current/40 disabled:opacity-50"
+                      onClick={() =>
+                        void run(async () => {
+                          const updated = guild.discoverPinned
+                            ? await unpinDiscoverGuild(guildId)
+                            : await pinDiscoverGuild(guildId);
+                          setGuild((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  discoverPinned: updated.discoverPinned,
+                                  discoverPinOrder: updated.discoverPinOrder,
+                                  discoverable: updated.discoverable ?? prev.discoverable,
+                                }
+                              : prev,
+                          );
+                          if (updated.discoverable) setEditDiscoverable(true);
+                        })
+                      }
+                    >
+                      {guild.discoverPinned
+                        ? 'Keşfet pinini kaldır'
+                        : 'Keşfette üste sabitle'}
+                    </button>
+                    {guild.discoverPinned && (
+                      <span className="text-xs text-dracula-purple">Pinli</span>
+                    )}
+                  </div>
                   <label className="block space-y-1 text-sm">
                     <span className="text-dracula-comment">AFK kanalı</span>
                     <select

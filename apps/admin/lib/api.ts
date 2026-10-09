@@ -252,6 +252,18 @@ export function listGuildRoles(guildId: string): Promise<RoleDto[]> {
   return adminFetch(`/platform-admin/guilds/${guildId}/roles`);
 }
 
+export function pinDiscoverGuild(guildId: string): Promise<GuildSummary> {
+  return adminFetch(`/platform-admin/guilds/${guildId}/discover-pin`, {
+    method: 'POST',
+  });
+}
+
+export function unpinDiscoverGuild(guildId: string): Promise<GuildSummary> {
+  return adminFetch(`/platform-admin/guilds/${guildId}/discover-pin`, {
+    method: 'DELETE',
+  });
+}
+
 export function platformSearch(opts: {
   q: string;
   types?: string[];

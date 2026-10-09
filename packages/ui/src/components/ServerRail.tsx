@@ -1,7 +1,7 @@
 'use client';
 
 import type { GuildSummary } from '@dracord/types';
-import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Logo } from './Logo';
@@ -10,6 +10,7 @@ export interface ServerRailGuild extends Pick<GuildSummary, 'id' | 'name' | 'ico
   initials?: string;
   accentClassName?: string;
   ownerId?: string;
+  favorite?: boolean;
 }
 
 export interface ServerRailGuildAction {
@@ -29,6 +30,8 @@ export interface ServerRailProps {
   onExploreClick?: () => void;
   /** Sağ tık menü aksiyonları */
   getGuildActions?: (guild: ServerRailGuild) => ServerRailGuildAction[];
+  /** Sürükle-bırak sonrası yeni id sırası (favoriler + diğerleri) */
+  onGuildReorder?: (orderedIds: string[]) => void;
   className?: string;
 }
 
@@ -81,6 +84,103 @@ type MenuState = {
   actions: ServerRailGuildAction[];
 };
 
+function GuildButton({
+  guild,
+  active,
+  onGuildClick,
+  openMenu,
+  getGuildActions,
+  onGuildReorder,
+  allIds,
+}: {
+  guild: ServerRailGuild;
+  active: boolean;
+  onGuildClick?: (guildId: string) => void;
+  openMenu: (e: MouseEvent, guild: ServerRailGuild) => void;
+  getGuildActions?: (guild: ServerRailGuild) => ServerRailGuildAction[];
+  onGuildReorder?: (orderedIds: string[]) => void;
+  allIds: string[];
+}) {
+  return (
+    <div
+      className="relative group flex items-center justify-center w-full"
+      draggable={Boolean(onGuildReorder)}
+      onDragStart={
+        onGuildReorder
+          ? (e) => {
+              e.dataTransfer.setData('application/x-dracord-guild', guild.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }
+          : undefined
+      }
+      onDragOver={
+        onGuildReorder
+          ? (e) => {
+              if ([...e.dataTransfer.types].includes('application/x-dracord-guild')) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }
+            }
+          : undefined
+      }
+      onDrop={
+        onGuildReorder
+          ? (e) => {
+              e.preventDefault();
+              const dragged = e.dataTransfer.getData('application/x-dracord-guild');
+              if (!dragged || dragged === guild.id) return;
+              const next = allIds.filter((id) => id !== dragged);
+              const at = next.indexOf(guild.id);
+              if (at < 0) return;
+              next.splice(at, 0, dragged);
+              onGuildReorder(next);
+            }
+          : undefined
+      }
+    >
+      <ActivePill active={active} />
+      {!active && <HoverPill show />}
+      <button
+        type="button"
+        onClick={() => onGuildClick?.(guild.id)}
+        onContextMenu={(e) => openMenu(e, guild)}
+        title={guild.name}
+        aria-haspopup={getGuildActions ? 'menu' : undefined}
+        className={cn(
+          'relative z-[1] w-12 h-12 flex items-center justify-center font-headline-md text-headline-md overflow-hidden',
+          railBtnEase,
+          active ? 'rounded-[16px]' : 'rounded-[50%] hover:rounded-[16px] hover:scale-[1.04] active:scale-[0.98]',
+          guild.accentClassName ??
+            (active
+              ? 'bg-primary-container text-on-primary-container'
+              : 'bg-secondary-container text-on-secondary-container hover:bg-primary hover:text-on-primary'),
+          guild.favorite && !active && 'ring-1 ring-primary-container/50',
+        )}
+      >
+        {guild.iconUrl ? (
+          <img
+            src={guild.iconUrl}
+            alt=""
+            className="w-full h-full object-cover pointer-events-none"
+            draggable={false}
+          />
+        ) : (
+          guildInitials(guild)
+        )}
+        {guild.favorite && (
+          <span
+            className="absolute -top-0.5 -right-0.5 material-symbols-outlined text-[12px] text-primary-container drop-shadow"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+            aria-hidden
+          >
+            star
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function ServerRail({
   guilds,
   activeGuildId,
@@ -90,11 +190,22 @@ export function ServerRail({
   onAddClick,
   onExploreClick,
   getGuildActions,
+  onGuildReorder,
   className,
 }: ServerRailProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
+
+  const { favorites, others, allIds } = useMemo(() => {
+    const favs = guilds.filter((g) => g.favorite);
+    const rest = guilds.filter((g) => !g.favorite);
+    return {
+      favorites: favs,
+      others: rest,
+      allIds: [...favs, ...rest].map((g) => g.id),
+    };
+  }, [guilds]);
 
   useEffect(() => {
     if (!menu) return;
@@ -122,9 +233,10 @@ export function ServerRail({
   }, [menu]);
 
   useEffect(() => {
-    if (!menu || !menuRef.current) return;
-    const el = menuRef.current;
-    const rect = el.getBoundingClientRect();
+    if (!menu) return;
+    const node = menuRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
     let x = menu.x;
     let y = menu.y;
     if (x + rect.width > window.innerWidth - 8) x = Math.max(8, window.innerWidth - rect.width - 8);
@@ -151,12 +263,12 @@ export function ServerRail({
   return (
     <aside
       className={cn(
-        'w-[72px] bg-surface-container-lowest flex flex-col items-center pt-space-md pb-32 gap-space-sm shrink-0 relative z-0',
+        'w-[72px] bg-surface-container-lowest flex flex-col items-center pt-space-md pb-space-md gap-space-sm shrink-0 relative z-0',
         className,
       )}
       aria-label="Sunucular"
     >
-      <div className="relative group flex items-center justify-center w-full">
+      <div className="relative group flex items-center justify-center w-full shrink-0">
         <ActivePill active={homeActive} />
         {!homeActive && <HoverPill show />}
         <button
@@ -175,48 +287,40 @@ export function ServerRail({
         </button>
       </div>
 
-      <div className="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs" />
+      <div className="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs shrink-0" />
 
-      <div className="flex-1 flex flex-col items-center gap-space-sm w-full overflow-y-auto min-h-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {guilds.map((guild) => {
-          const active = guild.id === activeGuildId;
-          return (
-            <div key={guild.id} className="relative group flex items-center justify-center w-full">
-              <ActivePill active={active} />
-              {!active && <HoverPill show />}
-              <button
-                type="button"
-                onClick={() => onGuildClick?.(guild.id)}
-                onContextMenu={(e) => openMenu(e, guild)}
-                title={guild.name}
-                aria-haspopup={getGuildActions ? 'menu' : undefined}
-                className={cn(
-                  'relative z-[1] w-12 h-12 flex items-center justify-center font-headline-md text-headline-md overflow-hidden',
-                  railBtnEase,
-                  active ? 'rounded-[16px]' : 'rounded-[50%] hover:rounded-[16px] hover:scale-[1.04] active:scale-[0.98]',
-                  guild.accentClassName ??
-                    (active
-                      ? 'bg-primary-container text-on-primary-container'
-                      : 'bg-secondary-container text-on-secondary-container hover:bg-primary hover:text-on-primary'),
-                )}
-              >
-                {guild.iconUrl ? (
-                  <img
-                    src={guild.iconUrl}
-                    alt=""
-                    className="w-full h-full object-cover pointer-events-none"
-                    draggable={false}
-                  />
-                ) : (
-                  guildInitials(guild)
-                )}
-              </button>
-            </div>
-          );
-        })}
+      <div className="flex-1 flex flex-col items-center gap-space-sm w-full overflow-y-auto min-h-0 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {favorites.map((guild) => (
+          <GuildButton
+            key={guild.id}
+            guild={guild}
+            active={guild.id === activeGuildId}
+            onGuildClick={onGuildClick}
+            openMenu={openMenu}
+            getGuildActions={getGuildActions}
+            onGuildReorder={onGuildReorder}
+            allIds={allIds}
+          />
+        ))}
+        {favorites.length > 0 && others.length > 0 && (
+          <div className="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs shrink-0" />
+        )}
+        {others.map((guild) => (
+          <GuildButton
+            key={guild.id}
+            guild={guild}
+            active={guild.id === activeGuildId}
+            onGuildClick={onGuildClick}
+            openMenu={openMenu}
+            getGuildActions={getGuildActions}
+            onGuildReorder={onGuildReorder}
+            allIds={allIds}
+          />
+        ))}
+      </div>
 
-        <div className="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs" />
-
+      {/* Alt aksiyonlar scroll dışında — mobilde basık kalmasın */}
+      <div className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 w-full border-t border-surface-container-highest/60 mt-1">
         <button
           type="button"
           onClick={onAddClick}

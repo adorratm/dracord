@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useChatChannel } from '@/hooks/useChatChannel';
 import { useUserPreferences } from '@/lib/user-preferences';
+import { useImageModeration } from '@/lib/use-image-moderation';
 
 export function VoiceSideChat({
   guildId,
@@ -24,6 +25,7 @@ export function VoiceSideChat({
 }) {
   const { user, client } = useAuth();
   const { prefs } = useUserPreferences();
+  const imageModeration = useImageModeration();
   const effectiveId = channelId ?? textChannels[0]?.id ?? undefined;
   const {
     messages,
@@ -144,6 +146,7 @@ export function VoiceSideChat({
             messages={messages}
             mentionNames={mentionNames}
             channelNames={channelNames}
+            imageModeration={imageModeration}
             censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
             hideEmbeds={!prefs.messaging.autoEmbed}
             messageGrouping={
