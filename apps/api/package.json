@@ -11,11 +11,11 @@
     "lint": "echo ok"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1146.0",
-    "@aws-sdk/s3-request-presigner": "^3.1146.0",
-    "@bull-board/api": "^9.10.2",
-    "@bull-board/express": "^9.10.2",
-    "@bull-board/ui": "^9.10.2",
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/s3-request-presigner": "^3.1147.0",
+    "@bull-board/api": "^9.10.4",
+    "@bull-board/express": "^9.10.4",
+    "@bull-board/ui": "^9.10.4",
     "@dracord/types": "workspace:*",
     "@elastic/elasticsearch": "8.15.3",
     "@nestjs/bullmq": "^12.0.0",
@@ -35,7 +35,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
-    "dotenv": "^18.0.5",
+    "dotenv": "^18.0.6",
     "ioredis": "^6.0.0",
     "livekit-server-sdk": "^2.19.1",
     "passport": "^0.7.0",
@@ -46,7 +46,7 @@
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.4",
     "socket.io-adapter": "^2.5.8",
-    "typeorm": "^1.1.1",
+    "typeorm": "^1.1.2",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -60,7 +60,7 @@
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-jwt": "^4.0.1",
     "@types/web-push": "^3.6.4",
-    "concurrently": "^10.0.5",
+    "concurrently": "^10.0.6",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }

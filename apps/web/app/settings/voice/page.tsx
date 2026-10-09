@@ -3,7 +3,15 @@
 import { useEffect } from 'react';
 import { SearchableSelect } from '@dracord/ui';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
-import { VOICE_BITRATE_PRESETS, type VoiceBitrateKbps } from '@/lib/voice-settings';
+import {
+  SCREEN_SHARE_FPS_PRESETS,
+  SCREEN_SHARE_RESOLUTION_PRESETS,
+  SCREEN_SHARE_RESOLUTION_SPECS,
+  VOICE_BITRATE_PRESETS,
+  type ScreenShareFps,
+  type ScreenShareResolutionId,
+  type VoiceBitrateKbps,
+} from '@/lib/voice-settings';
 
 function VolumeSlider({
   label,
@@ -108,13 +116,17 @@ export default function VoiceSettingsPage() {
           value={voice.audioSettings.outputVolume}
           onChange={voice.setOutputVolume}
         />
+        <p className="font-body-sm text-outline">
+          %100 üzeri yumuşak yükseltilir; ani patlamayı azaltmak için limiter açıktır. Çok yüksek
+          mikrofon (%150+) yine bozulmaya yol açabilir.
+        </p>
       </section>
 
       <section className="rounded-xl bg-surface-container-low p-space-lg space-y-space-lg">
         <h3 className="font-headline-md text-headline-md text-on-surface">Ses kalitesi</h3>
         <p className="font-body-sm text-on-surface-variant">
-          Mikrofon yayın bitrate’i. Varsayılan en yüksek (320 kbps). Daha düşük değerler bant
-          genişliği tasarruf eder; tarayıcı yine de desteklediği üst sınıra kadar çıkar.
+          Mikrofon yayın bitrate’i. Varsayılan 128 kbps (dengeli). Daha yüksek değerler bant
+          kullanır; çok yüksek gain ile birlikte patlamaya yol açabilir.
         </p>
         <label className="flex flex-col gap-space-xs">
           <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
@@ -128,13 +140,58 @@ export default function VoiceSettingsPage() {
             aria-label="Yayın kalitesi"
             options={VOICE_BITRATE_PRESETS.map((kbps) => ({
               value: String(kbps),
-              label: `${kbps} kbps${kbps === 320 ? ' — En yüksek' : kbps === 32 ? ' — En düşük' : ''}`,
+              label: `${kbps} kbps${kbps === 320 ? ' — En yüksek' : kbps === 128 ? ' — Önerilen' : kbps === 32 ? ' — En düşük' : ''}`,
             }))}
           />
         </label>
         {voice.connected && (
           <p className="font-body-sm text-outline">
             Değişiklik bu oturumda hemen uygulanır.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-xl bg-surface-container-low p-space-lg space-y-space-lg">
+        <h3 className="font-headline-md text-headline-md text-on-surface">Ekran paylaşımı</h3>
+        <p className="font-body-sm text-on-surface-variant">
+          Çözünürlük ve FPS kişisel ayardır (bu tarayıcıda saklanır). Paylaşım sırasında
+          değiştirirsen paylaşım yeniden başlar; tarayıcı ekranın gerçek çözünürlüğünü aşamaz.
+        </p>
+        <label className="flex flex-col gap-space-xs">
+          <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-[18px]">screenshot_monitor</span>
+            Çözünürlük
+          </span>
+          <SearchableSelect
+            fullWidth
+            value={voice.audioSettings.screenShareResolution}
+            onChange={(v) => void voice.setScreenShareResolution(v as ScreenShareResolutionId)}
+            aria-label="Ekran paylaşımı çözünürlüğü"
+            options={SCREEN_SHARE_RESOLUTION_PRESETS.map((id) => ({
+              value: id,
+              label: SCREEN_SHARE_RESOLUTION_SPECS[id].label,
+            }))}
+          />
+        </label>
+        <label className="flex flex-col gap-space-xs">
+          <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-[18px]">speed</span>
+            Kare hızı (FPS)
+          </span>
+          <SearchableSelect
+            fullWidth
+            value={String(voice.audioSettings.screenShareFps)}
+            onChange={(v) => void voice.setScreenShareFps(Number(v) as ScreenShareFps)}
+            aria-label="Ekran paylaşımı FPS"
+            options={SCREEN_SHARE_FPS_PRESETS.map((fps) => ({
+              value: String(fps),
+              label: `${fps} FPS${fps === 30 ? ' — Önerilen' : fps === 60 ? ' — Akıcı' : ''}`,
+            }))}
+          />
+        </label>
+        {voice.screenSharing && (
+          <p className="font-body-sm text-outline">
+            Şu an paylaşım açık — değişiklik paylaşımı yeniden başlatır.
           </p>
         )}
       </section>
