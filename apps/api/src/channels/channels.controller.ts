@@ -35,9 +35,10 @@ export class ChannelsController {
     @Body()
     body: {
       name: string;
-      type: 'TEXT' | 'VOICE' | 'FORUM';
+      type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
+      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | null;
     },
   ) {
     return this.channelsService.createChannel(guildId, user.sub, body);

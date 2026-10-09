@@ -60,18 +60,33 @@ if ! "${COMPOSE[@]}" exec -T postgres \
   exit 1
 fi
 
-# Ensure FORUM enum exists (TypeORM sync often skips enum widen)
+# Ensure channel type enum values exist (TypeORM sync often skips enum widen)
 "${COMPOSE[@]}" exec -T postgres \
   psql -U "$PGUSER" -d "$PGDB" -v ON_ERROR_STOP=0 <<'SQL' || true
 DO $enum$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'channels_type_enum')
-     AND NOT EXISTS (
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'channels_type_enum') THEN
+    IF NOT EXISTS (
        SELECT 1 FROM pg_enum e
        JOIN pg_type t ON t.oid = e.enumtypid
        WHERE t.typname = 'channels_type_enum' AND e.enumlabel = 'FORUM'
      ) THEN
-    ALTER TYPE channels_type_enum ADD VALUE 'FORUM';
+      ALTER TYPE channels_type_enum ADD VALUE 'FORUM';
+    END IF;
+    IF NOT EXISTS (
+       SELECT 1 FROM pg_enum e
+       JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'channels_type_enum' AND e.enumlabel = 'GAME'
+     ) THEN
+      ALTER TYPE channels_type_enum ADD VALUE 'GAME';
+    END IF;
+    IF NOT EXISTS (
+       SELECT 1 FROM pg_enum e
+       JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'channels_type_enum' AND e.enumlabel = 'WATCH_PARTY'
+     ) THEN
+      ALTER TYPE channels_type_enum ADD VALUE 'WATCH_PARTY';
+    END IF;
   END IF;
 END
 $enum$;

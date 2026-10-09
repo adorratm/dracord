@@ -16,6 +16,10 @@ export enum ChannelType {
   VOICE = 'VOICE',
   CATEGORY = 'CATEGORY',
   FORUM = 'FORUM',
+  /** Bilardo / okey / bowling / tavla odası */
+  GAME = 'GAME',
+  /** Watch party / sinema salonu */
+  WATCH_PARTY = 'WATCH_PARTY',
 }
 
 export enum FriendshipStatus {

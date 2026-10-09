@@ -9,7 +9,7 @@ import { Avatar } from './Avatar';
 import { presenceDotClass, presenceLabelTr } from '../lib/presence';
 import { VolumeSlider } from './VolumeSlider';
 
-export type SidebarChannelType = 'text' | 'voice' | 'forum';
+export type SidebarChannelType = 'text' | 'voice' | 'forum' | 'game' | 'watch';
 
 export interface SidebarVoiceMember {
   id: string;
@@ -814,6 +814,8 @@ function ChannelRow({
 }) {
   const isText = channel.type === 'text';
   const isForum = channel.type === 'forum';
+  const isGame = channel.type === 'game';
+  const isWatch = channel.type === 'watch';
   const isMessageChannel = isText || isForum;
   const voiceMembers = channel.voiceMembers ?? [];
   const hasActions = Boolean(channel.onEdit || channel.onDelete);
@@ -906,6 +908,24 @@ function ChannelRow({
             >
               forum
             </span>
+          ) : isWatch ? (
+            <span
+              className={cn(
+                'material-symbols-outlined text-[18px]',
+                channel.active ? 'text-primary-container' : 'text-outline',
+              )}
+            >
+              live_tv
+            </span>
+          ) : isGame ? (
+            <span
+              className={cn(
+                'material-symbols-outlined text-[18px]',
+                channel.active ? 'text-primary-container' : 'text-outline',
+              )}
+            >
+              sports_esports
+            </span>
           ) : isText ? (
             <span
               className={cn(
@@ -967,7 +987,7 @@ function ChannelRow({
         )}
       </div>
 
-      {!isText && voiceMembers.length > 0 && (
+      {!isMessageChannel && voiceMembers.length > 0 && (
         <ul className="ml-5 flex flex-col gap-1 mt-0.5">
           {voiceMembers.map((m) => {
             const hasMenu =

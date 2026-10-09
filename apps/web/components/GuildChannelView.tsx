@@ -55,7 +55,7 @@ import {
 } from '@/lib/voice-settings';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { PinnedMessageBar } from '@/components/PinnedMessageBar';
-import { ActivityPanel } from '@/components/activities/ActivityPanel';
+import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
 import { useImageModeration } from '@/lib/use-image-moderation';
 
 interface GuildChannelViewProps {
@@ -94,6 +94,8 @@ export function GuildChannelView({
   const channel = channels.find((c) => c.id === channelId);
   const isVoiceView = channel?.type === 'VOICE';
   const isForumView = channel?.type === 'FORUM';
+  const isActivityView =
+    channel?.type === 'GAME' || channel?.type === 'WATCH_PARTY';
   const [forumSort, setForumSort] = useState<ForumSort>('newest');
   const [forumTag, setForumTag] = useState<string | null>(null);
   const channelPending = !channel && loading;
@@ -124,7 +126,10 @@ export function GuildChannelView({
     error: chatError,
     typingUsers,
     notifyTyping,
-  } = useChatChannel(isVoiceView ? undefined : channelId, aroundMessageId);
+  } = useChatChannel(
+    isVoiceView || isActivityView ? undefined : channelId,
+    aroundMessageId,
+  );
   const voice = useVoiceSession();
   const { prefs } = useUserPreferences();
   const imageModeration = useImageModeration();
@@ -164,7 +169,12 @@ export function GuildChannelView({
   } | null>(null);
   const [categoryName, setCategoryName] = useState('');
   const [channelName, setChannelName] = useState('');
-  const [channelType, setChannelType] = useState<'TEXT' | 'VOICE' | 'FORUM'>('TEXT');
+  const [channelType, setChannelType] = useState<
+    'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY'
+  >('TEXT');
+  const [gameKind, setGameKind] = useState<'billiards' | 'okey' | 'bowling' | 'tavla'>(
+    'billiards',
+  );
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [serverNameDraft, setServerNameDraft] = useState('');
@@ -902,8 +912,17 @@ export function GuildChannelView({
   const openEditChannel = useCallback((ch: ChannelSummary) => {
     setChannelName(ch.name);
     setChannelType(
-      ch.type === 'VOICE' ? 'VOICE' : ch.type === 'FORUM' ? 'FORUM' : 'TEXT',
+      ch.type === 'VOICE'
+        ? 'VOICE'
+        : ch.type === 'FORUM'
+          ? 'FORUM'
+          : ch.type === 'GAME'
+            ? 'GAME'
+            : ch.type === 'WATCH_PARTY'
+              ? 'WATCH_PARTY'
+              : 'TEXT',
     );
+    if (ch.gameKind) setGameKind(ch.gameKind);
     setChannelLocked(Boolean(ch.locked));
     setChannelPasswordDraft('');
     setChannelDeniedIds(ch.deniedUserIds ?? []);
@@ -1481,13 +1500,24 @@ export function GuildChannelView({
         onAddChannel: canManageChannels
           ? (categoryId) => {
               setChannelName('');
-              setChannelType('TEXT');
+              if (categoryId === '__games__') {
+                setChannelType('GAME');
+                setGameKind('billiards');
+              } else if (categoryId === '__watch__') {
+                setChannelType('WATCH_PARTY');
+              } else {
+                setChannelType('TEXT');
+              }
               setChannelLocked(false);
               setChannelPasswordDraft('');
               setChannelDeniedIds([]);
               setChannelOverwrites([]);
               setShowOverwriteEditor(false);
-              setChannelModal({ mode: 'create', categoryId });
+              const realCategoryId =
+                categoryId === '__games__' || categoryId === '__watch__'
+                  ? null
+                  : categoryId;
+              setChannelModal({ mode: 'create', categoryId: realCategoryId });
             }
           : undefined,
         onEditChannel: canManageChannels ? openEditChannel : undefined,
@@ -1895,6 +1925,7 @@ export function GuildChannelView({
           name: channelName,
           type: channelType,
           categoryId: channelModal.categoryId,
+          gameKind: channelType === 'GAME' ? gameKind : null,
         });
         if (channelType === 'VOICE' && (channelLocked || channelPasswordDraft.trim())) {
           await client.updateChannel(created.id, {
@@ -1940,6 +1971,7 @@ export function GuildChannelView({
     channelModal,
     channelName,
     channelType,
+    gameKind,
     channelLocked,
     channelPasswordDraft,
     channelDeniedIds,
@@ -2329,7 +2361,8 @@ export function GuildChannelView({
         style={
           channelsOpen ||
           showingVoiceStage ||
-          (!isVoiceView && !channelPending && !channelMissing)
+          isActivityView ||
+          (!isVoiceView && !isActivityView && !channelPending && !channelMissing)
             ? { display: 'none' }
             : undefined
         }
@@ -2337,17 +2370,14 @@ export function GuildChannelView({
         <span className="material-symbols-outlined text-[22px]">tag</span>
       </button>
 
-      {showingVoiceStage ? (
+      {isActivityView && channel ? (
+        <ActivityChannelView
+          guildId={guildId}
+          channel={channel}
+          className="flex-1 min-w-0 min-h-0"
+        />
+      ) : showingVoiceStage ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-          {voice.voiceChannelId && (
-            <div className="shrink-0 max-h-[42vh] sm:max-h-[46vh] overflow-hidden border-b border-surface-container-high">
-              <ActivityPanel
-                guildId={guildId}
-                voiceChannelId={voice.voiceChannelId}
-                className="h-full max-h-[42vh] sm:max-h-[46vh] rounded-none border-0"
-              />
-            </div>
-          )}
           <VoiceStage
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
           participants={voice.participants.map((p) => {
@@ -2998,7 +3028,7 @@ export function GuildChannelView({
         </div>
       )}
 
-      {!showingVoiceStage && (
+      {!showingVoiceStage && !isActivityView && (
         <>
           <MemberList groups={memberGroups} className="hidden lg:flex lg:w-64" />
           <MobileDrawer
@@ -3225,28 +3255,50 @@ export function GuildChannelView({
           />
         </label>
         {channelModal?.mode === 'create' && (
-          <div className="flex gap-space-sm">
-            <button
-              type="button"
-              className={`flex-1 h-10 rounded-lg ${channelType === 'TEXT' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high'}`}
-              onClick={() => setChannelType('TEXT')}
-            >
-              Metin
-            </button>
-            <button
-              type="button"
-              className={`flex-1 h-10 rounded-lg ${channelType === 'FORUM' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high'}`}
-              onClick={() => setChannelType('FORUM')}
-            >
-              Forum
-            </button>
-            <button
-              type="button"
-              className={`flex-1 h-10 rounded-lg ${channelType === 'VOICE' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high'}`}
-              onClick={() => setChannelType('VOICE')}
-            >
-              Ses
-            </button>
+          <div className="space-y-space-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-space-sm">
+              {(
+                [
+                  { id: 'TEXT' as const, label: 'Metin' },
+                  { id: 'FORUM' as const, label: 'Forum' },
+                  { id: 'VOICE' as const, label: 'Ses' },
+                  { id: 'GAME' as const, label: 'Oyun' },
+                  { id: 'WATCH_PARTY' as const, label: 'Watch Party' },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`h-10 rounded-lg font-label-sm ${
+                    channelType === opt.id
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'bg-surface-container-high'
+                  }`}
+                  onClick={() => setChannelType(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {channelType === 'GAME' && (
+              <label className="flex flex-col gap-space-xs">
+                <span className="font-label-sm text-on-surface-variant">Oyun türü</span>
+                <select
+                  value={gameKind}
+                  onChange={(e) =>
+                    setGameKind(
+                      e.target.value as 'billiards' | 'okey' | 'bowling' | 'tavla',
+                    )
+                  }
+                  className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
+                >
+                  <option value="billiards">Bilardo</option>
+                  <option value="okey">Okey</option>
+                  <option value="bowling">Bowling</option>
+                  <option value="tavla">Tavla</option>
+                </select>
+              </label>
+            )}
           </div>
         )}
         {channelModal?.mode === 'edit' && canManageChannels && (

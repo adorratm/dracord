@@ -22,9 +22,10 @@ export class ActivitySession extends CuidEntity {
   @Column({ type: 'varchar' })
   guildId!: string;
 
+  /** GAME / WATCH_PARTY kanal id (eski kolon adı: voiceChannelId) */
   @Index()
-  @Column({ type: 'varchar' })
-  voiceChannelId!: string;
+  @Column({ type: 'varchar', name: 'voiceChannelId' })
+  channelId!: string;
 
   @Column({ type: 'varchar' })
   kind!: ActivityKind;

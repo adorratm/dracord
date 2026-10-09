@@ -1,6 +1,15 @@
 export type PresenceStatus = 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE';
 
-export type ChannelType = 'TEXT' | 'VOICE' | 'CATEGORY' | 'FORUM';
+export type ChannelType =
+  | 'TEXT'
+  | 'VOICE'
+  | 'CATEGORY'
+  | 'FORUM'
+  | 'GAME'
+  | 'WATCH_PARTY';
+
+/** GAME kanalı alt türü (WATCH_PARTY ayrı ChannelType) */
+export type GameChannelKind = 'billiards' | 'okey' | 'bowling' | 'tavla';
 
 export interface SocialLinks {
   website?: string;
@@ -162,6 +171,8 @@ export interface ChannelSummary {
   guildId: string | null;
   name: string;
   type: ChannelType;
+  /** GAME kanalları için */
+  gameKind?: GameChannelKind | null;
   categoryId: string | null;
   position: number;
   topic?: string | null;
@@ -459,7 +470,8 @@ export type ActivityStatus = 'lobby' | 'playing' | 'ended';
 export interface ActivitySessionDto {
   id: string;
   guildId: string;
-  voiceChannelId: string;
+  /** GAME veya WATCH_PARTY kanal id */
+  channelId: string;
   kind: ActivityKind;
   hostUserId: string;
   minPlayers: number;

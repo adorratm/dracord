@@ -432,9 +432,10 @@ export class DracordClient {
     guildId: string,
     data: {
       name: string;
-      type: 'TEXT' | 'VOICE' | 'FORUM';
+      type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
+      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | null;
     },
   ): Promise<ChannelSummary> {
     return this.request(`/guilds/${guildId}/channels`, {
@@ -1153,16 +1154,15 @@ export class DracordClient {
 
   async getChannelActivity(
     guildId: string,
-    voiceChannelId: string,
+    channelId: string,
   ): Promise<import('@dracord/types').ActivitySessionDto | null> {
-    const q = new URLSearchParams({ guildId, voiceChannelId });
+    const q = new URLSearchParams({ guildId, channelId });
     return this.request(`/activities/channel?${q.toString()}`);
   }
 
   async startActivity(data: {
     guildId: string;
-    voiceChannelId: string;
-    kind: import('@dracord/types').ActivityKind;
+    channelId: string;
   }): Promise<import('@dracord/types').ActivitySessionDto> {
     return this.request('/activities', {
       method: 'POST',

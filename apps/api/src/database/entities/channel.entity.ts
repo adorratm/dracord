@@ -31,6 +31,10 @@ export class Channel extends CuidEntity {
   @Column({ type: 'enum', enum: ChannelType })
   type!: ChannelType;
 
+  /** GAME kanalı için: billiards | okey | bowling | tavla */
+  @Column({ type: 'varchar', nullable: true })
+  gameKind!: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   categoryId!: string | null;
 

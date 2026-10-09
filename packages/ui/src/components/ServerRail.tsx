@@ -263,7 +263,7 @@ export function ServerRail({
   return (
     <aside
       className={cn(
-        'w-[72px] bg-surface-container-lowest flex flex-col items-center pt-space-md pb-space-md gap-space-sm shrink-0 relative z-0',
+        'w-[72px] bg-surface-container-lowest flex flex-col items-center pt-space-md pb-space-md md:pb-0 gap-space-sm shrink-0 relative z-0',
         className,
       )}
       aria-label="Sunucular"
@@ -319,8 +319,8 @@ export function ServerRail({
         ))}
       </div>
 
-      {/* Alt aksiyonlar scroll dışında — mobilde basık kalmasın */}
-      <div className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 w-full border-t border-surface-container-highest/60 mt-1">
+      {/* Alt aksiyonlar scroll dışında — desktop’ta alttan 65px yukarıda */}
+      <div className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 md:mb-[65px] md:pb-0 w-full border-t border-surface-container-highest/60 mt-1">
         <button
           type="button"
           onClick={onAddClick}

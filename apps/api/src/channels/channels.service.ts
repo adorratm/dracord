@@ -13,10 +13,12 @@ import {
   PERM_MANAGE_CHANNELS,
 } from '@/guilds/guilds.service';
 import { GuildPermissions } from '@/common/permissions';
+import { ActivitySession } from '@/database/entities/activity-session.entity';
 import { Channel } from '@/database/entities/channel.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
+import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
@@ -67,6 +69,7 @@ export class ChannelsService {
       order: { categoryId: 'ASC', position: 'ASC' },
     });
     const voiceMap = await this.voicePresence.listGuildVoice(guildId);
+    const activityMembers = await this.listActivityMembersByChannel(guildId);
     const unreadMap = await this.unreadByChannelIds(
       userId,
       channels
@@ -78,8 +81,14 @@ export class ChannelsService {
       const canView =
         canManage || this.memberCanInChannelWithContext(c, userId, 'VIEW_CHANNEL', permCtx);
       if (!canView) return null;
+      const isActivity =
+        c.type === ChannelType.GAME || c.type === ChannelType.WATCH_PARTY;
       return this.toSummary(c, {
-        voiceMembers: c.type === ChannelType.VOICE ? voiceMap[c.id] : undefined,
+        voiceMembers: c.type === ChannelType.VOICE
+          ? voiceMap[c.id]
+          : isActivity
+            ? activityMembers[c.id]
+            : undefined,
         unreadCount:
           c.type === ChannelType.TEXT || c.type === ChannelType.FORUM
             ? unreadMap.get(c.id)
@@ -119,34 +128,52 @@ export class ChannelsService {
     userId: string,
     data: {
       name: string;
-      type: 'TEXT' | 'VOICE' | 'FORUM';
+      type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
+      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | null;
     },
   ): Promise<ChannelSummary> {
     await this.guilds.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
-    const name =
-      data.type === 'VOICE'
-        ? data.name.trim().slice(0, 100)
-        : data.name.trim().replace(/\s+/g, '-').toLowerCase().slice(0, 100);
+    const preserveCase =
+      data.type === 'VOICE' || data.type === 'GAME' || data.type === 'WATCH_PARTY';
+    const name = preserveCase
+      ? data.name.trim().slice(0, 100)
+      : data.name.trim().replace(/\s+/g, '-').toLowerCase().slice(0, 100);
     if (!name) throw new BadRequestException('Kanal adı gerekli');
-    const last = await this.em.findOne(Channel, {
-      where: { guildId },
-      order: { position: 'DESC' },
-    });
-    const maxPos = last?.position ?? -1;
+
     const channelType =
       data.type === 'VOICE'
         ? ChannelType.VOICE
         : data.type === 'FORUM'
           ? ChannelType.FORUM
-          : ChannelType.TEXT;
+          : data.type === 'GAME'
+            ? ChannelType.GAME
+            : data.type === 'WATCH_PARTY'
+              ? ChannelType.WATCH_PARTY
+              : ChannelType.TEXT;
+
+    let gameKind: string | null = null;
+    if (channelType === ChannelType.GAME) {
+      const allowed = new Set(['billiards', 'okey', 'bowling', 'tavla']);
+      if (!data.gameKind || !allowed.has(data.gameKind)) {
+        throw new BadRequestException('Oyun türü gerekli (billiards/okey/bowling/tavla)');
+      }
+      gameKind = data.gameKind;
+    }
+
+    const last = await this.em.findOne(Channel, {
+      where: { guildId },
+      order: { position: 'DESC' },
+    });
+    const maxPos = last?.position ?? -1;
     const channel = await this.em.save(
       Channel,
       this.em.create(Channel, {
         guildId,
         name,
         type: channelType,
+        gameKind,
         categoryId: data.categoryId ?? null,
         topic: data.topic ?? null,
         position: maxPos + 1,
@@ -168,10 +195,13 @@ export class ChannelsService {
     if (!channel?.guildId) throw new NotFoundException('Channel not found');
     await this.guilds.requirePermission(channel.guildId, userId, 'MANAGE_CHANNELS');
     if (data.name != null) {
-      channel.name =
-        channel.type === ChannelType.VOICE
-          ? data.name.trim().slice(0, 100)
-          : data.name.trim().replace(/\s+/g, '-').toLowerCase().slice(0, 100);
+      const preserveCase =
+        channel.type === ChannelType.VOICE ||
+        channel.type === ChannelType.GAME ||
+        channel.type === ChannelType.WATCH_PARTY;
+      channel.name = preserveCase
+        ? data.name.trim().slice(0, 100)
+        : data.name.trim().replace(/\s+/g, '-').toLowerCase().slice(0, 100);
     }
     if (data.topic !== undefined) channel.topic = data.topic;
     if (data.categoryId !== undefined) channel.categoryId = data.categoryId;
@@ -414,6 +444,10 @@ export class ChannelsService {
       guildId: channel.guildId,
       name: channel.name,
       type: channel.type,
+      gameKind:
+        channel.type === ChannelType.GAME
+          ? ((channel.gameKind as ChannelSummary['gameKind']) ?? null)
+          : undefined,
       categoryId: channel.categoryId,
       position: channel.position,
       topic: channel.topic ?? null,
@@ -427,6 +461,49 @@ export class ChannelsService {
         isVoice && opts?.includeDenied ? (channel.deniedUserIds ?? []) : undefined,
       permissionOverwrites: channel.permissionOverwrites ?? undefined,
     };
+  }
+
+  /** Aktif oyun / watch party oturumlarındaki oyuncuları ses üyesi gibi listele */
+  private async listActivityMembersByChannel(
+    guildId: string,
+  ): Promise<Record<string, VoiceMemberSummary[]>> {
+    const sessions = await this.em
+      .createQueryBuilder(ActivitySession, 'a')
+      .where('a.guildId = :guildId', { guildId })
+      .andWhere('a.status IN (:...st)', { st: ['lobby', 'playing'] })
+      .getMany();
+    if (sessions.length === 0) return {};
+
+    const userIds = new Set<string>();
+    for (const s of sessions) {
+      for (const id of s.playerIds ?? []) userIds.add(id);
+      for (const id of s.spectatorIds ?? []) userIds.add(id);
+    }
+    const users =
+      userIds.size > 0
+        ? await this.em.find(User, { where: { id: In([...userIds]) } })
+        : [];
+    const byId = new Map(users.map((u) => [u.id, u]));
+
+    const out: Record<string, VoiceMemberSummary[]> = {};
+    for (const s of sessions) {
+      const ids = [...(s.playerIds ?? []), ...(s.spectatorIds ?? [])];
+      const members: VoiceMemberSummary[] = [];
+      for (const id of ids) {
+        const u = byId.get(id);
+        if (!u) continue;
+        members.push({
+          id: u.id,
+          displayName: u.displayName,
+          avatarUrl: u.avatarUrl,
+          muted: false,
+          deafened: false,
+          isBot: Boolean(u.isBot),
+        });
+      }
+      out[s.channelId] = members;
+    }
+    return out;
   }
 
   /** Kanal overwrite + önceden yüklenmiş sunucu izinleri (listGuildChannels hot path). */

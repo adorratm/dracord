@@ -299,7 +299,8 @@ export function createChannel(
   guildId: string,
   data: {
     name: string;
-    type: 'TEXT' | 'VOICE' | 'FORUM';
+    type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
+    gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | null;
     categoryId?: string | null;
     topic?: string | null;
   },

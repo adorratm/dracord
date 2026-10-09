@@ -12,7 +12,6 @@ import { Channel } from '@/database/entities/channel.entity';
 import { ChannelsService } from '@/channels/channels.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { SocketEvents } from '@dracord/types';
-import { VoicePresenceService } from '@/voice/voice-presence.service';
 
 const CAPACITY: Record<
   ActivityKind,
@@ -34,6 +33,7 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
 };
 
 const MAX_STATE_JSON_BYTES = 48_000;
+const GAME_KINDS = new Set(['billiards', 'okey', 'bowling', 'tavla']);
 
 @Injectable()
 export class ActivitiesService {
@@ -41,14 +41,13 @@ export class ActivitiesService {
     private readonly em: EntityManager,
     private readonly broadcast: SocketBroadcastService,
     private readonly channels: ChannelsService,
-    private readonly voicePresence: VoicePresenceService,
   ) {}
 
   private toDto(s: ActivitySession): ActivitySessionDto {
     return {
       id: s.id,
       guildId: s.guildId,
-      voiceChannelId: s.voiceChannelId,
+      channelId: s.channelId,
       kind: s.kind,
       hostUserId: s.hostUserId,
       minPlayers: s.minPlayers,
@@ -62,38 +61,31 @@ export class ActivitiesService {
     };
   }
 
-  /**
-   * Ses kanalı CONNECT + (kilitli odada) mevcut voice presence veya şifresiz erişim.
-   * Aktivite API’si şifre almadığı için Presence’da olanlar geçer; diğerleri assertVoiceAccess.
-   */
-  private async assertActivityAccess(
+  private kindFromChannel(channel: Channel): ActivityKind {
+    if (channel.type === ChannelType.WATCH_PARTY) return 'watch_party';
+    if (channel.type === ChannelType.GAME && channel.gameKind && GAME_KINDS.has(channel.gameKind)) {
+      return channel.gameKind as ActivityKind;
+    }
+    throw new BadRequestException('Bu kanal bir oyun veya watch party kanalı değil');
+  }
+
+  private async assertActivityChannel(
     guildId: string,
     channelId: string,
     userId: string,
   ): Promise<Channel> {
     if (!guildId || !channelId) {
-      throw new BadRequestException('guildId ve voiceChannelId gerekli');
+      throw new BadRequestException('guildId ve channelId gerekli');
     }
-    const locations = await this.voicePresence.getUserVoiceLocations(userId);
-    const inVoice = locations.some(
-      (l) => l.guildId === guildId && l.channelId === channelId,
-    );
-    if (inVoice) {
-      const channel = await this.em.findOne(Channel, {
-        where: { id: channelId, guildId },
-      });
-      if (!channel || channel.type !== ChannelType.VOICE) {
-        throw new BadRequestException('Geçerli bir ses kanalı gerekli');
-      }
-      const denied = channel.deniedUserIds ?? [];
-      if (denied.includes(userId)) {
-        throw new ForbiddenException('Bu odaya girmen engellendi');
-      }
-      return channel;
-    }
-    const channel = await this.channels.assertVoiceAccess(channelId, userId);
+    const channel = await this.channels.assertChannelAccess(channelId, userId);
     if (channel.guildId !== guildId) {
       throw new ForbiddenException('Kanal bu sunucuya ait değil');
+    }
+    if (
+      channel.type !== ChannelType.GAME &&
+      channel.type !== ChannelType.WATCH_PARTY
+    ) {
+      throw new BadRequestException('Yalnızca oyun / watch party kanallarında aktivite başlar');
     }
     return channel;
   }
@@ -172,13 +164,13 @@ export class ActivitiesService {
 
   async getActiveForChannel(
     guildId: string,
-    voiceChannelId: string,
+    channelId: string,
     userId: string,
   ): Promise<ActivitySessionDto | null> {
-    await this.assertActivityAccess(guildId, voiceChannelId, userId);
+    await this.assertActivityChannel(guildId, channelId, userId);
     const s = await this.em
       .createQueryBuilder(ActivitySession, 'a')
-      .where('a.voiceChannelId = :voiceChannelId', { voiceChannelId })
+      .where('a.channelId = :channelId', { channelId })
       .andWhere('a.status IN (:...st)', { st: ['lobby', 'playing'] })
       .orderBy('a.createdAt', 'DESC')
       .getOne();
@@ -187,14 +179,14 @@ export class ActivitiesService {
 
   async start(
     guildId: string,
-    voiceChannelId: string,
+    channelId: string,
     userId: string,
-    kind: ActivityKind,
   ): Promise<ActivitySessionDto> {
-    await this.assertActivityAccess(guildId, voiceChannelId, userId);
+    const channel = await this.assertActivityChannel(guildId, channelId, userId);
+    const kind = this.kindFromChannel(channel);
     const existing = await this.em
       .createQueryBuilder(ActivitySession, 'a')
-      .where('a.voiceChannelId = :voiceChannelId', { voiceChannelId })
+      .where('a.channelId = :channelId', { channelId })
       .andWhere('a.status IN (:...st)', { st: ['lobby', 'playing'] })
       .getOne();
     if (existing) {
@@ -204,19 +196,19 @@ export class ActivitiesService {
     if (!cap) throw new BadRequestException('Bilinmeyen aktivite');
     const s = this.em.create(ActivitySession, {
       guildId,
-      voiceChannelId,
+      channelId,
       kind,
       hostUserId: userId,
       minPlayers: cap.min,
       maxPlayers: cap.max,
-      status: 'lobby',
+      status: kind === 'watch_party' ? 'playing' : 'lobby',
       playerIds: [userId],
       spectatorIds: [],
       state: kind === 'watch_party' ? { mediaUrl: '', playing: false, at: 0 } : { turn: 0 },
     });
     await this.em.save(s);
     const dto = this.toDto(s);
-    this.broadcast.emitToChannel(voiceChannelId, SocketEvents.ACTIVITY_UPSERT, dto);
+    this.broadcast.emitToChannel(channelId, SocketEvents.ACTIVITY_UPSERT, dto);
     return dto;
   }
 
@@ -227,7 +219,7 @@ export class ActivitiesService {
   ): Promise<ActivitySessionDto> {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
     if (!s || s.status === 'ended') throw new NotFoundException('Aktivite yok');
-    await this.assertActivityAccess(s.guildId, s.voiceChannelId, userId);
+    await this.assertActivityChannel(s.guildId, s.channelId, userId);
 
     const players = new Set(s.playerIds ?? []);
     const spectators = new Set(s.spectatorIds ?? []);
@@ -253,7 +245,7 @@ export class ActivitiesService {
     }
     await this.em.save(s);
     const dto = this.toDto(s);
-    this.broadcast.emitToChannel(s.voiceChannelId, SocketEvents.ACTIVITY_UPSERT, dto);
+    this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_UPSERT, dto);
     return dto;
   }
 
@@ -263,7 +255,6 @@ export class ActivitiesService {
     s.playerIds = (s.playerIds ?? []).filter((id) => id !== userId);
     s.spectatorIds = (s.spectatorIds ?? []).filter((id) => id !== userId);
     if (s.hostUserId === userId) {
-      // Host yalnızca oyunculara devredilir; izleyiciye asla geçmez
       if (s.playerIds.length > 0) {
         s.hostUserId = s.playerIds[0]!;
       } else {
@@ -276,7 +267,7 @@ export class ActivitiesService {
     await this.em.save(s);
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(
-      s.voiceChannelId,
+      s.channelId,
       s.status === 'ended' ? SocketEvents.ACTIVITY_LEAVE : SocketEvents.ACTIVITY_UPSERT,
       dto,
     );
@@ -290,7 +281,7 @@ export class ActivitiesService {
   ): Promise<ActivitySessionDto> {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
     if (!s || s.status === 'ended') throw new NotFoundException('Aktivite yok');
-    await this.assertActivityAccess(s.guildId, s.voiceChannelId, userId);
+    await this.assertActivityChannel(s.guildId, s.channelId, userId);
 
     const isPlayer = (s.playerIds ?? []).includes(userId);
     const isHost = s.hostUserId === userId;
@@ -312,7 +303,7 @@ export class ActivitiesService {
     }
     await this.em.save(s);
     const dto = this.toDto(s);
-    this.broadcast.emitToChannel(s.voiceChannelId, SocketEvents.ACTIVITY_STATE, dto);
+    this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_STATE, dto);
     return dto;
   }
 
@@ -325,7 +316,7 @@ export class ActivitiesService {
     s.status = 'ended';
     await this.em.save(s);
     const dto = this.toDto(s);
-    this.broadcast.emitToChannel(s.voiceChannelId, SocketEvents.ACTIVITY_LEAVE, dto);
+    this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_LEAVE, dto);
     return dto;
   }
 }

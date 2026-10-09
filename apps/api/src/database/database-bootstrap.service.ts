@@ -12,17 +12,18 @@ export class DatabaseBootstrapService implements OnModuleInit {
   constructor(private readonly dataSource: DataSource) {}
 
   async onModuleInit() {
-    await this.ensureChannelTypeForum();
+    await this.ensureChannelTypeValues(['FORUM', 'GAME', 'WATCH_PARTY']);
   }
 
-  private async ensureChannelTypeForum() {
+  private async ensureChannelTypeValues(labels: string[]) {
     // PgBouncer (transaction pool) üzerinde ALTER TYPE sık break eder;
     // prod şema güncellemesi docker/schema-sync-once.sh ile direct Postgres’e yapılır.
-    const dbUrl = this.dataSource.options && 'url' in this.dataSource.options
-      ? String((this.dataSource.options as { url?: string }).url ?? '')
-      : '';
+    const dbUrl =
+      this.dataSource.options && 'url' in this.dataSource.options
+        ? String((this.dataSource.options as { url?: string }).url ?? '')
+        : '';
     if (/pgbouncer/i.test(dbUrl)) {
-      this.log.debug('PgBouncer — FORUM enum DDL atlandı (schema-sync-once kullan)');
+      this.log.debug('PgBouncer — channel type enum DDL atlandı (schema-sync-once kullan)');
       return;
     }
 
@@ -36,23 +37,24 @@ export class DatabaseBootstrapService implements OnModuleInit {
       `);
       if (!exists[0]?.exists) return;
 
-      const hasForum = await this.dataSource.query<{ exists: boolean }[]>(`
-        SELECT EXISTS (
-          SELECT 1
-          FROM pg_enum e
-          JOIN pg_type t ON t.oid = e.enumtypid
-          WHERE t.typname = 'channels_type_enum' AND e.enumlabel = 'FORUM'
-        ) AS exists
-      `);
-      if (hasForum[0]?.exists) return;
-
-      await this.dataSource.query(
-        `ALTER TYPE channels_type_enum ADD VALUE IF NOT EXISTS 'FORUM'`,
-      );
-      this.log.log('channels_type_enum: FORUM eklendi');
+      for (const label of labels) {
+        const has = await this.dataSource.query<{ exists: boolean }[]>(`
+          SELECT EXISTS (
+            SELECT 1
+            FROM pg_enum e
+            JOIN pg_type t ON t.oid = e.enumtypid
+            WHERE t.typname = 'channels_type_enum' AND e.enumlabel = $1
+          ) AS exists
+        `, [label]);
+        if (has[0]?.exists) continue;
+        await this.dataSource.query(
+          `ALTER TYPE channels_type_enum ADD VALUE IF NOT EXISTS '${label}'`,
+        );
+        this.log.log(`channels_type_enum: ${label} eklendi`);
+      }
     } catch (err) {
       this.log.warn(
-        `FORUM enum kontrolü atlandı: ${err instanceof Error ? err.message : String(err)}`,
+        `Channel type enum kontrolü atlandı: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

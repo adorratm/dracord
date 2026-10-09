@@ -187,7 +187,11 @@ export class PlatformAdminService {
           ? 'VOICE'
           : c.type === ChannelType.FORUM
             ? 'FORUM'
-            : 'TEXT',
+            : c.type === ChannelType.GAME
+              ? 'GAME'
+              : c.type === ChannelType.WATCH_PARTY
+                ? 'WATCH_PARTY'
+                : 'TEXT',
       topic: c.topic,
       categoryId: c.categoryId,
       position: c.position,

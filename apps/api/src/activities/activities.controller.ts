@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import type { ActivityKind } from '@dracord/types';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { ActivitiesService } from './activities.service';
 
@@ -12,11 +11,13 @@ export class ActivitiesController {
   getForChannel(
     @Req() req: { user: { sub: string } },
     @Query('guildId') guildId: string,
-    @Query('voiceChannelId') voiceChannelId: string,
+    @Query('channelId') channelId: string,
+    /** @deprecated eski istemciler */
+    @Query('voiceChannelId') voiceChannelId?: string,
   ) {
     return this.activities.getActiveForChannel(
       guildId,
-      voiceChannelId,
+      channelId || voiceChannelId || '',
       req.user.sub,
     );
   }
@@ -25,13 +26,12 @@ export class ActivitiesController {
   start(
     @Req() req: { user: { sub: string } },
     @Body()
-    body: { guildId: string; voiceChannelId: string; kind: ActivityKind },
+    body: { guildId: string; channelId?: string; voiceChannelId?: string },
   ) {
     return this.activities.start(
       body.guildId,
-      body.voiceChannelId,
+      body.channelId || body.voiceChannelId || '',
       req.user.sub,
-      body.kind,
     );
   }
 
