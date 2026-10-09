@@ -3,8 +3,8 @@ import { Track } from 'livekit-client';
 import { softVolumeCurve } from '@/lib/voice-settings';
 
 /**
- * Mikrofon: headroom’lu gain → agresif compressor → hafif makeup.
- * Amaç: %100 UI’da bile clipping / “patlama” olmasın.
+ * Mikrofon: headroom’lu gain → yumuşak compressor → hafif makeup.
+ * AudioContext örnekleme hızı track ile hizalanır — uyumsuzluk robotik sese yol açar.
  */
 export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
   readonly name = 'dracord-mic-gain';
@@ -27,6 +27,23 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
     this.gain = softVolumeCurve(gain);
     if (this.gainNode) {
       this.gainNode.gain.setTargetAtTime(this.gain, this.audioContext?.currentTime ?? 0, 0.02);
+    }
+  }
+
+  /** Context askıdaysa veya kapalıysa true — yeniden kurulum gerekir */
+  needsRecovery(): boolean {
+    const ctx = this.audioContext;
+    if (!ctx) return true;
+    if (ctx.state === 'closed') return true;
+    if (ctx.state === 'suspended') return true;
+    const out = this.processedTrack;
+    if (!out || out.readyState !== 'live') return true;
+    return false;
+  }
+
+  async resumeContext(): Promise<void> {
+    if (this.audioContext?.state === 'suspended') {
+      await this.audioContext.resume().catch(() => undefined);
     }
   }
 
@@ -66,7 +83,16 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
       this.audioContext = opts.audioContext;
       this.ownsContext = false;
     } else {
-      this.audioContext = new AudioContext();
+      const trackRate = opts.track.getSettings?.().sampleRate;
+      const sampleRate =
+        typeof trackRate === 'number' && trackRate >= 16000 && trackRate <= 96000
+          ? trackRate
+          : 48000;
+      try {
+        this.audioContext = new AudioContext({ sampleRate });
+      } catch {
+        this.audioContext = new AudioContext();
+      }
       this.ownsContext = true;
     }
     if (this.audioContext.state === 'suspended') {
@@ -77,17 +103,16 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = this.gain;
 
-    // Agresif soft-knee limiter — konuşma tepelerini tut
+    // Yumuşak limiter — aşırı ratio robotik / “su altında” bozulmaya yol açıyordu
     this.compressor = this.audioContext.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-28, t);
-    this.compressor.knee.setValueAtTime(24, t);
-    this.compressor.ratio.setValueAtTime(14, t);
-    this.compressor.attack.setValueAtTime(0.002, t);
-    this.compressor.release.setValueAtTime(0.12, t);
+    this.compressor.threshold.setValueAtTime(-24, t);
+    this.compressor.knee.setValueAtTime(18, t);
+    this.compressor.ratio.setValueAtTime(6, t);
+    this.compressor.attack.setValueAtTime(0.003, t);
+    this.compressor.release.setValueAtTime(0.22, t);
 
-    // Makeup düşük tut — compressor sonrası tekrar patlatma
     this.makeup = this.audioContext.createGain();
-    this.makeup.gain.value = 0.85;
+    this.makeup.gain.value = 0.9;
 
     this.destination = this.audioContext.createMediaStreamDestination();
     this.source.connect(this.gainNode);
@@ -96,6 +121,18 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
     this.makeup.connect(this.destination);
     const out = this.destination.stream.getAudioTracks()[0];
     if (!out) throw new Error('Mic gain çıkış track oluşturulamadı');
+    // İşlenmiş track’i mümkün olduğunca kaynak ile aynı kısıtlarda tut
+    try {
+      const settings = opts.track.getSettings();
+      if (settings.sampleRate || settings.channelCount) {
+        void out.applyConstraints({
+          sampleRate: settings.sampleRate,
+          channelCount: settings.channelCount ?? 1,
+        }).catch(() => undefined);
+      }
+    } catch {
+      // ignore
+    }
     this.processedTrack = out;
   }
 }

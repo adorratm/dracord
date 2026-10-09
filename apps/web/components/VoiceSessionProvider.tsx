@@ -285,6 +285,33 @@ function applyDeafen(room: Room, deafened: boolean) {
   });
 }
 
+/**
+ * Uzak ses için tek HTMLAudioElement tut.
+ * track.attach() her çağrıda YENİ element üretir → birikince faz kayması / robotik ses.
+ */
+function ensureSingleRemoteAudioElement(track: Track, identity: string) {
+  const audioEls = track.attachedElements.filter(
+    (el): el is HTMLAudioElement => el instanceof HTMLAudioElement,
+  );
+  // Fazladan elementleri kaldır (üst üste çalma = robotik / metalik)
+  for (const extra of audioEls.slice(1)) {
+    try {
+      track.detach(extra);
+    } catch {
+      // ignore
+    }
+  }
+  let el = audioEls[0];
+  if (!el) {
+    el = track.attach() as HTMLAudioElement;
+  }
+  el.setAttribute('data-lk-remote-audio', identity);
+  el.autoplay = true;
+  if (el.paused) {
+    void el.play().catch(() => undefined);
+  }
+}
+
 /** Deafen kapalıyken uzak ses aboneliklerini yeniden aç (hayalet sessizlik) */
 function ensureRemoteAudioReceiving(room: Room, deafened: boolean) {
   if (deafened) {
@@ -301,15 +328,7 @@ function ensureRemoteAudioReceiving(room: Room, deafened: boolean) {
       const track = pub.track;
       if (!track || track.kind !== Track.Kind.Audio) return;
       try {
-        const attached = track.attach();
-        const els = Array.isArray(attached) ? attached : [attached];
-        for (const el of els) {
-          if (el instanceof HTMLAudioElement) {
-            el.setAttribute('data-lk-remote-audio', p.identity);
-            el.autoplay = true;
-            void el.play().catch(() => undefined);
-          }
-        }
+        ensureSingleRemoteAudioElement(track, p.identity);
       } catch {
         // ignore
       }
@@ -717,12 +736,22 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
     let proc = micGainRef.current;
+    if (proc?.needsRecovery()) {
+      try {
+        await mic.stopProcessor();
+      } catch {
+        // ignore
+      }
+      micGainRef.current = null;
+      proc = null;
+    }
     if (!proc) {
       proc = new MicGainProcessor(volume);
       micGainRef.current = proc;
       await mic.setProcessor(proc);
     } else {
       proc.setGain(volume);
+      await proc.resumeContext();
     }
   }, []);
 
@@ -1226,15 +1255,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           );
         }
         try {
-          const attached = track.attach();
-          const els = Array.isArray(attached) ? attached : [attached];
-          for (const el of els) {
-            if (el instanceof HTMLAudioElement) {
-              el.setAttribute('data-lk-remote-audio', participant.identity);
-              el.autoplay = true;
-              void el.play().catch(() => undefined);
-            }
-          }
+          ensureSingleRemoteAudioElement(track, participant.identity);
         } catch {
           // ignore
         }
@@ -1410,7 +1431,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void client.voiceHeartbeat(channelId).catch(() => undefined);
     }, 30_000);
 
-    // Hayalet sessizlik: deafen yokken uzak ses aboneliklerini periyodik onar
+    // Hayalet sessizlik + robotik ses onarımı (çift audio element / askıda AudioContext)
     const audioHealth = window.setInterval(() => {
       if (disposed || !roomRef.current) return;
       ensureRemoteAudioReceiving(
@@ -1419,6 +1440,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       );
       if (!deafenedRef.current && !afkSilenceRef.current) {
         void room.startAudio().catch(() => undefined);
+      }
+      // Yayıncı: mic processor bozulduysa yeniden kur (robotik / metalik kalıcı ses)
+      if (!deepFilterActiveRef.current && !mutedRef.current && !afkSilenceRef.current) {
+        const mic = getMicTrack(room);
+        const proc = micGainRef.current;
+        if (mic && proc?.needsRecovery()) {
+          void applyMicGainToTrack(mic, audioSettingsRef.current.micVolume).catch(
+            () => undefined,
+          );
+        } else if (mic && proc) {
+          void proc.resumeContext();
+        }
       }
     }, 8_000);
 
@@ -1430,11 +1463,34 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('pagehide', onPageHide);
 
+    // Sekme geri gelince AudioContext / oynatma kurtar (askıda kalınca bozulma)
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible' || disposed) return;
+      ensureRemoteAudioReceiving(
+        room,
+        deafenedRef.current || afkSilenceRef.current,
+      );
+      void room.startAudio().catch(() => undefined);
+      void micGainRef.current?.resumeContext();
+      const mic = getMicTrack(room);
+      if (
+        mic &&
+        !deepFilterActiveRef.current &&
+        micGainRef.current?.needsRecovery()
+      ) {
+        void applyMicGainToTrack(mic, audioSettingsRef.current.micVolume).catch(
+          () => undefined,
+        );
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       disposed = true;
       window.clearInterval(heartbeat);
       window.clearInterval(audioHealth);
       window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
       deepFilterActiveRef.current = false;
       clarityRef.current = null;
       micGainRef.current = null;
@@ -1481,6 +1537,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     clearCameraViews,
     applyRoomAudioSettings,
     refreshAudioDevices,
+    applyMicGainToTrack,
   ]);
 
   useEffect(() => {
