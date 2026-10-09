@@ -160,6 +160,19 @@ export default function VoiceSettingsPage() {
           Çözünürlük ve FPS kişisel ayardır (bu tarayıcıda saklanır). Paylaşım sırasında
           değiştirirsen paylaşım yeniden başlar; tarayıcı ekranın gerçek çözünürlüğünü aşamaz.
         </p>
+        <div className="rounded-lg border border-outline-variant/40 bg-surface-container px-space-md py-space-sm space-y-1">
+          <p className="font-label-sm text-on-surface flex items-center gap-space-sm">
+            <span className="material-symbols-outlined text-[18px] text-primary-container">
+              shield
+            </span>
+            Otomatik uygunsuz içerik engeli
+          </p>
+          <p className="font-body-sm text-on-surface-variant">
+            Ekran ve kamera yayını yerelde taranır; pornografi / hentai tespiti paylaşımı veya
+            kamerayı anında keser. İzlerken de aynı kontrol uygulanır. Engel sonrası kısa bir
+            bekleme süresi vardır — kapatılamaz.
+          </p>
+        </div>
         <label className="flex flex-col gap-space-xs">
           <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-[18px]">screenshot_monitor</span>

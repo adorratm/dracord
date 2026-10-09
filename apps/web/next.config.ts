@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
     '@dracord/sdk',
     '@dracord/types',
     'denoise-voice-clarity',
+    'nsfwjs',
   ],
+  serverExternalPackages: ['@tensorflow/tfjs', 'nsfwjs'],
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
   async rewrites() {

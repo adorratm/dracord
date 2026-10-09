@@ -43,6 +43,13 @@ import {
   type VoiceTabMessage,
 } from '@/lib/voice-tab-sync';
 import {
+  NSFW_RESHARE_COOLDOWN_MS,
+  NSFW_SAMPLE_INTERVAL_MS,
+  nsfwBlockMessage,
+  startNsfwTrackMonitor,
+  type NsfwMonitorHandle,
+} from '@/lib/nsfw-screen-guard';
+import {
   audioBitrateToMaxBitrate,
   loadVoiceAudioSettings,
   micVolumeToPresenceDb,
@@ -544,6 +551,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const tabIdRef = useRef(createTabId());
   const voiceBcRef = useRef<BroadcastChannel | null>(null);
   const isLeaderRef = useRef(true);
+  const nsfwShareMonitorRef = useRef<NsfwMonitorHandle | null>(null);
+  const nsfwCameraMonitorRef = useRef<NsfwMonitorHandle | null>(null);
+  const nsfwCooldownUntilRef = useRef(0);
 
   const [connected, setConnected] = useState(false);
   const [isVoiceLeader, setIsVoiceLeader] = useState(true);
@@ -1544,6 +1554,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [claimVoiceLeadership, prepareMicrophone],
   );
 
+  const stopNsfwMonitors = useCallback(() => {
+    nsfwShareMonitorRef.current?.stop();
+    nsfwShareMonitorRef.current = null;
+    nsfwCameraMonitorRef.current?.stop();
+    nsfwCameraMonitorRef.current = null;
+  }, []);
+
   const leave = useCallback(() => {
     const channelId = channelIdRef.current;
     const guildId = guildIdRef.current;
@@ -1551,6 +1568,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     transferringLeadershipRef.current = false;
     voicePasswordRef.current = undefined;
     clearActiveVoice();
+    stopNsfwMonitors();
     setVoiceChannelId(null);
     setVoiceGuildId(null);
     setConnected(false);
@@ -1584,7 +1602,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       })();
     }
     return channelId;
-  }, [client, clearScreenShareView, clearCameraViews]);
+  }, [client, clearScreenShareView, clearCameraViews, stopNsfwMonitors]);
 
   /** Yetkili kick: sunucu VOICE_STATE leave/move yayınladığında oturumu güncelle */
   useEffect(() => {
@@ -1821,13 +1839,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     await setDeafen(!deafenedRef.current);
   }, [setDeafen]);
 
-  const toggleScreenShare = useCallback(async () => {
-    const room = roomRef.current;
-    const channelId = channelIdRef.current;
-    if (!room) return;
-    setError(null);
-
-    const syncSharePresence = (sharing: boolean) => {
+  const syncSharePresence = useCallback(
+    (sharing: boolean) => {
+      const channelId = channelIdRef.current;
       if (!channelId) return;
       void client
         .updateVoiceState(channelId, { screenSharing: sharing })
@@ -1842,7 +1856,148 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           deafened: deafenedRef.current,
         });
       }
-    };
+    },
+    [client],
+  );
+
+  const stopLocalScreenShare = useCallback(
+    async (opts?: { nsfw?: boolean }) => {
+      const room = roomRef.current;
+      nsfwShareMonitorRef.current?.stop();
+      nsfwShareMonitorRef.current = null;
+      if (!room) {
+        screenSharingRef.current = false;
+        setScreenSharing(false);
+        return;
+      }
+      try {
+        const pubs = [
+          ...room.localParticipant.trackPublications.values(),
+        ].filter(
+          (p) =>
+            p.source === Track.Source.ScreenShare ||
+            p.source === Track.Source.ScreenShareAudio,
+        );
+        for (const pub of pubs) {
+          const track = pub.track;
+          if (!track) continue;
+          try {
+            await room.localParticipant.unpublishTrack(track, true);
+          } catch {
+            // ignore
+          }
+          try {
+            track.stop();
+          } catch {
+            // ignore
+          }
+        }
+        try {
+          await room.localParticipant.setScreenShareEnabled(false);
+        } catch {
+          // ignore
+        }
+      } catch (err) {
+        console.warn('[voice] screen share stop', err);
+      }
+      screenSharingRef.current = false;
+      setScreenSharing(false);
+      syncSharePresence(false);
+      if (focusedScreenShareIdRef.current === room.localParticipant.identity) {
+        focusedScreenShareIdRef.current = null;
+      }
+      if (opts?.nsfw) {
+        nsfwCooldownUntilRef.current = Date.now() + NSFW_RESHARE_COOLDOWN_MS;
+        setError(nsfwBlockMessage('screen'));
+      }
+      try {
+        applyScreenShareView(room);
+        refreshParticipants(room, mutedRef.current);
+      } catch {
+        // ignore
+      }
+    },
+    [applyScreenShareView, refreshParticipants, syncSharePresence],
+  );
+
+  const startLocalScreenShareNsfwGuard = useCallback(
+    (room: Room) => {
+      nsfwShareMonitorRef.current?.stop();
+      nsfwShareMonitorRef.current = startNsfwTrackMonitor({
+        intervalMs: NSFW_SAMPLE_INTERVAL_MS,
+        getTrack: () => {
+          const pub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+          return pub?.track?.mediaStreamTrack ?? null;
+        },
+        onBlocked: () => {
+          void stopLocalScreenShare({ nsfw: true });
+        },
+      });
+    },
+    [stopLocalScreenShare],
+  );
+
+  const stopLocalCamera = useCallback(
+    async (opts?: { nsfw?: boolean }) => {
+      const room = roomRef.current;
+      nsfwCameraMonitorRef.current?.stop();
+      nsfwCameraMonitorRef.current = null;
+      if (!room) {
+        setCameraEnabled(false);
+        return;
+      }
+      try {
+        await room.localParticipant.setCameraEnabled(false);
+      } catch {
+        // ignore
+      }
+      setCameraEnabled(false);
+      syncCameraTracks(room);
+      refreshParticipants(room, mutedRef.current);
+      if (opts?.nsfw) {
+        nsfwCooldownUntilRef.current = Date.now() + NSFW_RESHARE_COOLDOWN_MS;
+        setError(nsfwBlockMessage('camera'));
+      }
+    },
+    [refreshParticipants, syncCameraTracks],
+  );
+
+  const startLocalCameraNsfwGuard = useCallback(
+    (room: Room) => {
+      nsfwCameraMonitorRef.current?.stop();
+      nsfwCameraMonitorRef.current = startNsfwTrackMonitor({
+        intervalMs: NSFW_SAMPLE_INTERVAL_MS,
+        getTrack: () => {
+          const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+          return pub?.track?.mediaStreamTrack ?? null;
+        },
+        onBlocked: () => {
+          void stopLocalCamera({ nsfw: true });
+        },
+      });
+    },
+    [stopLocalCamera],
+  );
+
+  const toggleScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+
+    if (screenSharingRef.current) {
+      setError(null);
+      await stopLocalScreenShare();
+      return;
+    }
+
+    if (Date.now() < nsfwCooldownUntilRef.current) {
+      const sec = Math.ceil((nsfwCooldownUntilRef.current - Date.now()) / 1000);
+      setError(
+        `Uygunsuz içerik engeli aktif — ekran paylaşımı ${sec} sn sonra tekrar denenebilir.`,
+      );
+      return;
+    }
+
+    setError(null);
 
     const shareCap = screenShareCaptureResolution(audioSettingsRef.current);
     const shareCaptureOpts = (withAudio: boolean) =>
@@ -1865,54 +2020,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenShareSimulcastLayers: screenShareSimulcastLayersForHeight(shareCap.height),
       degradationPreference: 'maintain-resolution' as const,
     };
-
-    if (screenSharingRef.current) {
-      // Paylaşımı güvenli kapat — mic/oda bağlantısına dokunma
-      try {
-        const pubs = [
-          ...room.localParticipant.trackPublications.values(),
-        ].filter(
-          (p) =>
-            p.source === Track.Source.ScreenShare ||
-            p.source === Track.Source.ScreenShareAudio,
-        );
-        for (const pub of pubs) {
-          const track = pub.track;
-          if (!track) continue;
-          try {
-            await room.localParticipant.unpublishTrack(track, true);
-          } catch {
-            // ignore per-track
-          }
-          try {
-            track.stop();
-          } catch {
-            // ignore
-          }
-        }
-        try {
-          await room.localParticipant.setScreenShareEnabled(false);
-        } catch {
-          // ignore — track’ler zaten kaldırılmış olabilir
-        }
-      } catch (err) {
-        // Soft fail: oda ayakta kalsın
-        console.warn('[voice] screen share stop', err);
-      }
-      screenSharingRef.current = false;
-      setScreenSharing(false);
-      syncSharePresence(false);
-      if (focusedScreenShareIdRef.current === room.localParticipant.identity) {
-        focusedScreenShareIdRef.current = null;
-      }
-      try {
-        applyScreenShareView(room);
-        refreshParticipants(room, mutedRef.current);
-      } catch {
-        // ignore
-      }
-      return;
-    }
 
     try {
       try {
@@ -1941,6 +2048,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       focusedScreenShareIdRef.current = room.localParticipant.identity;
       applyScreenShareView(room);
       refreshParticipants(room, mutedRef.current);
+      startLocalScreenShareNsfwGuard(room);
     } catch (err) {
       setScreenSharing(false);
       screenSharingRef.current = false;
@@ -1960,21 +2068,40 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, [refreshParticipants, applyScreenShareView, client]);
+  }, [
+    refreshParticipants,
+    applyScreenShareView,
+    stopLocalScreenShare,
+    startLocalScreenShareNsfwGuard,
+    syncSharePresence,
+  ]);
 
   const toggleCamera = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
     setError(null);
     const next = !cameraEnabled;
+    if (!next) {
+      await stopLocalCamera();
+      void refreshAudioDevices();
+      return;
+    }
+    if (Date.now() < nsfwCooldownUntilRef.current) {
+      const sec = Math.ceil((nsfwCooldownUntilRef.current - Date.now()) / 1000);
+      setError(
+        `Uygunsuz içerik engeli aktif — kamera ${sec} sn sonra tekrar açılabilir.`,
+      );
+      return;
+    }
     try {
       const opts = audioSettingsRef.current.videoDeviceId
         ? { deviceId: audioSettingsRef.current.videoDeviceId }
         : undefined;
-      await room.localParticipant.setCameraEnabled(next, opts);
-      setCameraEnabled(next);
+      await room.localParticipant.setCameraEnabled(true, opts);
+      setCameraEnabled(true);
       syncCameraTracks(room);
       refreshParticipants(room, mutedRef.current);
+      startLocalCameraNsfwGuard(room);
       void refreshAudioDevices();
     } catch (err) {
       setCameraEnabled(false);
@@ -1985,7 +2112,64 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, [cameraEnabled, refreshParticipants, syncCameraTracks, refreshAudioDevices]);
+  }, [
+    cameraEnabled,
+    refreshParticipants,
+    syncCameraTracks,
+    refreshAudioDevices,
+    stopLocalCamera,
+    startLocalCameraNsfwGuard,
+  ]);
+
+  /** İzleyici: uzak paylaşımda NSFW → izlemeyi kes */
+  useEffect(() => {
+    const share = activeScreenShare;
+    if (!share || share.isLocal || screenShareViewPaused) return;
+
+    let stopped = false;
+    let hits = 0;
+    let timer: number | null = null;
+    let inFlight = false;
+
+    const tick = async () => {
+      if (stopped || inFlight) return;
+      const el = screenVideoElRef.current;
+      if (!el || el.readyState < 2) return;
+      inFlight = true;
+      try {
+        const { classifyVideoElement } = await import('@/lib/nsfw-screen-guard');
+        const verdict = await classifyVideoElement(el);
+        if (stopped || !verdict) return;
+        if (verdict.blocked) {
+          hits += 1;
+          if (hits >= 2) {
+            hits = 0;
+            pauseScreenShareView();
+            setError(nsfwBlockMessage('view'));
+          }
+        } else {
+          hits = 0;
+        }
+      } catch {
+        // ignore
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    timer = window.setTimeout(() => {
+      void tick();
+      timer = window.setInterval(() => void tick(), NSFW_SAMPLE_INTERVAL_MS);
+    }, 1000);
+
+    return () => {
+      stopped = true;
+      if (timer != null) {
+        window.clearTimeout(timer);
+        window.clearInterval(timer);
+      }
+    };
+  }, [activeScreenShare, screenShareViewPaused, pauseScreenShareView]);
 
   const setVideoDevice = useCallback(
     async (deviceId: string) => {
