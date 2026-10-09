@@ -7,8 +7,8 @@ const nextConfig: NextConfig = {
     '@dracord/sdk',
     '@dracord/types',
     'denoise-voice-clarity',
-    'nsfwjs',
   ],
+  // NSFW modeli yalnızca istemci dinamik import; RSC bundle’ına sokma
   serverExternalPackages: ['@tensorflow/tfjs', 'nsfwjs'],
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
