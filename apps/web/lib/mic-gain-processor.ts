@@ -3,8 +3,8 @@ import { Track } from 'livekit-client';
 import { softVolumeCurve } from '@/lib/voice-settings';
 
 /**
- * Mikrofon kazancı + soft limiter.
- * Gain tek başına clipping/patlama yapıyordu; compressor tepe seviyesini tutar.
+ * Mikrofon: headroom’lu gain → agresif compressor → hafif makeup.
+ * Amaç: %100 UI’da bile clipping / “patlama” olmasın.
  */
 export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
   readonly name = 'dracord-mic-gain';
@@ -13,6 +13,7 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
   private source?: MediaStreamAudioSourceNode;
   private gainNode?: GainNode;
   private compressor?: DynamicsCompressorNode;
+  private makeup?: GainNode;
   private destination?: MediaStreamAudioDestinationNode;
   private audioContext?: AudioContext;
   private ownsContext = false;
@@ -43,12 +44,14 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
       this.source?.disconnect();
       this.gainNode?.disconnect();
       this.compressor?.disconnect();
+      this.makeup?.disconnect();
     } catch {
       // ignore
     }
     this.source = undefined;
     this.gainNode = undefined;
     this.compressor = undefined;
+    this.makeup = undefined;
     this.destination = undefined;
     this.processedTrack = undefined;
     if (this.ownsContext) {
@@ -69,22 +72,28 @@ export class MicGainProcessor implements TrackProcessor<Track.Kind.Audio> {
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume().catch(() => undefined);
     }
+    const t = this.audioContext.currentTime;
     this.source = this.audioContext.createMediaStreamSource(new MediaStream([opts.track]));
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = this.gain;
 
-    // Soft knee limiter — ani tepeleri kırp, “patlamayı” azalt
+    // Agresif soft-knee limiter — konuşma tepelerini tut
     this.compressor = this.audioContext.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-18, this.audioContext.currentTime);
-    this.compressor.knee.setValueAtTime(12, this.audioContext.currentTime);
-    this.compressor.ratio.setValueAtTime(8, this.audioContext.currentTime);
-    this.compressor.attack.setValueAtTime(0.003, this.audioContext.currentTime);
-    this.compressor.release.setValueAtTime(0.18, this.audioContext.currentTime);
+    this.compressor.threshold.setValueAtTime(-28, t);
+    this.compressor.knee.setValueAtTime(24, t);
+    this.compressor.ratio.setValueAtTime(14, t);
+    this.compressor.attack.setValueAtTime(0.002, t);
+    this.compressor.release.setValueAtTime(0.12, t);
+
+    // Makeup düşük tut — compressor sonrası tekrar patlatma
+    this.makeup = this.audioContext.createGain();
+    this.makeup.gain.value = 0.85;
 
     this.destination = this.audioContext.createMediaStreamDestination();
     this.source.connect(this.gainNode);
     this.gainNode.connect(this.compressor);
-    this.compressor.connect(this.destination);
+    this.compressor.connect(this.makeup);
+    this.makeup.connect(this.destination);
     const out = this.destination.stream.getAudioTracks()[0];
     if (!out) throw new Error('Mic gain çıkış track oluşturulamadı');
     this.processedTrack = out;

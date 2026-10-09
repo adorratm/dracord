@@ -20,6 +20,67 @@ export const SCREEN_SHARE_FPS_PRESETS = [15, 24, 30, 60] as const;
 export type ScreenShareFps = (typeof SCREEN_SHARE_FPS_PRESETS)[number];
 export const DEFAULT_SCREEN_SHARE_FPS: ScreenShareFps = 30;
 
+/** İzleyici (receive) kalitesi — kişisel, yayıncıdan bağımsız */
+export const SCREEN_SHARE_VIEW_QUALITY_PRESETS = [
+  'auto',
+  '480p',
+  '720p',
+  '1080p',
+  '1440p',
+  'source',
+] as const;
+export type ScreenShareViewQualityId = (typeof SCREEN_SHARE_VIEW_QUALITY_PRESETS)[number];
+export const DEFAULT_SCREEN_SHARE_VIEW_QUALITY: ScreenShareViewQualityId = 'auto';
+
+export interface ScreenShareViewQualitySpec {
+  id: ScreenShareViewQualityId;
+  label: string;
+  /** LiveKit VideoQuality: 0 LOW, 1 MEDIUM, 2 HIGH; null = dokunma */
+  videoQuality: 0 | 1 | 2 | null;
+  width?: number;
+  height?: number;
+}
+
+export const SCREEN_SHARE_VIEW_QUALITY_SPECS: Record<
+  ScreenShareViewQualityId,
+  ScreenShareViewQualitySpec
+> = {
+  auto: { id: 'auto', label: 'Otomatik', videoQuality: null },
+  '480p': {
+    id: '480p',
+    label: '480p — Düşük',
+    videoQuality: 0,
+    width: 854,
+    height: 480,
+  },
+  '720p': {
+    id: '720p',
+    label: '720p — Orta',
+    videoQuality: 1,
+    width: 1280,
+    height: 720,
+  },
+  '1080p': {
+    id: '1080p',
+    label: '1080p — Yüksek',
+    videoQuality: 2,
+    width: 1920,
+    height: 1080,
+  },
+  '1440p': {
+    id: '1440p',
+    label: '1440p',
+    videoQuality: 2,
+    width: 2560,
+    height: 1440,
+  },
+  source: {
+    id: 'source',
+    label: 'Kaynak (en yüksek)',
+    videoQuality: 2,
+  },
+};
+
 export interface ScreenShareResolutionSpec {
   id: ScreenShareResolutionId;
   label: string;
@@ -90,10 +151,12 @@ export interface VoiceAudioSettings {
   outputVolume: number;
   /** Mikrofon yayın bitrate (kbps). */
   audioBitrateKbps: VoiceBitrateKbps;
-  /** Ekran paylaşımı çözünürlüğü (kişisel) */
+  /** Ekran paylaşımı çözünürlüğü (kişisel — yayıncı) */
   screenShareResolution: ScreenShareResolutionId;
-  /** Ekran paylaşımı FPS (kişisel) */
+  /** Ekran paylaşımı FPS (kişisel — yayıncı) */
   screenShareFps: ScreenShareFps;
+  /** İzleme kalitesi (kişisel — izleyici) */
+  screenShareViewQuality: ScreenShareViewQualityId;
 }
 
 export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
@@ -105,6 +168,7 @@ export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
   audioBitrateKbps: DEFAULT_AUDIO_BITRATE_KBPS,
   screenShareResolution: DEFAULT_SCREEN_SHARE_RESOLUTION,
   screenShareFps: DEFAULT_SCREEN_SHARE_FPS,
+  screenShareViewQuality: DEFAULT_SCREEN_SHARE_VIEW_QUALITY,
 };
 
 export function normalizeBitrateKbps(value: unknown): VoiceBitrateKbps {
@@ -133,6 +197,16 @@ export function normalizeScreenShareFps(value: unknown): ScreenShareFps {
   return DEFAULT_SCREEN_SHARE_FPS;
 }
 
+export function normalizeScreenShareViewQuality(value: unknown): ScreenShareViewQualityId {
+  if (
+    typeof value === 'string' &&
+    (SCREEN_SHARE_VIEW_QUALITY_PRESETS as readonly string[]).includes(value)
+  ) {
+    return value as ScreenShareViewQualityId;
+  }
+  return DEFAULT_SCREEN_SHARE_VIEW_QUALITY;
+}
+
 /** LiveKit audioPreset.maxBitrate (bps). */
 export function audioBitrateToMaxBitrate(kbps: number): number {
   return normalizeBitrateKbps(kbps) * 1000;
@@ -146,13 +220,19 @@ function clampVolume(v: number) {
 }
 
 /**
- * UI 0–200% → gerçek yayın/kulaklık çarpanı.
- * 100% üzeri yumuşak eğri (patlamayı azaltır): 200% ≈ 1.35×
+ * UI %100’de bile birim kazanç kullanma — LiveKit/AGC ile clipping oluyordu.
+ * %100 ≈ 0.55 (−5 dB headroom), %200 ≈ 0.85 (asla 1.0 üstü değil).
+ */
+export const VOLUME_UNITY_AT_UI = 0.55;
+
+/**
+ * UI 0–200% → gerçek yayın/kulaklık çarpanı (headroom’lu).
  */
 export function softVolumeCurve(volume: number): number {
   const v = clampVolume(volume);
-  if (v <= 1) return v;
-  return 1 + (v - 1) * 0.35;
+  if (v <= 1) return v * VOLUME_UNITY_AT_UI;
+  // 100→200: 0.55 → ~0.85
+  return VOLUME_UNITY_AT_UI + (v - 1) * 0.3;
 }
 
 export function loadVoiceAudioSettings(): VoiceAudioSettings {
@@ -170,6 +250,9 @@ export function loadVoiceAudioSettings(): VoiceAudioSettings {
       audioBitrateKbps: normalizeBitrateKbps(parsed.audioBitrateKbps),
       screenShareResolution: normalizeScreenShareResolution(parsed.screenShareResolution),
       screenShareFps: normalizeScreenShareFps(parsed.screenShareFps),
+      screenShareViewQuality: normalizeScreenShareViewQuality(
+        parsed.screenShareViewQuality,
+      ),
     };
   } catch {
     return { ...DEFAULT_VOICE_AUDIO };

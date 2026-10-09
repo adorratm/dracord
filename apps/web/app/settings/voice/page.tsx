@@ -7,9 +7,12 @@ import {
   SCREEN_SHARE_FPS_PRESETS,
   SCREEN_SHARE_RESOLUTION_PRESETS,
   SCREEN_SHARE_RESOLUTION_SPECS,
+  SCREEN_SHARE_VIEW_QUALITY_PRESETS,
+  SCREEN_SHARE_VIEW_QUALITY_SPECS,
   VOICE_BITRATE_PRESETS,
   type ScreenShareFps,
   type ScreenShareResolutionId,
+  type ScreenShareViewQualityId,
   type VoiceBitrateKbps,
 } from '@/lib/voice-settings';
 
@@ -117,8 +120,8 @@ export default function VoiceSettingsPage() {
           onChange={voice.setOutputVolume}
         />
         <p className="font-body-sm text-outline">
-          %100 üzeri yumuşak yükseltilir; ani patlamayı azaltmak için limiter açıktır. Çok yüksek
-          mikrofon (%150+) yine bozulmaya yol açabilir.
+          %100 bile headroom’lu (≈ −5 dB); patlamayı azaltır. Daha yüksek için kaydırıcıyı
+          %100’ün üzerine çek. Limiter her zaman açıktır.
         </p>
       </section>
 
@@ -189,9 +192,31 @@ export default function VoiceSettingsPage() {
             }))}
           />
         </label>
+        <label className="flex flex-col gap-space-xs">
+          <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-[18px]">hd</span>
+            İzleme kalitesi
+          </span>
+          <SearchableSelect
+            fullWidth
+            value={voice.audioSettings.screenShareViewQuality}
+            onChange={(v) =>
+              voice.setScreenShareViewQuality(v as ScreenShareViewQualityId)
+            }
+            aria-label="Ekran paylaşımı izleme kalitesi"
+            options={SCREEN_SHARE_VIEW_QUALITY_PRESETS.map((id) => ({
+              value: id,
+              label: SCREEN_SHARE_VIEW_QUALITY_SPECS[id].label,
+            }))}
+          />
+        </label>
+        <p className="font-body-sm text-outline">
+          İzleme kalitesi başkalarının paylaşımını izlerken geçerlidir; sahne üstünden de
+          değiştirilebilir.
+        </p>
         {voice.screenSharing && (
           <p className="font-body-sm text-outline">
-            Şu an paylaşım açık — değişiklik paylaşımı yeniden başlatır.
+            Şu an paylaşım açık — çözünürlük/FPS değişikliği paylaşımı yeniden başlatır.
           </p>
         )}
       </section>

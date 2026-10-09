@@ -47,6 +47,11 @@ import { useChatChannel } from '@/hooks/useChatChannel';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { useUserPreferences } from '@/lib/user-preferences';
+import {
+  SCREEN_SHARE_VIEW_QUALITY_PRESETS,
+  SCREEN_SHARE_VIEW_QUALITY_SPECS,
+  type ScreenShareViewQualityId,
+} from '@/lib/voice-settings';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 
@@ -2335,6 +2340,14 @@ export function GuildChannelView({
           screenShareViewPaused={voice.screenShareViewPaused}
           onPauseScreenShareView={voice.pauseScreenShareView}
           onResumeScreenShareView={voice.resumeScreenShareView}
+          screenShareViewQuality={voice.audioSettings.screenShareViewQuality}
+          screenShareViewQualityOptions={SCREEN_SHARE_VIEW_QUALITY_PRESETS.map((id) => ({
+            value: id,
+            label: SCREEN_SHARE_VIEW_QUALITY_SPECS[id].label,
+          }))}
+          onScreenShareViewQualityChange={(q) =>
+            voice.setScreenShareViewQuality(q as ScreenShareViewQualityId)
+          }
           onFocusScreenShare={voice.focusScreenShare}
           participantsDrawerOpen={participantsOpen}
           chatDrawerOpen={chatOpen}

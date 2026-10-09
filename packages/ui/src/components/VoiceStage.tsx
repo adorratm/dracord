@@ -57,6 +57,10 @@ export interface VoiceStageProps {
   screenShareViewPaused?: boolean;
   onPauseScreenShareView?: () => void;
   onResumeScreenShareView?: () => void;
+  /** İzleyici yayın kalitesi (uzak paylaşım) */
+  screenShareViewQuality?: string;
+  screenShareViewQualityOptions?: Array<{ value: string; label: string }>;
+  onScreenShareViewQualityChange?: (quality: string) => void;
   participantsDrawerOpen?: boolean;
   chatDrawerOpen?: boolean;
   onToggleMute?: () => void;
@@ -133,6 +137,9 @@ export function VoiceStage({
   screenShareViewPaused: _screenShareViewPaused = false,
   onPauseScreenShareView: _onPauseScreenShareView,
   onResumeScreenShareView: _onResumeScreenShareView,
+  screenShareViewQuality,
+  screenShareViewQualityOptions = [],
+  onScreenShareViewQualityChange,
   participantsDrawerOpen,
   chatDrawerOpen,
   onToggleMute,
@@ -361,7 +368,7 @@ export function VoiceStage({
                       autoPlay
                       muted={screenShare.isLocal}
                     />
-                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1] flex items-center gap-2 max-w-[min(100%-5rem,20rem)]">
+                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1] flex items-center gap-2 max-w-[min(100%-5rem,28rem)] flex-wrap">
                       <span className="truncate">
                         {screenShare.displayName}
                         {screenShare.isLocal ? ' (sen)' : ''}
@@ -390,6 +397,32 @@ export function VoiceStage({
                               aria-label="Yayın sesi"
                             />
                           </div>
+                        )}
+                      {!screenShare.isLocal &&
+                        onScreenShareViewQualityChange &&
+                        screenShareViewQualityOptions.length > 0 && (
+                          <label
+                            className="flex items-center gap-1.5 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <span className="sr-only">Yayın kalitesi</span>
+                            <select
+                              value={screenShareViewQuality ?? screenShareViewQualityOptions[0]?.value}
+                              onChange={(e) =>
+                                onScreenShareViewQualityChange(e.target.value)
+                              }
+                              className="h-7 max-w-[9.5rem] rounded-md bg-black/70 border border-white/20 text-white text-[12px] px-1.5 outline-none focus:border-white/50 cursor-pointer"
+                              aria-label="Yayın kalitesi"
+                              title="Yayın kalitesi"
+                            >
+                              {screenShareViewQualityOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value} className="bg-surface text-on-surface">
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                         )}
                     </div>
                     <button

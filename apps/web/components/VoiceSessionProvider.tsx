@@ -7,6 +7,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
   VideoQuality,
   type AudioCaptureOptions,
   type LocalAudioTrack,
@@ -15,6 +16,7 @@ import {
   type RemoteParticipant,
   type RemoteTrackPublication,
   type TrackPublishOptions,
+  type VideoPreset,
 } from 'livekit-client';
 import {
   createContext,
@@ -47,11 +49,14 @@ import {
   normalizeBitrateKbps,
   normalizeScreenShareFps,
   normalizeScreenShareResolution,
+  normalizeScreenShareViewQuality,
   saveVoiceAudioSettings,
   screenShareCaptureResolution,
+  SCREEN_SHARE_VIEW_QUALITY_SPECS,
   softVolumeCurve,
   type ScreenShareFps,
   type ScreenShareResolutionId,
+  type ScreenShareViewQualityId,
   type VoiceAudioSettings,
   type VoiceBitrateKbps,
 } from '@/lib/voice-settings';
@@ -118,6 +123,8 @@ interface VoiceSessionValue {
   /** Ekran paylaşımı çözünürlüğü (kişisel; paylaşımdayken yeniden başlatır) */
   setScreenShareResolution: (id: ScreenShareResolutionId) => Promise<void>;
   setScreenShareFps: (fps: ScreenShareFps) => Promise<void>;
+  /** İzleyici yayın kalitesi (kişisel; anında uygulanır) */
+  setScreenShareViewQuality: (id: ScreenShareViewQualityId) => void;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
   /** Yerel mute toggle — sadece bu istemci; volume 0 / önceki seviye */
@@ -212,7 +219,8 @@ function voiceAudioCaptureOptions(settings: VoiceAudioSettings): AudioCaptureOpt
   return {
     echoCancellation: true,
     noiseSuppression: true,
-    autoGainControl: true,
+    // AGC ani yükseltme/patlama yapıyordu — seviye yazılım limiter + slider ile
+    autoGainControl: false,
     // sampleRate sabitleme bazı mobil tarayıcılarda constraint hatası verir
     deviceId: settings.inputDeviceId || undefined,
   };
@@ -317,6 +325,38 @@ function setRemoteSourceVolume(
 /** Kulaklık + kişi kaydırıcısı → soft-curve dinleme seviyesi */
 function listenLevel(outputVolume: number, personalPct: number): number {
   return softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100);
+}
+
+function applyRemoteScreenShareViewQuality(
+  pub: RemoteTrackPublication,
+  qualityId: ScreenShareViewQualityId,
+) {
+  const spec = SCREEN_SHARE_VIEW_QUALITY_SPECS[qualityId];
+  try {
+    if (spec.videoQuality === 0) pub.setVideoQuality(VideoQuality.LOW);
+    else if (spec.videoQuality === 1) pub.setVideoQuality(VideoQuality.MEDIUM);
+    else if (spec.videoQuality === 2) pub.setVideoQuality(VideoQuality.HIGH);
+  } catch {
+    // ignore
+  }
+  try {
+    if (spec.width && spec.height) {
+      pub.setVideoDimensions({ width: spec.width, height: spec.height });
+    } else if (qualityId === 'source') {
+      pub.setVideoDimensions({ width: 7680, height: 4320 });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Ana katmana ek simulcast katmanları (en fazla 2; düşük → yüksek) */
+function screenShareSimulcastLayersForHeight(height: number): VideoPreset[] {
+  if (height >= 2160) return [VideoPresets.h720, VideoPresets.h1080];
+  if (height >= 1440) return [VideoPresets.h720, VideoPresets.h1080];
+  if (height >= 1080) return [VideoPresets.h360, VideoPresets.h720];
+  if (height >= 720) return [VideoPresets.h360];
+  return [VideoPresets.h180];
 }
 
 /** Mikrofon ve yayın sesini ayrı uygula (participant.setVolume hepsini birleştirir). */
@@ -1000,6 +1040,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
 
       const share = shares.find((s) => s.identity === focusId) ?? shares[0]!;
+      const viewQuality = normalizeScreenShareViewQuality(
+        audioSettingsRef.current.screenShareViewQuality,
+      );
       let track: Track | null = null;
       if (share.isLocal) {
         track = room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track ?? null;
@@ -1009,13 +1052,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           | RemoteTrackPublication
           | undefined;
         track = pub?.track ?? null;
-        if (pub) {
-          try {
-            pub.setVideoQuality(VideoQuality.HIGH);
-          } catch {
-            // ignore
-          }
-        }
+        if (pub) applyRemoteScreenShareViewQuality(pub, viewQuality);
+      }
+      // Odakta olmayan uzak paylaşımları düşük kalitede tut (bant genişliği)
+      for (const remote of room.remoteParticipants.values()) {
+        if (remote.identity === share.identity) continue;
+        const other = remote.getTrackPublication(Track.Source.ScreenShare) as
+          | RemoteTrackPublication
+          | undefined;
+        if (other) applyRemoteScreenShareViewQuality(other, '480p');
       }
       bindScreenShareTrack(track, share.identity, share.displayName, share.isLocal);
     },
@@ -1186,11 +1231,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         void room.startAudio().catch(() => undefined);
       }
       if (publication.source === Track.Source.ScreenShare) {
-        try {
-          (publication as RemoteTrackPublication).setVideoQuality?.(VideoQuality.HIGH);
-        } catch {
-          // ignore
-        }
+        const focus = focusedScreenShareIdRef.current;
+        const q = normalizeScreenShareViewQuality(
+          audioSettingsRef.current.screenShareViewQuality,
+        );
+        const isFocused =
+          !focus || focus === '__none__' || focus === participant.identity;
+        applyRemoteScreenShareViewQuality(
+          publication as RemoteTrackPublication,
+          isFocused ? q : '480p',
+        );
       }
       syncAll();
     });
@@ -1807,11 +1857,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }) as const;
 
     const sharePublishOpts = {
-      simulcast: false,
+      simulcast: true,
       screenShareEncoding: {
         maxBitrate: shareCap.maxBitrate,
         maxFramerate: shareCap.frameRate,
       },
+      screenShareSimulcastLayers: screenShareSimulcastLayersForHeight(shareCap.height),
+      degradationPreference: 'maintain-resolution' as const,
     };
 
     if (screenSharingRef.current) {
@@ -2099,6 +2151,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [applyScreenShareQualityChange],
   );
 
+  const setScreenShareViewQuality = useCallback(
+    (id: ScreenShareViewQualityId) => {
+      const screenShareViewQuality = normalizeScreenShareViewQuality(id);
+      persistAudio({ ...audioSettingsRef.current, screenShareViewQuality });
+      const room = roomRef.current;
+      if (room) applyScreenShareView(room);
+    },
+    [persistAudio, applyScreenShareView],
+  );
+
   const toggleNoiseCancellation = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
@@ -2155,7 +2217,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         await mic.restartTrack({
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
           deviceId: audioSettingsRef.current.inputDeviceId || undefined,
         });
         await applyMicGainToTrack(mic, micVolume).catch(() => undefined);
@@ -2176,7 +2238,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     await mic.restartTrack({
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true,
+      autoGainControl: false,
       deviceId: audioSettingsRef.current.inputDeviceId || undefined,
     });
     await applyMicGainToTrack(mic, micVolume).catch(() => undefined);
@@ -2223,6 +2285,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setAudioBitrate,
       setScreenShareResolution,
       setScreenShareFps,
+      setScreenShareViewQuality,
       setParticipantVolume,
       getParticipantVolume,
       toggleLocalMuteParticipant,
@@ -2281,6 +2344,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setAudioBitrate,
       setScreenShareResolution,
       setScreenShareFps,
+      setScreenShareViewQuality,
       setParticipantVolume,
       getParticipantVolume,
       toggleLocalMuteParticipant,
