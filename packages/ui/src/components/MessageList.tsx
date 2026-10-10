@@ -306,6 +306,13 @@ export function MessageItem({
     }
     return set;
   }, [message.attachments, message.embeds, message.content, sticker]);
+  const onlyMediaUrls = contentIsOnlyMediaUrls(message.content, mediaUrls);
+  // Embed görünürse ham URL’yi gizle; aksi halde link tıklanabilir kalsın
+  const hasVisibleEmbeds =
+    !hideEmbeds &&
+    !sticker &&
+    !(message.attachments?.length) &&
+    (message.embeds?.length ?? 0) > 0;
   const hidePlainContent =
     Boolean(message.poll) ||
     sticker ||
@@ -313,12 +320,9 @@ export function MessageItem({
     (message.attachments?.length === 1 &&
       message.attachments[0] &&
       message.content.trim() === message.attachments[0].filename) ||
-    contentIsOnlyMediaUrls(message.content, mediaUrls);
+    (onlyMediaUrls && hasVisibleEmbeds);
   const hideMediaEmbeds =
-    hideEmbeds ||
-    sticker ||
-    Boolean(message.attachments?.length) ||
-    contentIsOnlyMediaUrls(message.content, mediaUrls);
+    hideEmbeds || sticker || Boolean(message.attachments?.length);
 
   const computePlacement = useCallback((estimatedHeight: number) => {
     const el = menuRef.current;
@@ -497,7 +501,10 @@ export function MessageItem({
             {!hidePlainContent && (
               <p className={cn('font-body-md text-body-md text-on-surface whitespace-pre-wrap break-words', sticker && 'mt-1')}>
                 {renderMessageContent(message.content, mentionNames, channelNames, {
-                  hideUrls: mediaUrls,
+                  // Yalnızca görünür embed/ek varken URL’yi tekrardan gizle
+                  hideUrls: hasVisibleEmbeds || Boolean(message.attachments?.length)
+                    ? mediaUrls
+                    : undefined,
                 })}
               </p>
             )}
