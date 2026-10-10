@@ -781,7 +781,7 @@ export function WatchPartyRoom(props: Props) {
                   isHost={isHost}
                   muted={muted}
                   volume={volume}
-                  className="absolute inset-0 h-full w-full"
+                  className="absolute inset-0 h-full w-full overflow-hidden bg-black [&_iframe]:!absolute [&_iframe]:!inset-0 [&_iframe]:!h-full [&_iframe]:!w-full [&_iframe]:!max-h-none [&_iframe]:!max-w-none"
                   playerRef={embedPlayerRef}
                   onTime={(t, d) => {
                     setCurrent(t);
@@ -801,7 +801,10 @@ export function WatchPartyRoom(props: Props) {
                   }}
                 />
               ) : (
-                <div ref={overlayHostRef} className="absolute inset-0 [&>video]:h-full [&>video]:w-full [&>video]:object-contain" />
+                <div
+                  ref={overlayHostRef}
+                  className="absolute inset-0 [&>video]:absolute [&>video]:inset-0 [&>video]:h-full [&>video]:w-full [&>video]:object-contain"
+                />
               )}
               {cinemaMode === 'panel' && (
                 <div

@@ -14,6 +14,7 @@ type YTPlayer = {
   mute: () => void;
   unMute: () => void;
   setVolume: (n: number) => void;
+  setSize?: (width: number, height: number) => void;
 };
 
 declare global {
@@ -23,6 +24,8 @@ declare global {
         el: HTMLElement | string,
         opts: {
           videoId: string;
+          width?: number | string;
+          height?: number | string;
           playerVars?: Record<string, string | number>;
           events?: {
             onReady?: (e: { target: YTPlayer }) => void;
@@ -190,18 +193,52 @@ export function WatchEmbedPlayer({
     };
   }, [media.provider, playerRef, volume]);
 
-  // YouTube
+  const fitFill = (root: HTMLElement) => {
+    root.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;overflow:hidden;';
+    root.querySelectorAll('iframe, object, embed').forEach((node) => {
+      const el = node as HTMLElement;
+      el.removeAttribute('width');
+      el.removeAttribute('height');
+      el.style.cssText =
+        'position:absolute;inset:0;width:100%!important;height:100%!important;border:0;max-width:none;max-height:none;';
+    });
+    root.querySelectorAll(':scope > div').forEach((node) => {
+      const el = node as HTMLElement;
+      el.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+    });
+  };
+
+  // YouTube — %100 doldur + resize
   useEffect(() => {
     if (media.provider !== 'youtube' || !media.id || !hostRef.current) return;
     let cancelled = false;
     const mount = hostRef.current;
-    const el = document.createElement('div');
     mount.innerHTML = '';
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
     mount.appendChild(el);
+    fitFill(mount);
+
+    const syncSize = () => {
+      const w = Math.max(1, Math.round(mount.clientWidth));
+      const h = Math.max(1, Math.round(mount.clientHeight));
+      const p = ytRef.current as YTPlayer & { setSize?: (a: number, b: number) => void };
+      try {
+        p?.setSize?.(w, h);
+      } catch {
+        /* ignore */
+      }
+      fitFill(mount);
+    };
 
     void loadYtApi().then(() => {
       if (cancelled || !window.YT?.Player) return;
+      const w = Math.max(1, Math.round(mount.clientWidth)) || 640;
+      const h = Math.max(1, Math.round(mount.clientHeight)) || 360;
       const player = new window.YT.Player(el, {
+        width: w,
+        height: h,
         videoId: media.id!,
         playerVars: {
           enablejsapi: 1,
@@ -214,6 +251,7 @@ export function WatchEmbedPlayer({
           onReady: (e) => {
             ytRef.current = e.target;
             readyRef.current = true;
+            syncSize();
             e.target.setVolume(Math.round(volume * 100));
             if (muted) e.target.mute();
             else e.target.unMute();
@@ -228,6 +266,9 @@ export function WatchEmbedPlayer({
         },
       });
       ytRef.current = player;
+      // iframe DOM’a yazıldıktan sonra stilleri zorla
+      window.setTimeout(syncSize, 0);
+      window.setTimeout(syncSize, 200);
     });
 
     const tick = window.setInterval(() => {
@@ -240,9 +281,13 @@ export function WatchEmbedPlayer({
       }
     }, 500);
 
+    const ro = new ResizeObserver(() => syncSize());
+    ro.observe(mount);
+
     return () => {
       cancelled = true;
       window.clearInterval(tick);
+      ro.disconnect();
       try {
         ytRef.current?.destroy();
       } catch {
@@ -252,7 +297,6 @@ export function WatchEmbedPlayer({
       readyRef.current = false;
       mount.innerHTML = '';
     };
-    // media.id değişince yeniden kur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [media.provider, media.id]);
 
@@ -267,7 +311,8 @@ export function WatchEmbedPlayer({
       'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
     iframe.allowFullscreen = true;
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    iframe.className = 'h-full w-full border-0 bg-black';
+    iframe.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;';
     let src = media.embedUrl;
     if (media.provider === 'vimeo' || media.provider === 'dailymotion') {
       const start = Math.max(0, Math.floor(atRef.current));
@@ -282,7 +327,10 @@ export function WatchEmbedPlayer({
     }
     iframe.src = src;
     iframeRef.current = iframe;
+    mount.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;overflow:hidden;';
     mount.appendChild(iframe);
+    fitFill(mount);
     readyRef.current = true;
     onReady?.();
 
@@ -397,7 +445,10 @@ export function WatchEmbedPlayer({
   return (
     <div
       ref={hostRef}
-      className={className ?? 'h-full w-full overflow-hidden rounded-lg bg-black'}
+      className={
+        className ??
+        'absolute inset-0 h-full w-full overflow-hidden bg-black [&_iframe]:!absolute [&_iframe]:!inset-0 [&_iframe]:!h-full [&_iframe]:!w-full'
+      }
     />
   );
 }
