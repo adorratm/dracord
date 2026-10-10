@@ -28,7 +28,12 @@ const KIND_ICON: Record<ActivityKind, string> = {
 };
 
 function errMsg(e: unknown, fallback: string) {
-  return e instanceof Error && e.message ? e.message : fallback;
+  if (!(e instanceof Error) || !e.message) return fallback;
+  // Boş JSON gövdesi / geçici ağ hatalarını kullanıcıya gösterme
+  if (/unexpected end of json|geçersiz sunucu yanıtı/i.test(e.message)) {
+    return fallback === 'Aktivite yüklenemedi' ? '' : fallback;
+  }
+  return e.message;
 }
 
 /** GAME / WATCH_PARTY kanalları için tam yükseklikte aktivite görünümü */
@@ -296,9 +301,9 @@ export function ActivityChannelView({
         </div>
       </header>
 
-      {error && (
+      {error ? (
         <p className="shrink-0 bg-error/10 px-space-md py-1 font-body-sm text-error">{error}</p>
-      )}
+      ) : null}
 
       <div className="relative min-h-0 flex-1">
         {loading ? (

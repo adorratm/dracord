@@ -177,6 +177,51 @@ export class ActivitiesService {
     return s ? this.toDto(s) : null;
   }
 
+  /** Oyuncu listesinden çıkar; yetersiz oyuncu / boş oda → oturumu bitir */
+  private finalizeAfterLeave(s: ActivitySession, userId: string) {
+    s.playerIds = (s.playerIds ?? []).filter((id) => id !== userId);
+    s.spectatorIds = (s.spectatorIds ?? []).filter((id) => id !== userId);
+    if (s.hostUserId === userId) {
+      s.hostUserId = s.playerIds[0] ?? s.spectatorIds[0] ?? s.hostUserId;
+    }
+    const empty =
+      s.playerIds.length === 0 && s.spectatorIds.length === 0;
+    // Oyunlar: min oyuncu altına düşünce otomatik sonlanır
+    const underMin =
+      s.kind !== 'watch_party' && s.playerIds.length < s.minPlayers;
+    if (empty || underMin) {
+      s.status = 'ended';
+    }
+  }
+
+  private async persistAndBroadcast(s: ActivitySession): Promise<ActivitySessionDto> {
+    await this.em.save(s);
+    const dto = this.toDto(s);
+    this.broadcast.emitToChannel(
+      s.channelId,
+      s.status === 'ended' ? SocketEvents.ACTIVITY_LEAVE : SocketEvents.ACTIVITY_UPSERT,
+      dto,
+    );
+    return dto;
+  }
+
+  /** Kullanıcıyı diğer aktif oturumlardan çıkar (tek oyun kuralı) */
+  private async evacuateUser(userId: string, exceptSessionId?: string) {
+    const sessions = await this.em
+      .createQueryBuilder(ActivitySession, 'a')
+      .where('a.status IN (:...st)', { st: ['lobby', 'playing'] })
+      .getMany();
+    for (const s of sessions) {
+      if (exceptSessionId && s.id === exceptSessionId) continue;
+      const inSession =
+        (s.playerIds ?? []).includes(userId) ||
+        (s.spectatorIds ?? []).includes(userId);
+      if (!inSession) continue;
+      this.finalizeAfterLeave(s, userId);
+      await this.persistAndBroadcast(s);
+    }
+  }
+
   async start(
     guildId: string,
     channelId: string,
@@ -192,6 +237,8 @@ export class ActivitiesService {
     if (existing) {
       throw new BadRequestException('Bu kanalda zaten bir aktivite var');
     }
+    // Önceki oyun / watch party'den otomatik ayrıl
+    await this.evacuateUser(userId);
     const cap = CAPACITY[kind];
     if (!cap) throw new BadRequestException('Bilinmeyen aktivite');
     const s = this.em.create(ActivitySession, {
@@ -220,6 +267,9 @@ export class ActivitiesService {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
     if (!s || s.status === 'ended') throw new NotFoundException('Aktivite yok');
     await this.assertActivityChannel(s.guildId, s.channelId, userId);
+
+    // Başka bir oturumdaysa önce oradan ayrıl
+    await this.evacuateUser(userId, sessionId);
 
     const players = new Set(s.playerIds ?? []);
     const spectators = new Set(s.spectatorIds ?? []);
@@ -252,26 +302,8 @@ export class ActivitiesService {
   async leave(sessionId: string, userId: string): Promise<ActivitySessionDto | null> {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
     if (!s || s.status === 'ended') return null;
-    s.playerIds = (s.playerIds ?? []).filter((id) => id !== userId);
-    s.spectatorIds = (s.spectatorIds ?? []).filter((id) => id !== userId);
-    if (s.hostUserId === userId) {
-      if (s.playerIds.length > 0) {
-        s.hostUserId = s.playerIds[0]!;
-      } else {
-        s.status = 'ended';
-      }
-    }
-    if (s.playerIds.length === 0 && s.spectatorIds.length === 0) {
-      s.status = 'ended';
-    }
-    await this.em.save(s);
-    const dto = this.toDto(s);
-    this.broadcast.emitToChannel(
-      s.channelId,
-      s.status === 'ended' ? SocketEvents.ACTIVITY_LEAVE : SocketEvents.ACTIVITY_UPSERT,
-      dto,
-    );
-    return dto;
+    this.finalizeAfterLeave(s, userId);
+    return this.persistAndBroadcast(s);
   }
 
   async patchState(

@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import type { Material, Mesh, PerspectiveCamera, Texture } from 'three';
 import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import { disposeObject, pointerNdc, type GameProps } from '../three/sceneUtils';
@@ -70,11 +77,26 @@ export function WatchPartyRoom(props: Props) {
   const [current, setCurrent] = useState(0);
   const [overlay, setOverlay] = useState(false);
   const [seekDraft, setSeekDraft] = useState<number | null>(null);
-  const [cinemaOpen, setCinemaOpen] = useState(true);
+  /** panel = yüzen pencere, wall = 3D duvar, fullscreen = tarayıcı tam ekran */
+  const [cinemaMode, setCinemaMode] = useState<'panel' | 'wall' | 'fullscreen'>('panel');
+  const [panelSize, setPanelSize] = useState({ w: 720, h: 405 });
+  const cinemaShellRef = useRef<HTMLDivElement | null>(null);
+  const resizingRef = useRef<{
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
 
-  uiRef.current.overlay = overlay || isEmbed;
+  // Duvar modunda dosya videosu VideoTexture'a gider; embed duvar overlay'inde kalır
+  const wallFileMode = cinemaMode === 'wall' && !isEmbed && Boolean(mediaUrl);
+  const showCinemaChrome = Boolean(mediaUrl) && cinemaMode !== 'wall';
+  const showWallEmbed = Boolean(mediaUrl) && cinemaMode === 'wall' && isEmbed;
+
+  // Duvar + dosya: VideoTexture; diğer durumlarda 3D ekranda yer tutucu
+  uiRef.current.overlay = Boolean(mediaUrl) && !wallFileMode;
   uiRef.current.hasMedia = mediaUrl !== '';
-  uiRef.current.isEmbed = isEmbed;
+  uiRef.current.isEmbed = false;
 
   useEffect(() => {
     setUrlInput(mediaUrl);
@@ -189,16 +211,22 @@ export function WatchPartyRoom(props: Props) {
     }
   }, [mediaUrl, playing, at, session.updatedAt, isHost, getVideo, isEmbed]);
 
+  // Dosya videosunu panele veya (duvar modunda) texture için DOM'dan ayır
   useEffect(() => {
     if (isEmbed) return;
     const v = getVideo();
     const host = overlayHostRef.current;
-    if (overlay && host) {
-      host.appendChild(v);
-    } else if (v.parentElement) {
-      v.remove();
+    if (cinemaMode === 'wall') {
+      // Duvar: VideoTexture — DOM'dan çıkar
+      if (v.parentElement) v.remove();
+      setOverlay(false);
+      return;
     }
-  }, [overlay, getVideo, isEmbed]);
+    if (host) {
+      host.appendChild(v);
+      setOverlay(true);
+    }
+  }, [getVideo, isEmbed, cinemaMode, mediaUrl]);
 
   useEffect(() => {
     if (isEmbed) return;
@@ -255,8 +283,84 @@ export function WatchPartyRoom(props: Props) {
       return;
     }
     needApplyRef.current = true;
-    setCinemaOpen(true);
+    setCinemaMode('panel');
     void send({ mediaUrl: resolved.sourceUrl, playing: false, at: 0 });
+  };
+
+  const toggleFullscreen = useCallback(async () => {
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        /* ignore */
+      }
+      setCinemaMode('panel');
+      return;
+    }
+    // Shell mount olsun (duvar+dosya modundan da)
+    setCinemaMode('fullscreen');
+  }, []);
+
+  useEffect(() => {
+    if (cinemaMode !== 'fullscreen') return;
+    const el = cinemaShellRef.current;
+    if (el && !document.fullscreenElement) {
+      void el.requestFullscreen().catch(() => undefined);
+    }
+  }, [cinemaMode, mediaUrl]);
+
+  useEffect(() => {
+    const onFs = () => {
+      if (!document.fullscreenElement) {
+        setCinemaMode((m) => (m === 'fullscreen' ? 'panel' : m));
+      }
+    };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  // Pencere / konteyner boyutu değişince panel oranını koru (max genişlik)
+  useEffect(() => {
+    const onResize = () => {
+      setPanelSize((prev) => {
+        const maxW = Math.min(window.innerWidth * 0.94, 1100);
+        const w = Math.min(prev.w, maxW);
+        const h = Math.round((w * 9) / 16);
+        if (w === prev.w && h === prev.h) return prev;
+        return { w, h };
+      });
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const onResizePointerDown = (e: ReactPointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: panelSize.w,
+      startH: panelSize.h,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onResizePointerMove = (e: ReactPointerEvent) => {
+    const r = resizingRef.current;
+    if (!r) return;
+    const dw = e.clientX - r.startX;
+    const w = Math.min(1100, Math.max(320, r.startW + dw));
+    const h = Math.round((w * 9) / 16);
+    setPanelSize({ w, h });
+  };
+  const onResizePointerUp = (e: ReactPointerEvent) => {
+    resizingRef.current = null;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   };
 
   const togglePlay = () => {
@@ -527,12 +631,13 @@ export function WatchPartyRoom(props: Props) {
         const ready = !!v && v.readyState >= 2;
         const next = !ui.hasMedia
           ? matNone
-          : ui.overlay || ui.isEmbed
+          : ui.overlay
             ? matOverlay
             : ready
               ? matVideo
               : matLoading;
         if (screen.material !== next) screen.material = next;
+        if (!ui.overlay && ready && videoTex) videoTex.needsUpdate = true;
         people.children.forEach((c) => {
           c.position.y += Math.sin(t * 2 + (c.userData.phase as number)) * 0.0015;
         });
@@ -602,23 +707,72 @@ export function WatchPartyRoom(props: Props) {
           )}
         </div>
 
-        {/* Platform / dosya sinema paneli */}
-        {mediaUrl && cinemaOpen && (
-          <div className="absolute left-1/2 top-[12%] z-30 flex w-[min(920px,94%)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-[#bd93f9]/40 bg-black shadow-2xl">
+        {/* Sinema: panel / tam ekran / duvar (embed) */}
+        {mediaUrl && (showCinemaChrome || showWallEmbed) && (
+          <div
+            ref={cinemaShellRef}
+            className={
+              cinemaMode === 'fullscreen'
+                ? 'fixed inset-0 z-[80] flex flex-col bg-black'
+                : showWallEmbed
+                  ? 'absolute left-1/2 top-[18%] z-30 flex w-[min(56vw,640px)] -translate-x-1/2 flex-col overflow-hidden rounded-lg border border-[#bd93f9]/35 bg-black shadow-xl'
+                  : 'absolute left-1/2 top-[10%] z-30 flex -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-[#bd93f9]/40 bg-black shadow-2xl'
+            }
+            style={
+              cinemaMode === 'panel'
+                ? { width: panelSize.w, maxWidth: '94vw' }
+                : showWallEmbed
+                  ? undefined
+                  : undefined
+            }
+          >
             <div className="flex items-center justify-between gap-2 border-b border-[#44307a] bg-[#11131e]/95 px-3 py-1.5">
               <span className="truncate text-xs text-[#f8f8f2]">
                 {media?.label ?? 'Medya'}
-                {media?.sourceUrl ? ` · ${media.sourceUrl}` : ''}
+                {cinemaMode === 'wall' ? ' · duvar' : ''}
               </span>
-              <button
-                type="button"
-                className="shrink-0 rounded-md px-2 py-0.5 text-xs text-[#bd93f9] hover:bg-[#44307a]/50"
-                onClick={() => setCinemaOpen(false)}
-              >
-                Küçült
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                {cinemaMode !== 'wall' && (
+                  <button
+                    type="button"
+                    className="rounded-md px-2 py-0.5 text-xs text-[#bd93f9] hover:bg-[#44307a]/50"
+                    onClick={() => {
+                      if (document.fullscreenElement) void document.exitFullscreen();
+                      setCinemaMode('wall');
+                    }}
+                    title="3D duvara küçült"
+                  >
+                    Duvara
+                  </button>
+                )}
+                {cinemaMode === 'wall' && (
+                  <button
+                    type="button"
+                    className="rounded-md px-2 py-0.5 text-xs text-[#bd93f9] hover:bg-[#44307a]/50"
+                    onClick={() => setCinemaMode('panel')}
+                  >
+                    Pencere
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-0.5 text-xs text-[#bd93f9] hover:bg-[#44307a]/50"
+                  onClick={() => void toggleFullscreen()}
+                >
+                  {cinemaMode === 'fullscreen' ? 'Çık' : 'Tam ekran'}
+                </button>
+              </div>
             </div>
-            <div className="relative aspect-video w-full bg-black">
+            <div
+              className="relative w-full bg-black"
+              style={
+                cinemaMode === 'fullscreen'
+                  ? { flex: 1, minHeight: 0 }
+                  : cinemaMode === 'panel'
+                    ? { height: panelSize.h, maxHeight: '70vh' }
+                    : { aspectRatio: '16 / 9' }
+              }
+            >
               {isEmbed && media ? (
                 <WatchEmbedPlayer
                   media={media as WatchMediaRef}
@@ -647,19 +801,43 @@ export function WatchPartyRoom(props: Props) {
                   }}
                 />
               ) : (
-                <div ref={overlayHostRef} className="absolute inset-0" />
+                <div ref={overlayHostRef} className="absolute inset-0 [&>video]:h-full [&>video]:w-full [&>video]:object-contain" />
+              )}
+              {cinemaMode === 'panel' && (
+                <div
+                  role="separator"
+                  aria-label="Boyutu değiştir"
+                  onPointerDown={onResizePointerDown}
+                  onPointerMove={onResizePointerMove}
+                  onPointerUp={onResizePointerUp}
+                  className="absolute bottom-0 right-0 z-10 h-5 w-5 cursor-se-resize touch-none"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, transparent 50%, #bd93f9 50%)',
+                  }}
+                />
               )}
             </div>
           </div>
         )}
 
-        {mediaUrl && !cinemaOpen && (
+        {/* Duvar + dosya: video 3D ekranda; kontroller */}
+        {mediaUrl && cinemaMode === 'wall' && !isEmbed && (
           <button
             type="button"
-            onClick={() => setCinemaOpen(true)}
+            onClick={() => setCinemaMode('panel')}
             className="absolute right-3 top-3 z-30 rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/90 px-3 py-1.5 text-xs font-semibold text-[#bd93f9]"
           >
-            Sinemayı aç
+            Pencereyi aç
+          </button>
+        )}
+        {mediaUrl && cinemaMode === 'wall' && !isEmbed && (
+          <button
+            type="button"
+            onClick={() => void toggleFullscreen()}
+            className="absolute right-3 top-14 z-30 rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/90 px-3 py-1.5 text-xs font-semibold text-[#bd93f9]"
+          >
+            Tam ekran
           </button>
         )}
 

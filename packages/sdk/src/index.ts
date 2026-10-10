@@ -126,7 +126,14 @@ export class DracordClient {
       throw new Error(formatApiError(res.status, text));
     }
     if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
+    const text = await res.text();
+    // Nest null / boş gövde → "Unexpected end of JSON input" olmasın
+    if (!text.trim()) return null as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error('Geçersiz sunucu yanıtı');
+    }
   }
 
   async getMe(): Promise<PublicUser> {

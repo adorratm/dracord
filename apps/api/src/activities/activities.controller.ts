@@ -8,18 +8,20 @@ export class ActivitiesController {
   constructor(private readonly activities: ActivitiesService) {}
 
   @Get('channel')
-  getForChannel(
+  async getForChannel(
     @Req() req: { user: { sub: string } },
     @Query('guildId') guildId: string,
     @Query('channelId') channelId: string,
     /** @deprecated eski istemciler */
     @Query('voiceChannelId') voiceChannelId?: string,
   ) {
-    return this.activities.getActiveForChannel(
+    const session = await this.activities.getActiveForChannel(
       guildId,
       channelId || voiceChannelId || '',
       req.user.sub,
     );
+    // Boş gövde yerine açık null — istemci JSON.parse hatası almasın
+    return session ?? null;
   }
 
   @Post()
