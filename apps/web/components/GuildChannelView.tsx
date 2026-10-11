@@ -2488,7 +2488,7 @@ export function GuildChannelView({
 
       <button
         type="button"
-        className="fixed bottom-20 left-3 z-40 h-11 w-11 rounded-full bg-surface-container-high text-on-surface shadow-float flex items-center justify-center border border-surface-container-highest"
+        className="hidden fixed bottom-20 left-3 z-40 h-11 w-11 rounded-full bg-surface-container-high text-on-surface shadow-float items-center justify-center border border-surface-container-highest"
         aria-label="Kanallar"
         onClick={() => setChannelsOpen(true)}
         style={
