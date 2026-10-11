@@ -43,6 +43,10 @@ export class Guild extends CuidEntity {
   @Column({ type: 'int', default: 0 })
   afkTimeoutMinutes!: number;
 
+  /** Aktif sunucu takviyesi sayısı */
+  @Column({ type: 'int', default: 0 })
+  boostCount!: number;
+
   @Column({ type: 'varchar' })
   ownerId!: string;
 

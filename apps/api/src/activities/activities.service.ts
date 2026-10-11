@@ -241,6 +241,9 @@ export class ActivitiesService {
     await this.evacuateUser(userId);
     const cap = CAPACITY[kind];
     if (!cap) throw new BadRequestException('Bilinmeyen aktivite');
+    const joinedAt = new Date().toISOString();
+    const baseState =
+      kind === 'watch_party' ? { mediaUrl: '', playing: false, at: 0 } : { turn: 0 };
     const s = this.em.create(ActivitySession, {
       guildId,
       channelId,
@@ -251,7 +254,7 @@ export class ActivitiesService {
       status: kind === 'watch_party' ? 'playing' : 'lobby',
       playerIds: [userId],
       spectatorIds: [],
-      state: kind === 'watch_party' ? { mediaUrl: '', playing: false, at: 0 } : { turn: 0 },
+      state: { ...baseState, memberJoinedAt: { [userId]: joinedAt } },
     });
     await this.em.save(s);
     const dto = this.toDto(s);
@@ -287,6 +290,12 @@ export class ActivitiesService {
     }
     s.playerIds = [...players];
     s.spectatorIds = [...spectators];
+    const prevState = (s.state ?? {}) as Record<string, unknown>;
+    const joinedMap = {
+      ...((prevState.memberJoinedAt as Record<string, string> | undefined) ?? {}),
+    };
+    if (!joinedMap[userId]) joinedMap[userId] = new Date().toISOString();
+    s.state = { ...prevState, memberJoinedAt: joinedMap };
     if (s.status === 'lobby' && s.playerIds.length >= s.minPlayers && s.kind !== 'watch_party') {
       s.status = 'playing';
     }
@@ -302,6 +311,12 @@ export class ActivitiesService {
   async leave(sessionId: string, userId: string): Promise<ActivitySessionDto | null> {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
     if (!s || s.status === 'ended') return null;
+    const prevState = (s.state ?? {}) as Record<string, unknown>;
+    const joinedMap = {
+      ...((prevState.memberJoinedAt as Record<string, string> | undefined) ?? {}),
+    };
+    delete joinedMap[userId];
+    s.state = { ...prevState, memberJoinedAt: joinedMap };
     this.finalizeAfterLeave(s, userId);
     return this.persistAndBroadcast(s);
   }

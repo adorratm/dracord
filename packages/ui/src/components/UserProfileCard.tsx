@@ -11,6 +11,8 @@ import { presenceLabelTr } from '../lib/presence';
 export interface UserProfileCardProps {
   open: boolean;
   onClose: () => void;
+  /** modal = ortada; popout = sol paneldan açılan Discord tarzı kart */
+  variant?: 'modal' | 'popout';
   user: {
     id: string;
     displayName: string;
@@ -36,7 +38,13 @@ function pickBg(roles?: MemberRoleSummary[]): RoleProfileBgKey {
   return (withBg?.profileBgKey as RoleProfileBgKey) || 'none';
 }
 
-export function UserProfileCard({ open, onClose, user, actions = [] }: UserProfileCardProps) {
+export function UserProfileCard({
+  open,
+  onClose,
+  user,
+  actions = [],
+  variant = 'modal',
+}: UserProfileCardProps) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (document.getElementById('dracord-role-badge-styles')) return;
@@ -57,19 +65,38 @@ export function UserProfileCard({ open, onClose, user, actions = [] }: UserProfi
   const bannerStyle = user.bannerUrl
     ? { backgroundImage: `url(${user.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : user.bannerColor
-      ? { backgroundColor: user.bannerColor }
-      : accent
+    ? { backgroundColor: user.bannerColor }
+    : accent
         ? { background: `linear-gradient(135deg, ${accent}99, ${accent}33)` }
         : undefined;
 
+  const isPopout = variant === 'popout';
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-space-md">
-      <button type="button" className="absolute inset-0 bg-black/65" aria-label="Kapat" onClick={onClose} />
+    <div
+      className={cn(
+        'fixed inset-0 z-[100] p-space-md',
+        isPopout
+          ? 'flex items-start justify-start md:pl-[calc(72px+18rem)] pt-16 md:pt-20'
+          : 'flex items-center justify-center',
+      )}
+    >
+      <button
+        type="button"
+        className={cn('absolute inset-0', isPopout ? 'bg-black/40' : 'bg-black/65')}
+        aria-label="Kapat"
+        onClick={onClose}
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={user.displayName}
-        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-fade-in"
+        className={cn(
+          'relative overflow-y-auto rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-fade-in',
+          isPopout
+            ? 'w-[min(100%,20rem)] max-h-[min(85vh,560px)]'
+            : 'w-full max-w-lg max-h-[90vh]',
+        )}
       >
         <button
           type="button"

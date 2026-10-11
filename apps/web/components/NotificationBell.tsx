@@ -3,10 +3,11 @@
 import type { NotificationDto } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { DracoEmpty } from '@/components/Draco';
 import { useUserPreferences } from '@/lib/user-preferences';
+
+type InboxTab = 'unreads' | 'mentions' | 'bookmarks' | 'reminders';
 
 function typeIcon(type: NotificationDto['type']): string {
   switch (type) {
@@ -60,11 +61,19 @@ function playNotifySound() {
   }
 }
 
+const TABS: { id: InboxTab; label: string }[] = [
+  { id: 'unreads', label: 'Okunmamışlar' },
+  { id: 'mentions', label: 'Bahsedilmeler' },
+  { id: 'bookmarks', label: 'İşaretler' },
+  { id: 'reminders', label: 'Hatırlatmalar' },
+];
+
 export function NotificationBell() {
   const { client, user, ready } = useAuth();
   const { prefs } = useUserPreferences();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<InboxTab>('unreads');
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [unread, setUnread] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -73,7 +82,7 @@ export function NotificationBell() {
     if (!user) return;
     try {
       const [list, count] = await Promise.all([
-        client.listNotifications({ limit: 30 }),
+        client.listNotifications({ limit: 40 }),
         client.notificationsUnreadCount(),
       ]);
       setItems(list);
@@ -88,7 +97,6 @@ export function NotificationBell() {
     void refresh();
     const sock = client.connectSocket();
     const onNotif = (n: NotificationDto) => {
-      // mentionsOnly: FRIEND her zaman; DM/ANNOUNCEMENT filtre
       if (
         prefs.notifications.mentionsOnly &&
         n.type !== 'MENTION' &&
@@ -97,7 +105,8 @@ export function NotificationBell() {
         return;
       }
       if (n.actorId && (prefs.notifications.mutedUserIds ?? []).includes(n.actorId)) return;
-      if (n.channelId && (prefs.notifications.mutedChannelIds ?? []).includes(n.channelId)) return;
+      if (n.channelId && (prefs.notifications.mutedChannelIds ?? []).includes(n.channelId))
+        return;
       if (n.guildId && (prefs.notifications.mutedGuildIds ?? []).includes(n.guildId)) return;
       if (prefs.notifications.quietHours && inQuietHours()) return;
 
@@ -165,20 +174,37 @@ export function NotificationBell() {
     }
   };
 
+  const visible = useMemo(() => {
+    const mutedUsers = new Set(prefs.notifications.mutedUserIds ?? []);
+    const mutedChannels = new Set(prefs.notifications.mutedChannelIds ?? []);
+    const mutedGuilds = new Set(prefs.notifications.mutedGuildIds ?? []);
+    return items.filter((n) => {
+      if (n.actorId && mutedUsers.has(n.actorId)) return false;
+      if (n.channelId && mutedChannels.has(n.channelId)) return false;
+      if (n.guildId && mutedGuilds.has(n.guildId)) return false;
+      if (tab === 'unreads') return !n.readAt;
+      if (tab === 'mentions') return n.type === 'MENTION';
+      if (tab === 'bookmarks') return false;
+      if (tab === 'reminders') return false;
+      return true;
+    });
+  }, [items, prefs.notifications, tab]);
+
   if (!user) return null;
 
   const showBadge = prefs.notifications.unreadBadge && unread > 0;
   const locale = prefs.language.locale === 'en' ? 'en-US' : 'tr-TR';
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative" ref={rootRef} data-tour="notifications">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="relative h-8 w-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-        aria-label="Bildirimler"
+        aria-label="Gelen Kutusu"
+        title="Gelen Kutusu"
       >
-        <span className="material-symbols-outlined text-[20px] leading-none">notifications</span>
+        <span className="material-symbols-outlined text-[20px] leading-none">inbox</span>
         {showBadge && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center">
             {unread > 99 ? '99+' : unread}
@@ -187,87 +213,90 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[min(100vw-1.5rem,22rem)] max-h-[70vh] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[80] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-surface-container-highest gap-2">
-            <p className="font-headline-md text-on-surface">Bildirimler</p>
-            <div className="flex items-center gap-2 shrink-0">
-              {unread > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void markAll()}
-                  className="font-label-sm text-primary-container hover:underline"
-                >
-                  Tümünü oku
-                </button>
-              )}
+        <div className="absolute right-0 top-full mt-2 w-[min(100vw-1.5rem,26rem)] max-h-[75vh] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[80] flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-surface-container-highest gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="material-symbols-outlined text-[20px] text-on-surface">inbox</span>
+              <p className="font-headline-md text-on-surface">Gelen Kutusu</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => void markAll()}
+                className="h-8 w-8 rounded-md bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-bright"
+                aria-label="Tümünü okundu yap"
+                title="Tümünü okundu yap"
+              >
+                <span className="material-symbols-outlined text-[18px]">done_all</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  router.push('/notifications');
+                  router.push('/settings/notifications');
                 }}
-                className="font-label-sm text-outline hover:text-on-surface hover:underline"
+                className="h-8 w-8 rounded-md bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-bright"
+                aria-label="Gelen kutusu ayarları"
+                title="Gelen kutusu ayarları"
               >
-                Tümü
+                <span className="material-symbols-outlined text-[18px]">tune</span>
               </button>
             </div>
           </div>
-          <div className="overflow-y-auto flex-1 min-h-0">
-            {(() => {
-              const mutedUsers = new Set(prefs.notifications.mutedUserIds ?? []);
-              const mutedChannels = new Set(prefs.notifications.mutedChannelIds ?? []);
-              const mutedGuilds = new Set(prefs.notifications.mutedGuildIds ?? []);
-              const visible = items.filter((n) => {
-                if (n.readAt) return false;
-                if (
-                  prefs.notifications.mentionsOnly &&
-                  n.type !== 'MENTION' &&
-                  n.type !== 'FRIEND'
-                ) {
-                  return false;
+
+          <div className="flex items-stretch border-b border-surface-container-highest px-1 overflow-x-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={
+                  tab === t.id
+                    ? 'shrink-0 px-3 py-2.5 font-label-sm text-on-surface border-b-2 border-primary-container'
+                    : 'shrink-0 px-3 py-2.5 font-label-sm text-on-surface-variant hover:text-on-surface border-b-2 border-transparent'
                 }
-                if (n.actorId && mutedUsers.has(n.actorId)) return false;
-                if (n.channelId && mutedChannels.has(n.channelId)) return false;
-                if (n.guildId && mutedGuilds.has(n.guildId)) return false;
-                return true;
-              });
-              if (visible.length === 0) {
-                return (
-                  <DracoEmpty
-                    mood="sleep"
-                    size={72}
-                    title="Okunmamış bildirim yok"
-                    description="Tümünü yönetmek için “Tümü”ne git."
-                    className="py-space-lg"
-                  />
-                );
-              }
-              return visible.map((n) => (
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="overflow-y-auto flex-1 min-h-0">
+            {visible.length === 0 ? (
+              <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                <div className="relative mb-4">
+                  <div className="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[32px] text-on-surface-variant">
+                      inbox
+                    </span>
+                  </div>
+                  <span className="absolute -top-1 -right-1 text-dracula-orange text-sm">✦</span>
+                </div>
+                <p className="font-headline-md text-on-surface">Güncele yetiştin!</p>
+                <p className="mt-2 font-body-sm text-on-surface-variant max-w-xs">
+                  <span className="text-dracula-green font-semibold">TÜYO:</span> Gelen Kutusunu
+                  açmak için bildirim ikonuna tıkla; tümünü okundu yapmak için üstteki çift onay
+                  işaretini kullan.
+                </p>
+              </div>
+            ) : (
+              visible.map((n) => (
                 <button
                   key={n.id}
                   type="button"
                   onClick={() => void openItem(n)}
-                  className="w-full text-left px-space-md py-space-sm flex gap-space-sm hover:bg-surface-bright border-b border-surface-container-highest/60 bg-primary-container/10"
+                  className={
+                    n.readAt
+                      ? 'w-full text-left px-3 py-2.5 flex gap-2.5 hover:bg-surface-bright border-b border-surface-container-highest/60'
+                      : 'w-full text-left px-3 py-2.5 flex gap-2.5 hover:bg-surface-bright border-b border-surface-container-highest/60 bg-primary-container/10'
+                  }
                 >
                   <span className="material-symbols-outlined text-[22px] text-primary-container shrink-0 mt-0.5">
                     {typeIcon(n.type)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2 min-w-0">
-                      <p className="font-label-md text-on-surface truncate flex-1">{n.title}</p>
-                      <span className="font-label-sm text-outline shrink-0">
-                        {n.type === 'FRIEND'
-                          ? 'Arkadaş'
-                          : n.type === 'MENTION'
-                            ? 'Bahsetme'
-                            : n.type === 'DM'
-                              ? 'DM'
-                              : n.type === 'ANNOUNCEMENT'
-                                ? 'Duyuru'
-                                : 'Sistem'}
-                      </span>
-                    </div>
-                    <p className="font-body-sm text-on-surface-variant line-clamp-3 mt-0.5">
+                    <p className="font-label-md text-on-surface truncate">{n.title}</p>
+                    <p className="font-body-sm text-on-surface-variant line-clamp-2 mt-0.5">
                       {n.body}
                     </p>
                     <p className="font-label-sm text-outline mt-1">
@@ -275,8 +304,8 @@ export function NotificationBell() {
                     </p>
                   </div>
                 </button>
-              ));
-            })()}
+              ))
+            )}
           </div>
         </div>
       )}

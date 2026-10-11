@@ -7,7 +7,32 @@ import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { presenceDotClass, presenceLabelTr } from '../lib/presence';
+import { Tooltip } from './Tooltip';
 import { VolumeSlider } from './VolumeSlider';
+
+function formatElapsed(joinedAt: string): string {
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(joinedAt).getTime()) / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function useElapsedLabel(joinedAt?: string | null) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    if (!joinedAt) {
+      setLabel('');
+      return;
+    }
+    const tick = () => setLabel(formatElapsed(joinedAt));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [joinedAt]);
+  return label;
+}
 
 export type SidebarChannelType = 'text' | 'voice' | 'forum' | 'game' | 'watch';
 
@@ -19,6 +44,8 @@ export interface SidebarVoiceMember {
   deafened?: boolean;
   speaking?: boolean;
   isBot?: boolean;
+  /** ISO — kanala katıldığı an */
+  joinedAt?: string;
   /** MOVE_MEMBERS ile başka ses kanalına sürükle */
   draggable?: boolean;
   contextActions?: SidebarVoiceMemberAction[];
@@ -66,10 +93,16 @@ export interface SidebarChannelItem {
   badgeCount?: number;
   memberCount?: string;
   voiceMembers?: SidebarVoiceMember[];
+  /** Görüntüleyenin bu kanaldaki katılım zamanı — süre sayacı için */
+  viewerJoinedAt?: string | null;
+  /** Aktif ses/aktivite kanalındaysa davet butonu */
+  showVoiceInvite?: boolean;
   onClick?: () => void;
   onContextMenu?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onInvite?: () => void;
+  onOpenChat?: () => void;
   /** Üye sürükle-bırak (ses kanalına taşı) */
   onDropMember?: (userId: string) => void;
   /** Kanal sırası için sürükle */
@@ -94,8 +127,15 @@ export interface UserPanelProps {
   noiseNote?: string | null;
   voiceConnected?: boolean;
   voiceChannelName?: string | null;
+  voiceServerName?: string | null;
   /** WebRTC ping (RTT), ms */
   voiceLatencyMs?: number | null;
+  cameraOn?: boolean;
+  screenSharing?: boolean;
+  onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
+  onActivitiesClick?: () => void;
+  onSoundboardClick?: () => void;
   /** Aktif ekran paylaşımı izleniyor / duraklatıldı — ses barı yanında kontrol */
   screenShareViewControl?: {
     paused: boolean;
@@ -256,7 +296,14 @@ export function UserPanel({
   noiseNote,
   voiceConnected,
   voiceChannelName,
+  voiceServerName = null,
   voiceLatencyMs = null,
+  cameraOn = false,
+  screenSharing = false,
+  onToggleCamera,
+  onToggleScreenShare,
+  onActivitiesClick,
+  onSoundboardClick,
   screenShareViewControl = null,
   micVolume = 1,
   outputVolume = 1,
@@ -316,24 +363,32 @@ export function UserPanel({
   };
 
   const statusOptions: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
-  const handleLine =
-    customStatus?.trim() ||
-    (username ? `@${username.replace(/^@/, '')}` : presenceLabelTr(status));
+  const handleLine = voiceConnected
+    ? 'Sesli aramada'
+    : customStatus?.trim() ||
+      (username ? `@${username.replace(/^@/, '')}` : presenceLabelTr(status));
   const inputLabel =
     inputDevices.find((d) => d.deviceId === inputDeviceId)?.label || 'Sistem varsayılanı';
   const outputLabel =
     outputDevices.find((d) => d.deviceId === outputDeviceId)?.label || 'Sistem varsayılanı';
 
+  const voiceTone =
+    voiceLatencyMs != null && voiceLatencyMs >= 150
+      ? 'error'
+      : voiceLatencyMs != null && voiceLatencyMs >= 80
+        ? 'warn'
+        : 'ok';
+
   return (
     <div className="bg-surface-container-lowest border-t border-surface-container-high shadow-[0_-4px_16px_rgba(0,0,0,0.2)]">
       {voiceConnected && voiceChannelName && (
-        <div className="px-2 pt-2">
+        <div className="px-2 pt-2 space-y-1.5">
           <div
             className={cn(
               'rounded-lg border px-2.5 py-1.5 flex items-center gap-1.5',
-              voiceLatencyMs != null && voiceLatencyMs >= 150
+              voiceTone === 'error'
                 ? 'bg-error/15 border-error/35'
-                : voiceLatencyMs != null && voiceLatencyMs >= 80
+                : voiceTone === 'warn'
                   ? 'bg-dracula-orange/15 border-dracula-orange/35'
                   : 'bg-dracula-green/15 border-dracula-green/30',
             )}
@@ -341,16 +396,16 @@ export function UserPanel({
             <span
               className={cn(
                 'material-symbols-outlined text-[16px] leading-none',
-                voiceLatencyMs != null && voiceLatencyMs >= 150
+                voiceTone === 'error'
                   ? 'text-error'
-                  : voiceLatencyMs != null && voiceLatencyMs >= 80
+                  : voiceTone === 'warn'
                     ? 'text-dracula-orange'
                     : 'text-dracula-green',
               )}
             >
-              {voiceLatencyMs != null && voiceLatencyMs >= 150
+              {voiceTone === 'error'
                 ? 'signal_cellular_alt_1_bar'
-                : voiceLatencyMs != null && voiceLatencyMs >= 80
+                : voiceTone === 'warn'
                   ? 'signal_cellular_alt_2_bar'
                   : 'signal_cellular_alt'}
             </span>
@@ -361,68 +416,114 @@ export function UserPanel({
             >
               <p
                 className={cn(
-                  'font-label-sm leading-tight',
-                  voiceLatencyMs != null && voiceLatencyMs >= 150
+                  'font-label-sm leading-tight font-semibold',
+                  voiceTone === 'error'
                     ? 'text-error'
-                    : voiceLatencyMs != null && voiceLatencyMs >= 80
+                    : voiceTone === 'warn'
                       ? 'text-dracula-orange'
                       : 'text-dracula-green',
                 )}
               >
-                Ses bağlı
-                {voiceLatencyMs != null && (
-                  <span className="tabular-nums">
-                    {' '}
-                    · {voiceLatencyMs} ms ping
-                  </span>
-                )}
+                Ses Bağlantısı Kuruldu
               </p>
-              <p className="font-label-sm text-on-surface truncate leading-tight">
+              <p className="font-label-sm text-on-surface-variant truncate leading-tight text-[11px]">
                 {voiceChannelName}
-                {voiceLatencyMs != null && (
-                  <span className="text-on-surface-variant tabular-nums">
-                    {' '}
-                    · ~{Math.max(1, Math.round(voiceLatencyMs / 2))} ms gecikme
-                  </span>
-                )}
+                {voiceServerName ? ` / ${voiceServerName}` : ''}
               </p>
             </button>
             {screenShareViewControl && (
-              <button
-                type="button"
-                onClick={screenShareViewControl.onToggle}
-                className={cn(
-                  'h-8 px-2 rounded-md flex items-center gap-1 font-label-sm transition-colors',
-                  'bg-surface-container-highest/40 backdrop-blur-sm border border-outline-variant/30',
-                  screenShareViewControl.paused
-                    ? 'text-primary-container hover:bg-primary-container/20'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
-                )}
-                aria-label={
-                  screenShareViewControl.paused
-                    ? 'İzlemeye devam et'
-                    : 'İzlemeyi durdur'
-                }
-                title={
-                  screenShareViewControl.paused
-                    ? 'İzlemeye devam et'
-                    : 'İzlemeyi durdur'
+              <Tooltip
+                content={
+                  screenShareViewControl.paused ? 'İzlemeye devam et' : 'İzlemeyi durdur'
                 }
               >
-                <span className="material-symbols-outlined text-[16px] leading-none">
-                  {screenShareViewControl.paused ? 'play_arrow' : 'pause'}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={screenShareViewControl.onToggle}
+                  className={cn(
+                    'h-8 w-8 rounded-md flex items-center justify-center transition-colors',
+                    'bg-surface-container-highest/40 border border-outline-variant/30',
+                    screenShareViewControl.paused
+                      ? 'text-primary-container hover:bg-primary-container/20'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
+                  )}
+                  aria-label={
+                    screenShareViewControl.paused
+                      ? 'İzlemeye devam et'
+                      : 'İzlemeyi durdur'
+                  }
+                >
+                  <span className="material-symbols-outlined text-[16px] leading-none">
+                    {screenShareViewControl.paused ? 'play_arrow' : 'graphic_eq'}
+                  </span>
+                </button>
+              </Tooltip>
             )}
-            <button
-              type="button"
-              onClick={onVoiceDisconnectClick}
-              className="w-8 h-8 rounded-md flex items-center justify-center text-error hover:bg-error/15"
-              aria-label="Sesten ayrıl"
-              title="Sesten ayrıl"
-            >
-              <span className="material-symbols-outlined text-[18px] leading-none">call_end</span>
-            </button>
+            <Tooltip content="Sesten ayrıl">
+              <button
+                type="button"
+                onClick={onVoiceDisconnectClick}
+                className="w-8 h-8 rounded-md flex items-center justify-center text-on-surface hover:bg-error/15 hover:text-error"
+                aria-label="Sesten ayrıl"
+              >
+                <span className="material-symbols-outlined text-[18px] leading-none">call_end</span>
+              </button>
+            </Tooltip>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {(
+              [
+                {
+                  key: 'cam',
+                  label: cameraOn ? 'Kamerayı kapat' : 'Kamera',
+                  icon: cameraOn ? 'videocam' : 'videocam_off',
+                  onClick: onToggleCamera,
+                  active: cameraOn,
+                },
+                {
+                  key: 'share',
+                  label: screenSharing ? 'Paylaşımı durdur' : 'Ekran paylaş',
+                  icon: 'screen_share',
+                  onClick: onToggleScreenShare,
+                  active: screenSharing,
+                },
+                {
+                  key: 'act',
+                  label: 'Aktiviteler',
+                  icon: 'rocket_launch',
+                  onClick: onActivitiesClick,
+                  active: false,
+                },
+                {
+                  key: 'sb',
+                  label: 'Ses panosu',
+                  icon: 'campaign',
+                  onClick: onSoundboardClick,
+                  active: false,
+                  disabled: !onSoundboardClick,
+                },
+              ] as const
+            ).map((btn) => (
+              <Tooltip key={btn.key} content={btn.label}>
+                <button
+                  type="button"
+                  disabled={'disabled' in btn ? Boolean(btn.disabled) : !btn.onClick}
+                  onClick={btn.onClick}
+                  className={cn(
+                    'h-8 rounded-md flex items-center justify-center transition-colors',
+                    'bg-surface-container-high text-on-surface-variant',
+                    'hover:bg-surface-container-highest hover:text-on-surface',
+                    'disabled:opacity-40 disabled:pointer-events-none',
+                    btn.active && 'text-primary-container bg-primary-container/15',
+                  )}
+                  aria-label={btn.label}
+                >
+                  <span className="material-symbols-outlined text-[18px] leading-none">
+                    {btn.icon}
+                  </span>
+                </button>
+              </Tooltip>
+            ))}
           </div>
         </div>
       )}
@@ -446,7 +547,17 @@ export function UserPanel({
               <span className="font-label-md text-on-surface truncate font-semibold">
                 {displayName}
               </span>
-              <span className="font-label-sm text-on-surface-variant truncate text-[11px]">
+              <span
+                className={cn(
+                  'font-label-sm truncate text-[11px]',
+                  voiceConnected ? 'text-dracula-green' : 'text-on-surface-variant',
+                )}
+              >
+                {voiceConnected && (
+                  <span className="material-symbols-outlined text-[12px] align-[-2px] mr-0.5">
+                    volume_up
+                  </span>
+                )}
                 {handleLine}
               </span>
             </div>
@@ -817,8 +928,12 @@ function ChannelRow({
   const isGame = channel.type === 'game';
   const isWatch = channel.type === 'watch';
   const isMessageChannel = isText || isForum;
+  const isVoiceLike = !isMessageChannel;
   const voiceMembers = channel.voiceMembers ?? [];
-  const hasActions = Boolean(channel.onEdit || channel.onDelete);
+  const elapsed = useElapsedLabel(channel.viewerJoinedAt);
+  const hasHoverActions = Boolean(
+    channel.onOpenChat || channel.onInvite || channel.onEdit || channel.onDelete,
+  );
   const [dragOver, setDragOver] = useState(false);
   const [reorderOver, setReorderOver] = useState(false);
 
@@ -941,6 +1056,11 @@ function ChannelRow({
             </span>
           )}
           <span className="font-body-sm text-body-sm truncate flex-1">{channel.name}</span>
+          {elapsed && (
+            <span className="font-label-sm text-[11px] text-dracula-green tabular-nums font-semibold shrink-0 group-hover/row:opacity-0">
+              {elapsed}
+            </span>
+          )}
           {channel.badgeCount != null && channel.badgeCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-label-sm leading-none font-bold">
               {channel.badgeCount}
@@ -949,134 +1069,189 @@ function ChannelRow({
           {channel.unread && !channel.active && (
             <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Okunmamış" />
           )}
-          {!isMessageChannel && voiceMembers.length > 0 && (
-            <span className="font-label-sm text-label-sm text-primary font-bold">
+          {isVoiceLike && voiceMembers.length > 0 && !elapsed && (
+            <span className="font-label-sm text-label-sm text-primary font-bold group-hover/row:opacity-0">
               {voiceMembers.length}
             </span>
           )}
         </button>
-        {hasActions && (
-          <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/row:flex items-center gap-0.5 bg-surface-container-high rounded-md px-0.5">
+        {hasHoverActions && (
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden md:group-hover/row:flex items-center gap-0.5 bg-surface-container-high rounded-md px-0.5 z-[1]">
+            {channel.onOpenChat && (
+              <Tooltip content="Sohbeti aç">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    channel.onOpenChat?.();
+                  }}
+                  className="w-6 h-6 flex items-center justify-center rounded text-outline hover:text-on-surface"
+                  aria-label="Sohbeti aç"
+                >
+                  <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
+                </button>
+              </Tooltip>
+            )}
+            {channel.onInvite && (
+              <Tooltip content="Sesli Sohbete Davet et">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    channel.onInvite?.();
+                  }}
+                  className="w-6 h-6 flex items-center justify-center rounded text-outline hover:text-on-surface"
+                  aria-label="Sesli Sohbete Davet et"
+                >
+                  <span className="material-symbols-outlined text-[14px]">person_add</span>
+                </button>
+              </Tooltip>
+            )}
             {channel.onEdit && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  channel.onEdit?.();
-                }}
-                className="w-6 h-6 flex items-center justify-center rounded text-outline hover:text-on-surface"
-                aria-label="Kanalı düzenle"
-              >
-                <span className="material-symbols-outlined text-[14px]">edit</span>
-              </button>
+              <Tooltip content="Kanalı düzenle">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    channel.onEdit?.();
+                  }}
+                  className="w-6 h-6 flex items-center justify-center rounded text-outline hover:text-on-surface"
+                  aria-label="Kanalı düzenle"
+                >
+                  <span className="material-symbols-outlined text-[14px]">settings</span>
+                </button>
+              </Tooltip>
             )}
             {channel.onDelete && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  channel.onDelete?.();
-                }}
-                className="w-6 h-6 flex items-center justify-center rounded text-outline hover:text-error"
-                aria-label="Kanalı sil"
-              >
-                <span className="material-symbols-outlined text-[14px]">delete</span>
-              </button>
+              <Tooltip content="Kanalı sil">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    channel.onDelete?.();
+                  }}
+                  className="w-6 h-6 flex items-center justify-center rounded text-outline hover:text-error"
+                  aria-label="Kanalı sil"
+                >
+                  <span className="material-symbols-outlined text-[14px]">delete</span>
+                </button>
+              </Tooltip>
             )}
           </div>
         )}
       </div>
 
-      {!isMessageChannel && voiceMembers.length > 0 && (
-        <ul className="ml-5 flex flex-col gap-1 mt-0.5">
-          {voiceMembers.map((m) => {
-            const hasMenu =
-              (m.contextActions?.length ?? 0) > 0 || Boolean(m.onParticipantVolumeChange);
-            return (
-            <li
-              key={m.id}
-              role={onVoiceMemberClick ? 'button' : undefined}
-              tabIndex={onVoiceMemberClick ? 0 : undefined}
-              draggable={Boolean(m.draggable)}
-              onDragStart={
-                m.draggable
-                  ? (e) => {
-                      e.dataTransfer.setData('application/x-dracord-user', m.id);
-                      e.dataTransfer.effectAllowed = 'move';
+      {isVoiceLike && (voiceMembers.length > 0 || channel.showVoiceInvite) && (
+        <div className="ml-5 flex flex-col gap-1 mt-0.5">
+          {voiceMembers.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {voiceMembers.map((m) => {
+                const hasMenu =
+                  (m.contextActions?.length ?? 0) > 0 || Boolean(m.onParticipantVolumeChange);
+                return (
+                  <li
+                    key={m.id}
+                    role={onVoiceMemberClick ? 'button' : undefined}
+                    tabIndex={onVoiceMemberClick ? 0 : undefined}
+                    draggable={Boolean(m.draggable)}
+                    onDragStart={
+                      m.draggable
+                        ? (e) => {
+                            e.dataTransfer.setData('application/x-dracord-user', m.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-              onClick={
-                onVoiceMemberClick
-                  ? (e) => {
-                      e.stopPropagation();
-                      onVoiceMemberClick(m.id);
+                    onClick={
+                      onVoiceMemberClick
+                        ? (e) => {
+                            e.stopPropagation();
+                            onVoiceMemberClick(m.id);
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-              onKeyDown={
-                onVoiceMemberClick
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onVoiceMemberClick(m.id);
-                      }
+                    onKeyDown={
+                      onVoiceMemberClick
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onVoiceMemberClick(m.id);
+                            }
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-              onContextMenu={hasMenu ? (e) => onVoiceMemberContextMenu(e, m) : undefined}
-              className={cn(
-                'flex items-center gap-space-sm px-space-sm py-1 rounded-md text-on-surface-variant',
-                m.speaking && 'bg-primary-container/10',
-                onVoiceMemberClick && 'cursor-pointer hover:bg-surface-container hover:text-on-surface',
-                m.draggable && 'cursor-grab active:cursor-grabbing',
-                voiceMemberMenu?.member.id === m.id && 'bg-surface-container',
-              )}
-            >
-              <div
-                className={cn(
-                  'rounded-full shrink-0',
-                  m.speaking && 'ring-2 ring-primary-container ring-offset-1 ring-offset-surface-container-low',
-                )}
-              >
-                <Avatar
-                  displayName={m.displayName}
-                  imageUrl={m.avatarUrl}
-                  size="md"
-                  statusRing={false}
-                />
-              </div>
-              <span
-                className={cn(
-                  'font-body-sm text-body-sm truncate flex-1',
-                  m.speaking && 'text-primary-container font-semibold',
-                )}
-              >
-                {m.displayName}
-              </span>
-              {m.isBot && (
-                <span className="shrink-0 px-1 py-px rounded text-[8px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
-                  BOT
-                </span>
-              )}
-              {m.muted && (
-                <span className="material-symbols-outlined text-[16px] text-error">mic_off</span>
-              )}
-              {m.deafened && (
-                <span className="relative inline-flex w-[16px] h-[16px] text-error" aria-hidden>
-                  <span
-                    className="material-symbols-outlined leading-none"
-                    style={{ fontSize: 16 }}
+                    onContextMenu={hasMenu ? (e) => onVoiceMemberContextMenu(e, m) : undefined}
+                    className={cn(
+                      'flex items-center gap-space-sm px-space-sm py-1 rounded-md text-on-surface-variant',
+                      m.speaking && 'bg-primary-container/10',
+                      onVoiceMemberClick &&
+                        'cursor-pointer hover:bg-surface-container hover:text-on-surface',
+                      m.draggable && 'cursor-grab active:cursor-grabbing',
+                      voiceMemberMenu?.member.id === m.id && 'bg-surface-container',
+                    )}
                   >
-                    headphones
-                  </span>
-                  <span className="absolute left-1/2 top-1/2 block w-[18px] h-[1.5px] -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] rounded-full bg-current" />
-                </span>
-              )}
-            </li>
-            );
-          })}
-        </ul>
+                    <div
+                      className={cn(
+                        'rounded-full shrink-0',
+                        m.speaking &&
+                          'ring-2 ring-primary-container ring-offset-1 ring-offset-surface-container-low',
+                      )}
+                    >
+                      <Avatar
+                        displayName={m.displayName}
+                        imageUrl={m.avatarUrl}
+                        size="md"
+                        statusRing={false}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        'font-body-sm text-body-sm truncate flex-1',
+                        m.speaking && 'text-primary-container font-semibold',
+                      )}
+                    >
+                      {m.displayName}
+                    </span>
+                    {m.isBot && (
+                      <span className="shrink-0 px-1 py-px rounded text-[8px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
+                        BOT
+                      </span>
+                    )}
+                    {m.muted && (
+                      <span className="material-symbols-outlined text-[16px] text-error">
+                        mic_off
+                      </span>
+                    )}
+                    {m.deafened && (
+                      <span className="relative inline-flex w-[16px] h-[16px] text-error" aria-hidden>
+                        <span
+                          className="material-symbols-outlined leading-none"
+                          style={{ fontSize: 16 }}
+                        >
+                          headphones
+                        </span>
+                        <span className="absolute left-1/2 top-1/2 block w-[18px] h-[1.5px] -translate-x-1/2 -translate-y-1/2 rotate-[-45deg] rounded-full bg-current" />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {channel.showVoiceInvite && channel.onInvite && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                channel.onInvite?.();
+              }}
+              className="flex items-center gap-2 mx-1 mt-0.5 px-2.5 py-1.5 rounded-md bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm transition-colors"
+            >
+              <span className="material-symbols-outlined text-[16px]">person_add</span>
+              Sesli Sohbete Davet et
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

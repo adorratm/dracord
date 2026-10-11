@@ -219,6 +219,28 @@ html.light {
   }
 }
 
+/* react-toastify — Dracula / Light uyumu */
+.Toastify__toast-container {
+  z-index: 10000;
+}
+.Toastify__toast {
+  font-family: inherit;
+}
+.Toastify__progress-bar--success,
+.Toastify__progress-bar--info {
+  background: #bd93f9 !important;
+}
+.Toastify__progress-bar--error {
+  background: #ff5555 !important;
+}
+.Toastify__progress-bar--warning {
+  background: #ffb86c !important;
+}
+html.light .Toastify__progress-bar--success,
+html.light .Toastify__progress-bar--info {
+  background: var(--md-sys-color-primary, #7c3aed) !important;
+}
+
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';
   font-weight: normal;

@@ -12,7 +12,9 @@ import {
   Avatar,
   ChannelSidebar,
   ChatInput,
+  ChatSkeleton,
   ConfirmDialog,
+  GuildNavSkeleton,
   MemberList,
   MessageList,
   Modal,
@@ -253,6 +255,9 @@ export function GuildChannelView({
   >([]);
   const [threadsPreviewBusy, setThreadsPreviewBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [voiceInviteChannel, setVoiceInviteChannel] = useState<ChannelSummary | null>(null);
+  const [voiceInviteFriends, setVoiceInviteFriends] = useState<PublicUser[]>([]);
+  const [voiceInviteBusyId, setVoiceInviteBusyId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
@@ -1545,6 +1550,20 @@ export function GuildChannelView({
         afkChannelId: guild?.afkChannelId ?? null,
         collapsedCategoryIds: collapsedCats,
         onToggleCategory: toggleCategoryCollapse,
+        onInviteChannel: (ch) => {
+          setVoiceInviteChannel(ch);
+          void (async () => {
+            try {
+              const friends = await client.getFriends();
+              setVoiceInviteFriends(friends);
+            } catch {
+              setVoiceInviteFriends([]);
+            }
+          })();
+        },
+        onOpenVoiceChat: (ch) => {
+          router.push(`/channels/${guildId}/${ch.id}`);
+        },
         onReorderChannels: canManageChannels
           ? (categoryId, orderedIds) => {
               void (async () => {
@@ -2153,7 +2172,10 @@ export function GuildChannelView({
   if (loading && !guild) {
     return (
       <AppShell guilds={guilds} activeGuildId={guildId} onGuildsChanged={() => void reload()}>
-        <div className="flex flex-1 items-center justify-center text-outline">Sunucu yükleniyor…</div>
+        <div className="flex flex-1 min-h-0 min-w-0">
+          <GuildNavSkeleton className="hidden md:flex" />
+          <ChatSkeleton />
+        </div>
       </AppShell>
     );
   }
@@ -2201,7 +2223,18 @@ export function GuildChannelView({
         noiseNote: voice.noiseNote,
         voiceConnected: inVoice,
         voiceChannelName: voiceChannel?.name ?? null,
+        voiceServerName: guild?.name ?? null,
         voiceLatencyMs: inVoice ? voice.latencyMs : null,
+        cameraOn: inVoice ? voice.cameraEnabled : false,
+        screenSharing: inVoice ? voice.screenSharing : false,
+        onToggleCamera: inVoice ? () => void voice.toggleCamera() : undefined,
+        onToggleScreenShare: inVoice ? () => void voice.toggleScreenShare() : undefined,
+        onActivitiesClick: inVoice
+          ? () => {
+              const game = channels.find((c) => c.type === 'GAME');
+              if (game) router.push(`/channels/${guildId}/${game.id}`);
+            }
+          : undefined,
         screenShareViewControl:
           inVoice &&
           (Boolean(voice.activeScreenShare) || voice.screenShareViewPaused) &&
@@ -2579,9 +2612,7 @@ export function GuildChannelView({
           />
         </div>
       ) : channelPending ? (
-        <div className="flex flex-1 min-w-0 min-h-0 items-center justify-center bg-surface text-outline font-body-md">
-          Kanal yükleniyor…
-        </div>
+        <ChatSkeleton />
       ) : channelsEmpty || navError ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col items-center justify-center gap-3 bg-surface px-4 text-center">
           <p className="font-body-md text-outline">
@@ -2928,6 +2959,20 @@ export function GuildChannelView({
                       void client.blockUser(m.author.id).then(() => hideMessage(m.id, true));
                     },
                     onVotePoll: (m, optionId) => void votePoll(m.id, optionId),
+                    onEmbedAction: (m, action, embed) => {
+                      void import('@/lib/toast').then(({ toast }) => {
+                        if (action.action === 'replay' && embed.url) {
+                          void sendMessage(`/oynat ${embed.url}`);
+                          toast.success('Tekrar kuyruğa eklendi');
+                          return;
+                        }
+                        if (action.action === 'lyrics') {
+                          toast.info(
+                            'Şarkı sözleri yakında — şimdilik YouTube üzerinden bakabilirsin.',
+                          );
+                        }
+                      });
+                    },
                     onReply: isForumView
                       ? (m) => {
                           setThreadRoot(m);
@@ -3071,6 +3116,19 @@ export function GuildChannelView({
               Kategori oluştur
             </button>
           )}
+          <button
+            type="button"
+            className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
+            onClick={() => {
+              setServerMenuOpen(false);
+              router.push(`/guilds/${guildId}/boost`);
+            }}
+          >
+            <span className="material-symbols-outlined text-[18px] text-primary-container">
+              diamond
+            </span>
+            Sunucu Takviyeleri
+          </button>
           <button
             type="button"
             className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
@@ -3517,6 +3575,79 @@ export function GuildChannelView({
         />
       </Modal>
 
+      <Modal
+        open={Boolean(voiceInviteChannel)}
+        title="Sesli Sohbete Davet et"
+        onClose={() => {
+          setVoiceInviteChannel(null);
+          setVoiceInviteFriends([]);
+        }}
+      >
+        <p className="font-body-sm text-on-surface-variant mb-space-sm">
+          {voiceInviteChannel
+            ? `${voiceInviteChannel.name} kanalına arkadaşlarını davet et.`
+            : ''}
+        </p>
+        <ul className="max-h-72 overflow-y-auto flex flex-col gap-1">
+          {voiceInviteFriends.length === 0 && (
+            <li className="py-6 text-center font-body-sm text-outline">Arkadaş listesi boş</li>
+          )}
+          {voiceInviteFriends.map((f) => (
+            <li
+              key={f.id}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-container"
+            >
+              <Avatar displayName={f.displayName} imageUrl={f.avatarUrl} size="md" />
+              <span className="flex-1 font-label-md text-on-surface truncate">
+                {f.displayName}
+              </span>
+              <button
+                type="button"
+                disabled={voiceInviteBusyId === f.id}
+                className="h-8 px-2.5 rounded-md bg-surface-container-high hover:bg-primary-container hover:text-on-primary-container font-label-sm flex items-center gap-1 disabled:opacity-50"
+                onClick={() => {
+                  void (async () => {
+                    if (!voiceInviteChannel) return;
+                    setVoiceInviteBusyId(f.id);
+                    try {
+                      const invite = await client.createInvite(guildId);
+                      const origin =
+                        typeof window !== 'undefined' ? window.location.origin : '';
+                      const url = `${origin}/invite/${invite.code}`;
+                      const dm = await client.openDm(f.id);
+                      await client.sendMessage(
+                        dm.id,
+                        `Sesli sohbete davet: **${voiceInviteChannel.name}** — ${url}`,
+                      );
+                      setVoiceInviteChannel(null);
+                    } catch (err) {
+                      setDmError(
+                        err instanceof Error ? err.message : 'Davet gönderilemedi',
+                      );
+                    } finally {
+                      setVoiceInviteBusyId(null);
+                    }
+                  })();
+                }}
+              >
+                <span className="material-symbols-outlined text-[16px]">person_add</span>
+                Davet
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          className="mt-3 w-full h-9 rounded-lg bg-surface-container-high font-label-sm text-on-surface-variant hover:text-on-surface"
+          onClick={() => {
+            void createInvite();
+            setVoiceInviteChannel(null);
+          }}
+        >
+          Davet linki kopyala…
+        </button>
+      </Modal>
+
       <Modal open={Boolean(inviteUrl)} title="Davet linki" onClose={() => setInviteUrl(null)}>
         <p className="font-body-sm text-on-surface-variant mb-space-sm">
           Bu linki paylaşarak sunucuya davet edebilirsin.
@@ -3897,6 +4028,7 @@ export function GuildChannelView({
       <UserProfileCard
         open={Boolean(profileUser)}
         onClose={() => setProfileUser(null)}
+        variant="popout"
         user={{
           id: profileUser?.id ?? '',
           displayName: profileUser?.displayName ?? '',

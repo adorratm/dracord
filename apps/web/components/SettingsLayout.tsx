@@ -46,6 +46,21 @@ const NAV: NavDef[] = [
     ],
   },
   {
+    id: 'billing',
+    titleKey: 'nav.billing',
+    items: [
+      { id: 'nitro', labelKey: 'nav.nitro', icon: 'workspace_premium', href: '/settings/nitro' },
+      { id: 'boost', labelKey: 'nav.boost', icon: 'diamond', href: '/settings/boost' },
+      {
+        id: 'subscriptions',
+        labelKey: 'nav.subscriptions',
+        icon: 'receipt_long',
+        href: '/settings/subscriptions',
+      },
+      { id: 'gifts', labelKey: 'nav.gifts', icon: 'card_giftcard', href: '/settings/gifts' },
+    ],
+  },
+  {
     id: 'experience',
     titleKey: 'nav.experience',
     items: [

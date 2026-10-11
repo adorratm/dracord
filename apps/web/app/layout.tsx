@@ -10,6 +10,7 @@ import { VoiceSessionProvider } from '@/components/VoiceSessionProvider';
 import { DmIncomingCallListener } from '@/components/DmCallControls';
 import { PreferencesProvider } from '@/lib/user-preferences';
 import { I18nProvider } from '@/lib/i18n';
+import { AppToaster } from '@/components/AppToaster';
 import './globals.css';
 
 const inter = Inter({
@@ -135,6 +136,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <SettingsReturnTracker />
                   <DmIncomingCallListener />
                   {children}
+                  <AppToaster />
                 </VoiceSessionProvider>
               </OnboardingGate>
             </I18nProvider>

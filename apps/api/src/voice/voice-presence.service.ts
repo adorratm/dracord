@@ -65,6 +65,7 @@ export class VoicePresenceService implements OnModuleDestroy {
     flags?: { muted?: boolean; deafened?: boolean },
   ): Promise<{ joined: VoiceStatePayload; left: VoiceStatePayload[] }> {
     const user = await this.em.findOneOrFail(User, { where: { id: userId } });
+    const existing = (await this.listChannel(guildId, channelId)).find((m) => m.id === userId);
     const member: VoiceMemberSummary = {
       id: user.id,
       displayName: user.displayName,
@@ -72,6 +73,7 @@ export class VoicePresenceService implements OnModuleDestroy {
       muted: flags?.muted ?? false,
       deafened: flags?.deafened ?? false,
       isBot: Boolean(user.isBot),
+      joinedAt: existing?.joinedAt ?? new Date().toISOString(),
     };
 
     // Aynı kullanıcı başka kanallardaysa çıkar (DM araması ↔ sunucu sesi dahil)

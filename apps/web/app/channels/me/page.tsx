@@ -239,55 +239,102 @@ export default function FriendsHubPage() {
 
   const dmSidebar = (
     <aside className="w-full md:w-60 h-full shrink-0 border-r border-surface-container-highest bg-surface-container-low flex flex-col min-h-0">
-      <div className="px-space-md py-space-md border-b border-surface-container-highest">
-        <p className="font-label-sm text-on-surface-variant uppercase tracking-wider font-bold">
-          Mesajlar
+      <div className="px-2 pt-3 pb-2">
+        <button
+          type="button"
+          className="w-full h-8 px-2 rounded-md bg-surface-container-highest text-left font-body-sm text-on-surface-variant hover:text-on-surface truncate"
+          onClick={() => setAddOpen(true)}
+        >
+          Sohbet bul ya da başlat
+        </button>
+      </div>
+      <nav className="px-2 flex flex-col gap-0.5">
+        {(
+          [
+            { label: 'Arkadaşlar', icon: 'group', onClick: () => undefined },
+            {
+              label: 'Nitro',
+              icon: 'workspace_premium',
+              onClick: () => router.push('/settings/nitro'),
+            },
+            { label: 'Mağaza', icon: 'storefront', onClick: () => router.push('/settings/gifts') },
+            {
+              label: 'Takviye',
+              icon: 'diamond',
+              onClick: () => router.push('/settings/boost'),
+            },
+          ] as const
+        ).map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={item.onClick}
+            className="h-10 px-2 rounded-md flex items-center gap-3 text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-label-md"
+          >
+            <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+        <p className="font-label-sm text-on-surface-variant uppercase tracking-wider font-bold text-[11px]">
+          Direkt Mesajlar
         </p>
         <button
           type="button"
-          className="mt-space-sm w-full h-9 rounded-lg bg-primary-container text-on-primary-container font-label-sm"
-          onClick={() => user && void openDm(user.id)}
+          className="w-5 h-5 flex items-center justify-center text-on-surface-variant hover:text-on-surface"
+          aria-label="Yeni DM"
+          onClick={() => setAddOpen(true)}
         >
-          Notlarım
+          <span className="material-symbols-outlined text-[16px]">add</span>
         </button>
-        {dmError && <p className="mt-space-xs font-body-sm text-error">{dmError}</p>}
       </div>
-      <ul className="flex-1 overflow-y-auto py-space-sm px-space-xs">
+      {dmError && <p className="px-3 font-body-sm text-error">{dmError}</p>}
+      <ul className="flex-1 overflow-y-auto py-1 px-2">
+        <li>
+          <button
+            type="button"
+            onClick={() => user && void openDm(user.id)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-container text-left"
+          >
+            <span className="material-symbols-outlined text-[20px] text-outline shrink-0 w-8 h-8 flex items-center justify-center">
+              sticky_note_2
+            </span>
+            <span className="font-body-sm text-on-surface truncate flex-1">Notlarım</span>
+          </button>
+        </li>
         {dms.length === 0 ? (
-          <li className="px-space-sm py-space-md font-body-sm text-outline">
-            Henüz DM yok. Üye listesinden birine tıkla.
-          </li>
+          <li className="px-2 py-3 font-body-sm text-outline">Henüz DM yok.</li>
         ) : (
-          dms.map((ch) => (
-            <li key={ch.id}>
-              <button
-                type="button"
-                onClick={() => openDmChannel(ch.id)}
-                className="w-full flex items-center gap-space-sm px-space-sm py-space-xs rounded-lg hover:bg-surface-container text-left"
-              >
-                {ch.selfNotes ? (
-                  <span className="material-symbols-outlined text-[22px] text-outline shrink-0 w-8 h-8 flex items-center justify-center">
-                    sticky_note_2
-                  </span>
-                ) : (
+          dms
+            .filter((ch) => !ch.selfNotes)
+            .map((ch) => (
+              <li key={ch.id}>
+                <button
+                  type="button"
+                  onClick={() => openDmChannel(ch.id)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-container text-left"
+                >
                   <Avatar
                     displayName={ch.name}
                     imageUrl={ch.peerAvatarUrl}
                     size="md"
                     status={ch.peerStatus ?? undefined}
                   />
-                )}
-                <span className="font-body-sm text-on-surface truncate flex-1">{ch.name}</span>
-                {(ch.unreadCount ?? 0) > 0 ? (
-                  <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-[11px] font-bold flex items-center justify-center">
-                    {ch.unreadCount! > 99 ? '99+' : ch.unreadCount}
-                  </span>
-                ) : ch.unread ? (
-                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Okunmamış" />
-                ) : null}
-              </button>
-            </li>
-          ))
+                  <span className="font-body-sm text-on-surface truncate flex-1">{ch.name}</span>
+                  {(ch.unreadCount ?? 0) > 0 ? (
+                    <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-[11px] font-bold flex items-center justify-center">
+                      {ch.unreadCount! > 99 ? '99+' : ch.unreadCount}
+                    </span>
+                  ) : ch.unread ? (
+                    <span
+                      className="w-2 h-2 rounded-full bg-primary shrink-0"
+                      aria-label="Okunmamış"
+                    />
+                  ) : null}
+                </button>
+              </li>
+            ))
         )}
       </ul>
     </aside>
@@ -319,48 +366,64 @@ export default function FriendsHubPage() {
             <span className="material-symbols-outlined text-[22px]">forum</span>
           </button>
 
-          <FriendsHub
-            className="min-w-0 w-full"
-            friends={friends}
-            pending={pending}
-            blocked={blocked}
-            onTabChange={(tab) => {
-              if (tab === 'blocked') void loadBlocked();
-              if (tab === 'pending') void loadPending();
-            }}
-            emptyState={
-              <DracoEmpty
-                mood="peek"
-                size={112}
-                title="Kimse yok gibi…"
-                description="Arkadaş ekle veya bir sunucuya girip sohbet başlat!"
-                headset
-              />
-            }
-            headerAction={
-              <div className="flex items-center gap-1 sm:gap-space-sm min-w-0">
-                <button
-                  type="button"
-                  className="md:hidden h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-                  aria-label="Mesajlar"
-                  onClick={() => setDmsOpen(true)}
-                >
-                  <span className="material-symbols-outlined text-[20px]">forum</span>
-                </button>
-                <button
-                  type="button"
-                  className="shrink-0 h-9 px-2.5 sm:px-space-md rounded-lg bg-primary text-on-primary font-label-sm sm:font-label-md hover:opacity-90 inline-flex items-center gap-1"
-                  onClick={() => setAddOpen((v) => !v)}
-                >
-                  <span className="material-symbols-outlined text-[18px] sm:hidden leading-none">
-                    person_add
-                  </span>
-                  <span className="sm:hidden">Ekle</span>
-                  <span className="hidden sm:inline">Arkadaş ekle</span>
-                </button>
+          <div className="flex flex-1 min-w-0 min-h-0">
+            <FriendsHub
+              className="min-w-0 flex-1"
+              friends={friends}
+              pending={pending}
+              blocked={blocked}
+              onTabChange={(tab) => {
+                if (tab === 'blocked') void loadBlocked();
+                if (tab === 'pending') void loadPending();
+              }}
+              emptyState={
+                <DracoEmpty
+                  mood="peek"
+                  size={112}
+                  title="Kimse yok gibi…"
+                  description="Arkadaş ekle veya bir sunucuya girip sohbet başlat!"
+                  headset
+                />
+              }
+              headerAction={
+                <div className="flex items-center gap-1 sm:gap-space-sm min-w-0">
+                  <button
+                    type="button"
+                    className="md:hidden h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                    aria-label="Mesajlar"
+                    onClick={() => setDmsOpen(true)}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">forum</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 h-9 px-2.5 sm:px-space-md rounded-lg bg-primary text-on-primary font-label-sm sm:font-label-md hover:opacity-90 inline-flex items-center gap-1"
+                    onClick={() => setAddOpen((v) => !v)}
+                  >
+                    <span className="material-symbols-outlined text-[18px] sm:hidden leading-none">
+                      person_add
+                    </span>
+                    <span className="sm:hidden">Ekle</span>
+                    <span className="hidden sm:inline">Arkadaş ekle</span>
+                  </button>
+                </div>
+              }
+            />
+            <aside className="hidden xl:flex w-80 shrink-0 border-l border-surface-container-highest bg-surface-container-low flex-col">
+              <div className="px-4 py-4 border-b border-surface-container-highest">
+                <p className="font-headline-md text-on-surface">Şimdi Aktif</p>
               </div>
-            }
-          />
+              <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                <span className="material-symbols-outlined text-[40px] text-outline mb-2">
+                  sports_esports
+                </span>
+                <p className="font-label-md text-on-surface">Şu an sessiz</p>
+                <p className="font-body-sm text-on-surface-variant mt-1">
+                  Arkadaşların bir aktivitedeyken burada görünür.
+                </p>
+              </div>
+            </aside>
+          </div>
 
           {addOpen && (
             <div className="absolute inset-x-0 top-14 z-30 mx-auto w-full max-w-md px-space-md min-w-0">

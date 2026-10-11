@@ -488,6 +488,8 @@ export class ChannelsService {
     const out: Record<string, VoiceMemberSummary[]> = {};
     for (const s of sessions) {
       const ids = [...(s.playerIds ?? []), ...(s.spectatorIds ?? [])];
+      const joinedMap =
+        ((s.state ?? {}) as { memberJoinedAt?: Record<string, string> }).memberJoinedAt ?? {};
       const members: VoiceMemberSummary[] = [];
       for (const id of ids) {
         const u = byId.get(id);
@@ -499,6 +501,7 @@ export class ChannelsService {
           muted: false,
           deafened: false,
           isBot: Boolean(u.isBot),
+          joinedAt: joinedMap[id] ?? s.createdAt?.toISOString?.() ?? undefined,
         });
       }
       out[s.channelId] = members;

@@ -35,6 +35,11 @@ export interface MessageItemActions {
   onUnhide?: (message: MessageDto) => void;
   onBlockAuthor?: (message: MessageDto) => void;
   onVotePoll?: (message: MessageDto, optionId: string) => void;
+  onEmbedAction?: (
+    message: MessageDto,
+    action: import('@dracord/types').MessageEmbedAction,
+    embed: import('@dracord/types').MessageEmbed,
+  ) => void;
   onReply?: (message: MessageDto) => void;
   onForward?: (message: MessageDto) => void;
   onPin?: (message: MessageDto, pin: boolean) => void;
@@ -532,7 +537,12 @@ export function MessageItem({
         {!isHeading && !hideMediaEmbeds && message.embeds && message.embeds.length > 0 && (
           <div className="flex flex-col gap-space-xs">
             {message.embeds.map((embed) => (
-              <MessageEmbedView key={embed.url} embed={embed} censored={censorLinkPreviews} />
+              <MessageEmbedView
+                key={`${embed.url}-${embed.title ?? ''}`}
+                embed={embed}
+                censored={censorLinkPreviews}
+                onAction={(action, emb) => actions?.onEmbedAction?.(message, action, emb)}
+              />
             ))}
           </div>
         )}

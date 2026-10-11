@@ -37,6 +37,10 @@ function mapChannelItem(
       'contextActions' | 'participantVolume' | 'onParticipantVolumeChange'
     >;
     afkChannelId?: string | null;
+    onInviteChannel?: (channel: ChannelSummary) => void;
+    onOpenVoiceChat?: (channel: ChannelSummary) => void;
+    /** Aktivite kanallarında selfVoiceChannelId yerine oturum üyeliği */
+    selfActivityChannelIds?: Set<string>;
   },
 ): SidebarChannelItem {
   const isVoice = ch.type === 'VOICE';
@@ -56,6 +60,17 @@ function mapChannelItem(
       voiceMembers = voiceMembers.filter((m) => m.id !== extras.selfUserId);
     }
   }
+  const selfInChannel = Boolean(
+    extras?.selfUserId &&
+      (isVoice
+        ? extras.selfVoiceChannelId === ch.id
+        : extras.selfActivityChannelIds?.has(ch.id) ||
+          voiceMembers?.some((m) => m.id === extras.selfUserId)),
+  );
+  const viewerJoinedAt =
+    selfInChannel && extras?.selfUserId
+      ? (voiceMembers?.find((m) => m.id === extras.selfUserId)?.joinedAt ?? null)
+      : null;
   return {
     id: ch.id,
     name: ch.name,
@@ -67,6 +82,8 @@ function mapChannelItem(
       (ch.type === 'TEXT' || ch.type === 'FORUM') && ch.id !== activeChannelId
         ? (ch.unreadCount ?? (ch.unread ? 1 : 0)) || undefined
         : undefined,
+    viewerJoinedAt,
+    showVoiceInvite: selfInChannel && Boolean(extras?.onInviteChannel),
     voiceMembers: voiceMembers?.map((m) => {
       const isSelf = Boolean(extras?.selfUserId && m.id === extras.selfUserId);
       const isSuperAdmin = Boolean(extras?.platformAdminIds?.has(m.id));
@@ -85,6 +102,7 @@ function mapChannelItem(
         deafened: isAfk ? true : m.deafened,
         speaking: isAfk ? false : m.speaking,
         isBot: m.isBot,
+        joinedAt: m.joinedAt,
         draggable,
         ...enriched,
       };
@@ -95,6 +113,14 @@ function mapChannelItem(
       : undefined,
     onEdit: extras?.onEditChannel ? () => extras.onEditChannel?.(ch) : undefined,
     onDelete: extras?.onDeleteChannel ? () => extras.onDeleteChannel?.(ch) : undefined,
+    onInvite:
+      (isVoice || isActivity) && extras?.onInviteChannel
+        ? () => extras.onInviteChannel?.(ch)
+        : undefined,
+    onOpenChat:
+      (isVoice || isActivity) && extras?.onOpenVoiceChat
+        ? () => extras.onOpenVoiceChat?.(ch)
+        : undefined,
     onDropMember:
       isVoice && extras?.onDropMember
         ? (userId) => extras.onDropMember?.(userId, ch)
@@ -138,6 +164,9 @@ export function buildSidebarCategories(
     >;
     /** AFK kanalı — speaking gizlenir, mute/deafen zorunlu gösterilir */
     afkChannelId?: string | null;
+    onInviteChannel?: (channel: ChannelSummary) => void;
+    onOpenVoiceChat?: (channel: ChannelSummary) => void;
+    selfActivityChannelIds?: Set<string>;
   },
 ): SidebarCategory[] {
   const gameChannels = channels

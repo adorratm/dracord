@@ -98,6 +98,8 @@ export interface VoiceMemberSummary {
   speaking?: boolean;
   /** Ekran paylaşımı aktif */
   screenSharing?: boolean;
+  /** ISO timestamp — kanala katıldığı an (kişi başına süre için) */
+  joinedAt?: string;
 }
 
 /** Müzik kuyruk parçası */
@@ -157,6 +159,17 @@ export interface GuildSummary {
   afkChannelId?: string | null;
   /** Konuşmadan sonra AFK’ya taşıma (dakika); 0 = kapalı */
   afkTimeoutMinutes?: number;
+  /** Aktif takviye sayısı */
+  boostCount?: number;
+  /** 0–3 (eşikler: 2 / 7 / 14) */
+  boostLevel?: number;
+}
+
+export function guildBoostLevel(boostCount: number): number {
+  if (boostCount >= 14) return 3;
+  if (boostCount >= 7) return 2;
+  if (boostCount >= 2) return 1;
+  return 0;
 }
 
 export interface CategoryDto {
@@ -213,12 +226,23 @@ export interface MessageAttachment {
   size: number;
 }
 
+export interface MessageEmbedAction {
+  id: string;
+  label: string;
+  /** Harici link (YouTube vb.) */
+  url?: string | null;
+  /** Uygulama içi eylem: replay | lyrics */
+  action?: 'replay' | 'lyrics' | 'open' | null;
+}
+
 export interface MessageEmbed {
   url: string;
   title?: string | null;
   description?: string | null;
   imageUrl?: string | null;
   siteName?: string | null;
+  /** Müzik / bot butonları */
+  actions?: MessageEmbedAction[];
 }
 
 export interface MessageReactionUserDto {

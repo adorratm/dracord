@@ -37,6 +37,7 @@ import { SearchIndexerService } from '@/search/search-indexer.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { SlashCommand } from '@/database/entities/slash-command.entity';
+import { mergeClientSettings } from '@/users/client-settings';
 
 export const PERM_MANAGE_GUILD = GuildPermissions.MANAGE_GUILD;
 export const PERM_MANAGE_CHANNELS = GuildPermissions.MANAGE_CHANNELS;
@@ -670,6 +671,50 @@ export class GuildsService {
     return this.toSummary(guild);
   }
 
+  async boostGuild(guildId: string, userId: string): Promise<GuildSummary> {
+    await this.ensureMember(guildId, userId);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const settings = mergeClientSettings(user.clientSettings);
+    const already = settings.billing.boostAssignments.some((a) => a.guildId === guildId);
+    if (already) throw new BadRequestException('Bu sunucuya zaten takviye verdin');
+    if (settings.billing.boostCredits < 1) {
+      throw new BadRequestException('Takviye kredin yok');
+    }
+    settings.billing.boostCredits -= 1;
+    settings.billing.boostAssignments = [
+      ...settings.billing.boostAssignments,
+      { guildId: guild.id, guildName: guild.name },
+    ];
+    user.clientSettings = settings as unknown as Record<string, unknown>;
+    guild.boostCount = (guild.boostCount ?? 0) + 1;
+    await this.em.save(User, user);
+    await this.em.save(Guild, guild);
+    return this.toSummary(guild);
+  }
+
+  async unboostGuild(guildId: string, userId: string): Promise<GuildSummary> {
+    await this.ensureMember(guildId, userId);
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Guild not found');
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const settings = mergeClientSettings(user.clientSettings);
+    const has = settings.billing.boostAssignments.some((a) => a.guildId === guildId);
+    if (!has) throw new BadRequestException('Bu sunucuya takviyen yok');
+    settings.billing.boostCredits += 1;
+    settings.billing.boostAssignments = settings.billing.boostAssignments.filter(
+      (a) => a.guildId !== guildId,
+    );
+    user.clientSettings = settings as unknown as Record<string, unknown>;
+    guild.boostCount = Math.max(0, (guild.boostCount ?? 0) - 1);
+    await this.em.save(User, user);
+    await this.em.save(Guild, guild);
+    return this.toSummary(guild);
+  }
+
   async listMembers(guildId: string, userId: string): Promise<PublicUser[]> {
     await this.ensureMember(guildId, userId);
     const members = await this.em.find(GuildMember, {
@@ -966,6 +1011,9 @@ export class GuildsService {
   }
 
   private toSummary(guild: Guild): GuildSummary {
+    const boostCount = guild.boostCount ?? 0;
+    const boostLevel =
+      boostCount >= 14 ? 3 : boostCount >= 7 ? 2 : boostCount >= 2 ? 1 : 0;
     return {
       id: guild.id,
       name: guild.name,
@@ -977,6 +1025,8 @@ export class GuildsService {
       discoverPinOrder: guild.discoverPinOrder ?? null,
       afkChannelId: guild.afkChannelId ?? null,
       afkTimeoutMinutes: guild.afkTimeoutMinutes ?? 0,
+      boostCount,
+      boostLevel,
     };
   }
 

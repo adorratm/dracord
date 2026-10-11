@@ -72,6 +72,12 @@ export class Message extends CuidEntity {
     description?: string | null;
     imageUrl?: string | null;
     siteName?: string | null;
+    actions?: Array<{
+      id: string;
+      label: string;
+      url?: string | null;
+      action?: 'replay' | 'lyrics' | 'open' | null;
+    }>;
   }> | null;
 
   /** Anket: soru, seçenekler ve oy veren kullanıcı id'leri */

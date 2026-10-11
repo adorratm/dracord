@@ -384,6 +384,10 @@ export class DracordClient {
     return this.request('/guilds', { method: 'POST', body: JSON.stringify(data) });
   }
 
+  async getGuild(guildId: string): Promise<GuildSummary> {
+    return this.request(`/guilds/${guildId}`);
+  }
+
   async updateGuild(
     guildId: string,
     data: {
@@ -425,6 +429,14 @@ export class DracordClient {
 
   async leaveGuild(guildId: string): Promise<{ ok: true }> {
     return this.request(`/guilds/${guildId}/leave`, { method: 'POST', body: '{}' });
+  }
+
+  async boostGuild(guildId: string): Promise<GuildSummary> {
+    return this.request(`/guilds/${guildId}/boosts`, { method: 'POST', body: '{}' });
+  }
+
+  async unboostGuild(guildId: string): Promise<GuildSummary> {
+    return this.request(`/guilds/${guildId}/boosts`, { method: 'DELETE' });
   }
 
   async getGuildChannels(guildId: string): Promise<ChannelSummary[]> {

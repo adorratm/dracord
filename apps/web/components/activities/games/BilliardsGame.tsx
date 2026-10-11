@@ -10,6 +10,7 @@ import {
   round4,
   type GameProps,
 } from '../three/sceneUtils';
+import { GameAudio } from '@/lib/game-audio';
 
 type Ball = { id: number; x: number; y: number; vx: number; vy: number; sunk?: boolean };
 
@@ -107,8 +108,27 @@ export function BilliardsGame(props: GameProps) {
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, renderer } = api;
     const camera = api.camera as PerspectiveCamera;
-    camera.position.set(0, 8.8, 6.4);
-    camera.lookAt(0, 0, 0.2);
+    const fitCamera = () => {
+      const el = api.root;
+      const aspect = (el.clientWidth || 1) / Math.max(1, el.clientHeight || 1);
+      // Dar (mobil) ekranda yukarıdan bak + daha geniş FOV — masa tam sığsın
+      if (aspect < 0.85) {
+        camera.fov = 58;
+        camera.position.set(0, 11.2, 0.15);
+      } else if (aspect < 1.2) {
+        camera.fov = 50;
+        camera.position.set(0, 9.6, 4.2);
+      } else {
+        camera.fov = 45;
+        camera.position.set(0, 8.8, 6.4);
+      }
+      camera.lookAt(0, 0, 0.2);
+      camera.updateProjectionMatrix();
+    };
+    fitCamera();
+    const camRo = new ResizeObserver(fitCamera);
+    camRo.observe(api.root);
+    GameAudio.unlock();
     const dom = renderer.domElement;
 
     const root = new THREE.Group();
@@ -327,23 +347,28 @@ export function BilliardsGame(props: GameProps) {
             b.x = px;
             b.z = pz;
             b.mesh.visible = false;
+            GameAudio.pot();
             break;
           }
         }
         if (b.sunk) continue;
         if (b.x > HX - R) {
           b.x = HX - R;
-          b.vx = -b.vx * 0.8;
+          if (b.vx > 0.4) GameAudio.cushion();
+          b.vx = -Math.abs(b.vx) * 0.8;
         } else if (b.x < -HX + R) {
           b.x = -HX + R;
-          b.vx = -b.vx * 0.8;
+          if (b.vx < -0.4) GameAudio.cushion();
+          b.vx = Math.abs(b.vx) * 0.8;
         }
         if (b.z > HZ - R) {
           b.z = HZ - R;
-          b.vz = -b.vz * 0.8;
+          if (b.vz > 0.4) GameAudio.cushion();
+          b.vz = -Math.abs(b.vz) * 0.8;
         } else if (b.z < -HZ + R) {
           b.z = -HZ + R;
-          b.vz = -b.vz * 0.8;
+          if (b.vz < -0.4) GameAudio.cushion();
+          b.vz = Math.abs(b.vz) * 0.8;
         }
       }
       for (let i = 0; i < list.length; i++) {
@@ -368,6 +393,7 @@ export function BilliardsGame(props: GameProps) {
             a.vz -= vrel * nz;
             c.vx += vrel * nx;
             c.vz += vrel * nz;
+            if (vrel > 0.8) GameAudio.collide();
           }
         }
       }
@@ -490,6 +516,7 @@ export function BilliardsGame(props: GameProps) {
       cueMesh.visible = false;
       setPower(0);
       lastPower = 0;
+      GameAudio.shoot();
     };
     dom.addEventListener('pointermove', onMove);
     dom.addEventListener('pointerdown', onDown);
@@ -497,6 +524,7 @@ export function BilliardsGame(props: GameProps) {
 
     return () => {
       cancelAnimationFrame(raf);
+      camRo.disconnect();
       dom.removeEventListener('pointermove', onMove);
       dom.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointerup', onUp);
@@ -516,9 +544,12 @@ export function BilliardsGame(props: GameProps) {
         : 'Rakip oynuyor';
 
   return (
-    <ThreeSceneHost className="absolute inset-0" onReady={onReady}>
-      <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
-        <span className="inline-flex w-fit items-center rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
+    <ThreeSceneHost
+      className="absolute inset-0 min-h-0 touch-none"
+      onReady={onReady}
+    >
+      <div className="pointer-events-none absolute left-2 top-2 sm:left-3 sm:top-3 flex flex-col gap-1 pt-[env(safe-area-inset-top)]">
+        <span className="inline-flex w-fit max-w-[min(100%,18rem)] items-center rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
           Bilardo · {statusText}
         </span>
         <span className="inline-flex w-fit rounded-lg bg-[#11131e]/70 px-3 py-1 text-[11px] text-[#bd93f9]">
@@ -526,7 +557,7 @@ export function BilliardsGame(props: GameProps) {
         </span>
       </div>
       {myTurn && !busy && (
-        <div className="pointer-events-none absolute bottom-3 left-1/2 w-56 -translate-x-1/2">
+        <div className="pointer-events-none absolute bottom-3 left-1/2 w-[min(14rem,80vw)] -translate-x-1/2 pb-[env(safe-area-inset-bottom)]">
           <div className="mb-1 text-center text-[11px] text-[#f8f8f2]/80">Güç %{power}</div>
           <div className="h-2 overflow-hidden rounded-full bg-[#282a36]">
             <div

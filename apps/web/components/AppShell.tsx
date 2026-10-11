@@ -14,14 +14,23 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useAuth } from '@/components/AuthProvider';
 import { AppTour } from '@/components/AppTour';
 import { NotificationBell } from '@/components/NotificationBell';
-import { invalidateGuildNavCache } from '@/hooks/useGuildNav';
+import {
+  invalidateGuildNavCache,
+  peekGuildNavCache,
+  prefetchGuildNav,
+} from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 
 const LAST_CHANNEL_KEY = 'dracord:last-channel';
+const LAST_CHANNEL_BY_GUILD_KEY = 'dracord:last-channel-by-guild';
 
 export function rememberChannel(guildId: string, channelId: string) {
   try {
     localStorage.setItem(LAST_CHANNEL_KEY, JSON.stringify({ guildId, channelId }));
+    const raw = localStorage.getItem(LAST_CHANNEL_BY_GUILD_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    map[guildId] = channelId;
+    localStorage.setItem(LAST_CHANNEL_BY_GUILD_KEY, JSON.stringify(map));
   } catch {
     // ignore
   }
@@ -35,6 +44,28 @@ export function readLastChannel(): { guildId: string; channelId: string } | null
   } catch {
     return null;
   }
+}
+
+export function readGuildLastChannel(guildId: string): string | null {
+  try {
+    const raw = localStorage.getItem(LAST_CHANNEL_BY_GUILD_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<string, string>;
+    return map[guildId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function pickDefaultChannel(
+  channels: { id: string; type: string }[],
+): { id: string; type: string } | undefined {
+  return (
+    channels.find((c) => c.type === 'TEXT') ??
+    channels.find((c) => c.type === 'FORUM') ??
+    channels.find((c) => c.type === 'VOICE') ??
+    channels[0]
+  );
 }
 
 export interface AppShellProps {
@@ -104,33 +135,54 @@ export function AppShell({
   }, [baseGuilds, prefs.appearance.favoriteGuildIds, prefs.appearance.guildOrderIds]);
 
   const openGuild = useCallback(
-    async (guildId: string) => {
-      invalidateGuildNavCache(guildId);
-      try {
-        let channels = await client.getGuildChannels(guildId);
-        // İlk istek boş dönerse (üyelik/izin race) bir kez daha dene
-        if (!channels.length) {
-          await new Promise((r) => setTimeout(r, 250));
-          channels = await client.getGuildChannels(guildId);
-        }
-        const text =
-          channels.find((c) => c.type === 'TEXT') ??
-          channels.find((c) => c.type === 'FORUM') ??
-          channels.find((c) => c.type === 'VOICE') ??
-          channels[0];
-        if (text) {
-          rememberChannel(guildId, text.id);
-          router.push(`/channels/${guildId}/${text.id}`);
-          return;
-        }
-        setError('Bu sunucuda görüntülenebilir kanal yok.');
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Sunucu açılamadı');
-      } finally {
-        setServersOpen(false);
+    (guildId: string) => {
+      setServersOpen(false);
+      const cached = peekGuildNavCache(guildId);
+      const remembered = readGuildLastChannel(guildId);
+      const cachedChannel =
+        (remembered && cached?.channels.some((c) => c.id === remembered)
+          ? remembered
+          : null) ??
+        (remembered && !cached ? remembered : null) ??
+        pickDefaultChannel(cached?.channels ?? [])?.id ??
+        null;
+
+      if (cachedChannel) {
+        rememberChannel(guildId, cachedChannel);
+        router.push(`/channels/${guildId}/${cachedChannel}`);
+        void prefetchGuildNav(client, guildId);
+        return;
       }
+
+      void (async () => {
+        try {
+          const snap = await prefetchGuildNav(client, guildId);
+          let channels = snap?.channels ?? [];
+          if (!channels.length) {
+            await new Promise((r) => setTimeout(r, 250));
+            channels = await client.getGuildChannels(guildId);
+          }
+          const text = pickDefaultChannel(channels);
+          if (text) {
+            rememberChannel(guildId, text.id);
+            router.push(`/channels/${guildId}/${text.id}`);
+            return;
+          }
+          setError('Bu sunucuda görüntülenebilir kanal yok.');
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Sunucu açılamadı');
+        }
+      })();
     },
     [client, router],
+  );
+
+  const prefetchGuild = useCallback(
+    (guildId: string) => {
+      if (peekGuildNavCache(guildId)?.channels.length) return;
+      void prefetchGuildNav(client, guildId);
+    },
+    [client],
   );
 
   const onNavClick = useCallback(
@@ -349,7 +401,8 @@ export function AppShell({
       setServersOpen(false);
       router.push('/channels/@me');
     },
-    onGuildClick: (guildId: string) => void openGuild(guildId),
+    onGuildClick: (guildId: string) => openGuild(guildId),
+    onGuildPrefetch: prefetchGuild,
     onAddClick: () => {
       setError(null);
       setServersOpen(false);
@@ -358,7 +411,7 @@ export function AppShell({
     onExploreClick: () => {
       setError(null);
       setServersOpen(false);
-      setExploreOpen(true);
+      router.push('/discover');
     },
     getGuildActions,
     onGuildReorder: (orderedIds: string[]) => {

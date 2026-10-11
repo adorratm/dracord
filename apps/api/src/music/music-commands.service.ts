@@ -161,9 +161,33 @@ export class MusicCommandsService {
         voiceChannelId: ctx.voiceChannelId,
         textChannelId,
       });
+      const t = tracks[0]!;
+      const dur =
+        t.durationSec != null
+          ? `${Math.floor(t.durationSec / 60)} dk ${t.durationSec % 60} sn`
+          : null;
       await this.reply(
         textChannelId,
-        `[PLAY] **Caliyor:** ${tracks[0]!.title}\nIsteyen: ${author.displayName}`,
+        `[PLAY] **Çalıyor:** ${t.title}`,
+        [
+          {
+            url: t.source.startsWith('http') ? t.source : t.url || 'https://youtube.com',
+            title: t.title,
+            description: [dur, `DJ: ${author.displayName}`].filter(Boolean).join(' · '),
+            imageUrl: t.thumbnailUrl ?? null,
+            siteName: 'Müzik',
+            actions: [
+              {
+                id: 'yt',
+                label: "YouTube'da aç",
+                url: t.source.startsWith('http') ? t.source : t.url,
+                action: 'open',
+              },
+              { id: 'replay', label: 'Tekrar oynat', action: 'replay' },
+              { id: 'lyrics', label: 'Şarkı sözleri', action: 'lyrics' },
+            ],
+          },
+        ],
       );
     } else {
       const pos = state.queue.length;
@@ -273,7 +297,11 @@ export class MusicCommandsService {
     await this.reply(textChannelId, `[DEL] Kuyruktan silindi: **${removed?.title}**`);
   }
 
-  async reply(textChannelId: string, content: string) {
+  async reply(
+    textChannelId: string,
+    content: string,
+    embeds?: Message['embeds'],
+  ) {
     const botId = this.bot.getBotUserId();
     await this.bot.ensureBotUser();
     const author = await this.em.findOneOrFail(User, { where: { id: botId } });
@@ -284,6 +312,7 @@ export class MusicCommandsService {
         authorId: botId,
         content,
         type: 'default',
+        embeds: embeds?.length ? embeds : null,
       }),
     );
     const dto = {
@@ -293,7 +322,7 @@ export class MusicCommandsService {
       content: message.content,
       type: 'default' as const,
       attachments: undefined,
-      embeds: undefined,
+      embeds: embeds?.length ? embeds : undefined,
       poll: undefined,
       replyTo: null,
       forwardedFrom: null,

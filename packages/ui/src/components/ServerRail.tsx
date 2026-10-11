@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from 're
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Logo } from './Logo';
+import { Tooltip } from './Tooltip';
 
 export interface ServerRailGuild extends Pick<GuildSummary, 'id' | 'name' | 'iconUrl'> {
   initials?: string;
@@ -26,6 +27,8 @@ export interface ServerRailProps {
   homeActive?: boolean;
   onHomeClick?: () => void;
   onGuildClick?: (guildId: string) => void;
+  /** Soft prefetch on hover / focus */
+  onGuildPrefetch?: (guildId: string) => void;
   onAddClick?: () => void;
   onExploreClick?: () => void;
   /** Sağ tık menü aksiyonları */
@@ -88,6 +91,7 @@ function GuildButton({
   guild,
   active,
   onGuildClick,
+  onGuildPrefetch,
   openMenu,
   getGuildActions,
   onGuildReorder,
@@ -96,6 +100,7 @@ function GuildButton({
   guild: ServerRailGuild;
   active: boolean;
   onGuildClick?: (guildId: string) => void;
+  onGuildPrefetch?: (guildId: string) => void;
   openMenu: (e: MouseEvent, guild: ServerRailGuild) => void;
   getGuildActions?: (guild: ServerRailGuild) => ServerRailGuildAction[];
   onGuildReorder?: (orderedIds: string[]) => void;
@@ -104,6 +109,8 @@ function GuildButton({
   return (
     <div
       className="relative group flex items-center justify-center w-full"
+      onMouseEnter={() => onGuildPrefetch?.(guild.id)}
+      onFocus={() => onGuildPrefetch?.(guild.id)}
       draggable={Boolean(onGuildReorder)}
       onDragStart={
         onGuildReorder
@@ -140,43 +147,45 @@ function GuildButton({
     >
       <ActivePill active={active} />
       {!active && <HoverPill show />}
-      <button
-        type="button"
-        onClick={() => onGuildClick?.(guild.id)}
-        onContextMenu={(e) => openMenu(e, guild)}
-        title={guild.name}
-        aria-haspopup={getGuildActions ? 'menu' : undefined}
-        className={cn(
-          'relative z-[1] w-12 h-12 flex items-center justify-center font-headline-md text-headline-md overflow-hidden',
-          railBtnEase,
-          active ? 'rounded-[16px]' : 'rounded-[50%] hover:rounded-[16px] hover:scale-[1.04] active:scale-[0.98]',
-          guild.accentClassName ??
-            (active
-              ? 'bg-primary-container text-on-primary-container'
-              : 'bg-secondary-container text-on-secondary-container hover:bg-primary hover:text-on-primary'),
-          guild.favorite && !active && 'ring-1 ring-primary-container/50',
-        )}
-      >
-        {guild.iconUrl ? (
-          <img
-            src={guild.iconUrl}
-            alt=""
-            className="w-full h-full object-cover pointer-events-none"
-            draggable={false}
-          />
-        ) : (
-          guildInitials(guild)
-        )}
-        {guild.favorite && (
-          <span
-            className="absolute -top-0.5 -right-0.5 material-symbols-outlined text-[12px] text-primary-container drop-shadow"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-            aria-hidden
-          >
-            star
-          </span>
-        )}
-      </button>
+      <Tooltip content={guild.name} side="right">
+        <button
+          type="button"
+          onClick={() => onGuildClick?.(guild.id)}
+          onContextMenu={(e) => openMenu(e, guild)}
+          aria-label={guild.name}
+          aria-haspopup={getGuildActions ? 'menu' : undefined}
+          className={cn(
+            'relative z-[1] w-12 h-12 flex items-center justify-center font-headline-md text-headline-md overflow-hidden',
+            railBtnEase,
+            active ? 'rounded-[16px]' : 'rounded-[50%] hover:rounded-[16px] hover:scale-[1.04] active:scale-[0.98]',
+            guild.accentClassName ??
+              (active
+                ? 'bg-primary-container text-on-primary-container'
+                : 'bg-secondary-container text-on-secondary-container hover:bg-primary hover:text-on-primary'),
+            guild.favorite && !active && 'ring-1 ring-primary-container/50',
+          )}
+        >
+          {guild.iconUrl ? (
+            <img
+              src={guild.iconUrl}
+              alt=""
+              className="w-full h-full object-cover pointer-events-none"
+              draggable={false}
+            />
+          ) : (
+            guildInitials(guild)
+          )}
+          {guild.favorite && (
+            <span
+              className="absolute -top-0.5 -right-0.5 material-symbols-outlined text-[12px] text-primary-container drop-shadow"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+              aria-hidden
+            >
+              star
+            </span>
+          )}
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -187,6 +196,7 @@ export function ServerRail({
   homeActive = false,
   onHomeClick,
   onGuildClick,
+  onGuildPrefetch,
   onAddClick,
   onExploreClick,
   getGuildActions,
@@ -271,20 +281,22 @@ export function ServerRail({
       <div className="relative group flex items-center justify-center w-full shrink-0">
         <ActivePill active={homeActive} />
         {!homeActive && <HoverPill show />}
-        <button
-          type="button"
-          onClick={onHomeClick}
-          className={cn(
-            'relative z-[1] w-12 h-12 flex items-center justify-center shadow-md',
-            railBtnEase,
-            homeActive
-              ? 'rounded-[16px] bg-surface-container-high text-on-surface'
-              : 'rounded-[50%] bg-surface-container-high text-on-surface hover:rounded-[16px] hover:bg-primary-container hover:text-on-primary-container hover:scale-[1.04] active:scale-[0.98]',
-          )}
-          aria-label="Ana sayfa / Direkt mesajlar"
-        >
-          <Logo size={28} showBackground />
-        </button>
+        <Tooltip content="Direkt Mesajlar" side="right">
+          <button
+            type="button"
+            onClick={onHomeClick}
+            className={cn(
+              'relative z-[1] w-12 h-12 flex items-center justify-center shadow-md',
+              railBtnEase,
+              homeActive
+                ? 'rounded-[16px] bg-surface-container-high text-on-surface'
+                : 'rounded-[50%] bg-surface-container-high text-on-surface hover:rounded-[16px] hover:bg-primary-container hover:text-on-primary-container hover:scale-[1.04] active:scale-[0.98]',
+            )}
+            aria-label="Ana sayfa / Direkt mesajlar"
+          >
+            <Logo size={28} showBackground />
+          </button>
+        </Tooltip>
       </div>
 
       <div className="w-8 h-[2px] bg-surface-container-highest rounded-full my-space-xs shrink-0" />
@@ -296,6 +308,7 @@ export function ServerRail({
             guild={guild}
             active={guild.id === activeGuildId}
             onGuildClick={onGuildClick}
+            onGuildPrefetch={onGuildPrefetch}
             openMenu={openMenu}
             getGuildActions={getGuildActions}
             onGuildReorder={onGuildReorder}
@@ -311,6 +324,7 @@ export function ServerRail({
             guild={guild}
             active={guild.id === activeGuildId}
             onGuildClick={onGuildClick}
+            onGuildPrefetch={onGuildPrefetch}
             openMenu={openMenu}
             getGuildActions={getGuildActions}
             onGuildReorder={onGuildReorder}
@@ -321,32 +335,36 @@ export function ServerRail({
 
       {/* Alt aksiyonlar scroll dışında — desktop’ta alttan 65px yukarıda */}
       <div className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 md:mb-[70px] md:pb-0 w-full border-t border-surface-container-highest/60 mt-1">
-        <button
-          type="button"
-          onClick={onAddClick}
-          className={cn(
-            'w-12 h-12 rounded-[50%] hover:rounded-[16px] bg-surface-container text-secondary',
-            'hover:bg-secondary-container hover:text-on-secondary-container hover:scale-[1.04] active:scale-[0.98]',
-            'flex items-center justify-center',
-            railBtnEase,
-          )}
-          aria-label="Sunucu ekle"
-        >
-          <span className="material-symbols-outlined">add</span>
-        </button>
-        <button
-          type="button"
-          onClick={onExploreClick}
-          className={cn(
-            'w-12 h-12 rounded-[50%] hover:rounded-[16px] bg-surface-container text-secondary',
-            'hover:bg-secondary-container hover:text-on-secondary-container hover:scale-[1.04] active:scale-[0.98]',
-            'flex items-center justify-center',
-            railBtnEase,
-          )}
-          aria-label="Keşfet"
-        >
-          <span className="material-symbols-outlined">explore</span>
-        </button>
+        <Tooltip content="Sunucu Ekle" side="right">
+          <button
+            type="button"
+            onClick={onAddClick}
+            className={cn(
+              'w-12 h-12 rounded-[50%] hover:rounded-[16px] bg-surface-container text-secondary',
+              'hover:bg-secondary-container hover:text-on-secondary-container hover:scale-[1.04] active:scale-[0.98]',
+              'flex items-center justify-center',
+              railBtnEase,
+            )}
+            aria-label="Sunucu ekle"
+          >
+            <span className="material-symbols-outlined">add</span>
+          </button>
+        </Tooltip>
+        <Tooltip content="Keşfet" side="right">
+          <button
+            type="button"
+            onClick={onExploreClick}
+            className={cn(
+              'w-12 h-12 rounded-[50%] hover:rounded-[16px] bg-surface-container text-secondary',
+              'hover:bg-secondary-container hover:text-on-secondary-container hover:scale-[1.04] active:scale-[0.98]',
+              'flex items-center justify-center',
+              railBtnEase,
+            )}
+            aria-label="Keşfet"
+          >
+            <span className="material-symbols-outlined">explore</span>
+          </button>
+        </Tooltip>
       </div>
 
       {menu &&

@@ -105,6 +105,22 @@ export class GuildsController {
     return this.guildsService.leaveGuild(guildId, user.sub);
   }
 
+  @Post(':guildId/boosts')
+  boost(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.boostGuild(guildId, user.sub);
+  }
+
+  @Delete(':guildId/boosts')
+  unboost(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.guildsService.unboostGuild(guildId, user.sub);
+  }
+
   @Post(':guildId/members/:userId/kick')
   kick(
     @Param('guildId') guildId: string,

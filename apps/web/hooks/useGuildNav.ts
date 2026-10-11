@@ -17,13 +17,48 @@ export function invalidateGuildNavCache(guildId?: string) {
   else guildNavCache.clear();
 }
 
-function readCache(guildId: string | undefined): GuildNavSnapshot | undefined {
+export function peekGuildNavCache(guildId: string | undefined): GuildNavSnapshot | undefined {
   if (!guildId) return undefined;
   return guildNavCache.get(guildId);
 }
 
+function readCache(guildId: string | undefined): GuildNavSnapshot | undefined {
+  return peekGuildNavCache(guildId);
+}
+
 function writeCache(guildId: string, snap: GuildNavSnapshot) {
   guildNavCache.set(guildId, snap);
+}
+
+type GuildNavClient = {
+  listGuilds: () => Promise<GuildSummary[]>;
+  getGuildChannels: (guildId: string) => Promise<ChannelSummary[]>;
+  listGuildCategories: (guildId: string) => Promise<CategoryDto[]>;
+};
+
+/** Soft prefetch — navigasyonu bloklamaz; cache’i doldurur. */
+export async function prefetchGuildNav(
+  client: GuildNavClient,
+  guildId: string,
+): Promise<GuildNavSnapshot | null> {
+  try {
+    const [list, ch, cats] = await Promise.all([
+      client.listGuilds(),
+      client.getGuildChannels(guildId),
+      client.listGuildCategories(guildId).catch(() => [] as CategoryDto[]),
+    ]);
+    const nextGuild = list.find((x) => x.id === guildId) ?? null;
+    const snap: GuildNavSnapshot = {
+      guilds: list,
+      guild: nextGuild,
+      channels: ch,
+      categories: cats,
+    };
+    writeCache(guildId, snap);
+    return snap;
+  } catch {
+    return null;
+  }
 }
 
 export function useGuildNav(guildId: string | undefined) {
@@ -130,8 +165,23 @@ export function useGuildNav(guildId: string | undefined) {
     if (!user) return;
     let cancelled = false;
     const hit = readCache(guildId);
-    if (!hit) setLoading(true);
-    setError(null);
+    // Guild değişiminde önceki sunucunun kanallarını göstermemek için cache’i hemen uygula
+    if (hit) {
+      setGuilds(hit.guilds);
+      setGuild(hit.guild);
+      setChannels(hit.channels);
+      setCategories(hit.categories);
+      setLoading(false);
+      setError(null);
+    } else {
+      setLoading(true);
+      setError(null);
+      if (guildId) {
+        setChannels([]);
+        setCategories([]);
+        setGuild(null);
+      }
+    }
     void (async () => {
       try {
         const list = await client.listGuilds();
