@@ -1354,9 +1354,15 @@ export function GuildChannelView({
   const buildVoiceMemberActions = useCallback(
     (target: VoiceMemberActionTarget): MemberListAction[] => {
       const gm = guildMembers.find((g) => g.id === target.id);
-      if (platformAdminIds.has(target.id) || gm?.isPlatformAdmin) return [];
-
       const isSelf = target.id === user?.id;
+      // Platform admin’e yönetim menüsü yok; kendi self menüsü yine açılsın
+      if (
+        !isSelf &&
+        (platformAdminIds.has(target.id) || gm?.isPlatformAdmin)
+      ) {
+        return [];
+      }
+
       const isBot = Boolean(target.isBot ?? gm?.isBot);
       const voiceChId =
         target.voiceChannelId ??
@@ -1501,10 +1507,13 @@ export function GuildChannelView({
   const enrichVoiceMember = useCallback(
     (member: VoiceMemberSummary, voiceChannelId: string) => {
       const gm = guildMembers.find((g) => g.id === member.id);
-      if (platformAdminIds.has(member.id) || gm?.isPlatformAdmin) {
+      const isSelf = member.id === user?.id;
+      if (
+        !isSelf &&
+        (platformAdminIds.has(member.id) || gm?.isPlatformAdmin)
+      ) {
         return {};
       }
-      const isSelf = member.id === user?.id;
       const inLocalVoiceSession =
         voice.voiceChannelId === voiceChannelId &&
         voice.participants.some((p) => p.id === member.id);

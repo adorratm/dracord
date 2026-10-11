@@ -222,6 +222,16 @@ export function ActivityChannelView({
     try {
       await client.endActivity(session.id);
       setSession(null);
+      if (voice.voiceChannelId === channelId) {
+        voice.leave();
+      }
+      try {
+        const channels = await client.getGuildChannels(guildId);
+        const text = channels.find((c) => c.type === 'TEXT');
+        if (text) router.push(`/channels/${guildId}/${text.id}`);
+      } catch {
+        // kal
+      }
     } catch (e) {
       setError(errMsg(e, 'Bitirilemedi'));
     } finally {

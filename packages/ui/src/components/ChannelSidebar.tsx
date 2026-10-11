@@ -442,12 +442,7 @@ export function UserPanel({
   return (
     <div
       ref={rootRef}
-      className="bg-surface-container-lowest border-t border-outline-variant/30 shadow-[0_-4px_16px_rgba(0,0,0,0.2)]"
-      onContextMenu={(e) => {
-        if (!selfMenuActions?.length) return;
-        e.preventDefault();
-        setSelfMenu({ x: e.clientX, y: e.clientY });
-      }}
+      className="bg-surface-container-lowest border-t border-white/[0.06] shadow-[0_-4px_16px_rgba(0,0,0,0.2)]"
     >
       {voiceConnected && voiceChannelName && (
         <div className="px-2 pt-2 space-y-1.5">
@@ -617,6 +612,22 @@ export function UserPanel({
                 setNoiseOpen(false);
                 setStatusOpen((v) => !v);
               } else onProfileClick?.();
+            }}
+            onContextMenu={(e) => {
+              if (!selfMenuActions?.length) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const pad = 8;
+              const estH = Math.min(280, 40 + selfMenuActions.length * 36);
+              let x = e.clientX;
+              let y = e.clientY;
+              if (y + estH > window.innerHeight - pad) {
+                y = Math.max(pad, e.clientY - estH);
+              }
+              if (x + 200 > window.innerWidth - pad) {
+                x = Math.max(pad, window.innerWidth - 200 - pad);
+              }
+              setSelfMenu({ x, y });
             }}
             className="flex items-center gap-2.5 min-w-0 px-1.5 py-1.5 rounded-lg hover:bg-surface-container transition-colors duration-200 w-full text-left"
           >
@@ -968,7 +979,7 @@ export function UserPanel({
           <div
             ref={selfMenuRef}
             role="menu"
-            className="fixed z-[200] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
+            className="fixed z-[260] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
             style={{ left: selfMenu.x, top: selfMenu.y }}
           >
             {selfMenuActions.map((a) => (
@@ -1410,14 +1421,28 @@ export function ChannelSidebar({
   useEffect(() => {
     if (!voiceMemberMenu || !voiceMenuRef.current) return;
     const el = voiceMenuRef.current;
-    const rect = el.getBoundingClientRect();
-    let x = voiceMemberMenu.x;
-    let y = voiceMemberMenu.y;
-    if (x + rect.width > window.innerWidth - 8) x = Math.max(8, window.innerWidth - rect.width - 8);
-    if (y + rect.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - rect.height - 8);
-    if (x !== voiceMemberMenu.x || y !== voiceMemberMenu.y) {
-      setVoiceMemberMenu((prev) => (prev ? { ...prev, x, y } : prev));
-    }
+    const pad = 8;
+    const originX = voiceMemberMenu.x;
+    const originY = voiceMemberMenu.y;
+    const place = () => {
+      const rect = el.getBoundingClientRect();
+      let x = originX;
+      let y = originY;
+      if (x + rect.width > window.innerWidth - pad) {
+        x = Math.max(pad, window.innerWidth - rect.width - pad);
+      }
+      // Alta sığmazsa imlecin üstüne aç (UserPanel’in altına gömülmesin)
+      if (y + rect.height > window.innerHeight - pad) {
+        y = Math.max(pad, originY - rect.height);
+      }
+      if (y < pad) y = pad;
+      if (x !== voiceMemberMenu.x || y !== voiceMemberMenu.y) {
+        setVoiceMemberMenu((prev) => (prev ? { ...prev, x, y } : prev));
+      }
+    };
+    place();
+    const raf = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(raf);
   }, [voiceMemberMenu]);
 
   const openVoiceMemberMenu = (e: ReactMouseEvent, member: SidebarVoiceMember) => {
@@ -1426,9 +1451,19 @@ export function ChannelSidebar({
     if (actions.length === 0 && !hasVolume) return;
     e.preventDefault();
     e.stopPropagation();
+    const pad = 8;
+    const estH = (hasVolume ? 72 : 36) + Math.max(1, actions.length) * 36;
+    let x = e.clientX;
+    let y = e.clientY;
+    if (y + estH > window.innerHeight - pad) {
+      y = Math.max(pad, e.clientY - estH);
+    }
+    if (x + 220 > window.innerWidth - pad) {
+      x = Math.max(pad, window.innerWidth - 220 - pad);
+    }
     setVoiceMemberMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       member,
       actions,
     });
@@ -1622,7 +1657,7 @@ export function ChannelSidebar({
             id={voiceMenuId}
             ref={voiceMenuRef}
             role="menu"
-            className="fixed z-[200] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
+            className="fixed z-[260] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
             style={{ left: voiceMemberMenu.x, top: voiceMemberMenu.y }}
           >
             <p className="px-3 py-1.5 font-label-sm text-outline truncate border-b border-surface-container-highest mb-0.5">

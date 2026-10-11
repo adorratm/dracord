@@ -242,37 +242,76 @@ function voiceAudioPublishOptions(kbps: number): TrackPublishOptions {
   };
 }
 
-/** Publisher PeerConnection üzerinden anlık RTT (ms). */
+/** Publisher PeerConnection üzerinden anlık RTT (ms) — medya yolu öncelikli. */
 async function readPublisherRttMs(room: Room): Promise<number | null> {
+  const samples: number[] = [];
+  const push = (ms: number | undefined) => {
+    if (ms != null && Number.isFinite(ms) && ms >= 0 && ms < 5000) {
+      samples.push(ms);
+    }
+  };
   try {
     for (const pub of room.localParticipant.trackPublications.values()) {
       const track = pub.track;
       if (!(track instanceof LocalTrack) || !track.sender) continue;
       const report = await track.sender.getStats();
-      let pairMs: number | undefined;
-      let remoteMs: number | undefined;
       report.forEach((stat) => {
-        if (stat.type === 'candidate-pair') {
-          const pair = stat as RTCIceCandidatePairStats & { selected?: boolean };
-          if (
-            typeof pair.currentRoundTripTime === 'number' &&
-            (pair.nominated || pair.selected)
-          ) {
-            pairMs = pair.currentRoundTripTime * 1000;
-          }
-        }
+        // Medya RTT (daha doğru) — önce bunu tercih et
         if (stat.type === 'remote-inbound-rtp') {
           const rtt = (stat as { roundTripTime?: number }).roundTripTime;
-          if (typeof rtt === 'number') remoteMs = rtt * 1000;
+          if (typeof rtt === 'number') push(rtt * 1000);
+        }
+        if (stat.type === 'candidate-pair') {
+          const pair = stat as RTCIceCandidatePairStats & {
+            selected?: boolean;
+            state?: string;
+          };
+          const active =
+            pair.state === 'succeeded' && (pair.nominated || pair.selected);
+          if (active && typeof pair.currentRoundTripTime === 'number') {
+            push(pair.currentRoundTripTime * 1000);
+          }
         }
       });
-      const ms = pairMs ?? remoteMs;
-      if (ms != null && Number.isFinite(ms)) return Math.max(0, Math.round(ms));
+    }
+    // PC düzeyinde de dene (track sender yoksa)
+    if (samples.length === 0) {
+      const engine = (
+        room as unknown as {
+          engine?: {
+            pcManager?: {
+              publisher?: { getStats?: () => Promise<RTCStatsReport> };
+            };
+          };
+        }
+      ).engine;
+      const pcStats = await engine?.pcManager?.publisher?.getStats?.();
+      pcStats?.forEach((stat) => {
+        if (stat.type === 'remote-inbound-rtp') {
+          const rtt = (stat as { roundTripTime?: number }).roundTripTime;
+          if (typeof rtt === 'number') push(rtt * 1000);
+        }
+        if (stat.type === 'candidate-pair') {
+          const pair = stat as RTCIceCandidatePairStats & {
+            selected?: boolean;
+            state?: string;
+          };
+          if (
+            pair.state === 'succeeded' &&
+            (pair.nominated || pair.selected) &&
+            typeof pair.currentRoundTripTime === 'number'
+          ) {
+            push(pair.currentRoundTripTime * 1000);
+          }
+        }
+      });
     }
   } catch {
     // ignore
   }
-  return null;
+  if (!samples.length) return null;
+  // En düşük geçerli örnek (ICE STUN spike’larını ele)
+  return Math.max(1, Math.round(Math.min(...samples)));
 }
 
 function applyDeafen(room: Room, deafened: boolean) {
@@ -1557,18 +1596,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
     let cancelled = false;
     let ema: number | null = null;
-    const alpha = 0.28;
     const tick = async () => {
       const room = roomRef.current;
       if (!room || cancelled) return;
       const ms = await readPublisherRttMs(room);
       if (cancelled || ms == null || !Number.isFinite(ms)) return;
-      // Spike yumuşatma: ani jitter UI’ı titretmesin
-      ema = ema == null ? ms : ema * (1 - alpha) + ms * alpha;
+      // Asimetrik EMA: düşüşe hızlı, spike’a yavaş tepki
+      if (ema == null) ema = ms;
+      else if (ms < ema) ema = ema * 0.45 + ms * 0.55;
+      else ema = ema * 0.82 + ms * 0.18;
       setLatencyMs(Math.max(1, Math.round(ema)));
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 1500);
+    const id = window.setInterval(() => void tick(), 1200);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -1581,23 +1621,38 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
+    let ema: number | null = null;
     const base = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(
       /\/$/,
       '',
     );
     const tick = async () => {
       if (cancelled || !base) return;
-      const t0 = performance.now();
+      // Warm-up: ilk istek TCP/TLS handshake şişirir — 2 ölçümün minimumu
+      const once = async () => {
+        const t0 = performance.now();
+        await fetch(`${base}/health`, {
+          method: 'GET',
+          cache: 'no-store',
+          keepalive: true,
+        });
+        return performance.now() - t0;
+      };
       try {
-        await fetch(`${base}/health`, { method: 'GET', cache: 'no-store' });
+        const a = await once();
+        const b = await once();
         if (cancelled) return;
-        setServerLatencyMs(Math.max(1, Math.round(performance.now() - t0)));
+        const ms = Math.max(1, Math.round(Math.min(a, b)));
+        if (ema == null) ema = ms;
+        else if (ms < ema) ema = ema * 0.4 + ms * 0.6;
+        else ema = ema * 0.85 + ms * 0.15;
+        setServerLatencyMs(Math.max(1, Math.round(ema)));
       } catch {
         if (!cancelled) setServerLatencyMs(null);
       }
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 5000);
+    const id = window.setInterval(() => void tick(), 4000);
     return () => {
       cancelled = true;
       window.clearInterval(id);

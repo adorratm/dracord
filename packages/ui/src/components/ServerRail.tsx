@@ -335,10 +335,10 @@ export function ServerRail({
 
       {/* Alt aksiyonlar: UserPanel yüksekliğine göre kayar (--dracord-user-panel-h) */}
       <div
-        className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 md:pb-0 w-full mt-1"
+        className="shrink-0 flex flex-col items-center gap-4 pt-space-sm pb-2 md:pb-0 w-full mt-1"
         style={{ marginBottom: 'var(--dracord-user-panel-h, 70px)' }}
       >
-        <div className="w-8 h-[2px] rounded-full bg-outline-variant/35 shrink-0" aria-hidden />
+        <div className="w-8 h-[2px] rounded-full bg-on-surface/10 shrink-0 mb-0.5" aria-hidden />
         <Tooltip content="Sunucu Ekle" side="right">
           <button
             type="button"
@@ -361,7 +361,7 @@ export function ServerRail({
             className={cn(
               'w-12 h-12 rounded-[50%] hover:rounded-[16px] bg-surface-container text-secondary',
               'hover:bg-secondary-container hover:text-on-secondary-container hover:scale-[1.04] active:scale-[0.98]',
-              'flex items-center justify-center',
+              'flex items-center justify-center mt-0.5',
               railBtnEase,
             )}
             aria-label="Keşfet"
