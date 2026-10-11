@@ -143,7 +143,30 @@ function MenuRow({
 function formatTimestamp(iso: string, hour24 = true, locale = 'tr-TR'): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString(locale, {
+    if (Number.isNaN(d.getTime())) return iso;
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs < 0) {
+      return d.toLocaleTimeString(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: !hour24,
+      });
+    }
+    const min = Math.floor(diffMs / 60_000);
+    if (min < 1) return 'az önce';
+    if (min < 60) return `${min} dakika önce`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} saat önce`;
+    const day = Math.floor(hr / 24);
+    if (day < 7) return `${day} gün önce`;
+    const week = Math.floor(day / 7);
+    if (day < 30) return `${week} hafta önce`;
+    const month = Math.floor(day / 30);
+    if (day < 365) return `${month} ay önce`;
+    return d.toLocaleString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       hour12: !hour24,

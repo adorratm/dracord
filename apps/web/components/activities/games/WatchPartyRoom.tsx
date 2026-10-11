@@ -190,13 +190,17 @@ export function WatchPartyRoom(props: Props) {
       }
     }
     if (!mediaUrl) return;
-    if (isHost && !needApplyRef.current) return;
+    // Host yalnızca medya/URL değişiminde seek uygular; non-host her playing/at değişiminde senkronlar
+    if (isHost && !needApplyRef.current) {
+      if (!playing) v.pause();
+      return;
+    }
     needApplyRef.current = false;
 
     const skew = Date.now() - new Date(session.updatedAt).getTime();
     const comp = playing && skew > 0 && skew < 10_000 ? skew / 1000 : 0;
     const expected = at + comp;
-    const threshold = isHost ? 0.5 : 2;
+    const threshold = isHost ? 0.5 : 1.0;
     if (v.readyState >= 1) {
       if (Math.abs(v.currentTime - expected) > threshold) v.currentTime = expected;
     } else if (expected > 0.5) {

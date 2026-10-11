@@ -123,7 +123,7 @@ function mapChannelItem(
         ? () => extras.onOpenVoiceChat?.(ch)
         : undefined,
     onDropMember:
-      isVoice && extras?.onDropMember
+      (isVoice || isActivity) && extras?.onDropMember
         ? (userId) => extras.onDropMember?.(userId, ch)
         : undefined,
     draggable: Boolean(extras?.onReorderChannels),

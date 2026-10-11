@@ -762,6 +762,7 @@ export function GuildChannelView({
   }, [client, user, channels, channelId, patchChannelUnread]);
 
   // AFK kanalı: konuşma yoksa süre dolunca AFK’ya taşı (mute girişte uygulanır)
+  // GAME / WATCH_PARTY odalarında sessizlik AFK sayılmaz
   useEffect(() => {
     const afkId = guild?.afkChannelId;
     const timeoutMin = guild?.afkTimeoutMinutes ?? 0;
@@ -776,6 +777,12 @@ export function GuildChannelView({
       return;
     }
 
+    const voiceCh = channels.find((c) => c.id === voice.voiceChannelId);
+    if (voiceCh?.type === 'GAME' || voiceCh?.type === 'WATCH_PARTY') {
+      lastSpokeAtRef.current = Date.now();
+      return;
+    }
+
     const self = voice.participants.find((p) => p.id === user.id);
     if (self?.speaking) {
       lastSpokeAtRef.current = Date.now();
@@ -784,6 +791,11 @@ export function GuildChannelView({
     const tick = window.setInterval(() => {
       if (afkMovingRef.current) return;
       if (voice.voiceChannelId === afkId) return;
+      const ch = channels.find((c) => c.id === voice.voiceChannelId);
+      if (ch?.type === 'GAME' || ch?.type === 'WATCH_PARTY') {
+        lastSpokeAtRef.current = Date.now();
+        return;
+      }
       const idleMs = Date.now() - lastSpokeAtRef.current;
       if (idleMs < timeoutMin * 60_000) return;
       afkMovingRef.current = true;
@@ -811,6 +823,7 @@ export function GuildChannelView({
     user,
     guildId,
     router,
+    channels,
   ]);
 
   // AFK kanalı: zorla sessizlik (mic+kulaklık); çıkınca aç
@@ -896,8 +909,36 @@ export function GuildChannelView({
     guildMembers,
   ]);
 
+  const leaveActivityIfNeeded = useCallback(
+    async (fromChannelId: string | null | undefined) => {
+      if (!fromChannelId || !user) return;
+      const ch = channels.find((c) => c.id === fromChannelId);
+      if (!ch || (ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY')) return;
+      try {
+        const s = await client.getChannelActivity(guildId, fromChannelId);
+        if (!s) return;
+        if (!s.playerIds.includes(user.id) && !s.spectatorIds.includes(user.id)) return;
+        await client.leaveActivity(s.id);
+      } catch {
+        /* yok / ağ */
+      }
+    },
+    [channels, user, client, guildId],
+  );
+
+  const prevVoiceChannelRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevVoiceChannelRef.current;
+    const cur = voice.voiceChannelId;
+    if (prev && prev !== cur) {
+      void leaveActivityIfNeeded(prev);
+    }
+    prevVoiceChannelRef.current = cur;
+  }, [voice.voiceChannelId, leaveActivityIfNeeded]);
+
   const leaveVoiceAndMaybeNavigate = useCallback(() => {
     const leftId = voice.leave();
+    if (leftId) void leaveActivityIfNeeded(leftId);
     if (user) {
       setVoiceMembersByChannel((prev) => {
         const next: Record<string, VoiceMemberSummary[]> = {};
@@ -908,13 +949,23 @@ export function GuildChannelView({
         return next;
       });
     }
-    if (isVoiceView || (leftId && channelId === leftId)) {
+    if (isVoiceView || isActivityView || (leftId && channelId === leftId)) {
       const text =
         channels.find((c) => c.type === 'TEXT') ??
         channels.find((c) => c.type === 'FORUM');
       if (text) router.push(`/channels/${guildId}/${text.id}`);
     }
-  }, [voice, user, isVoiceView, channelId, channels, guildId, router]);
+  }, [
+    voice,
+    user,
+    isVoiceView,
+    isActivityView,
+    channelId,
+    channels,
+    guildId,
+    router,
+    leaveActivityIfNeeded,
+  ]);
 
   const openEditChannel = useCallback((ch: ChannelSummary) => {
     setChannelName(ch.name);
@@ -1145,6 +1196,23 @@ export function GuildChannelView({
     return ids;
   }, [guildMembers, user?.id, user?.isPlatformAdmin]);
 
+  const joinActivityRoom = useCallback(
+    async (ch: ChannelSummary) => {
+      if (ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') return;
+      try {
+        let s = await client.getChannelActivity(guildId, ch.id);
+        if (!s) s = await client.startActivity({ guildId, channelId: ch.id });
+        if (!user?.id) return;
+        if (!s.playerIds.includes(user.id) && !s.spectatorIds.includes(user.id)) {
+          await client.joinActivity(s.id, ch.type === 'WATCH_PARTY');
+        }
+      } catch {
+        /* lobi / izin */
+      }
+    },
+    [client, guildId, user?.id],
+  );
+
   const moveToVoiceChannel = useCallback(
     async (targetUserId: string, targetChannelId: string) => {
       const isSelf = Boolean(user?.id && targetUserId === user.id);
@@ -1156,13 +1224,21 @@ export function GuildChannelView({
       try {
         if (isSelf) {
           const ch = channels.find((c) => c.id === targetChannelId);
-          if (!ch || ch.type !== 'VOICE') return;
+          if (
+            !ch ||
+            (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY')
+          ) {
+            return;
+          }
           if (ch.locked && ch.hasPassword && !canManageChannels && !isPlatformAdmin) {
             setVoicePasswordDraft('');
             setVoicePasswordPrompt({ channel: ch });
             return;
           }
           await joinVoiceChannel(ch);
+          if (ch.type === 'GAME' || ch.type === 'WATCH_PARTY') {
+            await joinActivityRoom(ch);
+          }
         } else {
           await client.moveVoiceUser(targetUserId, targetChannelId);
           await reload();
@@ -1182,6 +1258,7 @@ export function GuildChannelView({
       client,
       reload,
       joinVoiceChannel,
+      joinActivityRoom,
     ],
   );
 
@@ -1589,7 +1666,13 @@ export function GuildChannelView({
           ? (cat) => setConfirm({ kind: 'category', category: cat })
           : undefined,
         onDropMember: (userId, channel) => {
-          if (channel.type !== 'VOICE') return;
+          if (
+            channel.type !== 'VOICE' &&
+            channel.type !== 'GAME' &&
+            channel.type !== 'WATCH_PARTY'
+          ) {
+            return;
+          }
           const isSelf = Boolean(user?.id && userId === user.id);
           if (!isSelf && !canMoveMembers) return;
           void moveToVoiceChannel(userId, channel.id);
@@ -3773,14 +3856,17 @@ export function GuildChannelView({
         open={Boolean(moveTargetUser)}
         title={
           moveTargetUser
-            ? `${moveTargetUser.displayName} — ses kanalına taşı`
-            : 'Ses kanalına taşı'
+            ? `${moveTargetUser.displayName} — kanala taşı`
+            : 'Kanala taşı'
         }
         onClose={() => setMoveTargetUser(null)}
       >
         <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
           {channels
-            .filter((c) => c.type === 'VOICE')
+            .filter(
+              (c) =>
+                c.type === 'VOICE' || c.type === 'GAME' || c.type === 'WATCH_PARTY',
+            )
             .map((c) => (
               <button
                 key={c.id}
@@ -3792,7 +3878,11 @@ export function GuildChannelView({
                 }}
               >
                 <span className="material-symbols-outlined text-[18px] text-outline">
-                  volume_up
+                  {c.type === 'GAME'
+                    ? 'sports_esports'
+                    : c.type === 'WATCH_PARTY'
+                      ? 'live_tv'
+                      : 'volume_up'}
                 </span>
                 {c.name}
               </button>

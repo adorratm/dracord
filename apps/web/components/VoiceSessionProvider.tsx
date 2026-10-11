@@ -1692,12 +1692,32 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const leaveActivityMembership = useCallback(
+    async (guildId: string | null | undefined, channelId: string | null | undefined) => {
+      if (!guildId || !channelId || !user?.id) return;
+      try {
+        const s = await client.getChannelActivity(guildId, channelId);
+        if (!s) return;
+        if (!s.playerIds.includes(user.id) && !s.spectatorIds.includes(user.id)) return;
+        await client.leaveActivity(s.id);
+      } catch {
+        /* aktivite yok / ağ */
+      }
+    },
+    [client, user?.id],
+  );
+
   const join = useCallback(
     async (channelId: string, guildId: string, opts?: { password?: string }) => {
       intentionalLeaveRef.current = false;
       voicePasswordRef.current = opts?.password;
       // iOS WebKit: getUserMedia tıklama zincirinde olmalı; router.push / useEffect sonra prompt kapanır
       await prepareMicrophone();
+      const prevChannel = channelIdRef.current;
+      const prevGuild = guildIdRef.current;
+      if (prevChannel && prevChannel !== channelId) {
+        void leaveActivityMembership(prevGuild, prevChannel);
+      }
       saveActiveVoice({ guildId, channelId });
       setVoiceChannelId((prev) => {
         if (prev === channelId) return prev;
@@ -1707,7 +1727,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       // Aynı kanalda bile odak sekmesi liderliği alsın (çoklu sekme)
       claimVoiceLeadership(channelId, guildId);
     },
-    [claimVoiceLeadership, prepareMicrophone],
+    [claimVoiceLeadership, prepareMicrophone, leaveActivityMembership],
   );
 
   const stopNsfwMonitors = useCallback(() => {
@@ -1746,6 +1766,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     });
     // Lider olmasa bile presence temizle — aksi halde sol panelde hayalet avatar kalır.
     if (channelId) {
+      void leaveActivityMembership(guildId, channelId);
       void (async () => {
         try {
           await client.leaveVoiceState(channelId);
@@ -1758,7 +1779,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       })();
     }
     return channelId;
-  }, [client, clearScreenShareView, clearCameraViews, stopNsfwMonitors]);
+  }, [
+    client,
+    clearScreenShareView,
+    clearCameraViews,
+    stopNsfwMonitors,
+    leaveActivityMembership,
+  ]);
 
   /** Yetkili kick: sunucu VOICE_STATE leave/move yayınladığında oturumu güncelle */
   useEffect(() => {

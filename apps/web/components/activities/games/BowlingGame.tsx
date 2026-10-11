@@ -696,6 +696,34 @@ export function BowlingGame(props: GameProps) {
           <p className="mt-1 text-[#f1fa8c]">Kazanan: {playerLabel(session, best.id, userId)}</p>
         )}
       </div>
+      {finished && (
+        <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/45 p-4">
+          <div className="rounded-xl border border-[#bd93f9]/40 bg-[#11131e] px-6 py-5 text-center shadow-xl">
+            <p className="mb-1 font-headline-md text-[#f8f8f2]">Oyun bitti</p>
+            {best && (
+              <p className="mb-3 text-sm text-[#f1fa8c]">
+                Kazanan: {playerLabel(session, best.id, userId)} ({best.score})
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={busy || !canPlay}
+              onClick={() => {
+                setBusy(true);
+                const empty: Record<string, number[]> = {};
+                for (const id of session.playerIds) empty[id] = [];
+                void props
+                  .onPatch({ frames: empty, turn: 0, lastRoll: null })
+                  .catch(() => undefined)
+                  .finally(() => setBusy(false));
+              }}
+              className="h-9 rounded-lg bg-[#50fa7b] px-4 font-label-sm text-[#11131e] disabled:opacity-50"
+            >
+              Yeniden başla
+            </button>
+          </div>
+        </div>
+      )}
     </ThreeSceneHost>
   );
 }

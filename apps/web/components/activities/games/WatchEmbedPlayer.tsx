@@ -391,8 +391,9 @@ export function WatchEmbedPlayer({
     if (!readyRef.current) return;
     if (media.provider === 'youtube' && ytRef.current) {
       try {
-        if (Math.abs(ytRef.current.getCurrentTime() - at) > (isHost ? 1.2 : 2.5)) {
-          if (Math.abs(lastSeekRef.current - at) > 0.4) {
+        const drift = isHost ? 1.2 : 1.0;
+        if (Math.abs(ytRef.current.getCurrentTime() - at) > drift) {
+          if (Math.abs(lastSeekRef.current - at) > 0.35) {
             ytRef.current.seekTo(at, true);
             lastSeekRef.current = at;
           }
