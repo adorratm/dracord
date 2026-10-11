@@ -333,11 +333,8 @@ export function ServerRail({
         ))}
       </div>
 
-      {/* Alt aksiyonlar: UserPanel yüksekliğine göre kayar (--dracord-user-panel-h) */}
-      <div
-        className="shrink-0 flex flex-col items-center gap-4 pt-space-sm pb-2 md:pb-0 w-full mt-1"
-        style={{ marginBottom: 'var(--dracord-user-panel-h, 70px)' }}
-      >
+      {/* Mobil: alta yakın. Desktop: en az 70px (panel h < 70 olsa bile yapışmaz) */}
+      <div className="shrink-0 flex flex-col items-center gap-2 pt-space-sm pb-2 md:pb-0 w-full mt-1 mb-2 md:mb-[max(70px,var(--dracord-user-panel-h,70px))]">
         <div className="w-8 h-[2px] rounded-full bg-on-surface/10 shrink-0 mb-0.5" aria-hidden />
         <Tooltip content="Sunucu Ekle" side="right">
           <button

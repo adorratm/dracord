@@ -361,7 +361,7 @@ export function UserPanel({
       const h = Math.ceil(el.getBoundingClientRect().height);
       document.documentElement.style.setProperty(
         '--dracord-user-panel-h',
-        `${Math.max(56, h)}px`,
+        `${h}px`,
       );
     };
     publish();

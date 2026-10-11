@@ -201,7 +201,7 @@ export function SettingsShell({
               aria-modal
               aria-label="Ayarlar menüsü"
             >
-              <div className="h-12 px-space-sm flex items-center justify-between border-b border-surface-container-high shrink-0 gap-2">
+              <div className="h-12 px-space-sm flex items-center justify-between border-b border-surface-container-highest shrink-0 gap-2">
                 <div className="flex items-center gap-space-sm min-w-0">
                   <Logo size={24} showBackground className="shrink-0" />
                   <span className="font-headline-md text-on-surface truncate">{title}</span>

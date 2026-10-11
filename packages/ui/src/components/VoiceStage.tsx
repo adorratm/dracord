@@ -70,6 +70,8 @@ export interface VoiceStageProps {
   onLeave?: () => void;
   onToggleParticipants?: () => void;
   onToggleChat?: () => void;
+  /** Mobil kanal listesi */
+  onOpenChannels?: () => void;
   stageOverlay?: ReactNode;
   chatPanel?: ReactNode;
   participantsPanel?: ReactNode;
@@ -149,6 +151,7 @@ export function VoiceStage({
   onLeave,
   onToggleParticipants,
   onToggleChat,
+  onOpenChannels,
   stageOverlay,
   chatPanel,
   participantsPanel,
@@ -241,8 +244,18 @@ export function VoiceStage({
 
   return (
     <div className={cn('flex flex-col flex-1 min-h-0 bg-surface relative', className)}>
-      <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-high shrink-0">
+      <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-highest shrink-0">
         <div className="flex items-center gap-space-sm min-w-0">
+          {onOpenChannels && (
+            <button
+              type="button"
+              className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface shrink-0"
+              aria-label="Kanallar"
+              onClick={onOpenChannels}
+            >
+              <span className="material-symbols-outlined text-[20px]">menu</span>
+            </button>
+          )}
           <span className="material-symbols-outlined text-primary-container">volume_up</span>
           <span className="font-headline-md text-headline-md text-on-surface truncate">{channelName}</span>
           {screenShare && (
@@ -699,7 +712,7 @@ export function VoiceStage({
         )}
       </div>
 
-      <div className="h-16 px-space-lg flex items-center justify-center gap-space-md bg-surface-container-lowest border-t border-surface-container-high shrink-0">
+      <div className="h-16 px-space-lg flex items-center justify-center gap-space-md bg-surface-container-lowest border-t border-surface-container-highest shrink-0">
         <button
           type="button"
           onClick={onToggleMute}

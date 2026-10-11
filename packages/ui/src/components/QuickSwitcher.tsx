@@ -65,10 +65,10 @@ export function QuickSwitcher({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-xl bg-surface-container-lowest shadow-bar overflow-hidden"
+        className="w-full max-w-xl rounded-xl bg-surface-container-lowest border border-surface-container-highest shadow-bar overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-space-sm px-space-md border-b border-surface-container-high">
+        <div className="flex items-center gap-space-sm px-space-md border-b border-surface-container-highest">
           <span className="material-symbols-outlined text-outline">search</span>
           <input
             autoFocus

@@ -2493,7 +2493,6 @@ export function GuildChannelView({
         onClick={() => setChannelsOpen(true)}
         style={
           channelsOpen ||
-          showingVoiceStage ||
           (!isVoiceView && !isActivityView && !channelPending && !channelMissing)
             ? { display: 'none' }
             : undefined
@@ -2513,6 +2512,7 @@ export function GuildChannelView({
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
           <VoiceStage
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
+          onOpenChannels={() => setChannelsOpen(true)}
           participants={voice.participants.map((p) => {
             const m = guildMembers.find((g) => g.id === p.id);
             const inAfk =

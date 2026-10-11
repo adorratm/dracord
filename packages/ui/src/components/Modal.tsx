@@ -27,11 +27,11 @@ export function Modal({ open, title, onClose, children, footer, className }: Mod
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative w-full sm:max-w-md max-h-[min(92dvh,40rem)] flex flex-col rounded-t-2xl sm:rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-slide-up',
+          'relative w-full sm:max-w-md max-h-[min(92dvh,40rem)] flex flex-col rounded-t-2xl sm:rounded-2xl bg-surface-container-low border border-surface-container-highest shadow-float dracord-slide-up',
           className,
         )}
       >
-        <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-high shrink-0">
+        <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-highest shrink-0">
           <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
           <button
             type="button"
@@ -44,7 +44,7 @@ export function Modal({ open, title, onClose, children, footer, className }: Mod
         </div>
         <div className="p-space-md overflow-y-auto min-h-0 flex-1">{children}</div>
         {footer && (
-          <div className="px-space-md pb-space-md pt-space-xs flex justify-end gap-space-sm shrink-0 border-t border-surface-container-high/60">
+          <div className="px-space-md pb-space-md pt-space-xs flex justify-end gap-space-sm shrink-0 border-t border-surface-container-highest">
             {footer}
           </div>
         )}

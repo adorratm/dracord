@@ -219,26 +219,47 @@ html.light {
   }
 }
 
-/* react-toastify — Dracula / Light uyumu */
+/* react-toastify — tasarım tokenları; Slide enter/exit sınıfları korunur */
+:root,
+html.dark {
+  --toastify-color-dark: var(--color-surface-container-high);
+  --toastify-color-light: var(--color-surface-container-high);
+  --toastify-text-color-dark: var(--color-on-surface);
+  --toastify-text-color-light: var(--color-on-surface);
+  --toastify-toast-bd-radius: 0.75rem;
+  --toastify-toast-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --toastify-color-progress-dark: var(--color-primary-container);
+  --toastify-color-progress-light: var(--color-primary-container);
+  --toastify-color-progress-success: var(--color-primary-container);
+  --toastify-color-progress-info: var(--color-primary-container);
+  --toastify-color-progress-warning: #ffb86c;
+  --toastify-color-progress-error: var(--color-error);
+  --toastify-font-family: inherit;
+  --toastify-z-index: 10000;
+}
+html.light {
+  --toastify-toast-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --toastify-color-progress-dark: var(--color-primary-container);
+  --toastify-color-progress-light: var(--color-primary-container);
+}
+.dracord-toast-container,
 .Toastify__toast-container {
   z-index: 10000;
 }
-.Toastify__toast {
+.dracord-toast.Toastify__toast {
   font-family: inherit;
+  font-size: 0.875rem;
+  border: 1px solid var(--color-surface-container-highest);
+  box-shadow: var(--toastify-toast-shadow);
+  min-height: 3rem;
 }
-.Toastify__progress-bar--success,
-.Toastify__progress-bar--info {
-  background: #bd93f9 !important;
+html.light .dracord-toast.Toastify__toast {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 55%, transparent);
 }
-.Toastify__progress-bar--error {
-  background: #ff5555 !important;
-}
-.Toastify__progress-bar--warning {
-  background: #ffb86c !important;
-}
-html.light .Toastify__progress-bar--success,
-html.light .Toastify__progress-bar--info {
-  background: var(--md-sys-color-primary, #7c3aed) !important;
+.dracord-toast .Toastify__toast-body {
+  font-family: inherit;
+  margin: 0 0.25rem;
+  padding: 0;
 }
 
 .material-symbols-outlined {

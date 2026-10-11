@@ -92,7 +92,7 @@ export function UserProfileCard({
         aria-modal="true"
         aria-label={user.displayName}
         className={cn(
-          'relative overflow-y-auto rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-fade-in',
+          'relative overflow-y-auto rounded-2xl bg-surface-container-low border border-surface-container-highest shadow-float dracord-fade-in',
           isPopout
             ? 'w-[min(100%,20rem)] max-h-[min(85vh,560px)]'
             : 'w-full max-w-lg max-h-[90vh]',

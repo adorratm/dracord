@@ -40,7 +40,7 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
-        className="relative w-full max-w-md rounded-2xl bg-surface-container-low border border-surface-container-high shadow-float dracord-fade-in"
+        className="relative w-full max-w-md rounded-2xl bg-surface-container-low border border-surface-container-highest shadow-float dracord-fade-in"
       >
         <div className="p-space-lg space-y-space-md">
           <div className="flex items-start gap-space-md">

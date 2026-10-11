@@ -1,5 +1,6 @@
-import { toast as rtToast, type ToastOptions } from 'react-toastify';
+import { Slide, toast as rtToast, type ToastOptions } from 'react-toastify';
 
+/** Container theme sağlar; Slide her çağrıda da uygulanır (güncel toastify davranışı) */
 const base: ToastOptions = {
   position: 'bottom-right',
   autoClose: 3200,
@@ -7,7 +8,7 @@ const base: ToastOptions = {
   closeOnClick: true,
   pauseOnHover: true,
   draggable: true,
-  theme: 'colored',
+  transition: Slide,
 };
 
 export const toast = {

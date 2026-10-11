@@ -275,7 +275,7 @@ export function ActivityChannelView({
         className,
       )}
     >
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-container-high bg-surface-container-low px-space-md py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-container-highest bg-surface-container-low px-space-md py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]">
         {onOpenChannels && (
           <button
             type="button"

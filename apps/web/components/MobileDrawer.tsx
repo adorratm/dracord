@@ -78,7 +78,7 @@ export function MobileDrawer({
         aria-modal
         aria-label={title ?? 'Panel'}
       >
-        <div className="h-12 px-space-sm flex items-center justify-between border-b border-surface-container-high shrink-0">
+        <div className="h-12 px-space-sm flex items-center justify-between border-b border-surface-container-highest shrink-0">
           <span className="font-headline-md text-on-surface truncate">{title ?? 'Panel'}</span>
           <button
             type="button"

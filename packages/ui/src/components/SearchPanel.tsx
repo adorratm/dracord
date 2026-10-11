@@ -62,10 +62,10 @@ export function SearchPanel({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-xl bg-surface-container-lowest shadow-bar overflow-hidden flex flex-col max-h-[70vh]"
+        className="w-full max-w-2xl rounded-xl bg-surface-container-lowest border border-surface-container-highest shadow-bar overflow-hidden flex flex-col max-h-[70vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-space-sm px-space-md border-b border-surface-container-high">
+        <div className="flex items-center gap-space-sm px-space-md border-b border-surface-container-highest">
           <span className="material-symbols-outlined text-outline">manage_search</span>
           <input
             autoFocus
@@ -75,7 +75,7 @@ export function SearchPanel({
             className="flex-1 h-12 bg-transparent outline-none font-body-md text-on-surface"
           />
         </div>
-        <div className="flex gap-space-xs px-space-md py-space-sm border-b border-surface-container-high overflow-x-auto">
+        <div className="flex gap-space-xs px-space-md py-space-sm border-b border-surface-container-highest overflow-x-auto">
           {scopes.map((s) => (
             <button
               key={s.id}
