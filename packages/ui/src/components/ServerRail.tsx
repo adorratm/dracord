@@ -320,7 +320,7 @@ export function ServerRail({
       </div>
 
       {/* Alt aksiyonlar scroll dışında — desktop’ta alttan 65px yukarıda */}
-      <div className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 md:mb-[65px] md:pb-0 w-full border-t border-surface-container-highest/60 mt-1">
+      <div className="shrink-0 flex flex-col items-center gap-3 pt-space-sm pb-2 md:mb-[70px] md:pb-0 w-full border-t border-surface-container-highest/60 mt-1">
         <button
           type="button"
           onClick={onAddClick}
