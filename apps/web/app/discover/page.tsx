@@ -5,7 +5,7 @@ import {
   type DiscoverCategory,
   type GuildSummary,
 } from '@dracord/types';
-import { cn } from '@dracord/ui';
+import { cn, DiscoverSkeleton } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell, rememberChannel } from '@/components/AppShell';
@@ -114,8 +114,11 @@ export default function DiscoverPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedApp, setSelectedApp] = useState<CuratedApp | null>(null);
   const [addedApps, setAddedApps] = useState<Set<string>>(() => new Set());
+  const [loading, setLoading] = useState(true);
+  const [initialReady, setInitialReady] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const cat = category === 'all' ? undefined : (category as DiscoverCategory);
       const list = await client.discoverGuilds(query.trim() || undefined, cat);
@@ -124,12 +127,19 @@ export default function DiscoverPage() {
     } catch (e) {
       setDiscover([]);
       setError(e instanceof Error ? e.message : 'Keşfet yüklenemedi');
+    } finally {
+      setLoading(false);
+      setInitialReady(true);
     }
   }, [client, query, category]);
 
   useEffect(() => {
-    if (view !== 'servers') return;
-    const t = window.setTimeout(() => void load(), 200);
+    if (view !== 'servers') {
+      setLoading(false);
+      setInitialReady(true);
+      return;
+    }
+    const t = window.setTimeout(() => void load(), 120);
     return () => window.clearTimeout(t);
   }, [load, view]);
 
@@ -206,6 +216,9 @@ export default function DiscoverPage() {
         subtitle="Keşfet"
         onGuildsChanged={() => void reload()}
       >
+        {!initialReady || (view === 'servers' && loading && discover.length === 0) ? (
+          <DiscoverSkeleton />
+        ) : (
         <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
           <aside className="hidden md:flex w-60 shrink-0 flex-col bg-surface-container-low border-r border-surface-container-highest">
             <div className="px-4 py-4 border-b border-surface-container-highest">
@@ -505,6 +518,7 @@ export default function DiscoverPage() {
             )}
           </div>
         </div>
+        )}
       </AppShell>
     </RequireAuth>
   );

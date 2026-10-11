@@ -660,7 +660,9 @@ export function GuildChannelView({
   useEffect(() => {
     const map: Record<string, VoiceMemberSummary[]> = {};
     for (const ch of channels) {
-      if (ch.type !== 'VOICE') continue;
+      if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
+        continue;
+      }
       let members = [...(ch.voiceMembers ?? [])];
       // Sunucudan gelen hayalet self kaydını daha en başta ele
       if (user && voice.voiceChannelId !== ch.id) {
@@ -715,6 +717,12 @@ export function GuildChannelView({
         if (payload.action === 'leave' || !payload.channelId) {
           for (const key of Object.keys(next)) {
             next[key] = (next[key] ?? []).filter((m) => m.id !== payload.user.id);
+          }
+          // Hedef kanal anahtarı yoksa bile yaz — aksi halde API fallback hayalet bırakır
+          if (payload.channelId) {
+            next[payload.channelId] = (next[payload.channelId] ?? []).filter(
+              (m) => m.id !== payload.user.id,
+            );
           }
           return next;
         }
@@ -1175,16 +1183,43 @@ export function GuildChannelView({
       const chId =
         channelOverrideId ??
         voice.voiceChannelId ??
-        (isVoiceView ? channelId : null);
-      if (!chId || !canMoveMembers) return;
+        (isVoiceView || isActivityView ? channelId : null);
+      if (!chId) {
+        setDmError('Hedef oda bulunamadı');
+        return;
+      }
+      if (!canMoveMembers) {
+        setDmError('Üyeleri taşıma / odadan ayırma yetkin yok');
+        return;
+      }
+      // Anında UI’dan düş — socket gecikse bile hayalet kalmasın
+      setVoiceMembersByChannel((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          next[key] = (next[key] ?? []).filter((m) => m.id !== targetUserId);
+        }
+        if (chId) {
+          next[chId] = (next[chId] ?? []).filter((m) => m.id !== targetUserId);
+        }
+        return next;
+      });
       try {
         await client.disconnectVoiceUser(chId, targetUserId);
         await reload();
       } catch (err) {
         setDmError(err instanceof Error ? err.message : 'Odadan ayrılamadı');
+        await reload();
       }
     },
-    [voice.voiceChannelId, isVoiceView, channelId, canMoveMembers, client, reload],
+    [
+      voice.voiceChannelId,
+      isVoiceView,
+      isActivityView,
+      channelId,
+      canMoveMembers,
+      client,
+      reload,
+    ],
   );
 
   const platformAdminIds = useMemo(() => {

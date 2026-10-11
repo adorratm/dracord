@@ -97,7 +97,12 @@ export type { LoginScreenProps } from './components/LoginScreen';
 export { Modal } from './components/Modal';
 export type { ModalProps } from './components/Modal';
 
-export { Skeleton, GuildNavSkeleton, ChatSkeleton } from './components/Skeleton';
+export {
+  Skeleton,
+  GuildNavSkeleton,
+  ChatSkeleton,
+  DiscoverSkeleton,
+} from './components/Skeleton';
 export type { SkeletonProps } from './components/Skeleton';
 
 export { Tooltip } from './components/Tooltip';

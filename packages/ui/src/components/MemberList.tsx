@@ -264,7 +264,7 @@ export function MemberList({ groups, className }: MemberListProps) {
                   'w-full text-left px-3 py-2 font-body-sm hover:bg-surface-bright transition-colors',
                   action.danger ? 'text-error' : 'text-on-surface',
                 )}
-                onClick={(e) => {
+                onPointerDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   setMenu(null);

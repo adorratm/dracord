@@ -344,7 +344,8 @@ export function BilliardsGame(props: GameProps) {
     let pendingSync = false;
     let snapped = false;
     let simTime = 0;
-    let aimActive = false;
+    let charging = false;
+    let chargePower = 0;
     let placingCue = false;
     let aimX = 0;
     let aimZ = 0;
@@ -355,6 +356,7 @@ export function BilliardsGame(props: GameProps) {
     let sunkThisShot: number[] = [];
     let shotOwner: string | null = null;
     let isLocalAuthority = false;
+    const CHARGE_PER_SEC = 0.85;
     const raycaster = new THREE.Raycaster();
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -R);
     const hit = new THREE.Vector3();
@@ -660,7 +662,7 @@ export function BilliardsGame(props: GameProps) {
       }
     };
 
-    const updateAim = () => {
+    const updateAim = (dt: number) => {
       const cue = bodies.get(0)!;
       const p = propsRef.current;
       const w =
@@ -674,11 +676,16 @@ export function BilliardsGame(props: GameProps) {
       cueMesh.visible = show;
       dom.style.cursor = show || (inHand && isMyTurn(p) && !w) ? 'crosshair' : 'default';
       if (!show) {
+        charging = false;
+        chargePower = 0;
         if (lastPower !== 0) {
           lastPower = 0;
           setPower(0);
         }
         return;
+      }
+      if (charging) {
+        chargePower = Math.min(1, chargePower + CHARGE_PER_SEC * dt);
       }
       let dx = aimX - cue.x;
       let dz = aimZ - cue.z;
@@ -690,8 +697,7 @@ export function BilliardsGame(props: GameProps) {
       }
       dx /= Math.max(dist, 1e-4);
       dz /= Math.max(dist, 1e-4);
-      if (dist < 1e-3) dist = 0.5;
-      const pw = Math.min(1, Math.max(0.1, dist / 6));
+      const pw = charging ? Math.max(0.08, chargePower) : 0.15;
       const pos = aimGeo.attributes.position!;
       pos.setXYZ(0, cue.x, R, cue.z);
       pos.setXYZ(1, cue.x + dx * 3, R, cue.z + dz * 3);
@@ -705,7 +711,7 @@ export function BilliardsGame(props: GameProps) {
         cue.z + tmpDir.z * (gap + CUE_LEN / 2),
       );
       cueMesh.quaternion.setFromUnitVectors(up, tmpDir);
-      const pct = Math.round(pw * 100);
+      const pct = charging ? Math.round(chargePower * 100) : 0;
       if (pct !== lastPower) {
         lastPower = pct;
         setPower(pct);
@@ -738,7 +744,7 @@ export function BilliardsGame(props: GameProps) {
           rollMesh(b, b.x - ox, b.z - oz);
           placeMesh(b);
         }
-        updateAim();
+        updateAim(dt);
       }
     };
     loop();
@@ -758,6 +764,53 @@ export function BilliardsGame(props: GameProps) {
         if (Math.hypot(b.x - x, b.z - z) < 2 * R + 0.02) return false;
       }
       return true;
+    };
+
+    const cancelCharge = () => {
+      charging = false;
+      chargePower = 0;
+      lastPower = 0;
+      setPower(0);
+    };
+
+    const fireShot = () => {
+      const p = propsRef.current;
+      if (simulating || !isMyTurn(p) || p.session.state.cueInHand || p.session.state.winner) {
+        cancelCharge();
+        return;
+      }
+      const cue = bodies.get(0)!;
+      if (cue.sunk || !p.userId) {
+        cancelCharge();
+        return;
+      }
+      let dx = aimX - cue.x;
+      let dz = aimZ - cue.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 1e-4) {
+        dx = 1;
+        dz = 0;
+      } else {
+        dx /= dist;
+        dz /= dist;
+      }
+      const pw = Math.min(1, Math.max(0.08, chargePower));
+      charging = false;
+      chargePower = 0;
+      const shot: Shot = {
+        dx: round4(dx),
+        dz: round4(dz),
+        power: round4(pw),
+        by: p.userId,
+        id: Date.now(),
+      };
+      lastShotIdRef.current = shot.id;
+      startShot(shot, true);
+      setBusy(true);
+      void p
+        .onPatch({ shot })
+        .catch(() => undefined)
+        .finally(() => setBusy(false));
     };
 
     const onMove = (e: PointerEvent) => {
@@ -785,6 +838,13 @@ export function BilliardsGame(props: GameProps) {
       const p = propsRef.current;
       if (p.session.state.winner) return;
       if (!isMyTurn(p)) return;
+      // Sağ tık: şarj iptal
+      if (e.button === 2) {
+        e.preventDefault();
+        cancelCharge();
+        return;
+      }
+      if (e.button !== 0) return;
       toTable(e);
       if (Boolean(p.session.state.cueInHand)) {
         placingCue = true;
@@ -799,10 +859,18 @@ export function BilliardsGame(props: GameProps) {
         }
         return;
       }
-      aimActive = true;
+      charging = true;
+      chargePower = 0.08;
+      lastPower = 8;
+      setPower(8);
     };
     const onUp = (e: PointerEvent) => {
       const p = propsRef.current;
+      if (e.button === 2) {
+        cancelCharge();
+        return;
+      }
+      if (e.button !== 0) return;
       if (placingCue) {
         placingCue = false;
         if (!isMyTurn(p) || !p.session.state.cueInHand) return;
@@ -826,38 +894,18 @@ export function BilliardsGame(props: GameProps) {
           .finally(() => setBusy(false));
         return;
       }
-      if (!aimActive) return;
-      aimActive = false;
-      if (simulating || !isMyTurn(p) || p.session.state.cueInHand || p.session.state.winner) return;
+      if (!charging) return;
       toTable(e);
-      const cue = bodies.get(0)!;
-      if (cue.sunk) return;
-      let dx = aimX - cue.x;
-      let dz = aimZ - cue.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 0.05) return;
-      dx /= dist;
-      dz /= dist;
-      const pw = Math.min(1, Math.max(0.1, dist / 6));
-      if (!p.userId) return;
-      const shot: Shot = {
-        dx: round4(dx),
-        dz: round4(dz),
-        power: round4(pw),
-        by: p.userId,
-        id: Date.now(),
-      };
-      lastShotIdRef.current = shot.id;
-      startShot(shot, true);
-      setBusy(true);
-      void p
-        .onPatch({ shot })
-        .catch(() => undefined)
-        .finally(() => setBusy(false));
+      fireShot();
+    };
+    const onContext = (e: Event) => {
+      e.preventDefault();
+      cancelCharge();
     };
     dom.addEventListener('pointermove', onMove);
     dom.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
+    dom.addEventListener('contextmenu', onContext);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -865,6 +913,7 @@ export function BilliardsGame(props: GameProps) {
       dom.removeEventListener('pointermove', onMove);
       dom.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointerup', onUp);
+      dom.removeEventListener('contextmenu', onContext);
       syncRef.current = null;
       applyShotRef.current = null;
       scene.remove(root);
@@ -882,7 +931,7 @@ export function BilliardsGame(props: GameProps) {
         : cueInHand && myTurn
           ? 'Beyaz topu masaya yerleştir (tıkla)'
           : myTurn
-            ? 'Senin sıran — nişan al, bırakarak vur'
+            ? 'Sol tık basılı tut → güç · bırak → vur · sağ tık → iptal'
             : 'Rakip oynuyor';
 
   const myGroup = userId ? groups[userId] : undefined;

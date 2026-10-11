@@ -217,9 +217,20 @@ export class ActivitiesService {
         (s.playerIds ?? []).includes(userId) ||
         (s.spectatorIds ?? []).includes(userId);
       if (!inSession) continue;
+      const prevState = (s.state ?? {}) as Record<string, unknown>;
+      const joinedMap = {
+        ...((prevState.memberJoinedAt as Record<string, string> | undefined) ?? {}),
+      };
+      delete joinedMap[userId];
+      s.state = { ...prevState, memberJoinedAt: joinedMap };
       this.finalizeAfterLeave(s, userId);
       await this.persistAndBroadcast(s);
     }
+  }
+
+  /** Ses odasından çıkınca / kick / taşıma — aktivite listesinden de düş */
+  async leaveUserFromActivities(userId: string, exceptSessionId?: string) {
+    await this.evacuateUser(userId, exceptSessionId);
   }
 
   async start(

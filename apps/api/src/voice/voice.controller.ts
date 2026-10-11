@@ -6,6 +6,7 @@ import {
 } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { DM_CALL_GUILD_ID } from '@dracord/types';
+import { ActivitiesService } from '@/activities/activities.service';
 import { ChannelsService } from '@/channels/channels.service';
 import { DmCallService } from '@/dm/dm-call.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
@@ -26,6 +27,7 @@ export class VoiceController {
     private readonly em: EntityManager,
     private readonly dmCalls: DmCallService,
     private readonly platformAdmin: PlatformAdminService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   private async resolvePresenceGuildId(channelId: string): Promise<string | null> {
@@ -95,6 +97,7 @@ export class VoiceController {
     if (!guildId) return null;
     const payload = await this.presence.leave(guildId, channelId, user.sub);
     if (payload) this.broadcast.broadcastVoiceState(payload);
+    await this.activities.leaveUserFromActivities(user.sub);
     if (guildId === DM_CALL_GUILD_ID) {
       await this.dmCalls.endCallIfEmpty(channelId);
     }
@@ -122,6 +125,7 @@ export class VoiceController {
     if (summary.guildId) {
       const payload = await this.presence.leave(summary.guildId, channelId, body.userId);
       if (payload) this.broadcast.broadcastVoiceState(payload);
+      await this.activities.leaveUserFromActivities(body.userId);
     }
     return summary;
   }
@@ -145,8 +149,27 @@ export class VoiceController {
     if (!channel.guildId) return { ok: false };
     await this.voiceService.assertCanMoveMembers(channel.guildId, user.sub);
     await this.platformAdmin.assertNotPlatformAdminTarget(body.userId);
+    const members = await this.presence.listChannel(channel.guildId, channelId);
+    const prior = members.find((m) => m.id === body.userId);
     const payload = await this.presence.leave(channel.guildId, channelId, body.userId);
-    if (payload) this.broadcast.broadcastVoiceState(payload);
+    // Presence’te olmasa bile leave yayınla — hayalet avatar / istemci koparması için
+    this.broadcast.broadcastVoiceState(
+      payload ?? {
+        guildId: channel.guildId,
+        channelId,
+        action: 'leave',
+        user: prior ?? {
+          id: body.userId,
+          displayName: 'Üye',
+          avatarUrl: null,
+        },
+      },
+    );
+    try {
+      await this.activities.leaveUserFromActivities(body.userId);
+    } catch {
+      /* ses ayrımı yine başarılı sayılsın */
+    }
     return { ok: true };
   }
 

@@ -80,3 +80,40 @@ export function ChatSkeleton({ className }: { className?: string }) {
     </div>
   );
 }
+
+/** Keşfet / sunucu listesi geçiş placeholder’ı */
+export function DiscoverSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn('flex flex-1 min-h-0 min-w-0 overflow-hidden', className)}
+      aria-busy
+      aria-label="Keşfet yükleniyor"
+    >
+      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-surface-container-low border-r border-surface-container-highest p-3 gap-2">
+        <Skeleton className="h-5 w-24 mb-2" />
+        <Skeleton className="h-10 w-full rounded-lg" />
+        <Skeleton className="h-10 w-full rounded-lg" />
+      </aside>
+      <div className="flex-1 min-w-0 overflow-hidden p-4 md:p-6 space-y-4">
+        <Skeleton className="h-10 w-full max-w-md rounded-lg" />
+        <Skeleton className="h-[200px] md:h-[260px] w-full rounded-2xl" />
+        <Skeleton className="h-5 w-40" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-surface-container-highest overflow-hidden bg-surface-container-low"
+            >
+              <Skeleton className="h-28 w-full rounded-none" />
+              <div className="p-3 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

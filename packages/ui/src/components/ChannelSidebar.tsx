@@ -1698,7 +1698,8 @@ export function ChannelSidebar({
                   'w-full text-left px-3 py-2 font-body-sm hover:bg-surface-bright transition-colors',
                   action.danger ? 'text-error' : 'text-on-surface',
                 )}
-                onClick={(e) => {
+                onPointerDown={(e) => {
+                  // document capture pointerdown menüyü kapatmadan önce aksiyonu çalıştır
                   e.preventDefault();
                   e.stopPropagation();
                   setVoiceMemberMenu(null);

@@ -15,6 +15,7 @@ import { Channel } from '@/database/entities/channel.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { User } from '@/database/entities/user.entity';
 import { ChannelType } from '@/database/enums';
+import { ActivitiesService } from '@/activities/activities.service';
 import { PlatformAdminService } from '@/auth/platform-admin.service';
 import { GuildsService } from '@/guilds/guilds.service';
 import { VoicePresenceService } from './voice-presence.service';
@@ -29,6 +30,7 @@ export class VoiceService {
     private readonly presence: VoicePresenceService,
     private readonly broadcast: SocketBroadcastService,
     private readonly platformAdmin: PlatformAdminService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async createToken(
@@ -136,6 +138,7 @@ export class VoiceService {
         targetUserId,
       );
       if (leavePayload) this.broadcast.broadcastVoiceState(leavePayload);
+      await this.activities.leaveUserFromActivities(targetUserId);
     }
 
     const joinResult = await this.presence.join(

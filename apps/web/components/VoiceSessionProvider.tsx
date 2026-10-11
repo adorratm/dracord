@@ -1804,7 +1804,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (payload.action !== 'leave') return;
-      if (!payload.channelId || payload.channelId !== channelIdRef.current) return;
+      // channelId null veya mevcut oda — her iki durumda da kopar
+      if (
+        payload.channelId &&
+        channelIdRef.current &&
+        payload.channelId !== channelIdRef.current
+      ) {
+        return;
+      }
+      if (!channelIdRef.current) return;
       leave();
       setError('Bu odadan çıkarıldın veya girişin engellendi.');
     };
