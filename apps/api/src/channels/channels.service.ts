@@ -83,12 +83,16 @@ export class ChannelsService {
       if (!canView) return null;
       const isActivity =
         c.type === ChannelType.GAME || c.type === ChannelType.WATCH_PARTY;
+      const voiceInRoom = voiceMap[c.id];
       return this.toSummary(c, {
-        voiceMembers: c.type === ChannelType.VOICE
-          ? voiceMap[c.id]
-          : isActivity
-            ? activityMembers[c.id]
-            : undefined,
+        voiceMembers:
+          c.type === ChannelType.VOICE
+            ? voiceInRoom
+            : isActivity
+              ? voiceInRoom?.length
+                ? voiceInRoom
+                : activityMembers[c.id]
+              : undefined,
         unreadCount:
           c.type === ChannelType.TEXT || c.type === ChannelType.FORUM
             ? unreadMap.get(c.id)
@@ -117,7 +121,12 @@ export class ChannelsService {
       if (!member) throw new ForbiddenException('Not a participant in this DM');
     }
     let voiceMembers: VoiceMemberSummary[] | undefined;
-    if (channel.type === ChannelType.VOICE && channel.guildId) {
+    if (
+      channel.guildId &&
+      (channel.type === ChannelType.VOICE ||
+        channel.type === ChannelType.GAME ||
+        channel.type === ChannelType.WATCH_PARTY)
+    ) {
       voiceMembers = await this.voicePresence.listChannel(channel.guildId, channel.id);
     }
     return this.toSummary(channel, { voiceMembers, includeDenied: canManage });
@@ -279,7 +288,12 @@ export class ChannelsService {
       return channel;
     }
 
-    if (channel.type !== ChannelType.VOICE) {
+    // VOICE + aktivite odaları (oyun / watch party) — aynı LiveKit odası
+    if (
+      channel.type !== ChannelType.VOICE &&
+      channel.type !== ChannelType.GAME &&
+      channel.type !== ChannelType.WATCH_PARTY
+    ) {
       throw new BadRequestException('Channel is not a voice channel');
     }
     if (channel.guildId) {

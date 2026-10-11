@@ -130,7 +130,16 @@ export interface UserPanelProps {
   voiceServerName?: string | null;
   /** WebRTC ping (RTT), ms */
   voiceLatencyMs?: number | null;
+  /** API/sunucu ping (RTT), ms */
+  serverLatencyMs?: number | null;
   cameraOn?: boolean;
+  /** UserPanel sağ tık menü aksiyonları (self) */
+  selfMenuActions?: Array<{
+    id: string;
+    label: string;
+    danger?: boolean;
+    onSelect: () => void;
+  }>;
   screenSharing?: boolean;
   onToggleCamera?: () => void;
   onToggleScreenShare?: () => void;
@@ -298,12 +307,14 @@ export function UserPanel({
   voiceChannelName,
   voiceServerName = null,
   voiceLatencyMs = null,
+  serverLatencyMs = null,
   cameraOn = false,
   screenSharing = false,
   onToggleCamera,
   onToggleScreenShare,
   onActivitiesClick,
   onSoundboardClick,
+  selfMenuActions,
   screenShareViewControl = null,
   micVolume = 1,
   outputVolume = 1,
@@ -330,15 +341,54 @@ export function UserPanel({
   const [statusOpen, setStatusOpen] = useState(false);
   const [micMenuOpen, setMicMenuOpen] = useState(false);
   const [phonesMenuOpen, setPhonesMenuOpen] = useState(false);
+  const [selfMenu, setSelfMenu] = useState<{ x: number; y: number } | null>(null);
   const [draftCustom, setDraftCustom] = useState(customStatus ?? '');
+  const rootRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const micMenuRef = useRef<HTMLDivElement>(null);
   const phonesMenuRef = useRef<HTMLDivElement>(null);
   const noiseRef = useRef<HTMLDivElement>(null);
+  const selfMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setDraftCustom(customStatus ?? '');
   }, [customStatus]);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const publish = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      document.documentElement.style.setProperty(
+        '--dracord-user-panel-h',
+        `${Math.max(56, h)}px`,
+      );
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--dracord-user-panel-h');
+    };
+  }, [voiceConnected, voiceChannelName]);
+
+  useEffect(() => {
+    if (!selfMenu) return;
+    const onDoc = (e: MouseEvent) => {
+      if (selfMenuRef.current?.contains(e.target as Node)) return;
+      setSelfMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelfMenu(null);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [selfMenu]);
 
   const openMicMenu = () => {
     setPhonesMenuOpen(false);
@@ -379,8 +429,26 @@ export function UserPanel({
         ? 'warn'
         : 'ok';
 
+  const pingTooltip =
+    voiceLatencyMs != null || serverLatencyMs != null
+      ? [
+          voiceLatencyMs != null ? `Ses: ${voiceLatencyMs} ms` : null,
+          serverLatencyMs != null ? `Sunucu: ${serverLatencyMs} ms` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null;
+
   return (
-    <div className="bg-surface-container-lowest border-t border-surface-container-high shadow-[0_-4px_16px_rgba(0,0,0,0.2)]">
+    <div
+      ref={rootRef}
+      className="bg-surface-container-lowest border-t border-outline-variant/30 shadow-[0_-4px_16px_rgba(0,0,0,0.2)]"
+      onContextMenu={(e) => {
+        if (!selfMenuActions?.length) return;
+        e.preventDefault();
+        setSelfMenu({ x: e.clientX, y: e.clientY });
+      }}
+    >
       {voiceConnected && voiceChannelName && (
         <div className="px-2 pt-2 space-y-1.5">
           <div
@@ -393,22 +461,32 @@ export function UserPanel({
                   : 'bg-dracula-green/15 border-dracula-green/30',
             )}
           >
-            <span
-              className={cn(
-                'material-symbols-outlined text-[16px] leading-none',
-                voiceTone === 'error'
-                  ? 'text-error'
-                  : voiceTone === 'warn'
-                    ? 'text-dracula-orange'
-                    : 'text-dracula-green',
-              )}
-            >
-              {voiceTone === 'error'
-                ? 'signal_cellular_alt_1_bar'
-                : voiceTone === 'warn'
-                  ? 'signal_cellular_alt_2_bar'
-                  : 'signal_cellular_alt'}
-            </span>
+            <Tooltip content={pingTooltip || 'Bağlantı kalitesi'} side="top">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-0.5 shrink-0 cursor-default',
+                  voiceTone === 'error'
+                    ? 'text-error'
+                    : voiceTone === 'warn'
+                      ? 'text-dracula-orange'
+                      : 'text-dracula-green',
+                )}
+                title={pingTooltip || undefined}
+              >
+                <span className="material-symbols-outlined text-[16px] leading-none">
+                  {voiceTone === 'error'
+                    ? 'signal_cellular_alt_1_bar'
+                    : voiceTone === 'warn'
+                      ? 'signal_cellular_alt_2_bar'
+                      : 'signal_cellular_alt'}
+                </span>
+                {voiceLatencyMs != null && (
+                  <span className="font-label-sm tabular-nums text-[11px] leading-none">
+                    · {voiceLatencyMs} ms
+                  </span>
+                )}
+              </span>
+            </Tooltip>
             <button
               type="button"
               onClick={onVoiceReturnClick}
@@ -882,6 +960,37 @@ export function UserPanel({
           </button>
         </div>
       </div>
+      {selfMenu &&
+        selfMenuActions &&
+        selfMenuActions.length > 0 &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={selfMenuRef}
+            role="menu"
+            className="fixed z-[200] min-w-[12rem] max-w-[16rem] rounded-lg bg-surface-container-high border border-surface-container-highest shadow-float py-1"
+            style={{ left: selfMenu.x, top: selfMenu.y }}
+          >
+            {selfMenuActions.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                role="menuitem"
+                className={cn(
+                  'w-full px-3 py-1.5 text-left font-label-sm hover:bg-surface-container',
+                  a.danger ? 'text-error' : 'text-on-surface',
+                )}
+                onClick={() => {
+                  setSelfMenu(null);
+                  a.onSelect();
+                }}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

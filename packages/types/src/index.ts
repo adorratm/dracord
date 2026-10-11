@@ -144,6 +144,21 @@ export interface MusicJobPayload {
   volume?: number;
 }
 
+export type DiscoverCategory =
+  | 'gaming'
+  | 'music'
+  | 'entertainment'
+  | 'tech'
+  | 'education';
+
+export const DISCOVER_CATEGORIES: { id: DiscoverCategory; label: string }[] = [
+  { id: 'gaming', label: 'Oyun' },
+  { id: 'music', label: 'Müzik' },
+  { id: 'entertainment', label: 'Eğlence' },
+  { id: 'tech', label: 'Bilim ve Teknoloji' },
+  { id: 'education', label: 'Eğitim' },
+];
+
 export interface GuildSummary {
   id: string;
   name: string;
@@ -151,6 +166,8 @@ export interface GuildSummary {
   bannerUrl?: string | null;
   ownerId: string;
   discoverable?: boolean;
+  /** Keşfet kategorisi (varsayılan gaming) */
+  discoverCategory?: DiscoverCategory;
   memberCount?: number;
   /** Keşfet’te platform admin pin */
   discoverPinned?: boolean;
@@ -649,6 +666,21 @@ export interface ClientSettings {
     x: number;
     z: number;
   };
+}
+
+export interface GuildEventDto {
+  id: string;
+  guildId: string;
+  channelId: string | null;
+  creatorId: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  location: string | null;
+  coverUrl: string | null;
+  status: 'scheduled' | 'cancelled' | 'ended';
+  createdAt: string;
 }
 
 export interface VoiceTokenResponse {

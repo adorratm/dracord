@@ -28,6 +28,10 @@ export class Guild extends CuidEntity {
   @Column({ type: 'boolean', default: false })
   discoverable!: boolean;
 
+  /** Keşfet kategorisi: gaming | music | entertainment | tech | education */
+  @Column({ type: 'varchar', default: 'gaming' })
+  discoverCategory!: string;
+
   /** Keşfet’te öne çıkarma (platform admin); null = pin yok */
   @Column({ type: 'timestamptz', nullable: true })
   discoverPinnedAt!: Date | null;

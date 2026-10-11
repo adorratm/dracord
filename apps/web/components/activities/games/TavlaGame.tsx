@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Material, Mesh, PerspectiveCamera, Texture } from 'three';
 import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import { disposeObject, isMyTurn, pointerNdc, turnIndex, type GameProps } from '../three/sceneUtils';
+import { GameAudio } from '@/lib/game-audio';
 
 type Board = { points: number[]; bar: [number, number]; off: [number, number] };
 type Spot = number | 'bar' | 'off';
@@ -155,6 +156,7 @@ export function TavlaGame(props: GameProps) {
       const d1 = 1 + Math.floor(Math.random() * 6);
       const d2 = 1 + Math.floor(Math.random() * 6);
       setSelected(null);
+      GameAudio.dice();
       void send({
         board: b,
         dice: d1 === d2 ? [d1, d1, d1, d1] : [d1, d2],
@@ -190,12 +192,17 @@ export function TavlaGame(props: GameProps) {
         const dest = moves.filter((m) => m.from === sel && m.to === spot);
         if (dest.length > 0) {
           const m = dest.sort((a, c) => a.die - c.die)[0]!;
+          const hit =
+            m.to !== 'off' && (b.points[m.to] ?? 0) * (pl === 0 ? 1 : -1) === -1;
           const nb = applyMove(b, pl, m);
           const remaining = [...d];
           remaining.splice(remaining.indexOf(m.die), 1);
           const done = nb.off[pl] >= 15;
           const more = !done && remaining.some((x) => legalFor(nb, pl, x).length > 0);
           setSelected(null);
+          if (hit) GameAudio.hit();
+          else GameAudio.checker();
+          if (done) GameAudio.win();
           void send(
             more
               ? { board: nb, dice: remaining }
@@ -238,6 +245,7 @@ export function TavlaGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
+    GameAudio.unlock();
     const dyn = new THREE.Group();
 
     // --- Tahta ---

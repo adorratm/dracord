@@ -104,6 +104,15 @@ export class PlatformAdminService {
   ) {}
 
   private toGuildSummary(guild: Guild): GuildSummary {
+    const cat = guild.discoverCategory;
+    const discoverCategory =
+      cat === 'music' ||
+      cat === 'entertainment' ||
+      cat === 'tech' ||
+      cat === 'education' ||
+      cat === 'gaming'
+        ? cat
+        : 'gaming';
     return {
       id: guild.id,
       name: guild.name,
@@ -111,6 +120,7 @@ export class PlatformAdminService {
       bannerUrl: guild.bannerUrl ?? null,
       ownerId: guild.ownerId,
       discoverable: guild.discoverable,
+      discoverCategory,
       discoverPinned: Boolean(guild.discoverPinnedAt),
       discoverPinOrder: guild.discoverPinOrder ?? null,
       afkChannelId: guild.afkChannelId ?? null,

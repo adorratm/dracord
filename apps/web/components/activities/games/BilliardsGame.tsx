@@ -110,20 +110,39 @@ export function BilliardsGame(props: GameProps) {
     const camera = api.camera as PerspectiveCamera;
     const fitCamera = () => {
       const el = api.root;
-      const aspect = (el.clientWidth || 1) / Math.max(1, el.clientHeight || 1);
-      // Dar (mobil) ekranda yukarıdan bak + daha geniş FOV — masa tam sığsın
-      if (aspect < 0.85) {
-        camera.fov = 58;
-        camera.position.set(0, 11.2, 0.15);
-      } else if (aspect < 1.2) {
-        camera.fov = 50;
-        camera.position.set(0, 9.6, 4.2);
-      } else {
-        camera.fov = 45;
-        camera.position.set(0, 8.8, 6.4);
+      const w = Math.max(1, el.clientWidth);
+      const h = Math.max(1, el.clientHeight);
+      const aspect = w / h;
+      // Masa AABB (~11.4 x 6.4) + kenar payı — frustum’a sığdır
+      const halfW = 5.9;
+      const halfD = 3.4;
+      let fov = 48;
+      let elev = 9.2;
+      let zOff = 5.8;
+      if (aspect < 0.75) {
+        fov = 62;
+        elev = 12.4;
+        zOff = 0.05;
+      } else if (aspect < 1.05) {
+        fov = 54;
+        elev = 10.6;
+        zOff = 3.2;
       }
-      camera.lookAt(0, 0, 0.2);
+      camera.fov = fov;
+      camera.aspect = aspect;
+      camera.position.set(0, elev, zOff);
+      camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
+      // Dikey/yatay frustum ile masanın taşmamasını doğrula
+      const vFov = (camera.fov * Math.PI) / 180;
+      const dist = camera.position.length();
+      const visibleH = 2 * Math.tan(vFov / 2) * dist;
+      const visibleW = visibleH * aspect;
+      const need = Math.max((halfD * 2) / visibleH, (halfW * 2) / visibleW);
+      if (need > 0.92) {
+        camera.fov = Math.min(72, camera.fov * need * 1.08);
+        camera.updateProjectionMatrix();
+      }
     };
     fitCamera();
     const camRo = new ResizeObserver(fitCamera);
@@ -545,7 +564,7 @@ export function BilliardsGame(props: GameProps) {
 
   return (
     <ThreeSceneHost
-      className="absolute inset-0 min-h-0 touch-none"
+      className="absolute inset-0 min-h-0 touch-none overflow-hidden"
       onReady={onReady}
     >
       <div className="pointer-events-none absolute left-2 top-2 sm:left-3 sm:top-3 flex flex-col gap-1 pt-[env(safe-area-inset-top)]">

@@ -27,14 +27,20 @@ export class GuildsController {
   }
 
   @Get('discover')
-  discover(@Query('q') q?: string) {
-    return this.guildsService.discover(q);
+  discover(@Query('q') q?: string, @Query('category') category?: string) {
+    return this.guildsService.discover(q, category);
   }
 
   @Post()
   create(
     @CurrentUser() user: JwtPayloadUser,
-    @Body() body: { name: string; iconUrl?: string | null; discoverable?: boolean },
+    @Body()
+    body: {
+      name: string;
+      iconUrl?: string | null;
+      discoverable?: boolean;
+      discoverCategory?: string;
+    },
   ) {
     return this.guildsService.createGuild(user.sub, body);
   }
@@ -64,6 +70,7 @@ export class GuildsController {
       iconUrl?: string | null;
       bannerUrl?: string | null;
       discoverable?: boolean;
+      discoverCategory?: string;
       afkChannelId?: string | null;
       afkTimeoutMinutes?: number;
     },

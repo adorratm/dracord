@@ -47,9 +47,27 @@ function beep(
   osc.stop(t + durationMs / 1000);
 }
 
+function noiseBurst(durationMs: number, gain = 0.04) {
+  if (muted) return;
+  const ac = ensureCtx();
+  if (!ac) return;
+  const n = Math.floor((ac.sampleRate * durationMs) / 1000);
+  const buf = ac.createBuffer(1, n, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = ac.createBufferSource();
+  const g = ac.createGain();
+  src.buffer = buf;
+  g.gain.value = gain;
+  src.connect(g);
+  g.connect(ac.destination);
+  src.start();
+}
+
 export const GameAudio = {
   unlock: unlockGameAudio,
   setMuted: setGameAudioMuted,
+  /** Bilardo */
   collide: () => beep(180, 80, 'triangle', 0.05),
   pot: () => {
     beep(420, 120, 'sine', 0.07);
@@ -57,4 +75,42 @@ export const GameAudio = {
   },
   cushion: () => beep(140, 50, 'square', 0.03),
   shoot: () => beep(90, 70, 'sawtooth', 0.04),
+  /** Bowling */
+  bowl: () => {
+    noiseBurst(180, 0.035);
+    beep(70, 160, 'sawtooth', 0.03);
+  },
+  pin: () => {
+    beep(520, 45, 'triangle', 0.05);
+    window.setTimeout(() => beep(380, 60, 'triangle', 0.035), 40);
+  },
+  gutter: () => beep(90, 200, 'sine', 0.04),
+  strike: () => {
+    beep(300, 80, 'square', 0.05);
+    window.setTimeout(() => beep(480, 100, 'sine', 0.06), 70);
+    window.setTimeout(() => beep(640, 140, 'sine', 0.05), 140);
+  },
+  /** Okey */
+  tile: () => beep(640, 40, 'triangle', 0.035),
+  discard: () => beep(280, 70, 'sine', 0.045),
+  deal: () => {
+    for (let i = 0; i < 4; i++) {
+      window.setTimeout(() => beep(500 + i * 40, 35, 'triangle', 0.03), i * 45);
+    }
+  },
+  win: () => {
+    beep(440, 100, 'sine', 0.06);
+    window.setTimeout(() => beep(554, 100, 'sine', 0.06), 90);
+    window.setTimeout(() => beep(659, 160, 'sine', 0.07), 180);
+  },
+  /** Tavla */
+  dice: () => {
+    noiseBurst(90, 0.045);
+    beep(200, 50, 'square', 0.03);
+  },
+  checker: () => beep(360, 55, 'triangle', 0.04),
+  hit: () => {
+    beep(160, 70, 'sawtooth', 0.05);
+    window.setTimeout(() => beep(120, 90, 'sine', 0.04), 50);
+  },
 };

@@ -58,6 +58,7 @@ import {
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
+import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
 
 interface GuildChannelViewProps {
@@ -261,6 +262,7 @@ export function GuildChannelView({
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [busy, setBusy] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [guildMembers, setGuildMembers] = useState<PublicUser[]>([]);
   const [guildRoles, setGuildRoles] = useState<RoleDto[]>([]);
@@ -1021,6 +1023,16 @@ export function GuildChannelView({
         joinVoiceChannel(ch);
         return;
       }
+      // Oyun / watch party: mevcut sesten çıkıp aktivite odasının sesine geç
+      if (ch.type === 'GAME' || ch.type === 'WATCH_PARTY') {
+        if (ch.locked && ch.hasPassword && !canManageChannels) {
+          setVoicePasswordDraft('');
+          setVoicePasswordPrompt({ channel: ch });
+          return;
+        }
+        void joinVoiceChannel(ch);
+        return;
+      }
       setChannelsOpen(false);
       router.push(`/channels/${guildId}/${ch.id}`);
     },
@@ -1363,6 +1375,34 @@ export function GuildChannelView({
         });
       }
 
+      if (isSelf) {
+        actions.push(
+          {
+            id: 'profile',
+            label: 'Profil',
+            onSelect: () => router.push('/settings/profile'),
+          },
+          {
+            id: 'settings',
+            label: 'Kullanıcı ayarları',
+            onSelect: () => router.push('/settings'),
+          },
+          {
+            id: 'voice-settings',
+            label: 'Ses ve görüntü ayarları',
+            onSelect: () => router.push('/settings/voice'),
+          },
+          {
+            id: 'copy-id',
+            label: 'Kullanıcı ID’sini kopyala',
+            onSelect: () => {
+              void navigator.clipboard.writeText(target.id).catch(() => undefined);
+            },
+          },
+        );
+        return actions;
+      }
+
       if (!isSelf) {
         actions.push({
           id: 'dm',
@@ -1454,6 +1494,7 @@ export function GuildChannelView({
       kickMember,
       banMember,
       timeoutMember,
+      router,
     ],
   );
 
@@ -2225,6 +2266,38 @@ export function GuildChannelView({
         voiceChannelName: voiceChannel?.name ?? null,
         voiceServerName: guild?.name ?? null,
         voiceLatencyMs: inVoice ? voice.latencyMs : null,
+        serverLatencyMs: inVoice ? voice.serverLatencyMs : null,
+        selfMenuActions: user
+          ? [
+              {
+                id: 'profile',
+                label: 'Profil',
+                onSelect: () => router.push('/settings/profile'),
+              },
+              {
+                id: 'settings',
+                label: 'Kullanıcı ayarları',
+                onSelect: () => router.push('/settings'),
+              },
+              {
+                id: 'voice',
+                label: 'Ses ve görüntü ayarları',
+                onSelect: () => router.push('/settings/voice'),
+              },
+              {
+                id: 'status',
+                label: 'Durumu değiştir',
+                onSelect: () => router.push('/settings/profile'),
+              },
+              {
+                id: 'copy-id',
+                label: 'Kullanıcı ID’sini kopyala',
+                onSelect: () => {
+                  void navigator.clipboard.writeText(user.id).catch(() => undefined);
+                },
+              },
+            ]
+          : undefined,
         cameraOn: inVoice ? voice.cameraEnabled : false,
         screenSharing: inVoice ? voice.screenSharing : false,
         onToggleCamera: inVoice ? () => void voice.toggleCamera() : undefined,
@@ -2300,13 +2373,31 @@ export function GuildChannelView({
         },
       }}
       headerExtra={
-        <div className="px-space-sm pb-space-sm">
+        <div className="px-space-sm pb-space-sm space-y-1.5">
           <button
             type="button"
             className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors"
             onClick={() => void createInvite()}
           >
             İnsanları davet et
+          </button>
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+            onClick={() => setEventsOpen(true)}
+          >
+            <span className="material-symbols-outlined text-[16px]">event</span>
+            Etkinlikler
+          </button>
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+            onClick={() => router.push(`/guilds/${guildId}/boost`)}
+          >
+            <span className="material-symbols-outlined text-[16px] text-primary-container">
+              diamond
+            </span>
+            Sunucu Takviyeleri
           </button>
         </div>
       }
@@ -2394,7 +2485,6 @@ export function GuildChannelView({
         style={
           channelsOpen ||
           showingVoiceStage ||
-          isActivityView ||
           (!isVoiceView && !isActivityView && !channelPending && !channelMissing)
             ? { display: 'none' }
             : undefined
@@ -2408,6 +2498,7 @@ export function GuildChannelView({
           guildId={guildId}
           channel={channel}
           className="flex-1 min-w-0 min-h-0"
+          onOpenChannels={() => setChannelsOpen(true)}
         />
       ) : showingVoiceStage ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
@@ -4024,6 +4115,13 @@ export function GuildChannelView({
           </ul>
         )}
       </Modal>
+
+      <GuildEventsModal
+        open={eventsOpen}
+        onClose={() => setEventsOpen(false)}
+        guildId={guildId}
+        channels={channels}
+      />
 
       <UserProfileCard
         open={Boolean(profileUser)}

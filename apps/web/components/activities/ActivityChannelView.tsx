@@ -3,13 +3,16 @@
 import type { ActivityKind, ActivitySessionDto, ChannelSummary } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { cn } from '@dracord/ui';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { BilliardsGame } from '@/components/activities/games/BilliardsGame';
 import { BowlingGame } from '@/components/activities/games/BowlingGame';
 import { OkeyGame } from '@/components/activities/games/OkeyGame';
 import { TavlaGame } from '@/components/activities/games/TavlaGame';
 import { WatchPartyRoom } from '@/components/activities/games/WatchPartyRoom';
+import { GameAudio } from '@/lib/game-audio';
 
 const KIND_LABEL: Record<ActivityKind, string> = {
   billiards: 'Bilardo',
@@ -41,13 +44,38 @@ export function ActivityChannelView({
   guildId,
   channel,
   className,
+  onOpenChannels,
 }: {
   guildId: string;
   channel: ChannelSummary;
   className?: string;
+  onOpenChannels?: () => void;
 }) {
   const { client, user } = useAuth();
+  const voice = useVoiceSession();
+  const router = useRouter();
   const channelId = channel.id;
+
+  // Oyuna / watch party’ye girince mevcut sesten çıkıp bu odanın sesine geç
+  useEffect(() => {
+    if (!user) return;
+    if (voice.voiceChannelId === channelId && voice.voiceGuildId === guildId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        GameAudio.unlock();
+        await voice.join(channelId, guildId);
+      } catch {
+        if (!cancelled) {
+          /* şifre / izin — kullanıcı yine aktiviteyi görebilir */
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sadece kanal değişiminde
+  }, [channelId, guildId, user?.id]);
   const [session, setSession] = useState<ActivitySessionDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -169,7 +197,17 @@ export function ActivityChannelView({
     setError(null);
     try {
       await client.leaveActivity(session.id);
+      if (voice.voiceChannelId === channelId) {
+        voice.leave();
+      }
       await refresh();
+      try {
+        const channels = await client.getGuildChannels(guildId);
+        const text = channels.find((c) => c.type === 'TEXT');
+        if (text) router.push(`/channels/${guildId}/${text.id}`);
+      } catch {
+        // kal
+      }
     } catch (e) {
       setError(errMsg(e, 'Ayrılınamadı'));
     } finally {
@@ -227,7 +265,17 @@ export function ActivityChannelView({
         className,
       )}
     >
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-container-high bg-surface-container-low px-space-md py-1.5">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-container-high bg-surface-container-low px-space-md py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]">
+        {onOpenChannels && (
+          <button
+            type="button"
+            className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+            aria-label="Kanallar"
+            onClick={onOpenChannels}
+          >
+            <span className="material-symbols-outlined text-[20px]">menu</span>
+          </button>
+        )}
         <span className="flex items-center gap-1.5 font-headline-md text-on-surface">
           <span className="material-symbols-outlined text-[20px] text-[#bd93f9]">
             {kind ? KIND_ICON[kind] : 'sports_esports'}

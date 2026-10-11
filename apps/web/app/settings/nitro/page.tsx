@@ -74,9 +74,11 @@ export default function NitroPage() {
         <div className="px-space-md py-space-md space-y-space-sm">
           <div className="rounded-lg border border-surface-container-highest p-space-md">
             <p className="font-headline-md">Nitro Basic</p>
-            <p className="font-body-sm text-on-surface-variant mt-1">
-              Daha büyük yüklemeler ve özel emojiler (demo).
-            </p>
+            <ul className="mt-2 space-y-1 font-body-sm text-on-surface-variant list-disc pl-5">
+              <li>Özel emoji kullanımı</li>
+              <li>Daha büyük dosya yükleme</li>
+              <li>Animasyonlu avatar</li>
+            </ul>
             <button
               type="button"
               disabled={plan === 'basic'}
@@ -88,9 +90,13 @@ export default function NitroPage() {
           </div>
           <div className="rounded-lg border border-primary-container/40 p-space-md">
             <p className="font-headline-md">Nitro</p>
-            <p className="font-body-sm text-on-surface-variant mt-1">
-              HD video, sunucu takviyesi kredisi ve daha fazlası (demo).
-            </p>
+            <ul className="mt-2 space-y-1 font-body-sm text-on-surface-variant list-disc pl-5">
+              <li>Basic’teki her şey</li>
+              <li>Profil teması</li>
+              <li>+2 sunucu takviyesi kredisi</li>
+              <li>Özel sticker’lar</li>
+              <li>Daha uzun mesajlar (demo)</li>
+            </ul>
             <button
               type="button"
               disabled={plan === 'nitro'}
@@ -118,7 +124,8 @@ export default function NitroPage() {
           </div>
         </div>
         <SettingsNote>
-          Nitro aktifken profilinde rozet gösterilir. Ödeme altyapısı yok — yalnızca demo.
+          Nitro aktifken profilinde rozet gösterilir. 8K yayın veya ses bitrate vaadi yoktur —
+          bunlar kişisel ses/görüntü ayarlarından yönetilir. Ödeme altyapısı yok — yalnızca demo.
         </SettingsNote>
       </SettingsSection>
     </SettingsPage>

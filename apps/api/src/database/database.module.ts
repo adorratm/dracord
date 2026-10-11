@@ -26,6 +26,7 @@ import {
   Session,
   SlashCommand,
   ActivitySession,
+  GuildEvent,
   User,
 } from './entities';
 import { DatabaseBootstrapService } from './database-bootstrap.service';
@@ -56,6 +57,7 @@ const entities = [
   PushSubscription,
   SlashCommand,
   ActivitySession,
+  GuildEvent,
 ];
 
 @Module({

@@ -429,6 +429,46 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 </span>
               </label>
 
+              {detail?.discoverable && (
+                <label className="flex flex-col gap-space-xs">
+                  <span className="font-label-sm text-on-surface-variant">Keşfet kategorisi</span>
+                  <SearchableSelect
+                    value={detail.discoverCategory ?? 'gaming'}
+                    disabled={busy || !canManage}
+                    fullWidth
+                    aria-label="Keşfet kategorisi"
+                    options={[
+                      { value: 'gaming', label: 'Oyun' },
+                      { value: 'music', label: 'Müzik' },
+                      { value: 'entertainment', label: 'Eğlence' },
+                      { value: 'tech', label: 'Bilim ve Teknoloji' },
+                      { value: 'education', label: 'Eğitim' },
+                    ]}
+                    onChange={(discoverCategory) => {
+                      void (async () => {
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          const updated = await client.updateGuild(guildId, {
+                            discoverCategory,
+                          });
+                          patchGuild(updated);
+                          setDetail(updated);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : 'Kategori kaydedilemedi',
+                          );
+                        } finally {
+                          setBusy(false);
+                        }
+                      })();
+                    }}
+                  />
+                </label>
+              )}
+
               <div className="rounded-xl bg-surface-container-low p-space-md space-y-space-sm border border-surface-container-high">
                 <h3 className="font-headline-md text-headline-md text-on-surface">
                   Kişisel görünüm

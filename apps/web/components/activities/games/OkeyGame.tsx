@@ -11,6 +11,7 @@ import {
   turnIndex,
   type GameProps,
 } from '../three/sceneUtils';
+import { GameAudio } from '@/lib/game-audio';
 
 /**
  * Taş kodu: 0..103 = (set*52 + renk*13 + (sayı-1)), 104/105 = sahte okey.
@@ -217,6 +218,7 @@ export function OkeyGame(props: GameProps) {
         hands[id] = order.splice(0, i === 0 ? 15 : 14);
       });
       const scores = readState(p.session.state).scores;
+      GameAudio.deal();
       void send({ hands: packHands(hands, order, [], ind), scores, turn: Number(p.session.state.turn ?? 0) + 1 });
     },
     draw: (from: 'deck' | 'discard') => {
@@ -239,6 +241,7 @@ export function OkeyGame(props: GameProps) {
         setError(from === 'deck' ? 'Deste bitti' : 'Atılan taş yok');
         return;
       }
+      GameAudio.tile();
       void send({
         hands: packHands({ ...s.hands, [p.userId]: [...hand, tile] }, deck, discard, s.ind),
       });
@@ -261,6 +264,7 @@ export function OkeyGame(props: GameProps) {
         const me = p.session.playerIds.indexOf(p.userId);
         const scores = { ...s.scores, [p.userId]: (s.scores[p.userId] ?? 0) + 1 };
         setSelected(null);
+        GameAudio.win();
         void send({
           hands: packHands({ ...s.hands, [p.userId]: rest }, s.deck, [...s.discard, tile], s.ind, me),
           scores,
@@ -269,6 +273,7 @@ export function OkeyGame(props: GameProps) {
         return;
       }
       setSelected(null);
+      GameAudio.discard();
       void send({
         hands: packHands({ ...s.hands, [p.userId]: rest }, s.deck, [...s.discard, tile], s.ind),
         turn,
@@ -285,6 +290,7 @@ export function OkeyGame(props: GameProps) {
       if (selectedRef.current === pick.index && hand.length >= 15 && isMyTurn(p)) {
         actions.discard(false);
       } else {
+        GameAudio.tile();
         setSelected(pick.index);
       }
     },
@@ -303,6 +309,7 @@ export function OkeyGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
+    GameAudio.unlock();
     const dyn = new THREE.Group();
     root.add(dyn);
 

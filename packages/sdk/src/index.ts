@@ -4,6 +4,7 @@ import type {
   CategoryDto,
   ChannelSummary,
   ClientSettings,
+  GuildEventDto,
   GuildInviteDto,
   GuildSummary,
   MessageAttachment,
@@ -368,18 +369,20 @@ export class DracordClient {
     return this.request('/guilds');
   }
 
-  async discoverGuilds(query?: string): Promise<GuildSummary[]> {
+  async discoverGuilds(query?: string, category?: string): Promise<GuildSummary[]> {
+    const params = new URLSearchParams();
     const q = query?.trim();
-    if (q) {
-      return this.request(`/guilds/discover?q=${encodeURIComponent(q)}`);
-    }
-    return this.request('/guilds/discover');
+    if (q) params.set('q', q);
+    if (category && category !== 'all') params.set('category', category);
+    const qs = params.toString();
+    return this.request(qs ? `/guilds/discover?${qs}` : '/guilds/discover');
   }
 
   async createGuild(data: {
     name: string;
     iconUrl?: string | null;
     discoverable?: boolean;
+    discoverCategory?: string;
   }): Promise<GuildSummary> {
     return this.request('/guilds', { method: 'POST', body: JSON.stringify(data) });
   }
@@ -395,6 +398,7 @@ export class DracordClient {
       iconUrl?: string | null;
       bannerUrl?: string | null;
       discoverable?: boolean;
+      discoverCategory?: string;
       afkChannelId?: string | null;
       afkTimeoutMinutes?: number;
     },
@@ -437,6 +441,52 @@ export class DracordClient {
 
   async unboostGuild(guildId: string): Promise<GuildSummary> {
     return this.request(`/guilds/${guildId}/boosts`, { method: 'DELETE' });
+  }
+
+  async listGuildEvents(guildId: string): Promise<GuildEventDto[]> {
+    return this.request(`/guilds/${guildId}/events`);
+  }
+
+  async createGuildEvent(
+    guildId: string,
+    data: {
+      title: string;
+      description?: string | null;
+      startsAt: string;
+      endsAt?: string | null;
+      location?: string | null;
+      coverUrl?: string | null;
+      channelId?: string | null;
+    },
+  ): Promise<GuildEventDto> {
+    return this.request(`/guilds/${guildId}/events`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateGuildEvent(
+    guildId: string,
+    eventId: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      startsAt?: string;
+      endsAt?: string | null;
+      location?: string | null;
+      coverUrl?: string | null;
+      channelId?: string | null;
+      status?: 'scheduled' | 'cancelled' | 'ended';
+    },
+  ): Promise<GuildEventDto> {
+    return this.request(`/guilds/${guildId}/events/${eventId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteGuildEvent(guildId: string, eventId: string): Promise<void> {
+    await this.request(`/guilds/${guildId}/events/${eventId}`, { method: 'DELETE' });
   }
 
   async getGuildChannels(guildId: string): Promise<ChannelSummary[]> {

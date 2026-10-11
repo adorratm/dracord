@@ -4,6 +4,7 @@ import type { GuildSummary } from '@dracord/types';
 import type { TitleBarNavId } from '@dracord/ui';
 import {
   Modal,
+  SearchableSelect,
   ServerRail,
   TitleBar,
   type ServerRailGuild,
@@ -97,6 +98,9 @@ export function AppShell({
   const [inviteOpen, setInviteOpen] = useState(false);
   const [serverName, setServerName] = useState('');
   const [discoverable, setDiscoverable] = useState(true);
+  const [discoverCategory, setDiscoverCategory] = useState<
+    'gaming' | 'music' | 'entertainment' | 'tech' | 'education'
+  >('gaming');
   const [inviteCode, setInviteCode] = useState('');
   const [discover, setDiscover] = useState<GuildSummary[]>([]);
   const [discoverQuery, setDiscoverQuery] = useState('');
@@ -252,9 +256,11 @@ export function AppShell({
       const guild = await client.createGuild({
         name: serverName.trim() || 'Yeni sunucu',
         discoverable,
+        discoverCategory,
       });
       setCreateOpen(false);
       setServerName('');
+      setDiscoverCategory('gaming');
       setGuildsOverride((prev) => {
         const base = prev ?? guilds;
         if (base.some((g) => g.id === guild.id)) return base;
@@ -516,6 +522,28 @@ export function AppShell({
           />
           Keşfette göster
         </label>
+        {discoverable && (
+          <label className="mt-space-sm flex flex-col gap-space-xs">
+            <span className="font-label-sm text-on-surface-variant">Keşfet kategorisi</span>
+            <SearchableSelect
+              value={discoverCategory}
+              onChange={(v) =>
+                setDiscoverCategory(
+                  v as 'gaming' | 'music' | 'entertainment' | 'tech' | 'education',
+                )
+              }
+              fullWidth
+              aria-label="Keşfet kategorisi"
+              options={[
+                { value: 'gaming', label: 'Oyun' },
+                { value: 'music', label: 'Müzik' },
+                { value: 'entertainment', label: 'Eğlence' },
+                { value: 'tech', label: 'Bilim ve Teknoloji' },
+                { value: 'education', label: 'Eğitim' },
+              ]}
+            />
+          </label>
+        )}
         {error && <p className="mt-space-sm text-error font-body-sm">{error}</p>}
       </Modal>
 

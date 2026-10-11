@@ -1,6 +1,6 @@
 'use client';
 
-import type { NotificationDto } from '@dracord/types';
+import type { MessageBookmarkDto, NotificationDto } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -75,18 +75,21 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<InboxTab>('unreads');
   const [items, setItems] = useState<NotificationDto[]>([]);
+  const [bookmarks, setBookmarks] = useState<MessageBookmarkDto[]>([]);
   const [unread, setUnread] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      const [list, count] = await Promise.all([
+      const [list, count, marks] = await Promise.all([
         client.listNotifications({ limit: 40 }),
         client.notificationsUnreadCount(),
+        client.listBookmarks(40).catch(() => [] as MessageBookmarkDto[]),
       ]);
       setItems(list);
       setUnread(count.count);
+      setBookmarks(marks);
     } catch {
       // ignore
     }
@@ -184,8 +187,7 @@ export function NotificationBell() {
       if (n.guildId && mutedGuilds.has(n.guildId)) return false;
       if (tab === 'unreads') return !n.readAt;
       if (tab === 'mentions') return n.type === 'MENTION';
-      if (tab === 'bookmarks') return false;
-      if (tab === 'reminders') return false;
+      if (tab === 'bookmarks' || tab === 'reminders') return false;
       return true;
     });
   }, [items, prefs.notifications, tab]);
@@ -213,7 +215,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[min(100vw-1.5rem,26rem)] max-h-[75vh] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[80] flex flex-col overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[min(100vw-1.5rem,32rem)] max-h-[75vh] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[80] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-surface-container-highest gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <span className="material-symbols-outlined text-[20px] text-on-surface">inbox</span>
@@ -252,8 +254,8 @@ export function NotificationBell() {
                 onClick={() => setTab(t.id)}
                 className={
                   tab === t.id
-                    ? 'shrink-0 px-3 py-2.5 font-label-sm text-on-surface border-b-2 border-primary-container'
-                    : 'shrink-0 px-3 py-2.5 font-label-sm text-on-surface-variant hover:text-on-surface border-b-2 border-transparent'
+                    ? 'shrink-0 px-2.5 sm:px-3 py-2.5 font-label-sm text-on-surface border-b-2 border-primary-container whitespace-nowrap'
+                    : 'shrink-0 px-2.5 sm:px-3 py-2.5 font-label-sm text-on-surface-variant hover:text-on-surface border-b-2 border-transparent whitespace-nowrap'
                 }
               >
                 {t.label}
@@ -262,7 +264,60 @@ export function NotificationBell() {
           </div>
 
           <div className="overflow-y-auto flex-1 min-h-0">
-            {visible.length === 0 ? (
+            {tab === 'reminders' ? (
+              <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                <span className="material-symbols-outlined text-[40px] text-outline mb-3">
+                  schedule
+                </span>
+                <p className="font-headline-md text-on-surface">Hatırlatmalar yakında</p>
+                <p className="mt-2 font-body-sm text-on-surface-variant max-w-xs">
+                  Mesaj hatırlatmaları henüz kullanıma açılmadı.
+                </p>
+              </div>
+            ) : tab === 'bookmarks' ? (
+              bookmarks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                  <span className="material-symbols-outlined text-[40px] text-outline mb-3">
+                    bookmark
+                  </span>
+                  <p className="font-headline-md text-on-surface">İşaret yok</p>
+                  <p className="mt-2 font-body-sm text-on-surface-variant max-w-xs">
+                    Mesajları yer imine eklediğinde burada görünür.
+                  </p>
+                </div>
+              ) : (
+                bookmarks.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      if (b.guildId) {
+                        router.push(`/channels/${b.guildId}/${b.channelId}`);
+                      } else {
+                        router.push(`/channels/me/${b.channelId}`);
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2.5 flex gap-2.5 hover:bg-surface-bright border-b border-surface-container-highest/60"
+                  >
+                    <span className="material-symbols-outlined text-[22px] text-primary-container shrink-0 mt-0.5">
+                      bookmark
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-label-md text-on-surface truncate">
+                        {b.channelName ? `#${b.channelName}` : 'Kanal'}
+                      </p>
+                      <p className="font-body-sm text-on-surface-variant line-clamp-2 mt-0.5">
+                        {b.message.content?.trim() || '(ekli içerik)'}
+                      </p>
+                      <p className="font-label-sm text-outline mt-1">
+                        {formatTime(b.createdAt, prefs.language.hour24, locale)}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              )
+            ) : visible.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
                 <div className="relative mb-4">
                   <div className="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center">

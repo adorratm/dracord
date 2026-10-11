@@ -9,6 +9,7 @@ import {
   pointerNdc,
   type GameProps,
 } from '../three/sceneUtils';
+import { GameAudio } from '@/lib/game-audio';
 
 type FrameState = { rolls: number[]; complete: boolean };
 
@@ -150,6 +151,7 @@ export function BowlingGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
+    GameAudio.unlock();
 
     // --- Hat ---
     const laneMat = new THREE.MeshStandardMaterial({ color: 0xc98a4b, roughness: 0.35 });
@@ -373,6 +375,11 @@ export function BowlingGame(props: GameProps) {
       seenT = roll.t;
       const turn = Number(p.session.state.turn ?? 0);
       mode = 'idle';
+      if (knocked.length >= 10 || (reset && knocked.length >= standingBefore.length)) {
+        GameAudio.strike();
+      } else if (knocked.length > 0) {
+        GameAudio.pin();
+      }
       setBusy(true);
       void p
         .onPatch({ frames: { ...frames, [uid]: rolls }, turn: turn + 1, lastRoll: roll })
@@ -424,6 +431,7 @@ export function BowlingGame(props: GameProps) {
         if (Math.abs(ball.x) > LANE_HALF - 0.05 && ball.gutter === 0) {
           ball.gutter = Math.sign(ball.x);
           ball.vx = 0;
+          GameAudio.gutter();
         }
         if (ball.gutter !== 0) {
           const target = ball.gutter * (LANE_HALF + 0.3);
@@ -440,6 +448,7 @@ export function BowlingGame(props: GameProps) {
             pin.vz += c.ja * c.nz;
             pin.x += c.nx * c.push;
             pin.z += c.nz * c.push;
+            if (c.ja > 0.4) GameAudio.pin();
           }
         }
         // top ters dönmesin
@@ -612,6 +621,7 @@ export function BowlingGame(props: GameProps) {
       mode = 'sim';
       modeTime = 0;
       aimLine.visible = false;
+      GameAudio.bowl();
     };
     dom.addEventListener('pointermove', onMove);
     dom.addEventListener('pointerdown', onDown);

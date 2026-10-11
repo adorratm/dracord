@@ -67,7 +67,7 @@ export class MediaService {
     const key = this.apiKey();
     if (!key) {
       throw new ServiceUnavailableException(
-        'Klipy API anahtarı yok. .env içine KLIPY_API_KEY ekleyin (https://klipy.com/developers — ücretsiz test anahtarı).',
+        'Klipy API anahtarı yok. Kök veya apps/api .env içine KLIPY_API_KEY ekleyin (https://klipy.com/developers).',
       );
     }
 
@@ -80,8 +80,21 @@ export class MediaService {
       ...params,
     });
 
-    const res = await fetch(`https://api.klipy.com/v2/${path}?${qs.toString()}`);
-    const data = (await res.json()) as KlipyResponse;
+    let res: Response;
+    try {
+      res = await fetch(`https://api.klipy.com/v2/${path}?${qs.toString()}`, {
+        headers: { Accept: 'application/json' },
+      });
+    } catch {
+      throw new ServiceUnavailableException('Klipy API’ye ulaşılamadı');
+    }
+
+    let data: KlipyResponse;
+    try {
+      data = (await res.json()) as KlipyResponse;
+    } catch {
+      throw new BadRequestException(`Klipy geçersiz yanıt (${res.status})`);
+    }
     if (!res.ok) {
       throw new BadRequestException(
         data.error?.message || `Klipy isteği başarısız (${res.status})`,

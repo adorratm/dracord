@@ -4,12 +4,15 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 
 export type SearchableSelectOption = {
@@ -34,6 +37,14 @@ export interface SearchableSelectProps {
   'aria-label'?: string;
 }
 
+type MenuPos = {
+  left: number;
+  top: number;
+  width: number;
+  maxHeight: number;
+  placement: 'bottom' | 'top';
+};
+
 export function SearchableSelect({
   value,
   options,
@@ -49,10 +60,13 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
+  const [pos, setPos] = useState<MenuPos | null>(null);
 
   const selected = useMemo(
     () => options.find((o) => o.value === value) ?? null,
@@ -70,6 +84,44 @@ export function SearchableSelect({
     );
   }, [options, query]);
 
+  const updatePos = useCallback(() => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const gap = 4;
+    const pad = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxMenuW = Math.min(vw - pad * 2, Math.max(rect.width, 16 * 16));
+    const width = Math.min(maxMenuW, vw - pad * 2);
+    let left = Math.min(Math.max(pad, rect.left), vw - pad - width);
+    const spaceBelow = vh - rect.bottom - gap - pad;
+    const spaceAbove = rect.top - gap - pad;
+    const preferBottom = spaceBelow >= 160 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.min(16 * 16, preferBottom ? spaceBelow : spaceAbove, vh * 0.5);
+    const placement: 'bottom' | 'top' = preferBottom ? 'bottom' : 'top';
+    const top =
+      placement === 'bottom'
+        ? rect.bottom + gap
+        : Math.max(pad, rect.top - gap - maxHeight);
+    setPos({ left, top, width, maxHeight: Math.max(120, maxHeight), placement });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    updatePos();
+    const onScroll = () => updatePos();
+    window.addEventListener('resize', onScroll);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, updatePos]);
+
   useEffect(() => {
     if (!open) return;
     setQuery('');
@@ -81,7 +133,10 @@ export function SearchableSelect({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -124,6 +179,18 @@ export function SearchableSelect({
     }
   };
 
+  const menuStyle: CSSProperties | undefined = pos
+    ? {
+        position: 'fixed',
+        left: pos.left,
+        top: pos.top,
+        width: pos.width,
+        maxWidth: 'min(100vw - 1rem, 20rem)',
+        maxHeight: pos.maxHeight,
+        zIndex: 220,
+      }
+    : undefined;
+
   return (
     <div
       ref={rootRef}
@@ -134,6 +201,7 @@ export function SearchableSelect({
       )}
     >
       <button
+        ref={buttonRef}
         type="button"
         id={id}
         disabled={disabled}
@@ -166,62 +234,67 @@ export function SearchableSelect({
         </span>
       </button>
 
-      {open ? (
-        <div
-          className={cn(
-            'absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-xl border border-outline-variant/40',
-            'bg-surface-container-lowest shadow-lg',
-            'max-h-[min(16rem,50vh)] flex flex-col',
-          )}
-        >
-          <div className="flex items-center gap-2 border-b border-outline-variant/30 px-3 py-2">
-            <span className="material-symbols-outlined text-[18px] text-outline">search</span>
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onListKeyDown}
-              placeholder={searchPlaceholder}
-              className="h-8 w-full min-w-0 bg-transparent font-body-sm text-on-surface outline-none placeholder:text-outline"
-            />
-          </div>
-          <ul
-            id={listId}
-            role="listbox"
-            className="flex-1 overflow-y-auto overscroll-contain py-1"
-          >
-            {filtered.length === 0 ? (
-              <li className="px-3 py-2 font-body-sm text-outline">{emptyLabel}</li>
-            ) : (
-              filtered.map((opt, idx) => (
-                <li key={opt.value} role="option" aria-selected={opt.value === value}>
-                  <button
-                    type="button"
-                    disabled={opt.disabled}
-                    onMouseEnter={() => setHighlight(idx)}
-                    onClick={() => pick(opt)}
-                    className={cn(
-                      'flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left font-body-sm',
-                      'disabled:cursor-not-allowed disabled:opacity-40',
-                      idx === highlight
-                        ? 'bg-primary-container/40 text-on-surface'
-                        : 'text-on-surface hover:bg-surface-container-high',
-                      opt.value === value && 'font-medium',
-                    )}
-                  >
-                    <span className="truncate w-full">{opt.label}</span>
-                    {opt.description ? (
-                      <span className="truncate w-full font-label-sm text-outline">
-                        {opt.description}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              ))
+      {open &&
+        pos &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className={cn(
+              'overflow-hidden rounded-xl border border-outline-variant/40',
+              'bg-surface-container-lowest shadow-lg flex flex-col',
             )}
-          </ul>
-        </div>
-      ) : null}
+          >
+            <div className="flex items-center gap-2 border-b border-outline-variant/30 px-3 py-2 shrink-0">
+              <span className="material-symbols-outlined text-[18px] text-outline">search</span>
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onListKeyDown}
+                placeholder={searchPlaceholder}
+                className="h-8 w-full min-w-0 bg-transparent font-body-sm text-on-surface outline-none placeholder:text-outline"
+              />
+            </div>
+            <ul
+              id={listId}
+              role="listbox"
+              className="flex-1 overflow-y-auto overscroll-contain py-1 min-h-0"
+            >
+              {filtered.length === 0 ? (
+                <li className="px-3 py-2 font-body-sm text-outline">{emptyLabel}</li>
+              ) : (
+                filtered.map((opt, idx) => (
+                  <li key={opt.value} role="option" aria-selected={opt.value === value}>
+                    <button
+                      type="button"
+                      disabled={opt.disabled}
+                      onMouseEnter={() => setHighlight(idx)}
+                      onClick={() => pick(opt)}
+                      className={cn(
+                        'flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left font-body-sm',
+                        'disabled:cursor-not-allowed disabled:opacity-40',
+                        idx === highlight
+                          ? 'bg-primary-container/40 text-on-surface'
+                          : 'text-on-surface hover:bg-surface-container-high',
+                        opt.value === value && 'font-medium',
+                      )}
+                    >
+                      <span className="truncate w-full">{opt.label}</span>
+                      {opt.description ? (
+                        <span className="truncate w-full font-label-sm text-outline">
+                          {opt.description}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

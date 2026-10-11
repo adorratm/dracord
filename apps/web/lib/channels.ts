@@ -53,19 +53,19 @@ function mapChannelItem(
         ? (localMap![ch.id] ?? [])
         : (ch.voiceMembers ?? [])
       : undefined;
-  if (voiceMembers && extras?.selfUserId && isVoice) {
+  if (voiceMembers && extras?.selfUserId && (isVoice || isActivity)) {
     const inThis =
-      extras.selfVoiceChannelId != null && extras.selfVoiceChannelId === ch.id;
+      (extras.selfVoiceChannelId != null && extras.selfVoiceChannelId === ch.id) ||
+      Boolean(extras.selfActivityChannelIds?.has(ch.id));
     if (!inThis) {
       voiceMembers = voiceMembers.filter((m) => m.id !== extras.selfUserId);
     }
   }
   const selfInChannel = Boolean(
     extras?.selfUserId &&
-      (isVoice
-        ? extras.selfVoiceChannelId === ch.id
-        : extras.selfActivityChannelIds?.has(ch.id) ||
-          voiceMembers?.some((m) => m.id === extras.selfUserId)),
+      (extras.selfVoiceChannelId === ch.id ||
+        extras.selfActivityChannelIds?.has(ch.id) ||
+        voiceMembers?.some((m) => m.id === extras.selfUserId)),
   );
   const viewerJoinedAt =
     selfInChannel && extras?.selfUserId
@@ -87,12 +87,13 @@ function mapChannelItem(
     voiceMembers: voiceMembers?.map((m) => {
       const isSelf = Boolean(extras?.selfUserId && m.id === extras.selfUserId);
       const isSuperAdmin = Boolean(extras?.platformAdminIds?.has(m.id));
-      const draggable = isVoice
+      const voiceLike = isVoice || isActivity;
+      const draggable = voiceLike
         ? isSelf
           ? Boolean(extras?.canDragSelf) && !m.isBot
           : Boolean(extras?.canDragVoiceMembers) && !m.isBot && !isSuperAdmin
         : false;
-      const enriched = isVoice ? extras?.enrichVoiceMember?.(m, ch.id) ?? {} : {};
+      const enriched = voiceLike ? extras?.enrichVoiceMember?.(m, ch.id) ?? {} : {};
       const isAfk = Boolean(extras?.afkChannelId && ch.id === extras.afkChannelId);
       return {
         id: m.id,

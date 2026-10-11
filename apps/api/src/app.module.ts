@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { join } from 'path';
 import { AdminModule } from '@/admin/admin.module';
 import { AuthModule } from '@/auth/auth.module';
 import { PlatformAdminModule } from '@/platform-admin/platform-admin.module';
@@ -23,10 +24,19 @@ import { DmModule } from '@/dm/dm.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
 import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 import { ActivitiesModule } from '@/activities/activities.module';
+import { GuildEventsModule } from '@/guild-events/guild-events.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      // yarn workspace cwd = apps/api; kök .env (KLIPY vb.) de yüklensin
+      envFilePath: [
+        join(process.cwd(), '.env'),
+        join(process.cwd(), '../../.env'),
+        join(__dirname, '../../../.env'),
+      ],
+    }),
     DatabaseModule,
     SocketBroadcastModule,
     QueuesModule,
@@ -50,6 +60,7 @@ import { ActivitiesModule } from '@/activities/activities.module';
     DmModule,
     NotificationsModule,
     ActivitiesModule,
+    GuildEventsModule,
   ],
 })
 export class AppModule {}

@@ -90,6 +90,8 @@ interface VoiceSessionValue {
   voiceOnOtherTab: boolean;
   /** WebRTC RTT (ping), ms */
   latencyMs: number | null;
+  /** API/sunucu HTTP RTT, ms */
+  serverLatencyMs: number | null;
   muted: boolean;
   deafened: boolean;
   cameraEnabled: boolean;
@@ -578,6 +580,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [isVoiceLeader, setIsVoiceLeader] = useState(true);
   const [voiceOnOtherTab, setVoiceOnOtherTab] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [serverLatencyMs, setServerLatencyMs] = useState<number | null>(null);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
@@ -1572,6 +1575,35 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     };
   }, [connected, voiceChannelId]);
 
+  useEffect(() => {
+    if (!connected) {
+      setServerLatencyMs(null);
+      return;
+    }
+    let cancelled = false;
+    const base = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(
+      /\/$/,
+      '',
+    );
+    const tick = async () => {
+      if (cancelled || !base) return;
+      const t0 = performance.now();
+      try {
+        await fetch(`${base}/health`, { method: 'GET', cache: 'no-store' });
+        if (cancelled) return;
+        setServerLatencyMs(Math.max(1, Math.round(performance.now() - t0)));
+      } catch {
+        if (!cancelled) setServerLatencyMs(null);
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [connected, voiceChannelId]);
+
   /** Ctrl+F5 / yenileme sonrası aynı ses kanalına dön */
   useEffect(() => {
     if (!user) return;
@@ -2511,6 +2543,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       isVoiceLeader,
       voiceOnOtherTab,
       latencyMs,
+      serverLatencyMs,
       muted,
       deafened,
       cameraEnabled,
@@ -2570,6 +2603,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       isVoiceLeader,
       voiceOnOtherTab,
       latencyMs,
+      serverLatencyMs,
       muted,
       deafened,
       cameraEnabled,

@@ -7,12 +7,28 @@ import {
 import { EntityManager, ILike } from 'typeorm';
 import type {
   CategoryDto,
+  DiscoverCategory,
   GuildInviteDto,
   GuildPermissionsDto,
   GuildSummary,
   PublicUser,
 } from '@dracord/types';
 import { createId } from '@paralleldrive/cuid2';
+
+const DISCOVER_CATEGORY_SET = new Set<DiscoverCategory>([
+  'gaming',
+  'music',
+  'entertainment',
+  'tech',
+  'education',
+]);
+
+function normalizeDiscoverCategory(raw?: string | null): DiscoverCategory {
+  if (raw && DISCOVER_CATEGORY_SET.has(raw as DiscoverCategory)) {
+    return raw as DiscoverCategory;
+  }
+  return 'gaming';
+}
 import { toPublicUser } from '@/common/user.mapper';
 import {
   GuildPermissions,
@@ -298,7 +314,7 @@ export class GuildsService {
     return memberships.map((m) => this.toSummary(m.guild));
   }
 
-  async discover(q?: string): Promise<GuildSummary[]> {
+  async discover(q?: string, category?: string): Promise<GuildSummary[]> {
     const trimmed = q?.trim() ?? '';
     const qb = this.em
       .createQueryBuilder(Guild, 'g')
@@ -310,6 +326,9 @@ export class GuildsService {
       .take(50);
     if (trimmed) {
       qb.andWhere('g.name ILIKE :q', { q: `%${trimmed}%` });
+    }
+    if (category && category !== 'all' && DISCOVER_CATEGORY_SET.has(category as DiscoverCategory)) {
+      qb.andWhere('g.discoverCategory = :category', { category });
     }
     const guilds = await qb.getMany();
     if (!guilds.length) return [];
@@ -345,7 +364,12 @@ export class GuildsService {
 
   async createGuild(
     userId: string,
-    data: { name: string; iconUrl?: string | null; discoverable?: boolean },
+    data: {
+      name: string;
+      iconUrl?: string | null;
+      discoverable?: boolean;
+      discoverCategory?: string;
+    },
   ): Promise<GuildSummary> {
     await this.ensureUsernameConfirmed(userId);
     const name = data.name.trim();
@@ -359,6 +383,7 @@ export class GuildsService {
         bannerUrl: null,
         ownerId: userId,
         discoverable: data.discoverable ?? false,
+        discoverCategory: normalizeDiscoverCategory(data.discoverCategory),
       }),
     );
 
@@ -504,6 +529,7 @@ export class GuildsService {
       iconUrl?: string | null;
       bannerUrl?: string | null;
       discoverable?: boolean;
+      discoverCategory?: string;
       afkChannelId?: string | null;
       afkTimeoutMinutes?: number;
     },
@@ -520,6 +546,10 @@ export class GuildsService {
     if (data.discoverable !== undefined) {
       await this.requireOwner(guildId, userId);
       guild.discoverable = data.discoverable;
+    }
+    if (data.discoverCategory !== undefined) {
+      await this.requireOwner(guildId, userId);
+      guild.discoverCategory = normalizeDiscoverCategory(data.discoverCategory);
     }
     if (data.name != null) {
       const trimmed = data.name.trim();
@@ -1021,6 +1051,7 @@ export class GuildsService {
       bannerUrl: guild.bannerUrl ?? null,
       ownerId: guild.ownerId,
       discoverable: guild.discoverable,
+      discoverCategory: normalizeDiscoverCategory(guild.discoverCategory),
       discoverPinned: Boolean(guild.discoverPinnedAt),
       discoverPinOrder: guild.discoverPinOrder ?? null,
       afkChannelId: guild.afkChannelId ?? null,

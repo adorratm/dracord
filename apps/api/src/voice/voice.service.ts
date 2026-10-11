@@ -38,7 +38,9 @@ export class VoiceService {
   ): Promise<VoiceTokenResponse> {
     const channel = await this.channels.assertVoiceAccess(channelId, userId, password);
     const isDmCall = Boolean(channel.dmChannelId) && channel.type === ChannelType.TEXT;
-    if (channel.type !== ChannelType.VOICE && !isDmCall) {
+    const isActivityRoom =
+      channel.type === ChannelType.GAME || channel.type === ChannelType.WATCH_PARTY;
+    if (channel.type !== ChannelType.VOICE && !isDmCall && !isActivityRoom) {
       throw new BadRequestException('Channel is not a voice channel');
     }
 
@@ -98,8 +100,13 @@ export class VoiceService {
     targetChannelId: string,
   ): Promise<{ ok: true; targetChannelId: string }> {
     const target = await this.em.findOne(Channel, { where: { id: targetChannelId } });
-    if (!target?.guildId || target.type !== ChannelType.VOICE) {
-      throw new BadRequestException('Hedef bir ses kanalı olmalı');
+    if (
+      !target?.guildId ||
+      (target.type !== ChannelType.VOICE &&
+        target.type !== ChannelType.GAME &&
+        target.type !== ChannelType.WATCH_PARTY)
+    ) {
+      throw new BadRequestException('Hedef bir ses veya aktivite kanalı olmalı');
     }
     const isSelf = actorId === targetUserId;
     if (!isSelf) {
