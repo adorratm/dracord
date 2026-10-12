@@ -1,13 +1,57 @@
 /** Web Audio FX for activity games — unlock after first user gesture. */
 
-import { setDealerVoiceMuted } from './dealer-voice';
+import { setDealerVoiceMuted, setDealerVoiceVolume } from './dealer-voice';
+
+const STORAGE_MUTE = 'dracord.gameAudio.muted';
+const STORAGE_VOL = 'dracord.gameAudio.volume';
 
 let ctx: AudioContext | null = null;
 let muted = false;
+let volume = 0.85;
+
+function loadPrefs() {
+  if (typeof window === 'undefined') return;
+  try {
+    const m = localStorage.getItem(STORAGE_MUTE);
+    if (m === '1' || m === 'true') muted = true;
+    if (m === '0' || m === 'false') muted = false;
+    const v = Number(localStorage.getItem(STORAGE_VOL));
+    if (Number.isFinite(v)) volume = Math.min(1, Math.max(0, v));
+  } catch {
+    /* ignore */
+  }
+}
+
+if (typeof window !== 'undefined') loadPrefs();
+
+export function isGameAudioMuted() {
+  return muted;
+}
+
+export function getGameAudioVolume() {
+  return volume;
+}
 
 export function setGameAudioMuted(next: boolean) {
   muted = next;
+  try {
+    localStorage.setItem(STORAGE_MUTE, next ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+  // Oyun FX + kurpiyer TTS birlikte
   setDealerVoiceMuted(next);
+}
+
+/** 0–1 — oyun efektleri + kurpiyer */
+export function setGameAudioVolume(next: number) {
+  volume = Math.min(1, Math.max(0, next));
+  try {
+    localStorage.setItem(STORAGE_VOL, String(volume));
+  } catch {
+    /* ignore */
+  }
+  setDealerVoiceVolume(volume);
 }
 
 function ensureCtx(): AudioContext | null {
@@ -27,31 +71,36 @@ export function unlockGameAudio() {
   ensureCtx();
 }
 
+function gainOf(base: number) {
+  return Math.max(0.0001, base * volume);
+}
+
 function beep(
   freq: number,
   durationMs: number,
   type: OscillatorType = 'sine',
   gain = 0.06,
 ) {
-  if (muted) return;
+  if (muted || volume <= 0.001) return;
   const ac = ensureCtx();
   if (!ac) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
+  const level = gainOf(gain);
   osc.type = type;
   osc.frequency.value = freq;
-  g.gain.value = gain;
+  g.gain.value = level;
   osc.connect(g);
   g.connect(ac.destination);
   const t = ac.currentTime;
-  g.gain.setValueAtTime(gain, t);
+  g.gain.setValueAtTime(level, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + durationMs / 1000);
   osc.start(t);
   osc.stop(t + durationMs / 1000);
 }
 
 function noiseBurst(durationMs: number, gain = 0.04) {
-  if (muted) return;
+  if (muted || volume <= 0.001) return;
   const ac = ensureCtx();
   if (!ac) return;
   const n = Math.floor((ac.sampleRate * durationMs) / 1000);
@@ -60,8 +109,9 @@ function noiseBurst(durationMs: number, gain = 0.04) {
   for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
   const src = ac.createBufferSource();
   const g = ac.createGain();
+  const level = gainOf(gain);
   src.buffer = buf;
-  g.gain.value = gain;
+  g.gain.value = level;
   src.connect(g);
   g.connect(ac.destination);
   src.start();
@@ -70,6 +120,9 @@ function noiseBurst(durationMs: number, gain = 0.04) {
 export const GameAudio = {
   unlock: unlockGameAudio,
   setMuted: setGameAudioMuted,
+  setVolume: setGameAudioVolume,
+  isMuted: isGameAudioMuted,
+  getVolume: getGameAudioVolume,
   /** Bilardo */
   collide: () => beep(180, 80, 'triangle', 0.05),
   pot: () => {

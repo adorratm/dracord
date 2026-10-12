@@ -6,6 +6,7 @@ import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import type { GameProps } from '../three/sceneUtils';
 import { disposeObject, labelFor } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
+import { GameSoundControls } from '../three/GameSoundControls';
 import { addGameVenue } from '../three/sceneVenue';
 import {
   createAssetBag,
@@ -348,7 +349,7 @@ export function BlackjackGame(props: GameProps) {
   useEffect(() => {
     if (st.round > prevRoundRef.current && st.round > 0) {
       prevRoundRef.current = st.round;
-      speakDealer('Kartları dağıtıyorum.', { interrupt: true });
+      speakDealer('Kartları dağıtıyorum, bol şanslar.', { interrupt: true });
     }
   }, [st.round]);
 
@@ -361,15 +362,21 @@ export function BlackjackGame(props: GameProps) {
     if (st.phase === 'play' && st.turn) {
       const name = labelFor(props, st.turn);
       const mine = st.turn === userId;
-      // Dağıtımdan sonra sıra duyurusu — TTS çakışmasın
-      const delay = st.dealer.length <= 2 ? 1600 : 400;
+      const delay = st.dealer.length <= 2 ? 1800 : 450;
       const t = window.setTimeout(() => {
-        speakDealer(mine ? 'Sıra sende.' : `Sıra ${name}'da.`);
+        speakDealer(
+          mine
+            ? 'Sıra sende. Kart alabilir veya durabilirsin.'
+            : `Sıra ${name} oyuncusunda.`,
+        );
       }, delay);
       return () => clearTimeout(t);
     }
     if (st.phase === 'dealer') {
-      const t = window.setTimeout(() => speakDealer('Kurpiyer oynuyor.'), 500);
+      const t = window.setTimeout(
+        () => speakDealer('Şimdi kurpiyer oynuyor.'),
+        500,
+      );
       return () => clearTimeout(t);
     }
     if (st.phase === 'result') {
@@ -377,18 +384,18 @@ export function BlackjackGame(props: GameProps) {
       const t = window.setTimeout(() => {
         if (me?.result === 'blackjack') {
           GameAudio.blackjack();
-          speakDealer('Blackjack! Tebrikler.');
+          speakDealer('Blackjack! Harika, tebrikler.');
         } else if (me?.result === 'win') {
           GameAudio.win();
-          speakDealer('Kazandın, tebrikler.');
+          speakDealer('Bu eli sen kazandın, tebrikler.');
         } else if (me?.result === 'push') {
           GameAudio.push();
-          speakDealer('Berabere.');
+          speakDealer('Berabere bitti.');
         } else if (me?.result === 'lose') {
           GameAudio.lose();
-          speakDealer('Bu tur kaybettin.');
+          speakDealer('Bu tur kaybettin. Yeni elde görüşürüz.');
         } else {
-          speakDealer('Tur bitti.');
+          speakDealer('Tur sona erdi.');
         }
       }, 600);
       return () => clearTimeout(t);
@@ -786,16 +793,19 @@ export function BlackjackGame(props: GameProps) {
         title="21 Blackjack"
         status={statusText}
         meta={
-          <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
-            {seatsOrdered.filter((id) => !id.startsWith('_empty_')).length}/4 oyuncu
-            {st.round ? ` · Tur ${st.round}` : ''}
-            {st.phase === 'play' && myTurn ? ' · Senin sıran' : ''}
-            {st.dealer.length > 0
-              ? st.holeHidden
-                ? ` · Kurpiyer ${dealerVal.total}+?`
-                : ` · Kurpiyer ${dealerVal.total}`
-              : ''}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+              {seatsOrdered.filter((id) => !id.startsWith('_empty_')).length}/4 oyuncu
+              {st.round ? ` · Tur ${st.round}` : ''}
+              {st.phase === 'play' && myTurn ? ' · Senin sıran' : ''}
+              {st.dealer.length > 0
+                ? st.holeHidden
+                  ? ` · Kurpiyer ${dealerVal.total}+?`
+                  : ` · Kurpiyer ${dealerVal.total}`
+                : ''}
+            </span>
+            <GameSoundControls />
+          </div>
         }
         players={session.playerIds.map((pid) => {
           const seat = st.seats[pid];
