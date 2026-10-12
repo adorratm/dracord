@@ -1,7 +1,6 @@
 /**
- * Blackjack kurpiyer sesi.
- * 1) Google Translate TTS (doğal tr-TR) — kısa cümleler
- * 2) Web Speech — nöral/Online ses skorlaması ile yedek
+ * Blackjack kurpiyer sesi — Microsoft Türkçe kadın sesi (Web Speech) öncelikli.
+ * Emel Online / Natural tercih edilir; Google TTS yedek.
  */
 
 const STORAGE_MUTE = 'dracord.dealerVoice.muted';
@@ -13,6 +12,7 @@ let speaking = false;
 let onSpeakingChange: ((v: boolean) => void) | null = null;
 let currentAudio: HTMLAudioElement | null = null;
 let speakToken = 0;
+let voicesReady: Promise<void> | null = null;
 
 const audioCache = new Map<string, string>();
 
@@ -74,46 +74,36 @@ export function isDealerSpeaking() {
   return speaking;
 }
 
-/** Konuşma metnini TTS için yumuşat */
 export function prepareDealerText(raw: string): string {
   let t = raw.trim();
   if (!t) return '';
-  // İngilizce / oyun jargonunu Türkçe okunuşa çek
   t = t
     .replace(/\bBlackjack\b/gi, 'blackjack')
     .replace(/\bDouble\b/gi, 'çift')
     .replace(/\bBust\b/gi, 'battı')
     .replace(/\bPush\b/gi, 'berabere')
-    .replace(/'(\w)/g, ' $1'); // Ali'de → Ali de (daha net)
-  // Çok hızlı okunan ekleri ayır
+    .replace(/'(\w)/g, ' $1');
   t = t.replace(/\s+/g, ' ').trim();
   if (!/[.!?…]$/.test(t)) t += '.';
   return t;
 }
 
+/** Microsoft Emel / Natural kadın seslerini en üste koy */
 function scoreVoice(v: SpeechSynthesisVoice): number {
   let s = 0;
   const name = v.name;
   const lang = v.lang;
+  if (!/tr/i.test(lang) && !/turkish|türk/i.test(name)) return -1;
   if (/^tr(-|_|$)/i.test(lang)) s += 100;
-  else if (/tr/i.test(lang)) s += 40;
-  else return -1;
+  else s += 50;
 
-  // Nöral / online sesler çok daha iyi
-  if (/online|natural|neural|premium|enhanced/i.test(name)) s += 80;
-  if (/google/i.test(name)) s += 50;
-  if (/microsoft/i.test(name)) s += 45;
-  // Kadın ses isimleri (TR + genel)
-  if (
-    /(emel|aylin|filiz|yelda|zira|female|woman|kız|kadin|kadın|eva|seda|deniz)/i.test(
-      name,
-    )
-  ) {
-    s += 35;
-  }
-  // Erkek sesleri biraz düşür
-  if (/(ahmet|male|man|erkek|tolga)/i.test(name)) s -= 25;
-  if (v.localService) s -= 5; // online genelde daha iyi
+  // Microsoft Natural Online — kullanıcının tercihi
+  if (/microsoft/i.test(name)) s += 120;
+  if (/emel/i.test(name)) s += 100;
+  if (/online|natural|neural/i.test(name)) s += 90;
+  if (/female|woman|kız|kadın|aylin|filiz|yelda|zira|seda/i.test(name)) s += 40;
+  if (/google/i.test(name)) s += 10; // Microsoft'un gerisinde
+  if (/(ahmet|male|man|erkek|tolga)/i.test(name)) s -= 80;
   return s;
 }
 
@@ -133,15 +123,28 @@ function pickVoice(): SpeechSynthesisVoice | null {
   return best;
 }
 
-export function warmDealerVoices() {
-  if (typeof window === 'undefined') return;
-  if (window.speechSynthesis) {
-    window.speechSynthesis.getVoices();
-    window.speechSynthesis.onvoiceschanged = () => {
-      window.speechSynthesis.getVoices();
-    };
+function ensureVoices(): Promise<void> {
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    return Promise.resolve();
   }
-  // Prefetch kısa bir sessiz istek yok — ilk cümlede cache dolar
+  if (window.speechSynthesis.getVoices().length) return Promise.resolve();
+  if (voicesReady) return voicesReady;
+  voicesReady = new Promise((resolve) => {
+    const done = () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', done);
+      resolve();
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', done);
+    // Bazı tarayıcılarda event gelmez
+    window.setTimeout(done, 800);
+  });
+  return voicesReady;
+}
+
+export function warmDealerVoices() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  void ensureVoices();
+  window.speechSynthesis.getVoices();
 }
 
 function ttsProxyUrl(text: string): string {
@@ -172,29 +175,37 @@ export function stopDealerSpeech() {
 
 function speakWebSpeech(text: string, rate?: number): boolean {
   if (typeof window === 'undefined' || !window.speechSynthesis) return false;
+  const voice = pickVoice();
+  if (!voice) return false;
+
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'tr-TR';
-  // Türkçe için biraz yavaş + yumuşak perde
-  u.rate = rate ?? 0.92;
-  u.pitch = 1.08;
+  u.lang = voice.lang || 'tr-TR';
+  u.voice = voice;
+  const isMs = /microsoft/i.test(voice.name);
+  const isEmel = /emel/i.test(voice.name);
+  // Microsoft Emel Online: en doğal ayarlar
+  u.rate = rate ?? (isEmel ? 0.96 : isMs ? 0.94 : 0.9);
+  u.pitch = isEmel || isMs ? 1.04 : 1.1;
   u.volume = volume;
-  const voice = pickVoice();
-  if (voice) {
-    u.voice = voice;
-    u.lang = voice.lang || 'tr-TR';
-  }
   u.onstart = () => setSpeaking(true);
   u.onend = () => setSpeaking(false);
   u.onerror = () => setSpeaking(false);
   setSpeaking(true);
-  window.speechSynthesis.speak(u);
+  window.setTimeout(() => {
+    if (muted) return;
+    try {
+      window.speechSynthesis.speak(u);
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    } catch {
+      setSpeaking(false);
+    }
+  }, 40);
   return true;
 }
 
-async function playNeuralAudio(text: string, token: number): Promise<boolean> {
+async function playGoogleFallback(text: string, token: number): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-
   let src = audioCache.get(text);
   if (!src) {
     try {
@@ -219,7 +230,6 @@ async function playNeuralAudio(text: string, token: number): Promise<boolean> {
       return false;
     }
   }
-
   if (token !== speakToken) return false;
 
   return await new Promise<boolean>((resolve) => {
@@ -249,23 +259,6 @@ async function playNeuralAudio(text: string, token: number): Promise<boolean> {
   });
 }
 
-/**
- * Uzun metni Google TTS limitine (~180) göre böl.
- */
-function chunkText(text: string, max = 160): string[] {
-  if (text.length <= max) return [text];
-  const parts: string[] = [];
-  let rest = text;
-  while (rest.length > max) {
-    let cut = rest.lastIndexOf(' ', max);
-    if (cut < 40) cut = max;
-    parts.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
-  }
-  if (rest) parts.push(rest);
-  return parts.filter(Boolean);
-}
-
 export function speakDealer(text: string, opts?: { interrupt?: boolean; rate?: number }) {
   if (muted || typeof window === 'undefined') return;
   const prepared = prepareDealerText(text);
@@ -278,19 +271,37 @@ export function speakDealer(text: string, opts?: { interrupt?: boolean; rate?: n
   }
 
   const token = speakToken;
-  const chunks = chunkText(prepared);
 
   void (async () => {
+    await ensureVoices();
+    if (token !== speakToken || muted) return;
+
+    // 1) Microsoft Web Speech (tercih)
+    if (speakWebSpeech(prepared, opts?.rate)) return;
+
+    // 2) Google TTS yedek
     setSpeaking(true);
-    for (const chunk of chunks) {
-      if (token !== speakToken) return;
-      const ok = await playNeuralAudio(chunk, token);
-      if (token !== speakToken) return;
-      if (!ok) {
-        // Yedek: Web Speech (nöral ses varsa hâlâ kabul edilebilir)
-        speakWebSpeech(chunks.join(' '), opts?.rate);
+    const ok = await playGoogleFallback(prepared, token);
+    if (token !== speakToken) return;
+    if (!ok) {
+      // Son çare: herhangi bir TR ses
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(prepared);
+        u.lang = 'tr-TR';
+        u.rate = 0.92;
+        u.pitch = 1.08;
+        u.volume = volume;
+        const v = pickVoice();
+        if (v) u.voice = v;
+        u.onstart = () => setSpeaking(true);
+        u.onend = () => setSpeaking(false);
+        u.onerror = () => setSpeaking(false);
+        setSpeaking(true);
+        window.speechSynthesis.speak(u);
         return;
       }
+      setSpeaking(false);
+      return;
     }
     if (token === speakToken) setSpeaking(false);
   })();
