@@ -22,6 +22,7 @@ import {
   speakDealer,
   warmDealerVoices,
 } from '@/lib/dealer-voice';
+import { dealerLine } from '@/lib/dealer-lines';
 
 type Phase = 'idle' | 'play' | 'dealer' | 'result';
 type SeatStatus = 'idle' | 'playing' | 'stand' | 'bust' | 'blackjack' | 'done';
@@ -349,7 +350,7 @@ export function BlackjackGame(props: GameProps) {
   useEffect(() => {
     if (st.round > prevRoundRef.current && st.round > 0) {
       prevRoundRef.current = st.round;
-      speakDealer('Kartları dağıtıyorum, bol şanslar.', { interrupt: true });
+      speakDealer(dealerLine('deal'), { interrupt: true });
     }
   }, [st.round]);
 
@@ -366,17 +367,14 @@ export function BlackjackGame(props: GameProps) {
       const t = window.setTimeout(() => {
         speakDealer(
           mine
-            ? 'Sıra sende. Kart alabilir veya durabilirsin.'
-            : `Sıra ${name} oyuncusunda.`,
+            ? dealerLine('turn_you')
+            : dealerLine('turn_other', { name }),
         );
       }, delay);
       return () => clearTimeout(t);
     }
     if (st.phase === 'dealer') {
-      const t = window.setTimeout(
-        () => speakDealer('Şimdi kurpiyer oynuyor.'),
-        500,
-      );
+      const t = window.setTimeout(() => speakDealer(dealerLine('dealer_play')), 500);
       return () => clearTimeout(t);
     }
     if (st.phase === 'result') {
@@ -384,18 +382,18 @@ export function BlackjackGame(props: GameProps) {
       const t = window.setTimeout(() => {
         if (me?.result === 'blackjack') {
           GameAudio.blackjack();
-          speakDealer('Blackjack! Harika, tebrikler.');
+          speakDealer(dealerLine('blackjack'));
         } else if (me?.result === 'win') {
           GameAudio.win();
-          speakDealer('Bu eli sen kazandın, tebrikler.');
+          speakDealer(dealerLine('win'));
         } else if (me?.result === 'push') {
           GameAudio.push();
-          speakDealer('Berabere bitti.');
+          speakDealer(dealerLine('push'));
         } else if (me?.result === 'lose') {
           GameAudio.lose();
-          speakDealer('Bu tur kaybettin. Yeni elde görüşürüz.');
+          speakDealer(dealerLine('lose'));
         } else {
-          speakDealer('Tur sona erdi.');
+          speakDealer(dealerLine('round_end'));
         }
       }, 600);
       return () => clearTimeout(t);
