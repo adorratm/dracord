@@ -17,7 +17,10 @@ type LastRoll = {
   by: string;
   pins: number;
   knocked: number[];
+  /** Atış sonrası ayakta kalan (veya frame bitince ALL_PINS) */
   standing: number[];
+  /** Atış öncesi ayakta — rakip replay için */
+  standingBefore: number[];
   tx: number;
   t: number;
 };
@@ -101,11 +104,20 @@ function readLastRoll(raw: unknown): LastRoll | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const arr = (v: unknown) => (Array.isArray(v) ? v.map(Number).filter((n) => n >= 0 && n < 10) : []);
+  const knocked = arr(o.knocked);
+  const standing = Array.isArray(o.standing) ? arr(o.standing) : ALL_PINS;
+  let standingBefore = Array.isArray(o.standingBefore) ? arr(o.standingBefore) : null;
+  if (!standingBefore) {
+    if (knocked.length === 0) standingBefore = standing.length ? standing : ALL_PINS;
+    else if (standing.length === 10) standingBefore = ALL_PINS;
+    else standingBefore = [...new Set([...knocked, ...standing])].sort((a, b) => a - b);
+  }
   return {
     by: String(o.by ?? ''),
     pins: Number(o.pins ?? 0),
-    knocked: arr(o.knocked),
-    standing: Array.isArray(o.standing) ? arr(o.standing) : ALL_PINS,
+    knocked,
+    standing,
+    standingBefore: standingBefore.length ? standingBefore : ALL_PINS,
     tx: Number(o.tx ?? 0),
     t: Number(o.t ?? 0),
   };
@@ -332,13 +344,14 @@ export function BowlingGame(props: GameProps) {
       } else if (lr && lr.t !== seenT) {
         seenT = lr.t;
         if (lr.by !== uid) {
-          // Başkasının atışını görsel olarak oynat
-          const before = pins.filter((p) => p.active).map((p) => p.id);
-          if (before.length === 0) resetPins(ALL_PINS);
+          // Başkasının atışını görsel olarak oynat (atış öncesi labutlar)
+          resetPins(lr.standingBefore.length ? lr.standingBefore : ALL_PINS);
+          resetBall();
+          ball.active = true;
+          ball.vz = -16;
           replay = lr;
           mode = 'replay';
           modeTime = 0;
-          ball.active = true;
           aimLine.visible = false;
           return;
         }
@@ -369,6 +382,7 @@ export function BowlingGame(props: GameProps) {
         pins: knocked.length,
         knocked,
         standing: reset ? ALL_PINS : standingAfter,
+        standingBefore,
         tx: Number(aimTx.toFixed(3)),
         t: Date.now(),
       };

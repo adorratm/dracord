@@ -295,9 +295,10 @@ export function TavlaGame(props: GameProps) {
     triShape.lineTo(0, 4.3);
     triShape.closePath();
     const triGeo = new THREE.ShapeGeometry(triShape);
+    // DoubleSide: üst sıra (i<12) Math.PI/2 ile normale aşağı bakar; FrontSide raycast kaçırır
     const triMats = [
-      new THREE.MeshStandardMaterial({ color: 0x6d4ac0, roughness: 0.7 }),
-      new THREE.MeshStandardMaterial({ color: 0xd6c9a8, roughness: 0.7 }),
+      new THREE.MeshStandardMaterial({ color: 0x6d4ac0, roughness: 0.7, side: THREE.DoubleSide }),
+      new THREE.MeshStandardMaterial({ color: 0xd6c9a8, roughness: 0.7, side: THREE.DoubleSide }),
     ];
     const hlMat = new Map<string, Material>();
     const hlMaterial = (color: number, opacity: number) => {

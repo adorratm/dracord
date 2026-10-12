@@ -37,14 +37,16 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-const POCKET_R = 0.46;
+const POCKET_R = 0.58;
+/** Bant çarpışmasını kapatmak için delik ağzı yarıçapı */
+const POCKET_JAW = 0.72;
 const POCKETS: [number, number][] = [
-  [-4.9, -2.4],
-  [0, -2.45],
-  [4.9, -2.4],
-  [-4.9, 2.4],
-  [0, 2.45],
-  [4.9, 2.4],
+  [-4.95, -2.45],
+  [0, -2.5],
+  [4.95, -2.45],
+  [-4.95, 2.45],
+  [0, 2.5],
+  [4.95, 2.45],
 ];
 const CUE_START = { x: -3, z: 0 };
 const BALL_COLORS = [
@@ -270,7 +272,7 @@ export function BilliardsGame(props: GameProps) {
     neon(10.1, 0.04, 0, 2.5);
     neon(0.04, 5.0, -5.05, 0);
     neon(0.04, 5.0, 5.05, 0);
-    const pocketGeo = new THREE.CircleGeometry(POCKET_R * 0.9, 24);
+    const pocketGeo = new THREE.CircleGeometry(POCKET_R * 1.05, 24);
     const pocketMat = new THREE.MeshBasicMaterial({ color: 0x050508 });
     for (const [px, pz] of POCKETS) {
       const m = new THREE.Mesh(pocketGeo, pocketMat);
@@ -597,8 +599,11 @@ export function BilliardsGame(props: GameProps) {
           b.vz *= ns / sp;
         }
         if (sp > 0.001) rollMesh(b, b.vx * h, b.vz * h);
+        let nearPocket = false;
         for (const [px, pz] of POCKETS) {
-          if (Math.hypot(b.x - px, b.z - pz) < POCKET_R) {
+          const pd = Math.hypot(b.x - px, b.z - pz);
+          if (pd < POCKET_JAW) nearPocket = true;
+          if (pd < POCKET_R) {
             b.sunk = true;
             b.vx = 0;
             b.vz = 0;
@@ -611,23 +616,38 @@ export function BilliardsGame(props: GameProps) {
           }
         }
         if (b.sunk) continue;
-        if (b.x > HX - R) {
-          b.x = HX - R;
-          if (b.vx > 0.4) GameAudio.cushion();
-          b.vx = -Math.abs(b.vx) * 0.8;
-        } else if (b.x < -HX + R) {
-          b.x = -HX + R;
-          if (b.vx < -0.4) GameAudio.cushion();
-          b.vx = Math.abs(b.vx) * 0.8;
-        }
-        if (b.z > HZ - R) {
-          b.z = HZ - R;
-          if (b.vz > 0.4) GameAudio.cushion();
-          b.vz = -Math.abs(b.vz) * 0.8;
-        } else if (b.z < -HZ + R) {
-          b.z = -HZ + R;
-          if (b.vz < -0.4) GameAudio.cushion();
-          b.vz = Math.abs(b.vz) * 0.8;
+        // Delik ağzında bant topu geri itmesin — deliğe tam girsin
+        if (!nearPocket) {
+          if (b.x > HX - R) {
+            b.x = HX - R;
+            if (b.vx > 0.4) GameAudio.cushion();
+            b.vx = -Math.abs(b.vx) * 0.8;
+          } else if (b.x < -HX + R) {
+            b.x = -HX + R;
+            if (b.vx < -0.4) GameAudio.cushion();
+            b.vx = Math.abs(b.vx) * 0.8;
+          }
+          if (b.z > HZ - R) {
+            b.z = HZ - R;
+            if (b.vz > 0.4) GameAudio.cushion();
+            b.vz = -Math.abs(b.vz) * 0.8;
+          } else if (b.z < -HZ + R) {
+            b.z = -HZ + R;
+            if (b.vz < -0.4) GameAudio.cushion();
+            b.vz = Math.abs(b.vz) * 0.8;
+          }
+        } else {
+          // Ağızda deliğe çek; masa dışına kaçmayı sınırla
+          for (const [px, pz] of POCKETS) {
+            const pd = Math.hypot(b.x - px, b.z - pz);
+            if (pd < POCKET_JAW && pd > 1e-4) {
+              b.vx += ((px - b.x) / pd) * 12 * h;
+              b.vz += ((pz - b.z) / pd) * 12 * h;
+              break;
+            }
+          }
+          if (Math.abs(b.x) > HX + 0.4) b.vx *= 0.4;
+          if (Math.abs(b.z) > HZ + 0.4) b.vz *= 0.4;
         }
       }
       for (let i = 0; i < list.length; i++) {

@@ -394,24 +394,93 @@ function listenLevel(outputVolume: number, personalPct: number): number {
   return softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100);
 }
 
-function applyRemoteScreenShareViewQuality(
-  pub: RemoteTrackPublication,
-  qualityId: ScreenShareViewQualityId,
-) {
-  const spec = SCREEN_SHARE_VIEW_QUALITY_SPECS[qualityId];
+/**
+ * LiveKit adaptiveStream, istenen boyuttan küçük görünen elemana göre kaliteyi düşürür.
+ * Manuel kalitede gizli bir "floor" video ile gözlemi hedef çözünürlüğe çekeriz.
+ */
+let screenShareQualityFloorEl: HTMLVideoElement | null = null;
+let screenShareQualityFloorTrack: Track | null = null;
+
+function ensureScreenShareQualityFloor(): HTMLVideoElement {
+  if (screenShareQualityFloorEl && screenShareQualityFloorEl.isConnected) {
+    return screenShareQualityFloorEl;
+  }
+  const el = document.createElement('video');
+  el.setAttribute('aria-hidden', 'true');
+  el.muted = true;
+  el.playsInline = true;
+  el.style.cssText =
+    'position:fixed;left:-10000px;top:0;opacity:0;pointer-events:none;z-index:-1;';
+  document.body.appendChild(el);
+  screenShareQualityFloorEl = el;
+  return el;
+}
+
+function clearScreenShareQualityFloor() {
+  const el = screenShareQualityFloorEl;
+  const prev = screenShareQualityFloorTrack;
+  if (el && prev) {
+    try {
+      prev.detach(el);
+    } catch {
+      // ignore
+    }
+  }
+  screenShareQualityFloorTrack = null;
+  if (el) {
+    el.style.width = '0px';
+    el.style.height = '0px';
+  }
+}
+
+function bindScreenShareQualityFloor(track: Track, width: number, height: number) {
+  if (typeof document === 'undefined') return;
   try {
-    if (spec.videoQuality === 0) pub.setVideoQuality(VideoQuality.LOW);
-    else if (spec.videoQuality === 1) pub.setVideoQuality(VideoQuality.MEDIUM);
-    else if (spec.videoQuality === 2) pub.setVideoQuality(VideoQuality.HIGH);
+    const floor = ensureScreenShareQualityFloor();
+    if (screenShareQualityFloorTrack && screenShareQualityFloorTrack !== track) {
+      try {
+        screenShareQualityFloorTrack.detach(floor);
+      } catch {
+        // ignore
+      }
+    }
+    floor.style.width = `${width}px`;
+    floor.style.height = `${height}px`;
+    track.attach(floor);
+    screenShareQualityFloorTrack = track;
+    void floor.play().catch(() => undefined);
   } catch {
     // ignore
   }
-  try {
-    if (spec.width && spec.height) {
-      pub.setVideoDimensions({ width: spec.width, height: spec.height });
-    } else if (qualityId === 'source') {
-      pub.setVideoDimensions({ width: 7680, height: 4320 });
+}
+
+function applyRemoteScreenShareViewQuality(
+  pub: RemoteTrackPublication,
+  qualityId: ScreenShareViewQualityId,
+  opts?: { focused?: boolean },
+) {
+  const spec = SCREEN_SHARE_VIEW_QUALITY_SPECS[qualityId];
+  const track = pub.track ?? null;
+  const focused = opts?.focused !== false;
+
+  if (qualityId === 'auto') {
+    if (focused) clearScreenShareQualityFloor();
+    // setVideoQuality, requestedVideoDimensions'ı temizler → adaptiveStream devralır
+    try {
+      pub.setVideoQuality(VideoQuality.HIGH);
+    } catch {
+      // ignore
     }
+    return;
+  }
+
+  const width = spec.width ?? 7680;
+  const height = spec.height ?? 4320;
+
+  if (focused && track) bindScreenShareQualityFloor(track, width, height);
+
+  try {
+    pub.setVideoDimensions({ width, height });
   } catch {
     // ignore
   }
@@ -1133,7 +1202,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           | RemoteTrackPublication
           | undefined;
         track = pub?.track ?? null;
-        if (pub) applyRemoteScreenShareViewQuality(pub, viewQuality);
+        if (pub) applyRemoteScreenShareViewQuality(pub, viewQuality, { focused: true });
       }
       // Odakta olmayan uzak paylaşımları düşük kalitede tut (bant genişliği)
       for (const remote of room.remoteParticipants.values()) {
@@ -1141,7 +1210,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         const other = remote.getTrackPublication(Track.Source.ScreenShare) as
           | RemoteTrackPublication
           | undefined;
-        if (other) applyRemoteScreenShareViewQuality(other, '480p');
+        if (other) applyRemoteScreenShareViewQuality(other, '480p', { focused: false });
       }
       bindScreenShareTrack(track, share.identity, share.displayName, share.isLocal);
     },
@@ -1313,6 +1382,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         applyRemoteScreenShareViewQuality(
           publication as RemoteTrackPublication,
           isFocused ? q : '480p',
+          { focused: isFocused },
         );
       }
       syncAll();
@@ -2537,7 +2607,20 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const screenShareViewQuality = normalizeScreenShareViewQuality(id);
       persistAudio({ ...audioSettingsRef.current, screenShareViewQuality });
       const room = roomRef.current;
-      if (room) applyScreenShareView(room);
+      if (!room) return;
+      // Odaklı uzak yayına hemen uygula (bind early-return olsa bile)
+      const focusId =
+        focusedScreenShareIdRef.current && focusedScreenShareIdRef.current !== '__none__'
+          ? focusedScreenShareIdRef.current
+          : activeScreenShareIdRef.current;
+      if (focusId && !screenShareViewPausedRef.current) {
+        const p = room.remoteParticipants.get(focusId);
+        const pub = p?.getTrackPublication(Track.Source.ScreenShare) as
+          | RemoteTrackPublication
+          | undefined;
+        if (pub) applyRemoteScreenShareViewQuality(pub, screenShareViewQuality, { focused: true });
+      }
+      applyScreenShareView(room);
     },
     [persistAudio, applyScreenShareView],
   );
