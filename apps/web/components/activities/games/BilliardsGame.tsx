@@ -260,19 +260,23 @@ export function BilliardsGame(props: GameProps) {
 
     const woodDark = makeWoodMaterial(THREE, assets, 'dark');
     const railWood = makeWoodMaterial(THREE, assets, 'warm');
-    railWood.roughness = 0.38;
-    railWood.clearcoat = 0.5;
-    // Keçe / çerçeve ölçüleri
+    railWood.roughness = 0.36;
+    railWood.clearcoat = 0.55;
+    /**
+     * Gerçekçi masa katmanları (Extrude delik yok — bozulmasın):
+     * 1) gövde  2) yeşil keçe (ortada)  3) siyah cepler  4) ahşap banlar (yalnız kenar)
+     * 5) yeşil yastıklar
+     */
     const FELT_W = 10.2;
     const FELT_D = 5.2;
-    const RAIL_T = 0.58;
+    const RAIL_T = 0.55;
     const OUTER_W = FELT_W + RAIL_T * 2;
     const OUTER_D = FELT_D + RAIL_T * 2;
-    const railH = 0.26;
-    const feltY = 0.06;
+    const railH = 0.3;
+    const feltTop = 0.0;
 
-    const base = new THREE.Mesh(new THREE.BoxGeometry(OUTER_W, 0.7, OUTER_D), woodDark);
-    base.position.y = -0.42;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(OUTER_W, 0.72, OUTER_D), woodDark);
+    base.position.y = -0.44;
     base.castShadow = true;
     base.receiveShadow = true;
     root.add(base);
@@ -282,105 +286,111 @@ export function BilliardsGame(props: GameProps) {
       [-OUTER_W * 0.42, OUTER_D * 0.4],
       [OUTER_W * 0.42, OUTER_D * 0.4],
     ] as const) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.9, 12), woodDark);
-      leg.position.set(lx, -0.98, lz);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.95, 12), woodDark);
+      leg.position.set(lx, -1.0, lz);
       leg.castShadow = true;
       root.add(leg);
     }
 
-    const pocketBed = new THREE.Mesh(
-      new THREE.BoxGeometry(FELT_W, 0.1, FELT_D),
-      new THREE.MeshStandardMaterial({ color: 0x050508, roughness: 1 }),
-    );
-    pocketBed.position.y = -0.03;
-    root.add(pocketBed);
-
-    const addCircleHoles = (shape: { holes: InstanceType<typeof THREE.Path>[] }, r: number) => {
-      for (const [px, pz] of POCKETS) {
-        const hole = new THREE.Path();
-        hole.absarc(px, pz, r, 0, Math.PI * 2, true);
-        shape.holes.push(hole);
-      }
-    };
-
-    // Yeşil keçe (ortada görünür) + delikler
-    const feltShape = new THREE.Shape();
-    feltShape.moveTo(-FELT_W / 2, -FELT_D / 2);
-    feltShape.lineTo(FELT_W / 2, -FELT_D / 2);
-    feltShape.lineTo(FELT_W / 2, FELT_D / 2);
-    feltShape.lineTo(-FELT_W / 2, FELT_D / 2);
-    feltShape.closePath();
-    addCircleHoles(feltShape, POCKET_R);
+    // --- Yeşil oyun zemini (ortanın tamamı) ---
     const feltMat = makeFeltMaterial(THREE, '#1a8f42', assets);
-    feltMat.side = THREE.DoubleSide;
-    feltMat.depthWrite = true;
-    const felt = new THREE.Mesh(new THREE.ShapeGeometry(feltShape, 56), feltMat);
-    felt.rotation.x = -Math.PI / 2;
-    felt.position.y = feltY;
+    const felt = new THREE.Mesh(new THREE.BoxGeometry(FELT_W, 0.09, FELT_D), feltMat);
+    felt.position.y = feltTop - 0.045;
     felt.receiveShadow = true;
-    felt.renderOrder = 1;
     root.add(felt);
 
-    // Yekpare ahşap ÇERÇEVE — ortası boş (keçe/delik görünür)
-    const woodShape = new THREE.Shape();
-    const ow = OUTER_W / 2;
-    const od = OUTER_D / 2;
-    woodShape.moveTo(-ow, -od);
-    woodShape.lineTo(ow, -od);
-    woodShape.lineTo(ow, od);
-    woodShape.lineTo(-ow, od);
-    woodShape.closePath();
-    const inner = new THREE.Path();
-    const iw = FELT_W / 2 - 0.02;
-    const id = FELT_D / 2 - 0.02;
-    inner.moveTo(-iw, -id);
-    inner.lineTo(iw, -id);
-    inner.lineTo(iw, id);
-    inner.lineTo(-iw, id);
-    inner.closePath();
-    woodShape.holes.push(inner);
-    addCircleHoles(woodShape, POCKET_R * 1.05);
-    const woodGeo = new THREE.ExtrudeGeometry(woodShape, {
-      depth: railH,
-      bevelEnabled: false,
-      curveSegments: 40,
-    });
-    const woodFrame = new THREE.Mesh(woodGeo, railWood);
-    // Extrude +Z → rot X 90°: üst yüz y=railH
-    woodFrame.rotation.x = Math.PI / 2;
-    woodFrame.position.y = railH;
-    woodFrame.castShadow = true;
-    woodFrame.receiveShadow = true;
-    root.add(woodFrame);
+    // --- Cepler: keçe üstünde siyah ağız + kuyu ---
+    const pocketWellMat = new THREE.MeshStandardMaterial({ color: 0x030305, roughness: 1 });
+    const pocketMouthMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 1 });
+    for (const [px, pz] of POCKETS) {
+      const mouth = new THREE.Mesh(new THREE.CircleGeometry(POCKET_R, 40), pocketMouthMat);
+      mouth.rotation.x = -Math.PI / 2;
+      mouth.position.set(px, feltTop + 0.004, pz);
+      root.add(mouth);
+      const well = new THREE.Mesh(
+        new THREE.CylinderGeometry(POCKET_R * 0.95, POCKET_R * 1.1, 0.6, 32),
+        pocketWellMat,
+      );
+      well.position.set(px, -0.28, pz);
+      root.add(well);
+    }
 
-    // Yastıklar — keçe üstünde
-    const cushionMat = makeFeltMaterial(THREE, '#1a7a3c', assets);
-    const cush = (w: number, d: number, x: number, z: number) => {
-      if (w < 0.12 || d < 0.12) return;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.17, d), cushionMat);
-      m.position.set(x, feltY + 0.09, z);
+    // --- Ahşap ban: 4 kenar kutusu = içi boş dikdörtgen (orta ASLA ahşap değil) ---
+    const addRail = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), railWood);
+      m.position.set(x, y, z);
       m.castShadow = true;
       m.receiveShadow = true;
       root.add(m);
     };
-    const CUSH_Z = FELT_D / 2 - 0.12;
-    const CUSH_X = FELT_W / 2 - 0.12;
-    const GAP_CORNER = POCKET_R * 0.88;
-    const GAP_SIDE = POCKET_R * 0.92;
+    const railY = railH * 0.45;
+    const gapS = POCKET_R * 2.15; // orta cep boşluğu
+    const gapC = POCKET_R * 2.05; // köşe cep boşluğu
+    // Uzun kenarlar (üst/alt): iki parça — orta cep aralığı
+    for (const sz of [-1, 1] as const) {
+      const z = sz * (OUTER_D / 2 - RAIL_T / 2);
+      const end = OUTER_W / 2 - gapC * 0.45;
+      const mid = gapS / 2;
+      const len = Math.max(0.4, end - mid);
+      const cx = (end + mid) / 2;
+      addRail(len, railH, RAIL_T, -cx, railY, z);
+      addRail(len, railH, RAIL_T, cx, railY, z);
+    }
+    // Kısa kenarlar (sol/sağ): köşe cepleri arası
+    for (const sx of [-1, 1] as const) {
+      const x = sx * (OUTER_W / 2 - RAIL_T / 2);
+      const len = Math.max(0.4, OUTER_D - gapC * 2);
+      addRail(RAIL_T, railH, len, x, railY, 0);
+    }
+    // Köşe ahşap birleşimleri (yekpare dikdörtgen hissi, cepleri kapatmadan)
+    for (const [cx, cz] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ] as const) {
+      // Cep dışındaki L birleşim — küçük dış köşe kapağı
+      const corner = new THREE.Mesh(
+        new THREE.BoxGeometry(RAIL_T * 0.95, railH, RAIL_T * 0.95),
+        railWood,
+      );
+      corner.position.set(
+        cx * (OUTER_W / 2 - RAIL_T / 2),
+        railY,
+        cz * (OUTER_D / 2 - RAIL_T / 2),
+      );
+      corner.castShadow = true;
+      root.add(corner);
+    }
+
+    // --- Yeşil yastıklar (keçe kenarı, cep ağızları açık) ---
+    const cushionMat = makeFeltMaterial(THREE, '#1a7a3c', assets);
+    const cush = (w: number, d: number, x: number, z: number) => {
+      if (w < 0.12 || d < 0.12) return;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), cushionMat);
+      m.position.set(x, feltTop + 0.1, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      root.add(m);
+    };
+    const CUSH_Z = FELT_D / 2 - 0.14;
+    const CUSH_X = FELT_W / 2 - 0.14;
+    const GAP_CORNER = POCKET_R * 0.9;
+    const GAP_SIDE = POCKET_R * 0.95;
     for (const sz of [-1, 1] as const) {
       const z = sz * CUSH_Z;
       const x0 = -CUSH_X + GAP_CORNER;
       const x1 = -GAP_SIDE;
       const len = x1 - x0;
       const cx = (x0 + x1) / 2;
-      cush(len, 0.32, cx, z);
-      cush(len, 0.32, -cx, z);
+      cush(len, 0.34, cx, z);
+      cush(len, 0.34, -cx, z);
     }
     for (const sx of [-1, 1] as const) {
-      const x = sx * CUSH_X;
-      cush(0.32, (CUSH_Z - GAP_CORNER) * 2, x, 0);
+      cush(0.34, (CUSH_Z - GAP_CORNER) * 2, sx * CUSH_X, 0);
     }
 
+    // Diamond nişanlar
     const diamondMat = new THREE.MeshPhysicalMaterial({
       color: 0xf5e6b8,
       roughness: 0.35,
@@ -388,12 +398,12 @@ export function BilliardsGame(props: GameProps) {
       clearcoat: 0.35,
     });
     const diamondGeo = new THREE.SphereGeometry(0.045, 12, 10);
-    const dY = railH + 0.02;
+    const dY = railY + railH * 0.55;
     for (const sz of [-1, 1] as const) {
       const z = sz * (OUTER_D / 2 - RAIL_T / 2);
       for (const t of [-0.67, -0.33, 0.33, 0.67]) {
         const d = new THREE.Mesh(diamondGeo, diamondMat);
-        d.position.set(t * (FELT_W * 0.46), dY, z);
+        d.position.set(t * (FELT_W * 0.45), dY, z);
         root.add(d);
       }
     }
@@ -404,21 +414,6 @@ export function BilliardsGame(props: GameProps) {
         d.position.set(x, dY, t * (FELT_D * 0.4));
         root.add(d);
       }
-    }
-
-    const pocketWellMat = new THREE.MeshStandardMaterial({ color: 0x030305, roughness: 1 });
-    const pocketMouthMat = new THREE.MeshStandardMaterial({ color: 0x08080a, roughness: 1 });
-    for (const [px, pz] of POCKETS) {
-      const mouth = new THREE.Mesh(new THREE.CircleGeometry(POCKET_R * 0.98, 40), pocketMouthMat);
-      mouth.rotation.x = -Math.PI / 2;
-      mouth.position.set(px, feltY - 0.005, pz);
-      root.add(mouth);
-      const well = new THREE.Mesh(
-        new THREE.CylinderGeometry(POCKET_R * 0.92, POCKET_R * 1.08, 0.55, 32),
-        pocketWellMat,
-      );
-      well.position.set(px, -0.22, pz);
-      root.add(well);
     }
 
     const shadowGeo = new THREE.CircleGeometry(R * 1.05, 24);
