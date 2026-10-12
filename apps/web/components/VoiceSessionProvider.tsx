@@ -134,6 +134,8 @@ interface VoiceSessionValue {
   setScreenShareFps: (fps: ScreenShareFps) => Promise<void>;
   /** İzleyici yayın kalitesi (kişisel; anında uygulanır) */
   setScreenShareViewQuality: (id: ScreenShareViewQualityId) => void;
+  /** Uygunsuz içerik engeli (ekran/kamera + izleme); varsayılan açık */
+  setNsfwContentFilter: (enabled: boolean) => void;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
   /** Yerel mute toggle — sadece bu istemci; volume 0 / önceki seviye */
@@ -2184,6 +2186,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const startLocalScreenShareNsfwGuard = useCallback(
     (room: Room) => {
       nsfwShareMonitorRef.current?.stop();
+      nsfwShareMonitorRef.current = null;
+      if (!audioSettingsRef.current.nsfwContentFilter) return;
       nsfwShareMonitorRef.current = startNsfwTrackMonitor({
         intervalMs: NSFW_SAMPLE_INTERVAL_MS,
         getTrack: () => {
@@ -2226,6 +2230,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const startLocalCameraNsfwGuard = useCallback(
     (room: Room) => {
       nsfwCameraMonitorRef.current?.stop();
+      nsfwCameraMonitorRef.current = null;
+      if (!audioSettingsRef.current.nsfwContentFilter) return;
       nsfwCameraMonitorRef.current = startNsfwTrackMonitor({
         intervalMs: NSFW_SAMPLE_INTERVAL_MS,
         getTrack: () => {
@@ -2250,7 +2256,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (Date.now() < nsfwCooldownUntilRef.current) {
+    if (
+      audioSettingsRef.current.nsfwContentFilter &&
+      Date.now() < nsfwCooldownUntilRef.current
+    ) {
       const sec = Math.ceil((nsfwCooldownUntilRef.current - Date.now()) / 1000);
       setError(
         `Uygunsuz içerik engeli aktif — ekran paylaşımı ${sec} sn sonra tekrar denenebilir.`,
@@ -2347,7 +2356,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void refreshAudioDevices();
       return;
     }
-    if (Date.now() < nsfwCooldownUntilRef.current) {
+    if (
+      audioSettingsRef.current.nsfwContentFilter &&
+      Date.now() < nsfwCooldownUntilRef.current
+    ) {
       const sec = Math.ceil((nsfwCooldownUntilRef.current - Date.now()) / 1000);
       setError(
         `Uygunsuz içerik engeli aktif — kamera ${sec} sn sonra tekrar açılabilir.`,
@@ -2382,10 +2394,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     startLocalCameraNsfwGuard,
   ]);
 
-  /** İzleyici: uzak paylaşımda NSFW → izlemeyi kes */
+  /** İzleyici: uzak paylaşımda NSFW → izlemeyi kes (filtre açıksa) */
   useEffect(() => {
     const share = activeScreenShare;
-    if (!share || share.isLocal || screenShareViewPaused) return;
+    if (
+      !share ||
+      share.isLocal ||
+      screenShareViewPaused ||
+      !audioSettings.nsfwContentFilter
+    ) {
+      return;
+    }
 
     let stopped = false;
     let hits = 0;
@@ -2436,7 +2455,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         window.clearInterval(timer);
       }
     };
-  }, [activeScreenShare, screenShareViewPaused, pauseScreenShareView]);
+  }, [
+    activeScreenShare,
+    screenShareViewPaused,
+    pauseScreenShareView,
+    audioSettings.nsfwContentFilter,
+  ]);
 
   const setVideoDevice = useCallback(
     async (deviceId: string) => {
@@ -2625,6 +2649,25 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [persistAudio, applyScreenShareView],
   );
 
+  const setNsfwContentFilter = useCallback(
+    (enabled: boolean) => {
+      const nsfwContentFilter = Boolean(enabled);
+      persistAudio({ ...audioSettingsRef.current, nsfwContentFilter });
+      const room = roomRef.current;
+      if (!nsfwContentFilter) {
+        nsfwShareMonitorRef.current?.stop();
+        nsfwShareMonitorRef.current = null;
+        nsfwCameraMonitorRef.current?.stop();
+        nsfwCameraMonitorRef.current = null;
+        return;
+      }
+      if (!room) return;
+      if (screenSharingRef.current) startLocalScreenShareNsfwGuard(room);
+      if (cameraEnabled) startLocalCameraNsfwGuard(room);
+    },
+    [persistAudio, startLocalScreenShareNsfwGuard, startLocalCameraNsfwGuard, cameraEnabled],
+  );
+
   const toggleNoiseCancellation = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
@@ -2751,6 +2794,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareResolution,
       setScreenShareFps,
       setScreenShareViewQuality,
+      setNsfwContentFilter,
       setParticipantVolume,
       getParticipantVolume,
       toggleLocalMuteParticipant,
@@ -2811,6 +2855,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareResolution,
       setScreenShareFps,
       setScreenShareViewQuality,
+      setNsfwContentFilter,
       setParticipantVolume,
       getParticipantVolume,
       toggleLocalMuteParticipant,

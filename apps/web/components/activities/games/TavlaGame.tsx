@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Material, Mesh, PerspectiveCamera, Texture } from 'three';
 import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
-import { disposeObject, isMyTurn, pointerNdc, turnIndex, type GameProps } from '../three/sceneUtils';
+import {
+  disposeObject,
+  isMyTurn,
+  labelFor,
+  pointerNdc,
+  turnIndex,
+  type GameProps,
+} from '../three/sceneUtils';
+import { GameHud, GameHudButton } from '../three/GameHud';
 import { GameAudio } from '@/lib/game-audio';
 
 type Board = { points: number[]; bar: [number, number]; off: [number, number] };
@@ -569,74 +577,78 @@ export function TavlaGame(props: GameProps) {
     };
   }, []);
 
-  const statusText = winner !== null
-    ? `${winner === 0 ? 'Beyaz' : 'Mor'} kazandı!`
-    : !canPlay || me === null
-      ? `İzleyici · Sıra: ${activeColor}`
-      : busy
-        ? 'Hamle gönderiliyor…'
-        : myTurn
-          ? dice.length === 0
-            ? 'Senin sıran — zar at'
-            : hasLegal
-              ? 'Senin sıran — bir pul seç, sonra hedef noktaya tıkla'
-              : 'Hamle yok — sıra geçiliyor…'
-          : `Rakip oynuyor (${activeColor})`;
+  const p0 = session.playerIds[0];
+  const p1 = session.playerIds[1];
+  const name0 = p0 ? labelFor(props, p0) : 'Beyaz';
+  const name1 = p1 ? labelFor(props, p1) : 'Mor';
+  const winnerName =
+    winner === null ? null : winner === 0 ? `${name0} (Beyaz)` : `${name1} (Mor)`;
+
+  const statusText =
+    winnerName !== null
+      ? `${winnerName} kazandı!`
+      : !canPlay || me === null
+        ? `İzleyici · Sıra: ${activeColor === 'Beyaz' ? name0 : name1}`
+        : busy
+          ? 'Hamle gönderiliyor…'
+          : myTurn
+            ? dice.length === 0
+              ? 'Senin sıran — zar at'
+              : hasLegal
+                ? 'Pul seç → hedefe tıkla'
+                : 'Hamle yok — sıra geç'
+            : `Rakip: ${activeColor === 'Beyaz' ? name0 : name1}`;
 
   return (
-    <ThreeSceneHost className="absolute inset-0" onReady={onReady}>
-      <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
-        <span className="inline-flex w-fit rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
-          Tavla · {statusText}
-        </span>
-        <span className="inline-flex w-fit rounded-lg bg-[#11131e]/70 px-3 py-1 text-[11px] text-[#bd93f9]">
-          Sen: {me === null ? 'izleyici' : me === 0 ? 'Beyaz' : 'Mor'} · Zarlar:{' '}
-          {dice.length > 0 ? dice.join(' · ') : '—'} · Tur {turn + 1}
-        </span>
-        {error && (
-          <span className="inline-flex w-fit rounded-lg bg-[#ff5555]/20 px-3 py-1 text-[11px] text-[#ff5555]">
-            {error}
+    <ThreeSceneHost className="absolute inset-0 min-h-0 touch-none overflow-hidden" onReady={onReady}>
+      <GameHud
+        title="Tavla"
+        status={statusText}
+        error={error}
+        meta={
+          <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+            {me === null ? 'İzleyici' : me === 0 ? `Sen: ${name0} · Beyaz` : `Sen: ${name1} · Mor`}
+            {' · '}Zarlar: {dice.length > 0 ? dice.join(' · ') : '—'}
           </span>
-        )}
-      </div>
-      <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-[#bd93f9]/30 bg-[#11131e]/85 p-2 text-[11px] text-[#f8f8f2]">
-        <p>Beyaz: {board.off[0]}/15 toplandı · bar {board.bar[0]}</p>
-        <p>Mor: {board.off[1]}/15 toplandı · bar {board.bar[1]}</p>
-      </div>
-      {canPlay && me !== null && (
-        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2">
-          {myTurn && dice.length === 0 && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => actions.roll()}
-              className="rounded-lg bg-[#bd93f9] px-4 py-1.5 text-xs font-semibold text-[#11131e] disabled:opacity-50"
-            >
-              Zar At
-            </button>
-          )}
-          {myTurn && dice.length > 0 && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => actions.pass()}
-              className="rounded-lg bg-[#44307a] px-4 py-1.5 text-xs font-semibold text-[#f8f8f2] disabled:opacity-50"
-            >
-              Sırayı Geç
-            </button>
-          )}
-          {winner !== null && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => actions.newGame()}
-              className="rounded-lg bg-[#50fa7b] px-4 py-1.5 text-xs font-semibold text-[#11131e] disabled:opacity-50"
-            >
-              Yeni Oyun
-            </button>
-          )}
-        </div>
-      )}
+        }
+        players={[
+          {
+            id: p0 ?? '0',
+            label: `${name0} · Beyaz`,
+            active: winner === null && turnIndex(session) === 0,
+            detail: `${board.off[0]}/15`,
+            highlight: board.bar[0] ? `bar ${board.bar[0]}` : undefined,
+          },
+          {
+            id: p1 ?? '1',
+            label: `${name1} · Mor`,
+            active: winner === null && turnIndex(session) === 1,
+            detail: `${board.off[1]}/15`,
+            highlight: board.bar[1] ? `bar ${board.bar[1]}` : undefined,
+          },
+        ]}
+        actions={
+          canPlay && me !== null ? (
+            <>
+              {myTurn && dice.length === 0 && (
+                <GameHudButton disabled={busy} onClick={() => actions.roll()}>
+                  Zar At
+                </GameHudButton>
+              )}
+              {myTurn && dice.length > 0 && (
+                <GameHudButton variant="secondary" disabled={busy} onClick={() => actions.pass()}>
+                  Sırayı Geç
+                </GameHudButton>
+              )}
+              {winner !== null && (
+                <GameHudButton variant="success" disabled={busy} onClick={() => actions.newGame()}>
+                  Yeni Oyun
+                </GameHudButton>
+              )}
+            </>
+          ) : undefined
+        }
+      />
     </ThreeSceneHost>
   );
 }

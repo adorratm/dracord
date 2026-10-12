@@ -7,6 +7,8 @@ export type GameProps = {
   userId: string | undefined;
   canPlay: boolean;
   onPatch: (state: Record<string, unknown>) => Promise<void>;
+  /** userId → görünen ad (sunucu üyeleri / ses katılımcıları) */
+  nameByUserId?: Record<string, string>;
 };
 
 export function disposeMaterial(mat: Material) {
@@ -54,9 +56,26 @@ export function isMyTurn(p: GameProps): boolean {
   return idx >= 0 && idx === turnIndex(p.session);
 }
 
-export function playerLabel(session: ActivitySessionDto, id: string, userId?: string) {
+export function playerLabel(
+  session: ActivitySessionDto,
+  id: string,
+  userId?: string,
+  nameByUserId?: Record<string, string>,
+) {
   const idx = session.playerIds.indexOf(id);
-  return `Oyuncu ${idx + 1}${id === userId ? ' (sen)' : ''}`;
+  const mapped = nameByUserId?.[id]?.trim();
+  const base =
+    mapped && mapped.length > 0
+      ? mapped
+      : idx >= 0
+        ? `Oyuncu ${idx + 1}`
+        : id.slice(0, 8);
+  return `${base}${id === userId ? ' (sen)' : ''}`;
+}
+
+/** GameProps üzerinden etiket */
+export function labelFor(p: GameProps, id: string) {
+  return playerLabel(p.session, id, p.userId, p.nameByUserId);
 }
 
 export const DRACULA = {

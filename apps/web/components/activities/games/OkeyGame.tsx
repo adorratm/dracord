@@ -1,171 +1,37 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Material, Mesh, PerspectiveCamera, Texture } from 'three';
 import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import {
   disposeObject,
   isMyTurn,
-  playerLabel,
+  labelFor,
   pointerNdc,
   turnIndex,
   type GameProps,
 } from '../three/sceneUtils';
+import { GameHud, GameHudButton } from '../three/GameHud';
 import { GameAudio } from '@/lib/game-audio';
-
-/**
- * Taş kodu: 0..103 = (set*52 + renk*13 + (sayı-1)), 104/105 = sahte okey.
- * hands: { [userId]: number[], _deck, _discard, _ind (gösterge), _win ([oyuncu idx]) }
- */
-const TILE_COUNT = 106;
-const COLOR_HEX = ['#d4a017', '#2563eb', '#1f2937', '#dc2626'];
-const COLOR_NAME = ['Sarı', 'Mavi', 'Siyah', 'Kırmızı'];
-
-const colorOf = (code: number) => Math.floor((code % 52) / 13);
-const numOf = (code: number) => (code % 13) + 1;
-
-type Okey = { c: number; n: number };
-type NT = { c: number; n: number };
-
-function okeyFromIndicator(ind: number | undefined): Okey | null {
-  if (ind === undefined || ind >= 104) return null;
-  return { c: colorOf(ind), n: (numOf(ind) % 13) + 1 };
-}
-
-function sortKey(code: number) {
-  return code >= 104 ? 1000 + code : colorOf(code) * 13 + numOf(code);
-}
-function sortHand(codes: number[]) {
-  return [...codes].sort((a, b) => sortKey(a) - sortKey(b) || a - b);
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
-}
-
-/** 14 taşın tamamı geçerli per/seri mi (okey = joker) */
-function solve(tiles: NT[], wild: number): boolean {
-  if (tiles.length === 0) return wild === 0 || wild >= 3;
-  const t = tiles[0]!;
-  const rest = tiles.slice(1);
-
-  // Per: aynı sayı, farklı renk
-  const seen = new Set<number>([t.c]);
-  const cand: number[] = [];
-  rest.forEach((x, i) => {
-    if (x.n === t.n && !seen.has(x.c)) {
-      seen.add(x.c);
-      cand.push(i);
-    }
-  });
-  for (let mask = 0; mask < 1 << cand.length; mask++) {
-    const idxs = cand.filter((_, k) => (mask & (1 << k)) !== 0);
-    for (const total of [3, 4]) {
-      const w = total - 1 - idxs.length;
-      if (w < 0 || w > wild) continue;
-      if (
-        solve(
-          rest.filter((_, i) => !idxs.includes(i)),
-          wild - w,
-        )
-      )
-        return true;
-    }
-  }
-
-  // Seri: aynı renk, ardışık sayı (başa j joker eklenebilir)
-  for (let j = 0; j <= Math.min(wild, t.n - 1); j++) {
-    let used = j;
-    let remain = rest;
-    let end = t.n;
-    let len = j + 1;
-    for (;;) {
-      if (len >= 3 && solve(remain, wild - used)) return true;
-      const nextN = end + 1;
-      if (nextN > 13) break;
-      const k = remain.findIndex((x) => x.c === t.c && x.n === nextN);
-      if (k >= 0) remain = remain.filter((_, i) => i !== k);
-      else if (used < wild) used++;
-      else break;
-      end = nextN;
-      len++;
-    }
-  }
-  return false;
-}
-
-function isWinningHand(codes: number[], ind: number | undefined): boolean {
-  const okey = okeyFromIndicator(ind);
-  if (!okey || codes.length !== 14) return false;
-  let wild = 0;
-  const tiles: NT[] = [];
-  for (const code of codes) {
-    if (code >= 104) tiles.push({ c: okey.c, n: okey.n });
-    else if (colorOf(code) === okey.c && numOf(code) === okey.n) wild++;
-    else tiles.push({ c: colorOf(code), n: numOf(code) });
-  }
-  tiles.sort((a, b) => a.c - b.c || a.n - b.n);
-  return solve(tiles, wild);
-}
-
-type OkeyState = {
-  hands: Record<string, number[]>;
-  deck: number[];
-  discard: number[];
-  ind: number | undefined;
-  win: number | undefined;
-  scores: Record<string, number>;
-  dealt: boolean;
-};
-
-function readState(state: Record<string, unknown>): OkeyState {
-  const hands: Record<string, number[]> = {};
-  const raw = state.hands;
-  const ints = (v: unknown) =>
-    Array.isArray(v)
-      ? v.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < TILE_COUNT)
-      : [];
-  let deck: number[] = [];
-  let discard: number[] = [];
-  let ind: number | undefined;
-  let win: number | undefined;
-  let dealt = false;
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      if (k === '_deck') deck = ints(v);
-      else if (k === '_discard') discard = ints(v);
-      else if (k === '_ind') ind = ints(v)[0];
-      else if (k === '_win') win = Array.isArray(v) ? Number(v[0]) : undefined;
-      else hands[k] = ints(v);
-    }
-    dealt = ind !== undefined;
-  }
-  const scores: Record<string, number> = {};
-  if (state.scores && typeof state.scores === 'object' && !Array.isArray(state.scores)) {
-    for (const [k, v] of Object.entries(state.scores as Record<string, unknown>)) {
-      scores[k] = Number(v) || 0;
-    }
-  }
-  return { hands, deck, discard, ind, win, scores, dealt };
-}
-
-function packHands(
-  hands: Record<string, number[]>,
-  deck: number[],
-  discard: number[],
-  ind: number | undefined,
-  win?: number,
-) {
-  const out: Record<string, number[]> = { ...hands, _deck: deck, _discard: discard };
-  if (ind !== undefined) out._ind = [ind];
-  if (win !== undefined) out._win = [win];
-  return out;
-}
+import {
+  COLOR_HEX,
+  COLOR_NAME,
+  HAND_SIZE,
+  ELIMINATION_SCORE,
+  OPEN_THRESHOLD,
+  TILE_COUNT,
+  canOpen,
+  colorOf,
+  handPenalty,
+  isValidMeld,
+  numOf,
+  okeyFromIndicator,
+  packHands,
+  readOkey101,
+  sortHand,
+  shuffle,
+  type OkeyFace,
+} from './okey101';
 
 type Pick = { kind: 'hand'; index: number } | { kind: 'deck' } | { kind: 'discard' };
 
@@ -174,22 +40,29 @@ export function OkeyGame(props: GameProps) {
   const propsRef = useRef(props);
   propsRef.current = props;
   const syncRef = useRef<(() => void) | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
-  const selectedRef = useRef<number | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const selectedRef = useRef<number[]>([]);
   selectedRef.current = selected;
+  const [staged, setStaged] = useState<number[][]>([]);
+  const stagedRef = useRef<number[][]>([]);
+  stagedRef.current = staged;
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const [error, setError] = useState<string | null>(null);
 
-  const st = readState(session.state);
+  const st = readOkey101(session.state);
   const myTurn = isMyTurn(props);
-  const myHand = userId ? (st.hands[userId] ?? []) : [];
   const okey = okeyFromIndicator(st.ind);
+  const myHand = useMemo(
+    () => (userId ? sortHand(st.hands[userId] ?? [], okey) : []),
+    [userId, st.hands, okey],
+  );
+  const opened = Boolean(userId && st.opened[userId]);
   const phase: 'draw' | 'discard' | 'wait' =
     !myTurn || !st.dealt || st.win !== undefined
       ? 'wait'
-      : myHand.length >= 15
+      : myHand.length > HAND_SIZE
         ? 'discard'
         : 'draw';
 
@@ -206,6 +79,17 @@ export function OkeyGame(props: GameProps) {
     }
   }, []);
 
+  const takeSelectedCodes = (hand: number[], idxs: number[]) => {
+    const set = new Set(idxs);
+    const taken: number[] = [];
+    const rest: number[] = [];
+    hand.forEach((c, i) => {
+      if (set.has(i)) taken.push(c);
+      else rest.push(c);
+    });
+    return { taken, rest };
+  };
+
   const actions = {
     deal: () => {
       const p = propsRef.current;
@@ -214,19 +98,35 @@ export function OkeyGame(props: GameProps) {
       const indPos = order.findIndex((c) => c < 104);
       const ind = order.splice(indPos, 1)[0]!;
       const hands: Record<string, number[]> = {};
+      // 101: herkese 21; ilk oyuncu 22 ile başlar (atmayla tur açılır)
       p.session.playerIds.forEach((id, i) => {
-        hands[id] = order.splice(0, i === 0 ? 15 : 14);
+        hands[id] = order.splice(0, i === 0 ? HAND_SIZE + 1 : HAND_SIZE);
       });
-      const scores = readState(p.session.state).scores;
+      const prev = readOkey101(p.session.state);
+      const melds: Record<string, number[][]> = {};
+      const openedMap: Record<string, boolean> = {};
+      for (const id of p.session.playerIds) {
+        melds[id] = [];
+        openedMap[id] = false;
+      }
+      setSelected([]);
+      setStaged([]);
       GameAudio.deal();
-      void send({ hands: packHands(hands, order, [], ind), scores, turn: Number(p.session.state.turn ?? 0) + 1 });
+      void send({
+        hands: packHands(hands, order, [], ind, undefined, prev.eliminated),
+        scores: prev.scores,
+        melds,
+        opened: openedMap,
+        turn: Number(p.session.state.turn ?? 0),
+      });
     },
     draw: (from: 'deck' | 'discard') => {
       const p = propsRef.current;
-      const s = readState(p.session.state);
+      const s = readOkey101(p.session.state);
       if (!p.userId || !isMyTurn(p) || s.win !== undefined) return;
+      if (s.eliminated.includes(p.userId)) return;
       const hand = s.hands[p.userId] ?? [];
-      if (hand.length >= 15) return;
+      if (hand.length > HAND_SIZE) return;
       let tile: number | undefined;
       let deck = s.deck;
       let discard = s.discard;
@@ -243,39 +143,204 @@ export function OkeyGame(props: GameProps) {
       }
       GameAudio.tile();
       void send({
-        hands: packHands({ ...s.hands, [p.userId]: [...hand, tile] }, deck, discard, s.ind),
+        hands: packHands(
+          { ...s.hands, [p.userId]: [...hand, tile] },
+          deck,
+          discard,
+          s.ind,
+          s.win,
+          s.eliminated,
+        ),
+        melds: s.melds,
+        opened: s.opened,
+        scores: s.scores,
       });
     },
-    discard: (declare: boolean) => {
+    stageGroup: () => {
       const p = propsRef.current;
-      const s = readState(p.session.state);
-      if (!p.userId || !isMyTurn(p) || s.win !== undefined) return;
-      const hand = sortHand(s.hands[p.userId] ?? []);
-      const idx = selectedRef.current;
-      if (hand.length < 15 || idx === null || hand[idx] === undefined) return;
-      const tile = hand[idx]!;
-      const rest = hand.filter((_, i) => i !== idx);
-      const turn = Number(p.session.state.turn ?? 0) + 1;
-      if (declare) {
-        if (!isWinningHand(rest, s.ind)) {
-          setError('El henüz bitmiyor — per/seri düzenini kontrol et');
+      const s = readOkey101(p.session.state);
+      if (!p.userId || !isMyTurn(p)) return;
+      const hand = sortHand(s.hands[p.userId] ?? [], okeyFromIndicator(s.ind));
+      const idxs = selectedRef.current;
+      if (idxs.length < 2) {
+        setError('Grup için en az 2 taş seç');
+        return;
+      }
+      const { taken } = takeSelectedCodes(hand, idxs);
+      const ok = okeyFromIndicator(s.ind);
+      const pairsOnly = taken.length === 2;
+      if (!pairsOnly && !isValidMeld(taken, ok)) {
+        setError('Seçim geçerli per/seri değil');
+        return;
+      }
+      if (pairsOnly) {
+        const [a, b] = taken;
+        const same =
+          a !== undefined &&
+          b !== undefined &&
+          ((a >= 104 && b >= 104) ||
+            (colorOf(a) === colorOf(b) && numOf(a) === numOf(b)) ||
+            a >= 104 ||
+            b >= 104);
+        if (!same && !(ok && (asJokerPair(taken, ok)))) {
+          setError('Çift değil');
           return;
         }
+      }
+      setStaged((prev) => [...prev, taken]);
+      setSelected([]);
+      GameAudio.tile();
+    },
+    clearStaged: () => {
+      setStaged([]);
+      setSelected([]);
+    },
+    open: () => {
+      const p = propsRef.current;
+      const s = readOkey101(p.session.state);
+      if (!p.userId || !isMyTurn(p) || s.opened[p.userId]) return;
+      const ok = okeyFromIndicator(s.ind);
+      const groups = stagedRef.current;
+      const check = canOpen(groups, ok);
+      if (!check.ok) {
+        setError(check.reason ?? 'Açılamaz');
+        return;
+      }
+      const hand = sortHand(s.hands[p.userId] ?? [], ok);
+      const used = groups.flat();
+      const rest = [...hand];
+      for (const code of used) {
+        const i = rest.indexOf(code);
+        if (i < 0) {
+          setError('Seçilen taşlar elde yok');
+          return;
+        }
+        rest.splice(i, 1);
+      }
+      GameAudio.deal();
+      setStaged([]);
+      setSelected([]);
+      void send({
+        hands: packHands(
+          { ...s.hands, [p.userId]: rest },
+          s.deck,
+          s.discard,
+          s.ind,
+          s.win,
+          s.eliminated,
+        ),
+        melds: { ...s.melds, [p.userId]: [...(s.melds[p.userId] ?? []), ...groups] },
+        opened: { ...s.opened, [p.userId]: true },
+        scores: s.scores,
+      });
+    },
+    lay: () => {
+      const p = propsRef.current;
+      const s = readOkey101(p.session.state);
+      if (!p.userId || !isMyTurn(p) || !s.opened[p.userId]) return;
+      const groups = stagedRef.current;
+      if (groups.length === 0) {
+        setError('Masaya koymak için grup hazırla');
+        return;
+      }
+      const ok = okeyFromIndicator(s.ind);
+      for (const g of groups) {
+        if (g.length === 2 || !isValidMeld(g, ok)) {
+          setError('Açıldıktan sonra yalnızca geçerli per/seri konur');
+          return;
+        }
+      }
+      const hand = sortHand(s.hands[p.userId] ?? [], ok);
+      const used = groups.flat();
+      const rest = [...hand];
+      for (const code of used) {
+        const i = rest.indexOf(code);
+        if (i < 0) {
+          setError('Seçilen taşlar elde yok');
+          return;
+        }
+        rest.splice(i, 1);
+      }
+      GameAudio.tile();
+      setStaged([]);
+      setSelected([]);
+      void send({
+        hands: packHands(
+          { ...s.hands, [p.userId]: rest },
+          s.deck,
+          s.discard,
+          s.ind,
+          s.win,
+          s.eliminated,
+        ),
+        melds: { ...s.melds, [p.userId]: [...(s.melds[p.userId] ?? []), ...groups] },
+        opened: s.opened,
+        scores: s.scores,
+      });
+    },
+    discard: () => {
+      const p = propsRef.current;
+      const s = readOkey101(p.session.state);
+      if (!p.userId || !isMyTurn(p) || s.win !== undefined) return;
+      const ok = okeyFromIndicator(s.ind);
+      const hand = sortHand(s.hands[p.userId] ?? [], ok);
+      const idxs = selectedRef.current;
+      if (hand.length <= HAND_SIZE || idxs.length !== 1) {
+        setError('Atmak için tam bir taş seç');
+        return;
+      }
+      const idx = idxs[0]!;
+      const tile = hand[idx];
+      if (tile === undefined) return;
+      const rest = hand.filter((_, i) => i !== idx);
+      const turn = Number(p.session.state.turn ?? 0) + 1;
+      setSelected([]);
+      setStaged([]);
+
+      // El bitti (açılmış ve taş kalmadı)
+      if (rest.length === 0 && s.opened[p.userId]) {
+        const scores = { ...s.scores };
+        const eliminated = [...s.eliminated];
+        for (const id of p.session.playerIds) {
+          if (id === p.userId || eliminated.includes(id)) continue;
+          const pen = handPenalty(s.hands[id] ?? [], ok);
+          scores[id] = (scores[id] ?? 0) + pen;
+          if (scores[id]! >= ELIMINATION_SCORE && !eliminated.includes(id)) {
+            eliminated.push(id);
+          }
+        }
         const me = p.session.playerIds.indexOf(p.userId);
-        const scores = { ...s.scores, [p.userId]: (s.scores[p.userId] ?? 0) + 1 };
-        setSelected(null);
         GameAudio.win();
         void send({
-          hands: packHands({ ...s.hands, [p.userId]: rest }, s.deck, [...s.discard, tile], s.ind, me),
+          hands: packHands(
+            { ...s.hands, [p.userId]: [] },
+            s.deck,
+            [...s.discard, tile],
+            s.ind,
+            me,
+            eliminated,
+          ),
+          melds: s.melds,
+          opened: s.opened,
           scores,
           turn,
         });
         return;
       }
-      setSelected(null);
+
       GameAudio.discard();
       void send({
-        hands: packHands({ ...s.hands, [p.userId]: rest }, s.deck, [...s.discard, tile], s.ind),
+        hands: packHands(
+          { ...s.hands, [p.userId]: rest },
+          s.deck,
+          [...s.discard, tile],
+          s.ind,
+          s.win,
+          s.eliminated,
+        ),
+        melds: s.melds,
+        opened: s.opened,
+        scores: s.scores,
         turn,
       });
     },
@@ -284,24 +349,27 @@ export function OkeyGame(props: GameProps) {
       if (busyRef.current) return;
       if (pick.kind === 'deck') return actions.draw('deck');
       if (pick.kind === 'discard') return actions.draw('discard');
-      const s = readState(p.session.state);
-      const hand = p.userId ? (s.hands[p.userId] ?? []) : [];
+      const s = readOkey101(p.session.state);
+      const hand = p.userId
+        ? sortHand(s.hands[p.userId] ?? [], okeyFromIndicator(s.ind))
+        : [];
       if (!p.userId || pick.index >= hand.length) return;
-      if (selectedRef.current === pick.index && hand.length >= 15 && isMyTurn(p)) {
-        actions.discard(false);
-      } else {
-        GameAudio.tile();
-        setSelected(pick.index);
-      }
+      GameAudio.tile();
+      setSelected((prev) =>
+        prev.includes(pick.index)
+          ? prev.filter((i) => i !== pick.index)
+          : [...prev, pick.index],
+      );
     },
   };
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
 
   useEffect(() => {
-    setSelected(null);
+    setSelected([]);
+    setStaged([]);
     syncRef.current?.();
-  }, [session.state.hands, session.state.turn, session.playerIds, userId]);
+  }, [session.state.hands, session.state.turn, session.state.melds, session.state.opened, session.playerIds, userId]);
 
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, renderer } = api;
@@ -313,7 +381,6 @@ export function OkeyGame(props: GameProps) {
     const dyn = new THREE.Group();
     root.add(dyn);
 
-    // --- Masa ---
     const top = new THREE.Mesh(
       new THREE.CylinderGeometry(9.6, 9.9, 0.6, 48),
       new THREE.MeshStandardMaterial({ color: 0x3b2a4f, roughness: 0.55 }),
@@ -334,7 +401,6 @@ export function OkeyGame(props: GameProps) {
     rim.position.y = 0.02;
     root.add(rim);
 
-    // --- Taş kaynakları ---
     const tileGeo = new THREE.BoxGeometry(0.8, 0.22, 1.1);
     const sideMat = new THREE.MeshStandardMaterial({ color: 0xe9dfc6, roughness: 0.5 });
     const textures: Texture[] = [];
@@ -395,15 +461,15 @@ export function OkeyGame(props: GameProps) {
       return mats;
     };
 
-    const faceKey = (code: number, okey: Okey | null) => {
+    const faceKey = (code: number, face: OkeyFace | null) => {
       if (code >= 104) return 'j-0-0';
       const c = colorOf(code);
       const n = numOf(code);
-      const wild = okey && okey.c === c && okey.n === n ? 1 : 0;
+      const wild = face && face.c === c && face.n === n ? 1 : 0;
       return `${c}-${n}-${wild}`;
     };
 
-    type Tm = Mesh & { userData: { pick?: Pick; lift?: number; hover?: boolean; baseY?: number } };
+    type Tm = Mesh & { userData: { pick?: Pick; baseY?: number } };
     const pickables: Tm[] = [];
     const handMeshes: Tm[] = [];
 
@@ -412,9 +478,15 @@ export function OkeyGame(props: GameProps) {
       pickables.length = 0;
       handMeshes.length = 0;
     };
-    const dynDisposables: Material[] = [];
 
-    const addTile = (key: string, x: number, z: number, rotY: number, scale: number, pick?: Pick) => {
+    const addTile = (
+      key: string,
+      x: number,
+      z: number,
+      rotY: number,
+      scale: number,
+      pick?: Pick,
+    ) => {
       const m = new THREE.Mesh(tileGeo, makeFace(key)) as unknown as Tm;
       m.position.set(x, 0.11, z);
       m.rotation.y = rotY;
@@ -429,14 +501,13 @@ export function OkeyGame(props: GameProps) {
     const sync = () => {
       clearDyn();
       const p = propsRef.current;
-      const s = readState(p.session.state);
-      const okey = okeyFromIndicator(s.ind);
+      const s = readOkey101(p.session.state);
+      const face = okeyFromIndicator(s.ind);
       const players = p.session.playerIds;
       const myIdx = p.userId ? players.indexOf(p.userId) : -1;
       const base = myIdx >= 0 ? myIdx : 0;
       const winnerRevealed = s.win !== undefined;
 
-      // Deste
       if (s.dealt) {
         const h = 0.2 + Math.min(s.deck.length, 60) * 0.03;
         const deckMesh = new THREE.Mesh(
@@ -447,45 +518,55 @@ export function OkeyGame(props: GameProps) {
         deckMesh.userData = { pick: { kind: 'deck' } };
         dyn.add(deckMesh);
         pickables.push(deckMesh);
-        // Atılan taş yığını (en üst)
         const topDisc = s.discard[s.discard.length - 1];
         if (topDisc !== undefined) {
-          addTile(faceKey(topDisc, okey), 1.8, 0, 0.1, 1.15, { kind: 'discard' });
-        } else {
-          const ring = new THREE.Mesh(
-            new THREE.RingGeometry(0.45, 0.55, 24),
-            new THREE.MeshBasicMaterial({ color: 0xbd93f9, side: THREE.DoubleSide }),
-          );
-          ring.rotation.x = -Math.PI / 2;
-          ring.position.set(1.8, 0.02, 0);
-          dyn.add(ring);
-          dynDisposables.push(ring.material as Material);
+          addTile(faceKey(topDisc, face), 1.8, 0, 0.1, 1.15, { kind: 'discard' });
         }
-        // Gösterge
-        if (s.ind !== undefined) addTile(faceKey(s.ind, okey), -4.6, 0, 0, 1, undefined);
-        dyn.updateMatrixWorld();
+        if (s.ind !== undefined) addTile(faceKey(s.ind, face), -4.6, 0, 0, 1);
+
+        // Açılan meldler (masa ortası)
+        let meldX = -3.2;
+        for (const id of players) {
+          const groups = s.melds[id] ?? [];
+          for (const g of groups) {
+            g.forEach((code, k) => {
+              addTile(faceKey(code, face), meldX + k * 0.42, -1.6, 0, 0.55);
+            });
+            meldX += g.length * 0.42 + 0.35;
+            if (meldX > 4.5) {
+              meldX = -3.2;
+            }
+          }
+        }
       }
 
-      // Oyuncu elleri
       players.forEach((id, i) => {
         const rel = (i - base + players.length) % Math.max(1, players.length);
         const raw = s.hands[id] ?? [];
         const mine = id === p.userId;
-        const hand = mine || winnerRevealed ? sortHand(raw) : raw;
+        const hand = mine || winnerRevealed ? sortHand(raw, face) : raw;
         const n = hand.length;
+        const spacing = mine ? Math.min(0.78, 12 / Math.max(1, n)) : 0.48;
         hand.forEach((code, k) => {
-          const key = mine || winnerRevealed ? faceKey(code, okey) : 'back';
+          const key = mine || winnerRevealed ? faceKey(code, face) : 'back';
           if (rel === 0 && mine) {
-            const m = addTile(key, (k - (n - 1) / 2) * 0.9, 4.4, 0, 1, { kind: 'hand', index: k });
+            const m = addTile(
+              key,
+              (k - (n - 1) / 2) * spacing,
+              4.5,
+              0,
+              0.92,
+              { kind: 'hand', index: k },
+            );
             handMeshes.push(m);
           } else if (rel === 0) {
-            addTile(key, (k - (n - 1) / 2) * 0.62, 4.6, 0, 0.72);
+            addTile(key, (k - (n - 1) / 2) * 0.48, 4.7, 0, 0.55);
           } else if (rel === 2 || (players.length === 2 && rel === 1)) {
-            addTile(key, (k - (n - 1) / 2) * 0.62, -4.7, Math.PI, 0.72);
+            addTile(key, (k - (n - 1) / 2) * 0.48, -4.7, Math.PI, 0.55);
           } else if (rel === 1) {
-            addTile(key, 7.1, (k - (n - 1) / 2) * 0.55, -Math.PI / 2, 0.72);
+            addTile(key, 7.1, (k - (n - 1) / 2) * 0.42, -Math.PI / 2, 0.55);
           } else {
-            addTile(key, -7.1, (k - (n - 1) / 2) * 0.55, Math.PI / 2, 0.72);
+            addTile(key, -7.1, (k - (n - 1) / 2) * 0.42, Math.PI / 2, 0.55);
           }
         });
       });
@@ -493,7 +574,6 @@ export function OkeyGame(props: GameProps) {
     syncRef.current = sync;
     sync();
 
-    // --- Etkileşim ---
     const raycaster = new THREE.Raycaster();
     let hover: Tm | null = null;
     let downX = 0;
@@ -529,16 +609,17 @@ export function OkeyGame(props: GameProps) {
       const now = performance.now();
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      const asp = (camera as PerspectiveCamera).aspect || 1.7;
+      const asp = camera.aspect || 1.7;
       const f = Math.max(1, 1.8 / asp);
-      camera.position.set(0, 10.8 * f, 9.8 * f);
-      camera.lookAt(0, 0, 1.2);
-      const sel = selectedRef.current;
+      camera.position.set(0, 11.2 * f, 10.2 * f);
+      camera.lookAt(0, 0, 1.0);
+      const sel = new Set(selectedRef.current);
       handMeshes.forEach((m, i) => {
-        const target = (m.userData.baseY ?? 0.11) + (sel === i ? 0.55 : m === hover ? 0.2 : 0);
-        m.position.y += (target - m.position.y) * Math.min(1, dt * 14);
-        const tz = sel === i ? 4.0 : 4.4;
-        m.position.z += (tz - m.position.z) * Math.min(1, dt * 14);
+        const on = sel.has(i);
+        const target = (m.userData.baseY ?? 0.11) + (on ? 0.5 : m === hover ? 0.18 : 0);
+        m.position.y += (target - m.position.y) * Math.min(1, dt * 16);
+        const tz = on ? 4.1 : 4.5;
+        m.position.z += (tz - m.position.z) * Math.min(1, dt * 16);
       });
     };
     loop();
@@ -555,103 +636,139 @@ export function OkeyGame(props: GameProps) {
       tileGeo.dispose();
       sideMat.dispose();
       matCache.forEach((mats) => mats.forEach((m) => m.dispose()));
-      dynDisposables.forEach((m) => m.dispose());
       textures.forEach((t) => t.dispose());
     };
   }, []);
 
-  const selectedTile =
-    selected !== null ? sortHand(myHand)[selected] : undefined;
-
+  const turnPlayer = session.playerIds[turnIndex(session)];
   const statusText = !canPlay
     ? 'İzleyici'
     : !st.dealt
-      ? 'Taşlar dağıtılmadı'
+      ? '101 Okey — taşları dağıt'
       : st.win !== undefined
         ? 'El bitti'
         : myTurn
           ? phase === 'draw'
-            ? 'Senin sıran — desteden veya yığından taş çek'
-            : 'Senin sıran — bir taş seç ve at'
-          : `Sıra: ${playerLabel(session, session.playerIds[turnIndex(session)] ?? '', userId)}`;
+            ? opened
+              ? 'Çek → masaya koy / at'
+              : `Çek → ${OPEN_THRESHOLD}+ ile aç veya çift aç`
+            : opened
+              ? 'Taş seç → at (el bitince kazan)'
+              : 'Grup hazırla → Aç · sonra bir taş at'
+          : `Sıra: ${turnPlayer ? labelFor(props, turnPlayer) : '—'}`;
+
+  const stagedPts = useMemo(() => {
+    if (!okey || staged.length === 0) return 0;
+    const c = canOpen(staged, okey);
+    return c.points;
+  }, [staged, okey]);
 
   return (
-    <ThreeSceneHost className="absolute inset-0" onReady={onReady}>
-      <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
-        <span className="inline-flex w-fit rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
-          Okey · {statusText}
-        </span>
-        {okey && (
-          <span className="inline-flex w-fit rounded-lg bg-[#11131e]/70 px-3 py-1 text-[11px] text-[#bd93f9]">
-            Okey taşı: {COLOR_NAME[okey.c]} {okey.n} · Deste: {st.deck.length}
-          </span>
-        )}
-        {error && (
-          <span className="inline-flex w-fit rounded-lg bg-[#ff5555]/20 px-3 py-1 text-[11px] text-[#ff5555]">
-            {error}
-          </span>
-        )}
-      </div>
-
-      <div className="pointer-events-none absolute right-3 top-3 min-w-[150px] rounded-lg border border-[#bd93f9]/30 bg-[#11131e]/85 p-2 text-[11px] text-[#f8f8f2]">
-        <p className="mb-1 font-semibold text-[#bd93f9]">Skorlar</p>
-        {session.playerIds.map((id, i) => (
-          <div
-            key={id}
-            className={`flex justify-between gap-3 ${st.dealt && st.win === undefined && turnIndex(session) === i ? 'text-[#50fa7b]' : ''}`}
-          >
-            <span>{playerLabel(session, id, userId)}</span>
-            <span>
-              {st.scores[id] ?? 0} · {st.hands[id]?.length ?? 0} taş
-            </span>
-          </div>
-        ))}
-        {st.win !== undefined && session.playerIds[st.win] && (
-          <p className="mt-1 text-[#f1fa8c]">
-            Eli kazanan: {playerLabel(session, session.playerIds[st.win]!, userId)}
-          </p>
-        )}
-      </div>
-
-      {canPlay && (
-        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2">
-          {(!st.dealt || st.win !== undefined) && (
-            <button
-              type="button"
-              disabled={busy || session.playerIds.length < 2}
-              onClick={() => actions.deal()}
-              className="rounded-lg bg-[#bd93f9] px-4 py-1.5 text-xs font-semibold text-[#11131e] disabled:opacity-50"
-            >
-              {st.win !== undefined ? 'Yeni El Dağıt' : 'Taşları Dağıt'}
-            </button>
-          )}
-          {phase === 'discard' && (
+    <ThreeSceneHost className="absolute inset-0 min-h-0 touch-none overflow-hidden" onReady={onReady}>
+      <GameHud
+        title="Okey 101"
+        status={statusText}
+        error={error}
+        meta={
+          <>
+            {okey && (
+              <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+                Okey: {COLOR_NAME[okey.c]} {okey.n} · Deste {st.deck.length}
+                {opened ? ' · Açıldın' : ''}
+                {staged.length > 0 ? ` · Hazır: ${stagedPts}p / ${staged.length} grup` : ''}
+              </span>
+            )}
+          </>
+        }
+        players={session.playerIds.map((id, i) => ({
+          id,
+          label: labelFor(props, id),
+          active: st.dealt && st.win === undefined && turnIndex(session) === i,
+          detail: `${st.scores[id] ?? 0} ceza`,
+          highlight: st.opened[id]
+            ? `${st.hands[id]?.length ?? 0} taş`
+            : st.eliminated.includes(id)
+              ? 'Elendi'
+              : `${st.hands[id]?.length ?? 0} taş`,
+        }))}
+        actions={
+          canPlay ? (
             <>
-              <button
-                type="button"
-                disabled={busy || selectedTile === undefined}
-                onClick={() => actions.discard(false)}
-                className="rounded-lg bg-[#44307a] px-4 py-1.5 text-xs font-semibold text-[#f8f8f2] disabled:opacity-50"
-              >
-                Taşı At
-              </button>
-              <button
-                type="button"
-                disabled={busy || selectedTile === undefined}
-                onClick={() => actions.discard(true)}
-                className="rounded-lg bg-[#50fa7b] px-4 py-1.5 text-xs font-semibold text-[#11131e] disabled:opacity-50"
-              >
-                Eli Bitir
-              </button>
+              {(!st.dealt || st.win !== undefined) && (
+                <GameHudButton
+                  disabled={busy || session.playerIds.length < 2}
+                  onClick={() => actions.deal()}
+                >
+                  {st.win !== undefined ? 'Yeni El' : 'Taşları Dağıt'}
+                </GameHudButton>
+              )}
+              {phase === 'discard' && (
+                <>
+                  <GameHudButton
+                    variant="secondary"
+                    disabled={busy || selected.length < 2}
+                    onClick={() => actions.stageGroup()}
+                  >
+                    Gruba ekle
+                  </GameHudButton>
+                  {!opened && (
+                    <GameHudButton
+                      variant="success"
+                      disabled={busy || staged.length === 0}
+                      onClick={() => actions.open()}
+                    >
+                      Aç (≥{OPEN_THRESHOLD})
+                    </GameHudButton>
+                  )}
+                  {opened && (
+                    <GameHudButton
+                      variant="success"
+                      disabled={busy || staged.length === 0}
+                      onClick={() => actions.lay()}
+                    >
+                      Masaya koy
+                    </GameHudButton>
+                  )}
+                  {staged.length > 0 && (
+                    <GameHudButton variant="secondary" disabled={busy} onClick={() => actions.clearStaged()}>
+                      Grupları sil
+                    </GameHudButton>
+                  )}
+                  <GameHudButton
+                    disabled={busy || selected.length !== 1}
+                    onClick={() => actions.discard()}
+                  >
+                    Taşı At
+                  </GameHudButton>
+                </>
+              )}
+              {phase === 'draw' && (
+                <span className="px-2 text-[11px] text-[#f8f8f2]/80">
+                  Desteye veya atılan taşa dokun
+                </span>
+              )}
             </>
-          )}
-          {phase === 'draw' && (
-            <span className="rounded-lg bg-[#11131e]/80 px-3 py-1 text-[11px] text-[#f8f8f2]/80">
-              Orta destesine veya atılan taşa tıkla
-            </span>
-          )}
-        </div>
-      )}
+          ) : undefined
+        }
+      >
+        {st.win !== undefined && session.playerIds[st.win] && (
+          <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]">
+            <div className="w-full max-w-sm rounded-2xl border border-[#bd93f9]/40 bg-[#11131e] px-6 py-5 text-center shadow-xl">
+              <p className="mb-1 font-headline-md text-[#f8f8f2]">El bitti</p>
+              <p className="mb-3 text-sm text-[#f1fa8c]">
+                {labelFor(props, session.playerIds[st.win]!)} kazandı
+              </p>
+              <GameHudButton disabled={busy || !canPlay} onClick={() => actions.deal()} variant="success">
+                Yeni El Dağıt
+              </GameHudButton>
+            </div>
+          </div>
+        )}
+      </GameHud>
     </ThreeSceneHost>
   );
+}
+
+function asJokerPair(codes: number[], okey: OkeyFace): boolean {
+  return codes.some((c) => c >= 104 || (colorOf(c) === okey.c && numOf(c) === okey.n));
 }

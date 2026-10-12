@@ -5,10 +5,11 @@ import type { Line, Mesh, PerspectiveCamera, Quaternion } from 'three';
 import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import {
   disposeObject,
-  playerLabel,
+  labelFor,
   pointerNdc,
   type GameProps,
 } from '../three/sceneUtils';
+import { GameHud, GameHudButton } from '../three/GameHud';
 import { GameAudio } from '@/lib/game-audio';
 
 type FrameState = { rolls: number[]; complete: boolean };
@@ -678,66 +679,54 @@ export function BowlingGame(props: GameProps) {
           : 'Rakip atıyor';
 
   return (
-    <ThreeSceneHost className="absolute inset-0" onReady={onReady}>
-      <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
-        <span className="inline-flex w-fit rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
-          Bowling · {statusText}
-        </span>
-        {lastRoll && (
-          <span className="inline-flex w-fit rounded-lg bg-[#11131e]/70 px-3 py-1 text-[11px] text-[#bd93f9]">
-            Son atış: {lastRoll.pins === 10 ? 'STRIKE!' : `${lastRoll.pins} labut`} ·{' '}
-            {playerLabel(session, lastRoll.by, userId)}
-          </span>
-        )}
-      </div>
-      <div className="pointer-events-none absolute right-3 top-3 min-w-[170px] rounded-lg border border-[#bd93f9]/30 bg-[#11131e]/85 p-2 text-[11px] text-[#f8f8f2]">
-        <p className="mb-1 font-semibold text-[#bd93f9]">Skor tablosu</p>
-        {totals.map((t) => (
-          <div
-            key={t.id}
-            className={`flex justify-between gap-3 ${t.id === shooter ? 'text-[#50fa7b]' : ''}`}
-          >
-            <span>
-              {playerLabel(session, t.id, userId)}
-              {t.id === shooter ? ' ▸' : ''}
+    <ThreeSceneHost className="absolute inset-0 min-h-0 touch-none overflow-hidden" onReady={onReady}>
+      <GameHud
+        title="Bowling"
+        status={statusText}
+        meta={
+          lastRoll ? (
+            <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+              Son: {lastRoll.pins === 10 ? 'STRIKE!' : `${lastRoll.pins} labut`} ·{' '}
+              {labelFor(props, lastRoll.by)}
             </span>
-            <span>
-              {t.score} · K{t.frame}
-            </span>
+          ) : undefined
+        }
+        players={totals.map((t) => ({
+          id: t.id,
+          label: labelFor(props, t.id),
+          active: t.id === shooter && !finished,
+          detail: `K${t.frame}`,
+          highlight: String(t.score),
+        }))}
+      >
+        {finished && (
+          <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]">
+            <div className="w-full max-w-sm rounded-2xl border border-[#bd93f9]/40 bg-[#11131e] px-6 py-5 text-center shadow-xl">
+              <p className="mb-1 font-headline-md text-[#f8f8f2]">Oyun bitti</p>
+              {best && (
+                <p className="mb-3 text-sm text-[#f1fa8c]">
+                  Kazanan: {labelFor(props, best.id)} ({best.score})
+                </p>
+              )}
+              <GameHudButton
+                disabled={busy || !canPlay}
+                variant="success"
+                onClick={() => {
+                  setBusy(true);
+                  const empty: Record<string, number[]> = {};
+                  for (const id of session.playerIds) empty[id] = [];
+                  void props
+                    .onPatch({ frames: empty, turn: 0, lastRoll: null })
+                    .catch(() => undefined)
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Yeniden başla
+              </GameHudButton>
+            </div>
           </div>
-        ))}
-        {finished && best && (
-          <p className="mt-1 text-[#f1fa8c]">Kazanan: {playerLabel(session, best.id, userId)}</p>
         )}
-      </div>
-      {finished && (
-        <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/45 p-4">
-          <div className="rounded-xl border border-[#bd93f9]/40 bg-[#11131e] px-6 py-5 text-center shadow-xl">
-            <p className="mb-1 font-headline-md text-[#f8f8f2]">Oyun bitti</p>
-            {best && (
-              <p className="mb-3 text-sm text-[#f1fa8c]">
-                Kazanan: {playerLabel(session, best.id, userId)} ({best.score})
-              </p>
-            )}
-            <button
-              type="button"
-              disabled={busy || !canPlay}
-              onClick={() => {
-                setBusy(true);
-                const empty: Record<string, number[]> = {};
-                for (const id of session.playerIds) empty[id] = [];
-                void props
-                  .onPatch({ frames: empty, turn: 0, lastRoll: null })
-                  .catch(() => undefined)
-                  .finally(() => setBusy(false));
-              }}
-              className="h-9 rounded-lg bg-[#50fa7b] px-4 font-label-sm text-[#11131e] disabled:opacity-50"
-            >
-              Yeniden başla
-            </button>
-          </div>
-        </div>
-      )}
+      </GameHud>
     </ThreeSceneHost>
   );
 }

@@ -157,6 +157,11 @@ export interface VoiceAudioSettings {
   screenShareFps: ScreenShareFps;
   /** İzleme kalitesi (kişisel — izleyici) */
   screenShareViewQuality: ScreenShareViewQualityId;
+  /**
+   * Uygunsuz içerik engeli (ekran/kamera yayını + izleme).
+   * Varsayılan: açık. Kapatmak kullanıcı onayı ister.
+   */
+  nsfwContentFilter: boolean;
 }
 
 export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
@@ -169,6 +174,7 @@ export const DEFAULT_VOICE_AUDIO: VoiceAudioSettings = {
   screenShareResolution: DEFAULT_SCREEN_SHARE_RESOLUTION,
   screenShareFps: DEFAULT_SCREEN_SHARE_FPS,
   screenShareViewQuality: DEFAULT_SCREEN_SHARE_VIEW_QUALITY,
+  nsfwContentFilter: true,
 };
 
 export function normalizeBitrateKbps(value: unknown): VoiceBitrateKbps {
@@ -253,6 +259,8 @@ export function loadVoiceAudioSettings(): VoiceAudioSettings {
       screenShareViewQuality: normalizeScreenShareViewQuality(
         parsed.screenShareViewQuality,
       ),
+      // Eksik anahtar → varsayılan açık (herkes için güvenli başlangıç)
+      nsfwContentFilter: parsed.nsfwContentFilter !== false,
     };
   } catch {
     return { ...DEFAULT_VOICE_AUDIO };

@@ -26,7 +26,7 @@ const CAPACITY: Record<
 
 const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
   billiards: ['balls', 'turn', 'groups', 'pocketed', 'cueInHand', 'winner', 'shot'],
-  okey: ['hands', 'scores', 'turn'],
+  okey: ['hands', 'scores', 'turn', 'melds', 'opened'],
   bowling: ['frames', 'turn', 'lastRoll'],
   tavla: ['board', 'dice', 'turn'],
   watch_party: ['mediaUrl', 'playing', 'at'],

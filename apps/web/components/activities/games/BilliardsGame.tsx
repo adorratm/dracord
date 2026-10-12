@@ -6,12 +6,13 @@ import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import {
   disposeObject,
   isMyTurn,
-  playerLabel,
+  labelFor,
   pointerNdc,
   round4,
   turnIndex,
   type GameProps,
 } from '../three/sceneUtils';
+import { GameHud, GameHudButton } from '../three/GameHud';
 import { GameAudio } from '@/lib/game-audio';
 
 type Ball = { id: number; x: number; y: number; vx: number; vy: number; sunk?: boolean };
@@ -392,26 +393,54 @@ export function BilliardsGame(props: GameProps) {
       return out;
     };
 
-    const sync = () => {
-      if (simulating) {
-        pendingSync = true;
-        return;
-      }
-      pendingSync = false;
-      const stateBalls = parseBalls(propsRef.current.session.state.balls) ?? defaultBalls();
+    /** Authority sonucu / tur değişiminde anında snap — lerp kaymasını önler */
+    let forceSnap = true;
+    let inputLocked = false;
+    let localTurnOverride: number | null = null;
+    let localCueInHandOverride: boolean | null = null;
+    let lastSyncedTurn = Number(propsRef.current.session.state.turn ?? 0);
+
+    const applyBallsState = (stateBalls: Ball[], snap: boolean) => {
       for (const b of stateBalls) {
         const body = bodies.get(b.id);
         if (!body) continue;
         body.tx = (b.x - 0.5) * W;
         body.tz = (b.y - 0.5) * D;
         body.sunk = Boolean(b.sunk);
-        if (!snapped || body.sunk || Boolean(propsRef.current.session.state.cueInHand)) {
+        if (snap || !snapped || body.sunk) {
           body.x = body.tx;
           body.z = body.tz;
-          placeMesh(body);
         }
+        body.vx = 0;
+        body.vz = 0;
+        placeMesh(body);
       }
       snapped = true;
+    };
+
+    const sync = () => {
+      if (simulating) {
+        pendingSync = true;
+        return;
+      }
+      pendingSync = false;
+      const st = propsRef.current.session.state;
+      const turnNow = Number(st.turn ?? 0);
+      const turnChanged = turnNow !== lastSyncedTurn;
+      lastSyncedTurn = turnNow;
+      if (localTurnOverride !== null && turnNow === localTurnOverride) {
+        localTurnOverride = null;
+        localCueInHandOverride = null;
+        inputLocked = false;
+      }
+      const stateBalls = parseBalls(st.balls) ?? defaultBalls();
+      const snap =
+        forceSnap ||
+        turnChanged ||
+        Boolean(st.cueInHand) ||
+        stateBalls.some((b) => b.sunk !== bodies.get(b.id)?.sunk);
+      applyBallsState(stateBalls, snap);
+      forceSnap = false;
     };
     syncRef.current = sync;
     sync();
@@ -426,7 +455,22 @@ export function BilliardsGame(props: GameProps) {
         if (b.id === 0 || b.sunk) continue;
         if (Math.hypot(b.x - cue.x, b.z - cue.z) < 2 * R + 0.02) cue.x -= 0.5;
       }
+      cue.tx = cue.x;
+      cue.tz = cue.z;
       placeMesh(cue);
+    };
+
+    const canControl = () => {
+      if (inputLocked || simulating) return false;
+      const p = propsRef.current;
+      if (!p.canPlay || !p.userId || p.session.state.winner) return false;
+      const turn =
+        localTurnOverride !== null
+          ? localTurnOverride
+          : Number(p.session.state.turn ?? 0);
+      const n = Math.max(1, p.session.playerIds.length);
+      const idx = p.session.playerIds.indexOf(p.userId);
+      return idx >= 0 && idx === turn % n;
     };
 
     const resolveRules = (_outBalls: Ball[]) => {
@@ -440,6 +484,11 @@ export function BilliardsGame(props: GameProps) {
       const objectSunk = sunkThisShot.filter((id) => id !== 0);
       const eightSunk = sunkThisShot.includes(8);
       const oppId = players.find((id) => id !== shooterId) ?? '';
+      const shooterIdx = players.indexOf(shooterId);
+      // Sıra dışı vuruş sonucu yok say
+      if (shooterIdx >= 0 && shooterIdx !== turn % Math.max(1, players.length)) {
+        return null;
+      }
 
       let foul = false;
       let win: string | null = null;
@@ -466,8 +515,7 @@ export function BilliardsGame(props: GameProps) {
 
       if (cueSunk) foul = true;
 
-      // Grup ataması: ilk legal object ball (8 değil)
-      if (!prevGroups[shooterId] && objectSunk.length > 0 && !cueSunk) {
+      if (!prevGroups[shooterId] && objectSunk.length > 0 && !cueSunk && !foul) {
         const firstObj = objectSunk.find((id) => id !== 8);
         if (firstObj !== undefined && firstHitId !== null && ballGroup(firstHitId) !== 'eight') {
           const g = ballGroup(firstObj);
@@ -514,16 +562,14 @@ export function BilliardsGame(props: GameProps) {
         });
 
       let nextTurn = turn;
-      if (!win && !lose) {
-        if (!legalContinue) nextTurn = turn + 1;
-      }
+      if (!win && !lose && !legalContinue) nextTurn = turn + 1;
 
       if (lose) win = oppId || null;
 
-      clearCueFromPocket();
+      if (cueSunk) clearCueFromPocket();
       const finalBalls = exportBalls();
-      // cue in pocket → cueInHand for next player
-      const nextCueInHand = Boolean(cueSunk && !win);
+      // 8-top: her faulde rakibe top-el (ball-in-hand)
+      const nextCueInHand = Boolean(foul && !win);
 
       return {
         balls: finalBalls,
@@ -539,23 +585,38 @@ export function BilliardsGame(props: GameProps) {
     const finishShot = () => {
       simulating = false;
       if (!isLocalAuthority) {
-        clearCueFromPocket();
-        exportBalls();
-        if (pendingSync) sync();
+        // Rakip simülasyonu sadece görsel — otorite state'ine snap
+        forceSnap = true;
+        sync();
+        isLocalAuthority = false;
+        shotOwner = null;
         return;
       }
       const out = exportBalls();
       const patch = resolveRules(out);
+      isLocalAuthority = false;
+      shotOwner = null;
+      if (!patch) {
+        forceSnap = true;
+        sync();
+        return;
+      }
+      // Optimistic: sıra / cue-in-hand / toplar hemen — çift vuruş ve kayma olmasın
+      localTurnOverride = Number(patch.turn);
+      localCueInHandOverride = Boolean(patch.cueInHand);
+      inputLocked = true;
+      forceSnap = true;
+      applyBallsState(patch.balls as Ball[], true);
       setBusy(true);
       void propsRef.current
         .onPatch(patch)
         .catch(() => undefined)
         .finally(() => {
           setBusy(false);
+          forceSnap = true;
           if (pendingSync) sync();
+          else sync();
         });
-      isLocalAuthority = false;
-      shotOwner = null;
     };
 
     const startShot = (shot: Shot, authority: boolean) => {
@@ -689,12 +750,15 @@ export function BilliardsGame(props: GameProps) {
         typeof p.session.state.winner === 'string' && p.session.state.winner
           ? p.session.state.winner
           : null;
-      const inHand = Boolean(p.session.state.cueInHand);
-      const show =
-        !simulating && !w && isMyTurn(p) && !cue.sunk && !inHand;
+      const inHand =
+        localCueInHandOverride !== null
+          ? localCueInHandOverride
+          : Boolean(p.session.state.cueInHand);
+      const mine = canControl();
+      const show = !simulating && !w && mine && !cue.sunk && !inHand;
       aimLine.visible = show;
       cueMesh.visible = show;
-      dom.style.cursor = show || (inHand && isMyTurn(p) && !w) ? 'crosshair' : 'default';
+      dom.style.cursor = show || (inHand && mine && !w) ? 'crosshair' : 'default';
       if (!show) {
         charging = false;
         chargePower = 0;
@@ -745,8 +809,16 @@ export function BilliardsGame(props: GameProps) {
       last = now;
       if (simulating) {
         simTime += dt;
-        const sub = 6;
-        for (let i = 0; i < sub; i++) integrate(dt / sub);
+        // Sabit adım — istemciler arası fizik sapmasını azaltır
+        const fixed = 1 / 120;
+        let acc = dt;
+        let steps = 0;
+        while (acc > 0 && steps < 24) {
+          const h = Math.min(fixed, acc);
+          integrate(h);
+          acc -= h;
+          steps++;
+        }
         for (const b of bodies.values()) if (!b.sunk) b.mesh.position.set(b.x, R, b.z);
         let moving = false;
         for (const b of bodies.values()) {
@@ -754,14 +826,18 @@ export function BilliardsGame(props: GameProps) {
         }
         if (!moving || simTime > 14) finishShot();
       } else {
-        const k = Math.min(1, dt * 9);
+        // Snap sonrası lerp yok; yalnızca küçük düzeltme (opsiyonel yumuşaklık)
+        const k = forceSnap ? 1 : Math.min(1, dt * 14);
         for (const b of bodies.values()) {
-          if (b.sunk) continue;
+          if (b.sunk) {
+            placeMesh(b);
+            continue;
+          }
           const ox = b.x;
           const oz = b.z;
           b.x += (b.tx - b.x) * k;
           b.z += (b.tz - b.z) * k;
-          rollMesh(b, b.x - ox, b.z - oz);
+          if (k < 1) rollMesh(b, b.x - ox, b.z - oz);
           placeMesh(b);
         }
         updateAim(dt);
@@ -795,7 +871,11 @@ export function BilliardsGame(props: GameProps) {
 
     const fireShot = () => {
       const p = propsRef.current;
-      if (simulating || !isMyTurn(p) || p.session.state.cueInHand || p.session.state.winner) {
+      const inHand =
+        localCueInHandOverride !== null
+          ? localCueInHandOverride
+          : Boolean(p.session.state.cueInHand);
+      if (simulating || inputLocked || !canControl() || inHand || p.session.state.winner) {
         cancelCharge();
         return;
       }
@@ -834,15 +914,14 @@ export function BilliardsGame(props: GameProps) {
     };
 
     const onMove = (e: PointerEvent) => {
-      if (simulating) return;
+      if (simulating || inputLocked) return;
       toTable(e);
       const p = propsRef.current;
-      if (
-        placingCue &&
-        Boolean(p.session.state.cueInHand) &&
-        isMyTurn(p) &&
-        !p.session.state.winner
-      ) {
+      const inHand =
+        localCueInHandOverride !== null
+          ? localCueInHandOverride
+          : Boolean(p.session.state.cueInHand);
+      if (placingCue && inHand && canControl() && !p.session.state.winner) {
         const cue = bodies.get(0)!;
         if (cuePlacementOk(aimX, aimZ)) {
           cue.x = aimX;
@@ -854,10 +933,10 @@ export function BilliardsGame(props: GameProps) {
       }
     };
     const onDown = (e: PointerEvent) => {
-      if (simulating) return;
+      if (simulating || inputLocked) return;
       const p = propsRef.current;
       if (p.session.state.winner) return;
-      if (!isMyTurn(p)) return;
+      if (!canControl()) return;
       // Sağ tık: şarj iptal
       if (e.button === 2) {
         e.preventDefault();
@@ -866,7 +945,11 @@ export function BilliardsGame(props: GameProps) {
       }
       if (e.button !== 0) return;
       toTable(e);
-      if (Boolean(p.session.state.cueInHand)) {
+      const inHand =
+        localCueInHandOverride !== null
+          ? localCueInHandOverride
+          : Boolean(p.session.state.cueInHand);
+      if (inHand) {
         placingCue = true;
         const cue = bodies.get(0)!;
         cue.sunk = false;
@@ -893,7 +976,11 @@ export function BilliardsGame(props: GameProps) {
       if (e.button !== 0) return;
       if (placingCue) {
         placingCue = false;
-        if (!isMyTurn(p) || !p.session.state.cueInHand) return;
+        const inHand =
+          localCueInHandOverride !== null
+            ? localCueInHandOverride
+            : Boolean(p.session.state.cueInHand);
+        if (!canControl() || !inHand) return;
         toTable(e);
         const cue = bodies.get(0)!;
         if (!cuePlacementOk(aimX, aimZ)) return;
@@ -943,105 +1030,74 @@ export function BilliardsGame(props: GameProps) {
   }, []);
 
   const statusText = winner
-    ? `${playerLabel(session, winner, userId)} kazandı!`
+    ? `${labelFor(props, winner)} kazandı!`
     : !canPlay
       ? 'İzleyici'
       : busy
         ? 'Hamle gönderiliyor…'
         : cueInHand && myTurn
-          ? 'Beyaz topu masaya yerleştir (tıkla)'
+          ? 'Beyaz topu masaya yerleştir'
           : myTurn
-            ? 'Sol tık basılı tut → güç · bırak → vur · sağ tık → iptal'
+            ? 'Basılı tut → güç · bırak → vur'
             : 'Rakip oynuyor';
 
   const myGroup = userId ? groups[userId] : undefined;
   const turnPlayer = session.playerIds[turnIndex(session)];
-
-  const BallChip = ({ id }: { id: number }) => {
-    const g = ballGroup(id);
-    const color = BALL_COLORS[id === 0 ? 0 : id <= 8 ? id : id - 8]!;
-    return (
-      <span
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-[#111]"
-        style={{
-          background:
-            g === 'stripe'
-              ? `linear-gradient(#f8f8f2 0 30%, ${color} 30% 70%, #f8f8f2 70% 100%)`
-              : color,
-          color: id === 8 ? '#f8f8f2' : '#111',
-          border: '1px solid rgba(248,248,242,0.35)',
-        }}
-        title={g === 'stripe' ? `Çizgili ${id}` : g === 'solid' ? `Düz ${id}` : String(id)}
-      >
-        {id}
-      </span>
-    );
-  };
 
   return (
     <ThreeSceneHost
       className="absolute inset-0 min-h-0 touch-none overflow-hidden"
       onReady={onReady}
     >
-      <div className="pointer-events-none absolute left-2 top-2 sm:left-3 sm:top-3 flex flex-col gap-1.5 pt-[env(safe-area-inset-top)] max-w-[min(100%,22rem)]">
-        <span className="inline-flex w-fit max-w-full items-center rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
-          Bilardo · {statusText}
-        </span>
-        <span className="inline-flex w-fit rounded-lg bg-[#11131e]/70 px-3 py-1 text-[11px] text-[#bd93f9]">
-          Masada {remaining} · {turnPlayer ? playerLabel(session, turnPlayer, userId) : '—'}
-          {myGroup ? ` · Senin: ${myGroup === 'solid' ? 'Düz' : 'Çizgili'}` : ''}
-          {cueInHand ? ' · Beyaz yerleştirme' : ''}
-        </span>
-        <div className="flex flex-col gap-1 rounded-lg border border-[#bd93f9]/30 bg-[#11131e]/85 p-2 text-[11px] text-[#f8f8f2]">
-          {session.playerIds.map((pid) => {
-            const g = groups[pid];
-            const sunk = pocketed[pid] ?? [];
-            return (
-              <div key={pid} className="flex flex-wrap items-center gap-1.5">
-                <span className="min-w-[4.5rem] text-[#bd93f9]">
-                  {playerLabel(session, pid, userId)}
-                  {g ? ` · ${g === 'solid' ? 'Düz' : 'Çizgili'}` : ''}
-                </span>
-                {sunk.length === 0 ? (
-                  <span className="text-outline">—</span>
-                ) : (
-                  sunk.map((id) => <BallChip key={id} id={id} />)
-                )}
+      <GameHud
+        title="8-Top Bilardo"
+        status={statusText}
+        meta={
+          <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+            Masada {remaining}
+            {turnPlayer ? ` · Sıra: ${labelFor(props, turnPlayer)}` : ''}
+            {myGroup ? ` · Senin: ${myGroup === 'solid' ? 'Düz' : 'Çizgili'}` : ''}
+            {cueInHand ? ' · Top el' : ''}
+          </span>
+        }
+        players={session.playerIds.map((pid) => {
+          const g = groups[pid];
+          const sunk = pocketed[pid] ?? [];
+          return {
+            id: pid,
+            label: labelFor(props, pid),
+            active: pid === turnPlayer && !winner,
+            detail: g ? (g === 'solid' ? 'Düz' : 'Çizgili') : '—',
+            highlight: sunk.length ? `${sunk.length} delik` : undefined,
+          };
+        })}
+        actions={
+          myTurn && !busy && !cueInHand && !winner ? (
+            <div className="w-[min(14rem,70vw)]">
+              <div className="mb-1 text-center text-[11px] text-[#f8f8f2]/80">Güç %{power}</div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#282a36]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#50fa7b] via-[#f1fa8c] to-[#ff5555] transition-[width] duration-75"
+                  style={{ width: `${power}%` }}
+                />
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {winner && (
-        <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4">
-          <div className="rounded-xl border border-[#bd93f9]/40 bg-[#11131e] px-6 py-5 text-center shadow-xl">
-            <p className="mb-3 font-headline-md text-[#f8f8f2]">
-              {playerLabel(session, winner, userId)} kazandı!
-            </p>
-            <button
-              type="button"
-              disabled={busy || !canPlay}
-              onClick={restart}
-              className="h-9 rounded-lg bg-[#50fa7b] px-4 font-label-sm text-[#11131e] disabled:opacity-50"
-            >
-              Yeniden başla
-            </button>
+            </div>
+          ) : undefined
+        }
+      >
+        {winner && (
+          <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]">
+            <div className="w-full max-w-sm rounded-2xl border border-[#bd93f9]/40 bg-[#11131e] px-6 py-5 text-center shadow-xl">
+              <p className="mb-3 font-headline-md text-[#f8f8f2]">
+                {labelFor(props, winner)} kazandı!
+              </p>
+              <GameHudButton disabled={busy || !canPlay} onClick={restart} variant="success">
+                Yeniden başla
+              </GameHudButton>
+            </div>
           </div>
-        </div>
-      )}
-
-      {myTurn && !busy && !cueInHand && !winner && (
-        <div className="pointer-events-none absolute bottom-3 left-1/2 w-[min(14rem,80vw)] -translate-x-1/2 pb-[env(safe-area-inset-bottom)]">
-          <div className="mb-1 text-center text-[11px] text-[#f8f8f2]/80">Güç %{power}</div>
-          <div className="h-2 overflow-hidden rounded-full bg-[#282a36]">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#50fa7b] via-[#f1fa8c] to-[#ff5555]"
-              style={{ width: `${power}%` }}
-            />
-          </div>
-        </div>
-      )}
+        )}
+      </GameHud>
     </ThreeSceneHost>
   );
 }

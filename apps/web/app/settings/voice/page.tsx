@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
-import { SearchableSelect } from '@dracord/ui';
+import { useEffect, useState } from 'react';
+import { ConfirmDialog, SearchableSelect } from '@dracord/ui';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
+import { SettingsToggle } from '@/components/settings/SettingsControls';
 import {
   SCREEN_SHARE_FPS_PRESETS,
   SCREEN_SHARE_RESOLUTION_PRESETS,
@@ -89,6 +90,7 @@ function DeviceSelect({
 
 export default function VoiceSettingsPage() {
   const voice = useVoiceSession();
+  const [nsfwDisableConfirmOpen, setNsfwDisableConfirmOpen] = useState(false);
 
   useEffect(() => {
     void voice.refreshAudioDevices(true);
@@ -160,19 +162,33 @@ export default function VoiceSettingsPage() {
           Çözünürlük ve FPS kişisel ayardır (bu tarayıcıda saklanır). Paylaşım sırasında
           değiştirirsen paylaşım yeniden başlar; tarayıcı ekranın gerçek çözünürlüğünü aşamaz.
         </p>
-        <div className="rounded-lg border border-outline-variant/40 bg-surface-container px-space-md py-space-sm space-y-1">
-          <p className="font-label-sm text-on-surface flex items-center gap-space-sm">
-            <span className="material-symbols-outlined text-[18px] text-primary-container">
-              shield
-            </span>
-            Otomatik uygunsuz içerik engeli
-          </p>
-          <p className="font-body-sm text-on-surface-variant">
-            Ekran ve kamera yayını yerelde taranır; pornografi / hentai tespiti paylaşımı veya
-            kamerayı anında keser. İzlerken de aynı kontrol uygulanır. Engel sonrası kısa bir
-            bekleme süresi vardır — kapatılamaz.
-          </p>
+        <div className="rounded-lg border border-outline-variant/40 bg-surface-container overflow-hidden">
+          <SettingsToggle
+            label="Otomatik uygunsuz içerik engeli"
+            description="Ekran ve kamera yayını yerelde taranır; tespit edilirse paylaşım/kamera kesilir. İzlerken de aynı kontrol uygulanır. Varsayılan olarak açıktır."
+            checked={voice.audioSettings.nsfwContentFilter !== false}
+            onChange={(next) => {
+              if (next) {
+                voice.setNsfwContentFilter(true);
+                return;
+              }
+              setNsfwDisableConfirmOpen(true);
+            }}
+          />
         </div>
+        <ConfirmDialog
+          open={nsfwDisableConfirmOpen}
+          title="İçerik engelini kapat?"
+          description="Kapatırsan ekran paylaşımı, kamera ve izleme sırasında uygunsuz içerik otomatik engellenmez. Bu ayar yalnızca senin hesabında (bu tarayıcıda) geçerlidir."
+          confirmLabel="Engeli kapat"
+          cancelLabel="Vazgeç"
+          danger
+          onCancel={() => setNsfwDisableConfirmOpen(false)}
+          onConfirm={() => {
+            voice.setNsfwContentFilter(false);
+            setNsfwDisableConfirmOpen(false);
+          }}
+        />
         <label className="flex flex-col gap-space-xs">
           <span className="flex items-center gap-space-sm font-label-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-[18px]">screenshot_monitor</span>

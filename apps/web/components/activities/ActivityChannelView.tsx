@@ -4,7 +4,7 @@ import type { ActivityKind, ActivitySessionDto, ChannelSummary } from '@dracord/
 import { SocketEvents } from '@dracord/sdk';
 import { cn } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { BilliardsGame } from '@/components/activities/games/BilliardsGame';
@@ -85,6 +85,37 @@ export function ActivityChannelView({
   sessionIdRef.current = session?.id ?? null;
 
   const me = user?.id;
+  const [guildNameById, setGuildNameById] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .getGuildMembers(guildId)
+      .then((members) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const m of members) {
+          map[m.id] = m.displayName || m.username || m.id;
+        }
+        setGuildNameById(map);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client, guildId]);
+
+  const nameByUserId = useMemo(() => {
+    const map: Record<string, string> = { ...guildNameById };
+    if (user) {
+      map[user.id] = user.displayName || user.username || map[user.id] || user.id;
+    }
+    for (const p of voice.participants) {
+      const n = p.displayName?.trim();
+      if (n) map[p.id] = n;
+    }
+    return map;
+  }, [guildNameById, user, voice.participants]);
 
   const refresh = useCallback(async (): Promise<ActivitySessionDto | null> => {
     try {
@@ -394,6 +425,7 @@ export function ActivityChannelView({
                 userId={me}
                 canPlay={isPlayer}
                 onPatch={patch}
+                nameByUserId={nameByUserId}
               />
             )}
             {session.kind === 'okey' && (
@@ -403,6 +435,7 @@ export function ActivityChannelView({
                 userId={me}
                 canPlay={isPlayer}
                 onPatch={patch}
+                nameByUserId={nameByUserId}
               />
             )}
             {session.kind === 'bowling' && (
@@ -412,6 +445,7 @@ export function ActivityChannelView({
                 userId={me}
                 canPlay={isPlayer}
                 onPatch={patch}
+                nameByUserId={nameByUserId}
               />
             )}
             {session.kind === 'tavla' && (
@@ -421,6 +455,7 @@ export function ActivityChannelView({
                 userId={me}
                 canPlay={isPlayer}
                 onPatch={patch}
+                nameByUserId={nameByUserId}
               />
             )}
             {session.kind === 'watch_party' && (
@@ -431,6 +466,7 @@ export function ActivityChannelView({
                 canPlay={isPlayer}
                 isHost={isHost}
                 onPatch={patch}
+                nameByUserId={nameByUserId}
               />
             )}
 
