@@ -46,16 +46,18 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-/** Cep — görsel dışarıda; fizik geniş JAW + çekim ile girer */
-const POCKET_R = 0.4;
-const POCKET_JAW = 1.2;
+/** Cep — ağız açık; batırma eşiği top ahşaba binmeden */
+const POCKET_R = 0.42;
+const POCKET_JAW = 1.25;
+/** Batır: merkez deliğe bu mesafede (görünür ahşaba çıkmadan) */
+const POCKET_SINK = POCKET_R + R * 0.35;
 const POCKETS: [number, number][] = [
-  [-5.05, -2.55],
-  [0, -2.72],
-  [5.05, -2.55],
-  [-5.05, 2.55],
-  [0, 2.72],
-  [5.05, 2.55],
+  [-5.0, -2.5],
+  [0, -2.68],
+  [5.0, -2.5],
+  [-5.0, 2.5],
+  [0, 2.68],
+  [5.0, 2.5],
 ];
 /** Güç çubuğu: 0→100 (ms) */
 const CHARGE_DURATION_MS = 1000;
@@ -315,8 +317,9 @@ export function BilliardsGame(props: GameProps) {
       root.add(well);
     }
 
-    // --- Ahşap ban: 4 kenar kutusu = içi boş dikdörtgen (orta ASLA ahşap değil) ---
+    // --- Ahşap banlar: cep ağızları KAPALI OLMASIN (köşe kapağı yok) ---
     const addRail = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+      if (w < 0.2 || d < 0.2) return;
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), railWood);
       m.position.set(x, y, z);
       m.castShadow = true;
@@ -324,59 +327,40 @@ export function BilliardsGame(props: GameProps) {
       root.add(m);
     };
     const railY = railH * 0.45;
-    const gapS = POCKET_R * 2.15; // orta cep boşluğu
-    const gapC = POCKET_R * 2.05; // köşe cep boşluğu
-    // Uzun kenarlar (üst/alt): iki parça — orta cep aralığı
+    // Cep merkezinden banın bitişine açıklık (top geçsin, ahşap üstüne binmesin)
+    const clearS = POCKET_R + 0.22;
+    const clearC = POCKET_R + 0.28;
     for (const sz of [-1, 1] as const) {
       const z = sz * (OUTER_D / 2 - RAIL_T / 2);
-      const end = OUTER_W / 2 - gapC * 0.45;
-      const mid = gapS / 2;
-      const len = Math.max(0.4, end - mid);
-      const cx = (end + mid) / 2;
+      // köşe cep ↔ orta cep
+      const xInner = clearS;
+      const xOuter = FELT_W / 2 - clearC;
+      const len = xOuter - xInner;
+      const cx = (xInner + xOuter) / 2;
       addRail(len, railH, RAIL_T, -cx, railY, z);
       addRail(len, railH, RAIL_T, cx, railY, z);
     }
-    // Kısa kenarlar (sol/sağ): köşe cepleri arası
     for (const sx of [-1, 1] as const) {
       const x = sx * (OUTER_W / 2 - RAIL_T / 2);
-      const len = Math.max(0.4, OUTER_D - gapC * 2);
+      const zOuter = FELT_D / 2 - clearC;
+      const len = zOuter * 2;
       addRail(RAIL_T, railH, len, x, railY, 0);
     }
-    // Köşe ahşap birleşimleri (yekpare dikdörtgen hissi, cepleri kapatmadan)
-    for (const [cx, cz] of [
-      [-1, -1],
-      [1, -1],
-      [-1, 1],
-      [1, 1],
-    ] as const) {
-      // Cep dışındaki L birleşim — küçük dış köşe kapağı
-      const corner = new THREE.Mesh(
-        new THREE.BoxGeometry(RAIL_T * 0.95, railH, RAIL_T * 0.95),
-        railWood,
-      );
-      corner.position.set(
-        cx * (OUTER_W / 2 - RAIL_T / 2),
-        railY,
-        cz * (OUTER_D / 2 - RAIL_T / 2),
-      );
-      corner.castShadow = true;
-      root.add(corner);
-    }
 
-    // --- Yeşil yastıklar (keçe kenarı, cep ağızları açık) ---
+    // --- Yeşil yastıklar — köşe/orta ağızlar açık ---
     const cushionMat = makeFeltMaterial(THREE, '#1a7a3c', assets);
     const cush = (w: number, d: number, x: number, z: number) => {
-      if (w < 0.12 || d < 0.12) return;
+      if (w < 0.15 || d < 0.15) return;
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), cushionMat);
       m.position.set(x, feltTop + 0.1, z);
       m.castShadow = true;
       m.receiveShadow = true;
       root.add(m);
     };
-    const CUSH_Z = FELT_D / 2 - 0.14;
-    const CUSH_X = FELT_W / 2 - 0.14;
-    const GAP_CORNER = POCKET_R * 0.9;
-    const GAP_SIDE = POCKET_R * 0.95;
+    const CUSH_Z = FELT_D / 2 - 0.16;
+    const CUSH_X = FELT_W / 2 - 0.16;
+    const GAP_CORNER = POCKET_R + 0.18;
+    const GAP_SIDE = POCKET_R + 0.2;
     for (const sz of [-1, 1] as const) {
       const z = sz * CUSH_Z;
       const x0 = -CUSH_X + GAP_CORNER;
@@ -632,12 +616,26 @@ export function BilliardsGame(props: GameProps) {
       b.mesh.rotateOnWorldAxis(tmpAxis, d / R);
     };
 
-    const placeMesh = (b: Body) => {
-      b.mesh.position.set(b.x, R, b.z);
-      b.mesh.visible = !b.sunk;
+    const hideSunk = (b: Body) => {
+      b.mesh.visible = false;
+      b.mesh.position.set(b.x, -2, b.z);
       const sh = (b.mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow;
       if (sh) {
-        sh.visible = !b.sunk;
+        sh.visible = false;
+        sh.position.set(b.x, -2, b.z);
+      }
+    };
+
+    const placeMesh = (b: Body) => {
+      if (b.sunk) {
+        hideSunk(b);
+        return;
+      }
+      b.mesh.visible = true;
+      b.mesh.position.set(b.x, R, b.z);
+      const sh = (b.mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow;
+      if (sh) {
+        sh.visible = true;
         sh.position.set(b.x + 0.04, 0.012, b.z + 0.04);
       }
     };
@@ -946,19 +944,18 @@ export function BilliardsGame(props: GameProps) {
           }
         }
         if (bestPd < POCKET_JAW) nearPocket = true;
-        // Top merkezi delik yarıçapına girince batır (görsel delikle uyumlu)
-        if (bestPd < POCKET_R * 0.92) {
+        // Ahşaba binmeden batır — eşiği geniş
+        if (bestPd < POCKET_SINK) {
           b.sunk = true;
           b.vx = 0;
           b.vz = 0;
           b.x = bestPx;
           b.z = bestPz;
-          b.mesh.visible = false;
+          hideSunk(b);
           if (!sunkThisShot.includes(b.id)) sunkThisShot.push(b.id);
           GameAudio.pot();
           continue;
         }
-        // Delik ağzında yastık sekmesin — deliğe çek
         if (!nearPocket) {
           if (b.x > HX - R) {
             b.x = HX - R;
@@ -978,14 +975,19 @@ export function BilliardsGame(props: GameProps) {
             if (b.vz < -0.4) GameAudio.cushion();
             b.vz = Math.abs(b.vz) * 0.8;
           }
+          b.mesh.position.set(b.x, R, b.z);
         } else if (bestPd > 1e-4) {
-          const pull = 32 * h;
+          const pull = 40 * h;
           b.vx += ((bestPx - b.x) / bestPd) * pull;
           b.vz += ((bestPz - b.z) / bestPd) * pull;
-          // Cep yönünde yastık sınırını aşmaya izin ver
-          const maxOut = POCKET_R + 0.35;
-          if (Math.abs(b.x) > HX + maxOut) b.vx *= 0.25;
-          if (Math.abs(b.z) > HZ + maxOut) b.vz *= 0.25;
+          // Cepte kal; masa dışına / ahşap üstüne kaçmasın
+          const maxOut = POCKET_R + 0.15;
+          b.x = Math.max(-HX - maxOut, Math.min(HX + maxOut, b.x));
+          b.z = Math.max(-HZ - maxOut, Math.min(HZ + maxOut, b.z));
+          // Deliğe yaklaşırken aşağı düş (ahşap üstünde kalmasın)
+          const drop = Math.max(0, 1 - bestPd / POCKET_SINK);
+          b.mesh.position.set(b.x, R - drop * 0.75, b.z);
+          b.mesh.visible = true;
         }
       }
       for (let i = 0; i < list.length; i++) {
@@ -1125,7 +1127,16 @@ export function BilliardsGame(props: GameProps) {
           acc -= h;
           steps++;
         }
-        for (const b of bodies.values()) if (!b.sunk) b.mesh.position.set(b.x, R, b.z);
+        for (const b of bodies.values()) {
+          if (b.sunk) {
+            hideSunk(b);
+            continue;
+          }
+          // integrate zaten cep yakınında Y ayarladı; değilse masa üstü
+          if (b.mesh.position.y > R - 0.01) b.mesh.position.set(b.x, R, b.z);
+          else b.mesh.position.x = b.x;
+          b.mesh.position.z = b.z;
+        }
         let moving = false;
         for (const b of bodies.values()) {
           if (!b.sunk && Math.hypot(b.vx, b.vz) > 0.06) moving = true;
