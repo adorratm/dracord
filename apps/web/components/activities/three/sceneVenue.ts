@@ -206,11 +206,19 @@ function softSpot(
   z: number,
   lookZ: number,
   intensity: number,
+  withShadow = false,
 ) {
   const light = new THREE.SpotLight(0xfff0dd, intensity, 20, Math.PI / 3.2, 0.72, 1.35);
   light.position.set(x, y, z);
   light.target.position.set(x * 0.35, 0, lookZ);
-  light.castShadow = false;
+  if (withShadow) {
+    light.castShadow = true;
+    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.bias = -0.0004;
+    light.shadow.radius = 2;
+  } else {
+    light.castShadow = false;
+  }
   group.add(light);
   group.add(light.target);
   return light;
@@ -324,8 +332,9 @@ function buildTableRoom(
     );
     cord.position.set(x, y + 0.65, z);
     group.add(cord);
-    // Bilardo/tavla/okey: yumuşak geniş spot — topları/taşları yıkamaz
-    softSpot(THREE, group, x, y - 0.15, z, z, theme === 'billiards' ? 1.65 : 1.9);
+    // Bilardo: bir spot gölge atsın; diğerleri yumuşak dolgu
+    const cast = theme === 'billiards' && x < 0;
+    softSpot(THREE, group, x, y - 0.15, z, z, theme === 'billiards' ? 1.45 : 1.75, cast);
   }
 
   if (theme === 'billiards') {
@@ -374,122 +383,200 @@ function buildBowlingAlley(
   accent: number,
 ) {
   const laneTex = track(laneWoodTexture(THREE));
-  laneTex.repeat.set(1, 3);
+  laneTex.repeat.set(1, 4);
   const concrete = track(concreteTexture(THREE));
   concrete.repeat.set(4, 4);
+  const carpet = track(carpetTexture(THREE, '#2a2438', '#1a1528'));
+  carpet.repeat.set(8, 8);
 
-  const floorMat = track(
-    new THREE.MeshStandardMaterial({ map: concrete, roughness: 0.9, metalness: 0.05 }),
+  // Approach / oturma alanı — halı
+  const carpetMat = track(
+    new THREE.MeshStandardMaterial({ map: carpet, roughness: 0.95, metalness: 0 }),
   );
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(28, 0.2, 36), floorMat);
-  floor.position.set(0, -0.95, -4);
+  const approach = new THREE.Mesh(new THREE.BoxGeometry(26, 0.12, 14), carpetMat);
+  approach.position.set(0, -0.88, 8);
+  approach.receiveShadow = true;
+  group.add(approach);
+
+  // Şerit altı beton
+  const floorMat = track(
+    new THREE.MeshStandardMaterial({ map: concrete, roughness: 0.88, metalness: 0.06 }),
+  );
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(26, 0.18, 24), floorMat);
+  floor.position.set(0, -0.95, -6);
   floor.receiveShadow = true;
   group.add(floor);
 
   const ceilMat = track(
-    new THREE.MeshStandardMaterial({ color: 0x1a1d28, roughness: 0.95, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ color: 0x141820, roughness: 0.95, side: THREE.DoubleSide }),
   );
-  const ceil = new THREE.Mesh(new THREE.BoxGeometry(28, 0.15, 36), ceilMat);
-  ceil.position.set(0, 6.2, -4);
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(28, 0.2, 38), ceilMat);
+  ceil.position.set(0, 6.35, -3);
   group.add(ceil);
+  // Tavan kirişleri
+  const beamMat = track(new THREE.MeshStandardMaterial({ color: 0x1e2430, roughness: 0.8 }));
+  for (let i = -3; i <= 3; i++) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(26, 0.22, 0.35), beamMat);
+    beam.position.set(0, 6.15, i * 4.2);
+    group.add(beam);
+  }
 
-  const wallMat = track(new THREE.MeshStandardMaterial({ color: 0x222636, roughness: 0.85 }));
+  const wallMat = track(new THREE.MeshStandardMaterial({ color: 0x1c2230, roughness: 0.82 }));
+  const wallAccent = track(
+    new THREE.MeshStandardMaterial({
+      color: 0x2a3348,
+      roughness: 0.7,
+      map: track(woodTexture(THREE, '#2a3040', '#1a2030')),
+    }),
+  );
   for (const sx of [-1, 1]) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7, 36), wallMat);
-    wall.position.set(sx * 13.5, 2.5, -4);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.45, 7.2, 38), wallMat);
+    wall.position.set(sx * 13.2, 2.6, -3);
+    wall.receiveShadow = true;
     group.add(wall);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.2, 28), wallAccent);
+    panel.position.set(sx * 12.95, 1.8, -2);
+    group.add(panel);
     const strip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 0.2, 30),
+      new THREE.BoxGeometry(0.1, 0.16, 32),
       track(
         new THREE.MeshStandardMaterial({
           color: accent,
           emissive: accent,
-          emissiveIntensity: 0.45,
+          emissiveIntensity: 0.4,
         }),
       ),
     );
-    strip.position.set(sx * 13.2, 4.5, -3);
+    strip.position.set(sx * 12.9, 4.8, -2);
     group.add(strip);
   }
 
-  const back = new THREE.Mesh(new THREE.BoxGeometry(18, 6, 0.5), wallMat);
-  back.position.set(0, 2.5, -14.5);
+  // Pin deck arka duvar + skor ekranları
+  const back = new THREE.Mesh(new THREE.BoxGeometry(22, 6.5, 0.6), wallMat);
+  back.position.set(0, 2.6, -14.8);
+  back.receiveShadow = true;
   group.add(back);
-  const screen = new THREE.Mesh(
-    new THREE.BoxGeometry(10, 1.2, 0.1),
-    track(
-      new THREE.MeshStandardMaterial({
-        color: 0x0a0a12,
-        emissive: 0x3a2860,
-        emissiveIntensity: 0.25,
-      }),
-    ),
-  );
-  screen.position.set(0, 4.8, -14.2);
-  group.add(screen);
-  const pink = track(
+  const maskMat = track(new THREE.MeshStandardMaterial({ color: 0x0e1018, roughness: 0.75 }));
+  for (let i = -2; i <= 2; i++) {
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 1.2), maskMat);
+    hood.position.set(i * 3.6, 2.1, -13.6);
+    group.add(hood);
+    const screen = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, 0.9, 0.08),
+      track(
+        new THREE.MeshStandardMaterial({
+          color: 0x061018,
+          emissive: i === 0 ? 0x3d5a80 : 0x2a4060,
+          emissiveIntensity: 0.35,
+        }),
+      ),
+    );
+    screen.position.set(i * 3.6, 4.55, -14.4);
+    group.add(screen);
+  }
+  const neon = track(
     new THREE.MeshStandardMaterial({
       color: 0xff79c6,
       emissive: 0xff79c6,
-      emissiveIntensity: 0.55,
+      emissiveIntensity: 0.5,
     }),
   );
-  for (const y of [3.6, 5.4]) {
-    const s = new THREE.Mesh(new THREE.BoxGeometry(12, 0.12, 0.08), pink);
-    s.position.set(0, y, -14.15);
+  for (const y of [3.7, 5.2]) {
+    const s = new THREE.Mesh(new THREE.BoxGeometry(20, 0.1, 0.08), neon);
+    s.position.set(0, y, -14.35);
     group.add(s);
   }
 
   const laneMat = track(
     new THREE.MeshStandardMaterial({
       map: laneTex,
-      roughness: 0.35,
-      metalness: 0.05,
+      roughness: 0.32,
+      metalness: 0.06,
+    }),
+  );
+  const gutterMat = track(new THREE.MeshStandardMaterial({ color: 0x12151c, roughness: 0.65 }));
+  const gutterRail = track(
+    new THREE.MeshStandardMaterial({
+      color: accent,
+      emissive: accent,
+      emissiveIntensity: 0.25,
+      metalness: 0.4,
+      roughness: 0.4,
     }),
   );
   for (let i = -2; i <= 2; i++) {
     if (i === 0) continue;
-    const lane = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 20), laneMat);
-    lane.position.set(i * 3.6, -0.78, -2);
+    const lane = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.14, 22), laneMat);
+    lane.position.set(i * 3.6, -0.78, -3);
     lane.receiveShadow = true;
     group.add(lane);
     for (const gx of [-1, 1]) {
-      const gutter = new THREE.Mesh(
-        new THREE.BoxGeometry(0.35, 0.1, 20),
-        track(new THREE.MeshStandardMaterial({ color: 0x151820, roughness: 0.7 })),
-      );
-      gutter.position.set(i * 3.6 + gx * 1.15, -0.88, -2);
+      const gutter = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 22), gutterMat);
+      gutter.position.set(i * 3.6 + gx * 1.18, -0.9, -3);
       group.add(gutter);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 22), gutterRail);
+      rail.position.set(i * 3.6 + gx * 1.38, -0.72, -3);
+      group.add(rail);
     }
+    // Ball return
+    const ret = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.35, 3.2),
+      track(new THREE.MeshStandardMaterial({ color: 0x2a3040, metalness: 0.45, roughness: 0.4 })),
+    );
+    ret.position.set(i * 3.6 + (i > 0 ? 1.7 : -1.7), -0.55, 6.5);
+    group.add(ret);
   }
 
-  const seatMat = track(new THREE.MeshStandardMaterial({ color: 0x3a3050, roughness: 0.75 }));
+  // Oturma + masa
+  const seatMat = track(new THREE.MeshStandardMaterial({ color: 0x3a3558, roughness: 0.72 }));
+  const tableMat = track(new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.55 }));
   for (const sx of [-1, 1]) {
-    const bench = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.45, 1.2), seatMat);
-    bench.position.set(sx * 8, -0.4, 8);
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.5, 1.4), seatMat);
+    bench.position.set(sx * 7.5, -0.35, 9.2);
+    bench.castShadow = true;
+    bench.receiveShadow = true;
     group.add(bench);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.85, 0.28), seatMat);
+    back.position.set(sx * 7.5, 0.2, 9.75);
+    group.add(back);
+    const table = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 1.1), tableMat);
+    table.position.set(sx * 7.5, 0.05, 7.8);
+    table.castShadow = true;
+    group.add(table);
   }
 
-  // Eşit, yumuşak tavan yıkaması (sert spot halkası yok)
+  // Foul line şeritleri (yan şeritlerde)
+  const foulMat = track(
+    new THREE.MeshStandardMaterial({ color: 0xc04040, emissive: 0x801010, emissiveIntensity: 0.2 }),
+  );
+  for (let i = -2; i <= 2; i++) {
+    if (i === 0) continue;
+    const foul = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.02, 0.08), foulMat);
+    foul.position.set(i * 3.6, -0.7, 6.2);
+    group.add(foul);
+  }
+
   for (const [x, z] of [
-    [0, 3],
-    [0, -3],
+    [0, 4],
+    [0, -2],
     [0, -8],
-    [-5.5, -2],
-    [5.5, -2],
+    [-6, 1],
+    [6, 1],
+    [-6, -6],
+    [6, -6],
   ] as const) {
     const lamp = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.55, 0.75, 0.12, 16),
+      new THREE.CylinderGeometry(0.45, 0.65, 0.14, 16),
       track(
         new THREE.MeshStandardMaterial({
-          color: 0x333848,
+          color: 0x2a3040,
           emissive: 0xffe8c8,
-          emissiveIntensity: 0.22,
+          emissiveIntensity: 0.28,
         }),
       ),
     );
-    lamp.position.set(x, 5.95, z);
+    lamp.position.set(x, 6.05, z);
     group.add(lamp);
-    softSpot(THREE, group, x, 5.7, z, z - 1.5, 2.1);
+    softSpot(THREE, group, x, 5.85, z, z - 1.2, 1.85);
   }
 }

@@ -78,23 +78,25 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
         touchAction: 'none',
       });
 
-      // Nötr, yumuşak baz ışık (mor/neon cast yok — renk bozulmasın)
-      const hemi = new THREE.HemisphereLight(0xf2efe6, 0x2a3140, 0.55);
+      // Nötr baz + belirgin gölge (hemi düşük → gölgeler daha koyu)
+      const hemi = new THREE.HemisphereLight(0xf2efe6, 0x1a2030, 0.38);
       scene.add(hemi);
-      const key = new THREE.DirectionalLight(0xfff4e8, 0.75);
-      key.position.set(5, 16, 4);
+      const key = new THREE.DirectionalLight(0xfff4e8, 1.05);
+      key.position.set(4, 18, 5);
       key.castShadow = true;
-      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.mapSize.set(2048, 2048);
       key.shadow.camera.near = 1;
-      key.shadow.camera.far = 40;
-      key.shadow.camera.left = -12;
-      key.shadow.camera.right = 12;
-      key.shadow.camera.top = 12;
-      key.shadow.camera.bottom = -12;
-      key.shadow.bias = -0.0002;
+      key.shadow.camera.far = 50;
+      key.shadow.camera.left = -14;
+      key.shadow.camera.right = 14;
+      key.shadow.camera.top = 14;
+      key.shadow.camera.bottom = -14;
+      key.shadow.bias = -0.00035;
+      key.shadow.normalBias = 0.035;
+      key.shadow.radius = 2.5;
       scene.add(key);
-      const fill = new THREE.DirectionalLight(0xd8e4f5, 0.28);
-      fill.position.set(-7, 10, -5);
+      const fill = new THREE.DirectionalLight(0xd8e4f5, 0.18);
+      fill.position.set(-8, 10, -5);
       scene.add(fill);
 
       cleanupScene = onReadyRef.current({ THREE, scene, camera, renderer, root: el });

@@ -185,7 +185,16 @@ export function BowlingGame(props: GameProps) {
     const lane = new THREE.Mesh(new THREE.BoxGeometry(LANE_HALF * 2, 0.2, 24), laneMat);
     lane.position.set(0, -0.1, -1);
     lane.receiveShadow = true;
+    lane.castShadow = true;
     root.add(lane);
+    // Approach halı (oyuncu tarafı)
+    const approach = new THREE.Mesh(
+      new THREE.BoxGeometry(LANE_HALF * 2 + 2.4, 0.08, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a2438, roughness: 0.92 }),
+    );
+    approach.position.set(0, -0.14, 10.2);
+    approach.receiveShadow = true;
+    root.add(approach);
     const gutterMat = new THREE.MeshPhysicalMaterial({
       color: 0x1b1d2b,
       roughness: 0.55,
@@ -374,6 +383,8 @@ export function BowlingGame(props: GameProps) {
     let pinsetStanding: number[] = ALL_PINS;
     let seenT: number | null = null;
     let pendingSync = false;
+    /** Patch geldikten sonra labutları hemen dizme — settle + pinsetter bekleniyor */
+    let pinsetQueued = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     let aimTx = 0;
     let raf = 0;
@@ -405,28 +416,41 @@ export function BowlingGame(props: GameProps) {
 
     const resetPins = (standing: number[], animate = false) => {
       if (animate && mode !== 'pinset') {
+        pinsetQueued = false;
         pinsetStanding = standing;
         mode = 'pinset';
         modeTime = 0;
+        // Animasyon başında: yerleştirilecekler gizlensin, düşenler süpürülsün
+        for (const p of pins) {
+          if (p.fallen) continue;
+          if (standing.includes(p.id) && !p.fallen) {
+            // Ayakta kalanlar (spare) yerinde kalsın
+            p.mesh.visible = true;
+          }
+        }
         return;
       }
       applyPinsImmediate(standing);
     };
 
     const sync = () => {
-      if (mode !== 'idle') {
-        pendingSync = true;
+      const lr = readLastRoll(propsRef.current.session.state.lastRoll);
+      const uid = propsRef.current.userId;
+      // Pinsetter / settle sırasında dizilim yapma (strike bug)
+      if (mode === 'pinset' || pinsetQueued || mode === 'sim' || mode === 'replay') {
+        if (lr && (seenT === null || lr.t !== seenT) && lr.by === uid) {
+          seenT = lr.t;
+        }
+        if (mode === 'pinset' || pinsetQueued) pendingSync = false;
+        else pendingSync = true;
         return;
       }
       pendingSync = false;
-      const lr = readLastRoll(propsRef.current.session.state.lastRoll);
-      const uid = propsRef.current.userId;
       if (seenT === null) {
         seenT = lr?.t ?? 0;
       } else if (lr && lr.t !== seenT) {
         seenT = lr.t;
         if (lr.by !== uid) {
-          // Başkasının atışını görsel olarak oynat (atış öncesi labutlar)
           resetPins(lr.standingBefore.length ? lr.standingBefore : ALL_PINS);
           resetBall();
           ball.active = true;
@@ -471,6 +495,7 @@ export function BowlingGame(props: GameProps) {
       seenT = roll.t;
       const turn = Number(p.session.state.turn ?? 0);
       mode = 'idle';
+      pinsetQueued = true; // sync labutları hemen dizmesin
       if (knocked.length >= 10 || (reset && knocked.length >= standingBefore.length)) {
         GameAudio.strike();
       } else if (knocked.length > 0) {
@@ -482,15 +507,15 @@ export function BowlingGame(props: GameProps) {
         .catch(() => undefined)
         .finally(() => {
           setBusy(false);
-          // Devrilen labutları kısa süre göster, sonra süpür
+          if (settleTimer) clearTimeout(settleTimer);
+          // Devrilen labutları göster, sonra tek pinsetter animasyonu
           settleTimer = setTimeout(() => {
             settleTimer = null;
-            if (mode === 'idle') {
-              const lr = readLastRoll(propsRef.current.session.state.lastRoll);
-              resetPins(lr?.standing ?? ALL_PINS, true);
-              resetBall();
-            }
-          }, 1400);
+            if (mode === 'sim' || mode === 'replay') return;
+            const lr = readLastRoll(propsRef.current.session.state.lastRoll);
+            resetPins(lr?.standing ?? ALL_PINS, true);
+            resetBall();
+          }, 1200);
         });
     };
 
@@ -665,10 +690,10 @@ export function BowlingGame(props: GameProps) {
         if (modeTime > 2.6) {
           mode = 'idle';
           replay = null;
+          pinsetQueued = true;
           const lr = readLastRoll(p.session.state.lastRoll);
           resetPins(lr?.standing ?? ALL_PINS, true);
           resetBall();
-          if (pendingSync) sync();
         }
       } else if (mode === 'pinset') {
         modeTime += dt;
