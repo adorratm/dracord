@@ -104,8 +104,7 @@ function laneWoodTexture(THREE: Three): Texture {
 
 /**
  * Oyun alanını kapatmayan iç mekan.
- * Üstten bakan kameralarda (tavla/bilardo/okey) tavan/zemin oyunu örtmez:
- * zemin halka (ortası boş), tavan yok veya yalnızca kenar kirişleri.
+ * Işıklar yumuşak ve nötr — renkleri yıkayan spot/mor neon yok.
  */
 export function addGameVenue(
   THREE: Three,
@@ -125,26 +124,25 @@ export function addGameVenue(
 
   const playR = opts.playRadius ?? (theme === 'bowling' ? 4 : theme === 'tavla' ? 10 : 7);
 
-  // Arka plan: soft gradient (sis yok — oyun soluklaşmasın)
   scene.fog = null;
   const bg = makeNoiseTexture(THREE, 8, 512, (ctx, w, h) => {
     const g = ctx.createLinearGradient(0, 0, 0, h);
     if (theme === 'bowling') {
-      g.addColorStop(0, '#0e121c');
+      g.addColorStop(0, '#12161f');
       g.addColorStop(0.55, '#1a2030');
-      g.addColorStop(1, '#0a0c12');
+      g.addColorStop(1, '#0c0e14');
     } else if (theme === 'tavla') {
-      g.addColorStop(0, '#1c1430');
-      g.addColorStop(0.5, '#2a1f42');
-      g.addColorStop(1, '#120c1c');
-    } else if (theme === 'okey') {
-      g.addColorStop(0, '#181428');
-      g.addColorStop(0.5, '#241c38');
+      g.addColorStop(0, '#1a1428');
+      g.addColorStop(0.5, '#241c36');
       g.addColorStop(1, '#100c18');
+    } else if (theme === 'okey') {
+      g.addColorStop(0, '#161222');
+      g.addColorStop(0.5, '#201828');
+      g.addColorStop(1, '#0e0a14');
     } else {
-      g.addColorStop(0, '#141018');
-      g.addColorStop(0.5, '#1e1824');
-      g.addColorStop(1, '#0c0a10');
+      g.addColorStop(0, '#16120e');
+      g.addColorStop(0.5, '#1c1612');
+      g.addColorStop(1, '#0c0a08');
     }
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
@@ -152,7 +150,6 @@ export function addGameVenue(
   track(bg);
   scene.background = bg;
 
-  // Ortam yansıması (PBR) — asenkron; oyun geometrisini bloklamaz
   const envState: { dispose: (() => void) | null } = { dispose: null };
   if (opts.renderer) {
     const renderer = opts.renderer;
@@ -163,6 +160,7 @@ export function addGameVenue(
         const env = new RoomEnvironment();
         const rt = pmremGen.fromScene(env as unknown as Scene, 0.04);
         scene.environment = rt.texture;
+        scene.environmentIntensity = 0.55;
         envState.dispose = () => {
           rt.dispose();
           pmremGen.dispose();
@@ -173,22 +171,19 @@ export function addGameVenue(
       .catch(() => undefined);
   }
 
-  const neon =
-    theme === 'bowling' ? 0x8be9fd : theme === 'tavla' ? 0xffb86c : theme === 'okey' ? 0xbd93f9 : 0xd4a574;
+  const accent =
+    theme === 'bowling' ? 0x6ec8d4 : theme === 'tavla' ? 0xd4a574 : theme === 'okey' ? 0xa78bfa : 0xc4a574;
 
   if (theme === 'bowling') {
-    buildBowlingAlley(THREE, group, track, neon);
+    buildBowlingAlley(THREE, group, track, accent);
   } else {
-    buildTableRoom(THREE, group, track, theme, playR, neon);
+    buildTableRoom(THREE, group, track, theme, playR, accent);
   }
 
-  // Dolgu ışık (mekan)
-  const rim = new THREE.PointLight(neon, 0.65, 40, 2);
-  rim.position.set(0, theme === 'bowling' ? 4.5 : 6, theme === 'bowling' ? -2 : 0);
+  // Çok hafif dolgu — renk kayması yaratmayan düşük yoğunluk
+  const rim = new THREE.PointLight(0xffe8cc, 0.22, 32, 2);
+  rim.position.set(theme === 'bowling' ? 0 : -3.5, theme === 'bowling' ? 3.8 : 5.5, theme === 'bowling' ? 2 : 2.5);
   group.add(rim);
-  const warm = new THREE.PointLight(0xffd8a8, 0.45, 35, 2);
-  warm.position.set(-5, 5, 4);
-  group.add(warm);
 
   return () => {
     scene.fog = null;
@@ -203,13 +198,31 @@ export function addGameVenue(
   };
 }
 
+function softSpot(
+  THREE: Three,
+  group: import('three').Group,
+  x: number,
+  y: number,
+  z: number,
+  lookZ: number,
+  intensity: number,
+) {
+  const light = new THREE.SpotLight(0xfff0dd, intensity, 20, Math.PI / 3.2, 0.72, 1.35);
+  light.position.set(x, y, z);
+  light.target.position.set(x * 0.35, 0, lookZ);
+  light.castShadow = false;
+  group.add(light);
+  group.add(light.target);
+  return light;
+}
+
 function buildTableRoom(
   THREE: Three,
   group: import('three').Group,
   track: <T extends Material | Texture | { dispose: () => void }>(x: T) => T,
   theme: VenueTheme,
   playR: number,
-  neon: number,
+  accent: number,
 ) {
   const woodTex = track(woodTexture(THREE));
   woodTex.repeat.set(4, 4);
@@ -222,7 +235,6 @@ function buildTableRoom(
   );
   carpetTex.repeat.set(6, 6);
 
-  // Zemin: ORTA DELİKLİ halka — üstten bakınca masa görünür
   const floorMat = track(
     new THREE.MeshStandardMaterial({
       map: carpetTex,
@@ -230,26 +242,19 @@ function buildTableRoom(
       metalness: 0.02,
     }),
   );
-  const floor = new THREE.Mesh(
-    new THREE.RingGeometry(playR * 0.92, playR + 14, 64),
-    floorMat,
-  );
+  const floor = new THREE.Mesh(new THREE.RingGeometry(playR * 0.92, playR + 14, 64), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.9;
   floor.receiveShadow = true;
   group.add(floor);
 
-  // Merkezde çok koyu ince zemin (masa altı gölge), masa geometrisinin ALTINDA
-  const underMat = track(
-    new THREE.MeshStandardMaterial({ color: 0x0a0810, roughness: 1 }),
-  );
+  const underMat = track(new THREE.MeshStandardMaterial({ color: 0x0a0810, roughness: 1 }));
   const under = new THREE.Mesh(new THREE.CircleGeometry(playR * 0.9, 48), underMat);
   under.rotation.x = -Math.PI / 2;
   under.position.y = -0.95;
   under.receiveShadow = true;
   group.add(under);
 
-  // 4 duvar paneli (kamera üstte — duvarlar görüşü kesmez)
   const wallTex = track(woodTexture(THREE, '#2c2038', '#1a1424'));
   wallTex.repeat.set(2, 1);
   const wallMat = track(
@@ -275,62 +280,56 @@ function buildTableRoom(
     group.add(p);
   }
 
-  // Kenar neon şeritler (duvar üstü)
-  const neonMat = track(new THREE.MeshStandardMaterial({
-    color: neon,
-    emissive: neon,
-    emissiveIntensity: 0.85,
-    roughness: 0.4,
-  }));
+  const neonMat = track(
+    new THREE.MeshStandardMaterial({
+      color: accent,
+      emissive: accent,
+      emissiveIntensity: 0.35,
+      roughness: 0.45,
+    }),
+  );
   for (const z of [-dist + 0.2, dist - 0.2]) {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(dist * 2, 0.08, 0.08), neonMat);
     strip.position.set(0, wallH - 0.3, z);
     group.add(strip);
   }
 
-  // Asılı avizeler — masa ÜSTÜNDE ama küçük, kamerayı kapatmaz
+  // Avize gövdeleri (ışık kaynağı yumuşak, düşük yoğunluk)
   const shadeMat = track(
     new THREE.MeshStandardMaterial({
-      color: 0x2a2030,
-      emissive: neon,
-      emissiveIntensity: 0.25,
-      roughness: 0.45,
+      color: 0x2a2420,
+      emissive: 0xffd8a8,
+      emissiveIntensity: 0.18,
+      roughness: 0.5,
     }),
   );
-  const lampSpots: [number, number][] =
+  const lampSpots: [number, number, number][] =
     theme === 'billiards'
       ? [
-          [-2.2, 0],
-          [2.2, 0],
+          [-1.6, 3.8, 0],
+          [1.6, 3.8, 0],
         ]
       : [
-          [-3, -2],
-          [3, -2],
-          [0, 2.5],
+          [-2.4, 4.0, -1.2],
+          [2.4, 4.0, -1.2],
+          [0, 4.0, 1.8],
         ];
-  for (const [x, z] of lampSpots) {
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.7, 0.28, 20), shadeMat);
-    shade.position.set(x, 4.2, z);
+  for (const [x, y, z] of lampSpots) {
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.85, 0.22, 20), shadeMat);
+    shade.position.set(x, y, z);
     group.add(shade);
     const cord = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.02, 1.2, 6),
+      new THREE.CylinderGeometry(0.018, 0.018, 1.0, 6),
       track(new THREE.MeshStandardMaterial({ color: 0x111111 })),
     );
-    cord.position.set(x, 5.0, z);
+    cord.position.set(x, y + 0.65, z);
     group.add(cord);
-    const light = new THREE.SpotLight(0xffe6c8, 8, 18, Math.PI / 5, 0.45, 1);
-    light.position.set(x, 4.0, z);
-    light.target.position.set(x, 0, z);
-    light.castShadow = true;
-    group.add(light);
-    group.add(light.target);
+    // Bilardo/tavla/okey: yumuşak geniş spot — topları/taşları yıkamaz
+    softSpot(THREE, group, x, y - 0.15, z, z, theme === 'billiards' ? 1.65 : 1.9);
   }
 
-  // Dekor
   if (theme === 'billiards') {
-    const rackMat = track(
-      new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.6 }),
-    );
+    const rackMat = track(new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.6 }));
     for (const sx of [-1, 1]) {
       const rack = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.4, 2.8), rackMat);
       rack.position.set(sx * (playR + 2.2), 0.6, -1);
@@ -346,12 +345,7 @@ function buildTableRoom(
       }
     }
   } else if (theme === 'tavla') {
-    const cushionMat = track(
-      new THREE.MeshStandardMaterial({
-        color: 0x5a3a7a,
-        roughness: 0.8,
-      }),
-    );
+    const cushionMat = track(new THREE.MeshStandardMaterial({ color: 0x5a3a7a, roughness: 0.8 }));
     for (const [x, z, w, d] of [
       [0, playR + 3.2, 8, 1.6],
       [0, -(playR + 3.2), 8, 1.6],
@@ -364,10 +358,7 @@ function buildTableRoom(
       group.add(back);
     }
   } else {
-    // okey
-    const shelfMat = track(
-      new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.65 }),
-    );
+    const shelfMat = track(new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.65 }));
     for (const sx of [-1, 1]) {
       const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.8, 3.2), shelfMat);
       shelf.position.set(sx * (playR + 2.5), 0.9, 0);
@@ -380,14 +371,13 @@ function buildBowlingAlley(
   THREE: Three,
   group: import('three').Group,
   track: <T extends Material | Texture | { dispose: () => void }>(x: T) => T,
-  neon: number,
+  accent: number,
 ) {
   const laneTex = track(laneWoodTexture(THREE));
   laneTex.repeat.set(1, 3);
   const concrete = track(concreteTexture(THREE));
   concrete.repeat.set(4, 4);
 
-  // Kapalı salon zemini
   const floorMat = track(
     new THREE.MeshStandardMaterial({ map: concrete, roughness: 0.9, metalness: 0.05 }),
   );
@@ -396,7 +386,6 @@ function buildBowlingAlley(
   floor.receiveShadow = true;
   group.add(floor);
 
-  // Tavan (kamera içeride — bowling yatay bakış)
   const ceilMat = track(
     new THREE.MeshStandardMaterial({ color: 0x1a1d28, roughness: 0.95, side: THREE.DoubleSide }),
   );
@@ -404,22 +393,18 @@ function buildBowlingAlley(
   ceil.position.set(0, 6.2, -4);
   group.add(ceil);
 
-  // Yan duvarlar
-  const wallMat = track(
-    new THREE.MeshStandardMaterial({ color: 0x222636, roughness: 0.85 }),
-  );
+  const wallMat = track(new THREE.MeshStandardMaterial({ color: 0x222636, roughness: 0.85 }));
   for (const sx of [-1, 1]) {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7, 36), wallMat);
     wall.position.set(sx * 13.5, 2.5, -4);
     group.add(wall);
-    // Neon duvar şeridi
     const strip = new THREE.Mesh(
       new THREE.BoxGeometry(0.12, 0.2, 30),
       track(
         new THREE.MeshStandardMaterial({
-          color: neon,
-          emissive: neon,
-          emissiveIntensity: 1.2,
+          color: accent,
+          emissive: accent,
+          emissiveIntensity: 0.45,
         }),
       ),
     );
@@ -427,7 +412,6 @@ function buildBowlingAlley(
     group.add(strip);
   }
 
-  // Arka pin duvarı + skor paneli
   const back = new THREE.Mesh(new THREE.BoxGeometry(18, 6, 0.5), wallMat);
   back.position.set(0, 2.5, -14.5);
   group.add(back);
@@ -436,8 +420,8 @@ function buildBowlingAlley(
     track(
       new THREE.MeshStandardMaterial({
         color: 0x0a0a12,
-        emissive: 0x4a3080,
-        emissiveIntensity: 0.4,
+        emissive: 0x3a2860,
+        emissiveIntensity: 0.25,
       }),
     ),
   );
@@ -447,7 +431,7 @@ function buildBowlingAlley(
     new THREE.MeshStandardMaterial({
       color: 0xff79c6,
       emissive: 0xff79c6,
-      emissiveIntensity: 1.1,
+      emissiveIntensity: 0.55,
     }),
   );
   for (const y of [3.6, 5.4]) {
@@ -456,7 +440,6 @@ function buildBowlingAlley(
     group.add(s);
   }
 
-  // Yan bowling şeritleri (dokulu)
   const laneMat = track(
     new THREE.MeshStandardMaterial({
       map: laneTex,
@@ -480,40 +463,33 @@ function buildBowlingAlley(
     }
   }
 
-  // Oturma / approach alanı
-  const seatMat = track(
-    new THREE.MeshStandardMaterial({ color: 0x3a3050, roughness: 0.75 }),
-  );
+  const seatMat = track(new THREE.MeshStandardMaterial({ color: 0x3a3050, roughness: 0.75 }));
   for (const sx of [-1, 1]) {
     const bench = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.45, 1.2), seatMat);
     bench.position.set(sx * 8, -0.4, 8);
     group.add(bench);
   }
 
-  // Tavan spotları
+  // Eşit, yumuşak tavan yıkaması (sert spot halkası yok)
   for (const [x, z] of [
-    [0, 2],
-    [0, -4],
-    [0, -9],
-    [-6, -2],
-    [6, -2],
+    [0, 3],
+    [0, -3],
+    [0, -8],
+    [-5.5, -2],
+    [5.5, -2],
   ] as const) {
     const lamp = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.7, 0.2, 16),
+      new THREE.CylinderGeometry(0.55, 0.75, 0.12, 16),
       track(
         new THREE.MeshStandardMaterial({
           color: 0x333848,
-          emissive: neon,
-          emissiveIntensity: 0.5,
+          emissive: 0xffe8c8,
+          emissiveIntensity: 0.22,
         }),
       ),
     );
-    lamp.position.set(x, 5.9, z);
+    lamp.position.set(x, 5.95, z);
     group.add(lamp);
-    const spot = new THREE.SpotLight(0xfff0dd, 12, 22, Math.PI / 6, 0.5, 1);
-    spot.position.set(x, 5.7, z);
-    spot.target.position.set(x, 0, z - 2);
-    group.add(spot);
-    group.add(spot.target);
+    softSpot(THREE, group, x, 5.7, z, z - 1.5, 2.1);
   }
 }

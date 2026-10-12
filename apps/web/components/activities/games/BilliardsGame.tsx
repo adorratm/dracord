@@ -46,30 +46,31 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-/** Gerçekçi cep — masa yüzeyini yutmayacak kadar küçük */
-const POCKET_R = 0.34;
-const POCKET_JAW = 0.48;
+/** Cep — görsel + fizik; köşe/yan açıklıklar yastıklarla uyumlu */
+const POCKET_R = 0.4;
+const POCKET_JAW = 0.56;
 const POCKETS: [number, number][] = [
-  [-4.92, -2.42],
-  [0, -2.48],
-  [4.92, -2.42],
-  [-4.92, 2.42],
-  [0, 2.48],
-  [4.92, 2.42],
+  [-4.95, -2.45],
+  [0, -2.52],
+  [4.95, -2.45],
+  [-4.95, 2.45],
+  [0, 2.52],
+  [4.95, 2.45],
 ];
-/** Güç çubuğu: boştan doluya süre (ms) */
-const CHARGE_DURATION_MS = 1600;
+/** Güç çubuğu: 0→100 doğrusal süre (ms) — kısa süre / yuvarlama atlama hissi vermesin */
+const CHARGE_DURATION_MS = 2400;
 const CUE_START = { x: -3, z: 0 };
+/** Klasik doygun bilardo renkleri (pastel değil) */
 const BALL_COLORS = [
-  '#f8f8f2',
-  '#f1fa8c',
-  '#8be9fd',
-  '#ff5555',
-  '#bd93f9',
-  '#ffb86c',
-  '#50fa7b',
-  '#ff79c6',
-  '#282a36',
+  '#f5f0e6',
+  '#e6b800',
+  '#1a5fb4',
+  '#c01c28',
+  '#5c2d91',
+  '#e85d04',
+  '#2a9d4a',
+  '#9b2226',
+  '#141414',
 ];
 const RACK_ORDER = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
 
@@ -258,76 +259,170 @@ export function BilliardsGame(props: GameProps) {
     const textures: Texture[] = [];
 
     const wood = makeWoodMaterial(THREE, assets, 'warm');
-    const base = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.85, 6.6), wood);
+    const woodDark = makeWoodMaterial(THREE, assets, 'dark');
+    const base = new THREE.Mesh(new THREE.BoxGeometry(11.7, 0.85, 6.7), wood);
     base.position.y = -0.48;
     base.castShadow = true;
     base.receiveShadow = true;
     root.add(base);
-    const apron = new THREE.Mesh(
-      new THREE.BoxGeometry(11.9, 0.24, 6.9),
-      makeWoodMaterial(THREE, assets, 'dark'),
-    );
-    apron.position.y = -0.1;
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(12.05, 0.26, 7.05), woodDark);
+    apron.position.y = -0.08;
     root.add(apron);
-    const legs = makeWoodMaterial(THREE, assets, 'dark');
     for (const [lx, lz] of [
-      [-5.2, -2.8],
-      [5.2, -2.8],
-      [-5.2, 2.8],
-      [5.2, 2.8],
+      [-5.25, -2.85],
+      [5.25, -2.85],
+      [-5.25, 2.85],
+      [5.25, 2.85],
     ] as const) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.9, 12), legs);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.9, 12), woodDark);
       leg.position.set(lx, -0.95, lz);
       leg.castShadow = true;
       root.add(leg);
     }
-    const felt = new THREE.Mesh(new THREE.BoxGeometry(W, 0.1, D), makeFeltMaterial(THREE, '#1a6b3a', assets));
-    felt.position.y = -0.05;
+
+    // Keçe: delikli (Shape holes) — gerçek cep açıklıkları
+    const feltShape = new THREE.Shape();
+    feltShape.moveTo(-W / 2, -D / 2);
+    feltShape.lineTo(W / 2, -D / 2);
+    feltShape.lineTo(W / 2, D / 2);
+    feltShape.lineTo(-W / 2, D / 2);
+    feltShape.closePath();
+    for (const [px, pz] of POCKETS) {
+      const hole = new THREE.Path();
+      hole.absarc(px, pz, POCKET_R * 0.98, 0, Math.PI * 2, true);
+      feltShape.holes.push(hole);
+    }
+    const feltGeo = new THREE.ExtrudeGeometry(feltShape, {
+      depth: 0.09,
+      bevelEnabled: false,
+      curveSegments: 28,
+    });
+    const felt = new THREE.Mesh(feltGeo, makeFeltMaterial(THREE, '#1f7a42', assets));
+    felt.rotation.x = Math.PI / 2;
+    felt.position.y = 0;
     felt.receiveShadow = true;
     root.add(felt);
-    const cushionMat = makeFeltMaterial(THREE, '#14532d', assets);
+
+    const cushionMat = makeFeltMaterial(THREE, '#166534', assets);
     const cush = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.28, d), cushionMat);
-      m.position.set(x, 0.12, z);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.26, d), cushionMat);
+      m.position.set(x, 0.13, z);
       m.castShadow = true;
       root.add(m);
     };
-    cush(3.6, 0.38, -2.5, -2.68);
-    cush(3.6, 0.38, 2.5, -2.68);
-    cush(3.6, 0.38, -2.5, 2.68);
-    cush(3.6, 0.38, 2.5, 2.68);
-    cush(0.38, 3.4, -5.18, 0);
-    cush(0.38, 3.4, 5.18, 0);
-    const railMat = makeWoodMaterial(THREE, assets, 'warm');
+    // Uzun kenar yastıkları — köşe + yan cep boşlukları
+    const gapC = POCKET_R + 0.22;
+    const gapS = POCKET_R + 0.28;
+    for (const sz of [-1, 1] as const) {
+      const z = sz * (HZ + 0.28);
+      const len = HX - gapC - gapS;
+      const cx = (HX + gapC - gapS) / 2;
+      cush(len, 0.36, -cx, z);
+      cush(len, 0.36, cx, z);
+    }
+    // Kısa kenar yastıkları — yalnızca orta segment (köşe cepleri açık)
+    for (const sx of [-1, 1] as const) {
+      cush(0.36, (HZ - gapC) * 2, sx * (HX + 0.28), 0);
+    }
+    // Cep ağızları — yastığın daireye kıvrılması (referans)
+    const jawMat = cushionMat;
+    for (const [px, pz] of POCKETS) {
+      const isSide = Math.abs(px) < 0.2;
+      const jaw = new THREE.Mesh(
+        new THREE.TorusGeometry(POCKET_R * 0.92, 0.07, 10, 20, Math.PI * (isSide ? 0.55 : 0.7)),
+        jawMat,
+      );
+      jaw.rotation.x = Math.PI / 2;
+      if (isSide) {
+        jaw.rotation.z = pz > 0 ? Math.PI : 0;
+      } else {
+        const ang = Math.atan2(pz, px);
+        jaw.rotation.z = ang + Math.PI * 0.75;
+      }
+      jaw.position.set(px, 0.12, pz);
+      root.add(jaw);
+    }
+
+    const railMat = wood;
     const rail = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), railMat);
-      m.position.set(x, 0.28, z);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, d), railMat);
+      m.position.set(x, 0.3, z);
       m.castShadow = true;
       root.add(m);
     };
-    rail(11.5, 0.55, 0, -3.05);
-    rail(11.5, 0.55, 0, 3.05);
-    rail(0.55, 5.6, -5.55, 0);
-    rail(0.55, 5.6, 5.55, 0);
-    const pocketGeo = new THREE.CircleGeometry(POCKET_R * 0.95, 28);
-    const pocketMat = new THREE.MeshStandardMaterial({ color: 0x050508, roughness: 1 });
-    const pocketRimGeo = new THREE.RingGeometry(POCKET_R * 0.95, POCKET_R * 1.25, 28);
-    const pocketRimMat = new THREE.MeshPhysicalMaterial({
-      color: 0x222222,
+    // Ahşap bantda cep boşlukları
+    for (const sz of [-1, 1] as const) {
+      const z = sz * 3.08;
+      const len = HX - gapC - gapS;
+      const cx = (HX + gapC - gapS) / 2;
+      rail(len, 0.52, -cx, z);
+      rail(len, 0.52, cx, z);
+    }
+    for (const sx of [-1, 1] as const) {
+      rail(0.52, (HZ - gapC) * 2, sx * 5.58, 0);
+    }
+    // Diamond nişan işaretleri (yan cep üstü boş)
+    const diamondMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf0d878,
       roughness: 0.35,
-      metalness: 0.4,
+      metalness: 0.25,
+      clearcoat: 0.4,
+    });
+    const diamondGeo = new THREE.SphereGeometry(0.055, 12, 10);
+    for (const sz of [-1, 1] as const) {
+      for (const t of [-2 / 3, -1 / 3, 1 / 3, 2 / 3]) {
+        const d = new THREE.Mesh(diamondGeo, diamondMat);
+        d.position.set(t * HX, 0.42, sz * 3.08);
+        root.add(d);
+      }
+    }
+    for (const sx of [-1, 1] as const) {
+      for (const t of [-0.5, 0, 0.5]) {
+        const d = new THREE.Mesh(diamondGeo, diamondMat);
+        d.position.set(sx * 5.58, 0.42, t * HZ);
+        root.add(d);
+      }
+    }
+
+    // Derin siyah cep kuyuları + deri kenar
+    const pocketWellMat = new THREE.MeshStandardMaterial({ color: 0x030305, roughness: 1 });
+    const pocketRimMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1a1a1a,
+      roughness: 0.55,
+      metalness: 0.15,
       side: THREE.DoubleSide,
     });
+    const pocketLeatherMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.85 });
     for (const [px, pz] of POCKETS) {
-      const m = new THREE.Mesh(pocketGeo, pocketMat);
-      m.rotation.x = -Math.PI / 2;
-      m.position.set(px, 0.01, pz);
-      root.add(m);
-      const rim = new THREE.Mesh(pocketRimGeo, pocketRimMat);
+      const well = new THREE.Mesh(
+        new THREE.CylinderGeometry(POCKET_R * 0.95, POCKET_R * 1.08, 0.65, 32),
+        pocketWellMat,
+      );
+      well.position.set(px, -0.28, pz);
+      root.add(well);
+      const throat = new THREE.Mesh(
+        new THREE.CircleGeometry(POCKET_R * 0.95, 32),
+        pocketLeatherMat,
+      );
+      throat.rotation.x = -Math.PI / 2;
+      throat.position.set(px, -0.02, pz);
+      root.add(throat);
+      const rim = new THREE.Mesh(
+        new THREE.RingGeometry(POCKET_R * 0.92, POCKET_R * 1.22, 32),
+        pocketRimMat,
+      );
       rim.rotation.x = -Math.PI / 2;
-      rim.position.set(px, 0.015, pz);
+      rim.position.set(px, 0.02, pz);
       root.add(rim);
     }
+
+    const shadowGeo = new THREE.CircleGeometry(R * 0.95, 20);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+    });
 
     const bodies = new Map<number, Body>();
     for (let id = 0; id <= 15; id++) {
@@ -335,23 +430,147 @@ export function BilliardsGame(props: GameProps) {
       const mesh = makePoolBall(THREE, id, R, color, id >= 9, assets);
       mesh.position.y = R;
       root.add(mesh);
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.01;
+      root.add(shadow);
+      (mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow = shadow;
       bodies.set(id, { id, x: 0, z: 0, vx: 0, vz: 0, sunk: false, tx: 0, tz: 0, mesh });
     }
 
-    const aimGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(),
-      new THREE.Vector3(1, 0, 0),
-    ]);
-    const aimLine: Line = new THREE.Line(
-      aimGeo,
-      new THREE.LineBasicMaterial({ color: 0xbd93f9, transparent: true, opacity: 0.85 }),
+    const aimMat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.92,
+    });
+    const aimPathMat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.75,
+    });
+    const makeAimLine = () => {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(),
+        new THREE.Vector3(1, 0, 0),
+      ]);
+      return new THREE.Line(geo, aimMat);
+    };
+    const aimLine: Line = makeAimLine();
+    const aimObjLine: Line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]),
+      aimPathMat,
+    );
+    const aimCueLine: Line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]),
+      aimPathMat,
     );
     aimLine.visible = false;
-    root.add(aimLine);
+    aimObjLine.visible = false;
+    aimCueLine.visible = false;
+    root.add(aimLine, aimObjLine, aimCueLine);
+    // Ghost ball — çarpışma anındaki isteka topu konumu
+    const ghostRing = new THREE.Mesh(
+      new THREE.RingGeometry(R * 0.92, R * 1.08, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ghostRing.rotation.x = -Math.PI / 2;
+    ghostRing.visible = false;
+    root.add(ghostRing);
+    const ghostFill = new THREE.Mesh(
+      new THREE.CircleGeometry(R * 0.88, 40),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+      }),
+    );
+    ghostFill.rotation.x = -Math.PI / 2;
+    ghostFill.visible = false;
+    root.add(ghostFill);
     const CUE_LEN = 4;
     const cueMesh = makeCueStick(THREE, CUE_LEN, assets);
     cueMesh.visible = false;
     root.add(cueMesh);
+
+    const setLine = (line: Line, x0: number, z0: number, x1: number, z1: number) => {
+      const pos = line.geometry.attributes.position!;
+      pos.setXYZ(0, x0, R, z0);
+      pos.setXYZ(1, x1, R, z1);
+      pos.needsUpdate = true;
+      line.geometry.computeBoundingSphere();
+    };
+
+    /** İlk hedef top + ghost konum + sapma yönleri */
+    const predictAim = (cx: number, cz: number, dx: number, dz: number) => {
+      let bestT = Infinity;
+      let hit: Body | null = null;
+      let gx = 0;
+      let gz = 0;
+      for (const b of bodies.values()) {
+        if (b.id === 0 || b.sunk) continue;
+        // Ray–daire: |C + D*t - B| = 2R
+        const fx = cx - b.x;
+        const fz = cz - b.z;
+        const bDot = fx * dx + fz * dz;
+        const c = fx * fx + fz * fz - 4 * R * R;
+        const disc = bDot * bDot - c;
+        if (disc < 0) continue;
+        const t = -bDot - Math.sqrt(disc);
+        if (t < 0.02 || t >= bestT) continue;
+        bestT = t;
+        hit = b;
+        gx = cx + dx * t;
+        gz = cz + dz * t;
+      }
+      if (!hit) {
+        return {
+          hit: null as Body | null,
+          gx: cx + dx * 3.2,
+          gz: cz + dz * 3.2,
+          nx: dx,
+          nz: dz,
+          cueDx: dx,
+          cueDz: dz,
+          objDx: dx,
+          objDz: dz,
+        };
+      }
+      let nx = hit.x - gx;
+      let nz = hit.z - gz;
+      const nl = Math.hypot(nx, nz) || 1;
+      nx /= nl;
+      nz /= nl;
+      // Eşit kütle: obje normal boyunca, isteka teğet bileşeni
+      const vn = dx * nx + dz * nz;
+      let cueDx = dx - vn * nx;
+      let cueDz = dz - vn * nz;
+      const cl = Math.hypot(cueDx, cueDz);
+      if (cl > 1e-4) {
+        cueDx /= cl;
+        cueDz /= cl;
+      } else {
+        cueDx = -nz;
+        cueDz = nx;
+      }
+      return {
+        hit,
+        gx,
+        gz,
+        nx,
+        nz,
+        cueDx,
+        cueDz,
+        objDx: nx,
+        objDz: nz,
+      };
+    };
 
     let simulating = false;
     let pendingSync = false;
@@ -387,6 +606,11 @@ export function BilliardsGame(props: GameProps) {
     const placeMesh = (b: Body) => {
       b.mesh.position.set(b.x, R, b.z);
       b.mesh.visible = !b.sunk;
+      const sh = (b.mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow;
+      if (sh) {
+        sh.visible = !b.sunk;
+        sh.position.set(b.x + 0.04, 0.012, b.z + 0.04);
+      }
     };
 
     const exportBalls = (): Ball[] => {
@@ -652,6 +876,10 @@ export function BilliardsGame(props: GameProps) {
       shotOwner = shot.by;
       isLocalAuthority = authority;
       aimLine.visible = false;
+      aimObjLine.visible = false;
+      aimCueLine.visible = false;
+      ghostRing.visible = false;
+      ghostFill.visible = false;
       cueMesh.visible = false;
       setPower(0);
       lastPower = 0;
@@ -774,6 +1002,10 @@ export function BilliardsGame(props: GameProps) {
       const show = !simulating && !w && mine && !cue.sunk && !inHand;
       aimLine.visible = show;
       cueMesh.visible = show;
+      ghostRing.visible = show;
+      ghostFill.visible = show;
+      aimObjLine.visible = show;
+      aimCueLine.visible = show;
       dom.style.cursor = show || (inHand && mine && !w) ? 'crosshair' : 'default';
       if (!show) {
         charging = false;
@@ -786,9 +1018,9 @@ export function BilliardsGame(props: GameProps) {
         return;
       }
       if (charging && chargeStartedAt > 0) {
-        // Zamana bağlı şarj — dt birikimi / kare takılmasından etkilenmez
-        const t = Math.min(1, (performance.now() - chargeStartedAt) / CHARGE_DURATION_MS);
-        chargePower = 0.06 + t * 0.94;
+        // Doğrusal 0→1 — yuvarlama / ofset yüzünden %80→%100 atlamasın
+        const t = Math.min(1, Math.max(0, (performance.now() - chargeStartedAt) / CHARGE_DURATION_MS));
+        chargePower = t;
       }
       let dx = aimX - cue.x;
       let dz = aimZ - cue.z;
@@ -800,21 +1032,45 @@ export function BilliardsGame(props: GameProps) {
       }
       dx /= Math.max(dist, 1e-4);
       dz /= Math.max(dist, 1e-4);
-      const pw = charging ? Math.max(0.08, chargePower) : 0.15;
-      const pos = aimGeo.attributes.position!;
-      pos.setXYZ(0, cue.x, R, cue.z);
-      pos.setXYZ(1, cue.x + dx * 3, R, cue.z + dz * 3);
-      pos.needsUpdate = true;
-      aimGeo.computeBoundingSphere();
+      const pred = predictAim(cue.x, cue.z, dx, dz);
+      setLine(aimLine, cue.x, cue.z, pred.gx, pred.gz);
+      ghostRing.position.set(pred.gx, R + 0.002, pred.gz);
+      ghostFill.position.set(pred.gx, R + 0.001, pred.gz);
+      if (pred.hit) {
+        const pathLen = 1.85;
+        setLine(
+          aimObjLine,
+          pred.hit.x,
+          pred.hit.z,
+          pred.hit.x + pred.objDx * pathLen,
+          pred.hit.z + pred.objDz * pathLen,
+        );
+        setLine(
+          aimCueLine,
+          pred.gx,
+          pred.gz,
+          pred.gx + pred.cueDx * pathLen * 0.85,
+          pred.gz + pred.cueDz * pathLen * 0.85,
+        );
+        aimObjLine.visible = true;
+        aimCueLine.visible = Math.hypot(pred.cueDx, pred.cueDz) > 0.08;
+      } else {
+        setLine(aimObjLine, pred.gx, pred.gz, pred.gx + dx * 0.01, pred.gz + dz * 0.01);
+        setLine(aimCueLine, pred.gx, pred.gz, pred.gx + dx * 0.01, pred.gz + dz * 0.01);
+        aimObjLine.visible = false;
+        aimCueLine.visible = false;
+      }
+      const pw = charging ? chargePower : 0.12;
       tmpDir.set(-dx, 0, -dz);
-      const gap = 0.3 + pw * 0.9;
+      const gap = 0.3 + Math.max(0.08, pw) * 0.9;
       cueMesh.position.set(
         cue.x + tmpDir.x * (gap + CUE_LEN / 2),
         R + 0.05,
         cue.z + tmpDir.z * (gap + CUE_LEN / 2),
       );
       cueMesh.quaternion.setFromUnitVectors(up, tmpDir);
-      const pct = charging ? Math.round(chargePower * 100) : 0;
+      // floor: 0.795→80, 0.994→99, yalnızca tam dolunca 100 — round atlaması yok
+      const pct = charging ? Math.min(100, Math.floor(chargePower * 100 + 1e-6)) : 0;
       if (pct !== lastPower) {
         lastPower = pct;
         setPower(pct);
@@ -914,7 +1170,7 @@ export function BilliardsGame(props: GameProps) {
         dx /= dist;
         dz /= dist;
       }
-      const pw = Math.min(1, Math.max(0.06, chargePower));
+      const pw = Math.min(1, Math.max(0.08, chargePower));
       charging = false;
       chargePower = 0;
       chargeStartedAt = 0;
@@ -985,9 +1241,9 @@ export function BilliardsGame(props: GameProps) {
       }
       charging = true;
       chargeStartedAt = performance.now();
-      chargePower = 0.06;
-      lastPower = 6;
-      setPower(6);
+      chargePower = 0;
+      lastPower = 0;
+      setPower(0);
     };
     const onUp = (e: PointerEvent) => {
       const p = propsRef.current;
@@ -1101,7 +1357,7 @@ export function BilliardsGame(props: GameProps) {
               <div className="mb-1 text-center text-[11px] text-[#f8f8f2]/80">Güç %{power}</div>
               <div className="h-2 overflow-hidden rounded-full bg-[#282a36]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#50fa7b] via-[#f1fa8c] to-[#ff5555] transition-[width] duration-75"
+                  className="h-full rounded-full bg-gradient-to-r from-[#50fa7b] via-[#f1fa8c] to-[#ff5555]"
                   style={{ width: `${power}%` }}
                 />
               </div>

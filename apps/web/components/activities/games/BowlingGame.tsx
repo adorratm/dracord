@@ -232,11 +232,84 @@ export function BowlingGame(props: GameProps) {
       new THREE.MeshPhysicalMaterial({
         color: 0xff79c6,
         emissive: 0xff79c6,
-        emissiveIntensity: 1.1,
+        emissiveIntensity: 0.55,
       }),
     );
     backNeon.position.set(0, 3.2, -12.4);
     root.add(backNeon);
+
+    // --- Pinsetter makinesi (karşı uç) ---
+    const pinsetter = new THREE.Group();
+    pinsetter.position.set(0, 0, PIN_Z - 0.35);
+    root.add(pinsetter);
+    const metalMat = new THREE.MeshPhysicalMaterial({
+      color: 0x4a5168,
+      roughness: 0.35,
+      metalness: 0.75,
+    });
+    const darkMetal = new THREE.MeshPhysicalMaterial({
+      color: 0x2a2e3c,
+      roughness: 0.45,
+      metalness: 0.65,
+    });
+    const housing = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.6, 1.8), darkMetal);
+    housing.position.set(0, 2.55, -1.1);
+    pinsetter.add(housing);
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.2, 2.0), metalMat);
+    hood.position.set(0, 3.4, -1.0);
+    pinsetter.add(hood);
+    for (const sx of [-1, 1] as const) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.8, 0.14), metalMat);
+      post.position.set(sx * 2.0, 1.6, -0.4);
+      pinsetter.add(post);
+    }
+    // Taşıyıcı (labutları indiren kollar)
+    const carriage = new THREE.Group();
+    carriage.position.set(0, 2.35, 0.15);
+    pinsetter.add(carriage);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 0.2), metalMat);
+    carriage.add(bar);
+    {
+      for (let row = 0; row < 4; row++) {
+        for (let i = 0; i <= row; i++) {
+          const gx = (i - row / 2) * 0.72;
+          const gz = -row * 0.62;
+          const arm = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.04, 0.04, 0.55, 8),
+            metalMat,
+          );
+          arm.position.set(gx, -0.35, gz);
+          carriage.add(arm);
+          const claw = new THREE.Mesh(
+            new THREE.BoxGeometry(0.16, 0.08, 0.16),
+            new THREE.MeshPhysicalMaterial({
+              color: 0xbd93f9,
+              emissive: 0xbd93f9,
+              emissiveIntensity: 0.25,
+              roughness: 0.4,
+              metalness: 0.4,
+            }),
+          );
+          claw.position.set(gx, -0.62, gz);
+          carriage.add(claw);
+        }
+      }
+    }
+    // Süpürücü çubuk
+    const sweeper = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.08, 0.18), metalMat);
+    sweeper.position.set(0, 0.12, 1.4);
+    pinsetter.add(sweeper);
+    const lightBar = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.06, 0.06),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x8be9fd,
+        emissive: 0x8be9fd,
+        emissiveIntensity: 0.6,
+        roughness: 0.3,
+      }),
+    );
+    lightBar.position.set(0, 3.15, -0.15);
+    pinsetter.add(lightBar);
 
     // --- Labutlar ---
     const pins: Pin[] = [];
@@ -294,10 +367,11 @@ export function BowlingGame(props: GameProps) {
     root.add(aimLine);
 
     // --- Durum ---
-    type Mode = 'idle' | 'sim' | 'replay';
+    type Mode = 'idle' | 'sim' | 'replay' | 'pinset';
     let mode: Mode = 'idle';
     let modeTime = 0;
     let replay: LastRoll | null = null;
+    let pinsetStanding: number[] = ALL_PINS;
     let seenT: number | null = null;
     let pendingSync = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -309,8 +383,10 @@ export function BowlingGame(props: GameProps) {
     const hit = new THREE.Vector3();
     const q: Quaternion = new THREE.Quaternion();
     const axis3 = new THREE.Vector3();
+    const carriageY0 = 2.35;
+    const sweeperZ0 = 1.4;
 
-    const resetPins = (standing: number[]) => {
+    const applyPinsImmediate = (standing: number[]) => {
       for (const p of pins) {
         p.x = p.bx;
         p.z = p.bz;
@@ -323,6 +399,18 @@ export function BowlingGame(props: GameProps) {
         p.mesh.position.set(p.bx, 0, p.bz);
         p.mesh.quaternion.identity();
       }
+      carriage.position.y = carriageY0;
+      sweeper.position.z = sweeperZ0;
+    };
+
+    const resetPins = (standing: number[], animate = false) => {
+      if (animate && mode !== 'pinset') {
+        pinsetStanding = standing;
+        mode = 'pinset';
+        modeTime = 0;
+        return;
+      }
+      applyPinsImmediate(standing);
     };
 
     const sync = () => {
@@ -399,7 +487,7 @@ export function BowlingGame(props: GameProps) {
             settleTimer = null;
             if (mode === 'idle') {
               const lr = readLastRoll(propsRef.current.session.state.lastRoll);
-              resetPins(lr?.standing ?? ALL_PINS);
+              resetPins(lr?.standing ?? ALL_PINS, true);
               resetBall();
             }
           }, 1400);
@@ -578,10 +666,64 @@ export function BowlingGame(props: GameProps) {
           mode = 'idle';
           replay = null;
           const lr = readLastRoll(p.session.state.lastRoll);
-          resetPins(lr?.standing ?? ALL_PINS);
+          resetPins(lr?.standing ?? ALL_PINS, true);
           resetBall();
           if (pendingSync) sync();
         }
+      } else if (mode === 'pinset') {
+        modeTime += dt;
+        const t = modeTime;
+        // 0–0.7s: süpürücü ileri
+        if (t < 0.7) {
+          const k = t / 0.7;
+          sweeper.position.z = sweeperZ0 - k * 2.2;
+          for (const pin of pins) {
+            if (pin.fallen || !pinsetStanding.includes(pin.id)) {
+              pin.mesh.visible = pin.active;
+              pin.z = Math.max(PIN_Z - 2.5, pin.z - dt * 4);
+              pin.mesh.position.set(pin.x, 0.05, pin.z);
+            }
+          }
+        } else if (t < 0.95) {
+          sweeper.position.z = sweeperZ0 - 2.2;
+          for (const pin of pins) {
+            if (pin.fallen || !pinsetStanding.includes(pin.id)) pin.mesh.visible = false;
+          }
+        } else if (t < 1.85) {
+          // Taşıyıcı iner, ayakta labutlar görünür
+          sweeper.position.z = sweeperZ0 - 2.2 + ((t - 0.95) / 0.9) * 2.2;
+          const k = (t - 0.95) / 0.9;
+          carriage.position.y = carriageY0 - k * 1.55;
+          for (const pin of pins) {
+            const on = pinsetStanding.includes(pin.id);
+            pin.active = on;
+            pin.fallen = false;
+            pin.fall = 0;
+            pin.x = pin.bx;
+            pin.z = pin.bz;
+            pin.vx = 0;
+            pin.vz = 0;
+            pin.mesh.quaternion.identity();
+            if (on) {
+              pin.mesh.visible = true;
+              // Labutlar taşıyıcıyla iner
+              const y = Math.max(0, 1.2 * (1 - k));
+              pin.mesh.position.set(pin.bx, y, pin.bz);
+            } else {
+              pin.mesh.visible = false;
+            }
+          }
+        } else if (t < 2.6) {
+          const k = (t - 1.85) / 0.75;
+          carriage.position.y = carriageY0 - 1.55 + k * 1.55;
+          sweeper.position.z = sweeperZ0;
+          applyPinsImmediate(pinsetStanding);
+        } else {
+          applyPinsImmediate(pinsetStanding);
+          mode = 'idle';
+          if (pendingSync) sync();
+        }
+        aimLine.visible = false;
       } else {
         aimLine.visible = my && !busyRef.current;
         dom.style.cursor = aimLine.visible ? 'crosshair' : 'default';

@@ -66,26 +66,29 @@ function trackGeo<T extends { dispose: () => void }>(g: T, bagRef: AssetBag): T 
   return g;
 }
 
-/** Keçe (bilardo / tavla) */
-export function makeFeltMaterial(THREE: Three, color = '#1a6b3a', bagRef: AssetBag) {
+/** Keçe (bilardo / tavla) — merkez biraz daha açık (referans gibi yumuşak ışık) */
+export function makeFeltMaterial(THREE: Three, color = '#1f7a42', bagRef: AssetBag) {
   const map = canvasTex(THREE, 512, 512, (ctx, w, h) => {
-    ctx.fillStyle = color;
+    const g = ctx.createRadialGradient(w * 0.5, h * 0.5, w * 0.1, w * 0.5, h * 0.5, w * 0.7);
+    g.addColorStop(0, color);
+    g.addColorStop(1, '#14532d');
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 8000; i++) {
-      const a = 0.03 + Math.random() * 0.06;
+    for (let i = 0; i < 6000; i++) {
+      const a = 0.02 + Math.random() * 0.05;
       ctx.fillStyle = Math.random() > 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`;
       ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1 + Math.random() * 2);
     }
   }, bagRef);
-  map.repeat.set(3, 2);
+  map.repeat.set(1.2, 1);
   return trackMat(
     new THREE.MeshPhysicalMaterial({
       map,
       color: 0xffffff,
-      roughness: 0.92,
+      roughness: 0.88,
       metalness: 0,
-      sheen: 0.35,
-      sheenRoughness: 0.85,
+      sheen: 0.18,
+      sheenRoughness: 0.9,
       sheenColor: new THREE.Color(color),
     }),
     bagRef,
@@ -131,7 +134,7 @@ export function makeWoodMaterial(THREE: Three, bagRef: AssetBag, tone: 'dark' | 
   );
 }
 
-/** Bilardo topu — yüksek çözünürlüklü equirect map */
+/** Bilardo topu — doygun renk + net numara (ışık altında okunaklı) */
 export function makePoolBall(
   THREE: Three,
   id: number,
@@ -140,19 +143,18 @@ export function makePoolBall(
   striped: boolean,
   bagRef: AssetBag,
 ): Mesh {
-  const map = canvasTex(THREE, 512, 256, (ctx, w, h) => {
+  const map = canvasTex(THREE, 768, 384, (ctx, w, h) => {
     if (striped) {
-      ctx.fillStyle = '#f4f1ea';
+      ctx.fillStyle = '#f7f4ec';
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = colorHex;
-      ctx.fillRect(0, h * 0.28, w, h * 0.44);
+      ctx.fillRect(0, h * 0.26, w, h * 0.48);
     } else {
-      ctx.fillStyle = id === 0 ? '#f8f6f0' : colorHex;
+      ctx.fillStyle = id === 0 ? '#f7f4ec' : colorHex;
       ctx.fillRect(0, 0, w, h);
       if (id === 0) {
-        // inci parıltı
-        const g = ctx.createRadialGradient(w * 0.35, h * 0.35, 10, w * 0.35, h * 0.35, w * 0.4);
-        g.addColorStop(0, 'rgba(255,255,255,0.55)');
+        const g = ctx.createRadialGradient(w * 0.35, h * 0.35, 8, w * 0.35, h * 0.35, w * 0.38);
+        g.addColorStop(0, 'rgba(255,255,255,0.35)');
         g.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, w, h);
@@ -161,20 +163,22 @@ export function makePoolBall(
     if (id > 0) {
       for (const cx of [w * 0.25, w * 0.75]) {
         ctx.beginPath();
-        ctx.arc(cx, h * 0.5, h * 0.22, 0, Math.PI * 2);
-        ctx.fillStyle = '#f8f6f0';
+        ctx.arc(cx, h * 0.5, h * 0.24, 0, Math.PI * 2);
+        ctx.fillStyle = '#fffef8';
         ctx.fill();
-        ctx.fillStyle = id === 8 ? '#f8f6f0' : '#111';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.stroke();
         if (id === 8) {
           ctx.beginPath();
-          ctx.arc(cx, h * 0.5, h * 0.22, 0, Math.PI * 2);
-          ctx.fillStyle = '#1a1a1a';
+          ctx.arc(cx, h * 0.5, h * 0.24, 0, Math.PI * 2);
+          ctx.fillStyle = '#141414';
           ctx.fill();
-          ctx.fillStyle = '#f8f6f0';
         }
-        ctx.font = `bold ${Math.floor(h * 0.28)}px system-ui,sans-serif`;
+        ctx.font = `bold ${Math.floor(h * 0.32)}px system-ui,sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        ctx.fillStyle = id === 8 ? '#fffef8' : '#111';
         ctx.fillText(String(id), cx, h * 0.52);
       }
     }
@@ -184,11 +188,11 @@ export function makePoolBall(
   const mat = trackMat(
     new THREE.MeshPhysicalMaterial({
       map,
-      roughness: id === 0 ? 0.12 : 0.18,
-      metalness: 0.05,
-      clearcoat: 0.85,
-      clearcoatRoughness: 0.12,
-      envMapIntensity: 1.1,
+      roughness: id === 0 ? 0.22 : 0.28,
+      metalness: 0.02,
+      clearcoat: 0.45,
+      clearcoatRoughness: 0.22,
+      envMapIntensity: 0.45,
     }),
     bagRef,
   );

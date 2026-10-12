@@ -68,7 +68,8 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.05;
+      // Düşük exposure — spotlar renkleri yıkamasın
+      renderer.toneMappingExposure = 0.88;
       el.appendChild(renderer.domElement);
       Object.assign(renderer.domElement.style, {
         width: '100%',
@@ -77,18 +78,24 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
         touchAction: 'none',
       });
 
-      const amb = new THREE.AmbientLight(0x9b8ec4, 0.85);
-      scene.add(amb);
-      const key = new THREE.DirectionalLight(0xffe0c0, 1.4);
-      key.position.set(8, 14, 6);
+      // Nötr, yumuşak baz ışık (mor/neon cast yok — renk bozulmasın)
+      const hemi = new THREE.HemisphereLight(0xf2efe6, 0x2a3140, 0.55);
+      scene.add(hemi);
+      const key = new THREE.DirectionalLight(0xfff4e8, 0.75);
+      key.position.set(5, 16, 4);
       key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.camera.near = 1;
+      key.shadow.camera.far = 40;
+      key.shadow.camera.left = -12;
+      key.shadow.camera.right = 12;
+      key.shadow.camera.top = 12;
+      key.shadow.camera.bottom = -12;
+      key.shadow.bias = -0.0002;
       scene.add(key);
-      const fill = new THREE.DirectionalLight(0x6272a4, 0.55);
-      fill.position.set(-6, 8, -4);
+      const fill = new THREE.DirectionalLight(0xd8e4f5, 0.28);
+      fill.position.set(-7, 10, -5);
       scene.add(fill);
-      const neon = new THREE.PointLight(0xbd93f9, 1.2, 28);
-      neon.position.set(0, 3, 0);
-      scene.add(neon);
 
       cleanupScene = onReadyRef.current({ THREE, scene, camera, renderer, root: el });
 
