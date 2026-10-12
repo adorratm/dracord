@@ -46,10 +46,11 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-/** Cep — ağız açık; batırma eşiği top ahşaba binmeden */
+/** Cep — çekim yok; yalnızca merkez delikte batma + ağızda yastık muafiyeti */
 const POCKET_R = 0.42;
-const POCKET_JAW = 1.25;
-/** Batır: delik ağzının içinde (dışarı taşırmadan) */
+/** Yastık sekmesini kapatma (çekim / yerçekimi yok) */
+const POCKET_JAW = 0.48;
+/** Batır: top merkezi delik ağzının içinde */
 const POCKET_SINK = POCKET_R * 0.72;
 const POCKETS: [number, number][] = [
   [-5.0, -2.5],
@@ -957,7 +958,20 @@ export function BilliardsGame(props: GameProps) {
             bestPz = pz;
           }
         }
+        // Ağızda mı? (çekim yok — yalnızca yastık muafiyeti)
         if (bestPd < POCKET_JAW) nearPocket = true;
+        // Doğal batma: merkez gerçekten deliğe girince (vakum yok)
+        if (bestPd < POCKET_SINK) {
+          b.sunk = true;
+          b.vx = 0;
+          b.vz = 0;
+          b.x = bestPx;
+          b.z = bestPz;
+          hideSunk(b);
+          if (!sunkThisShot.includes(b.id)) sunkThisShot.push(b.id);
+          GameAudio.pot();
+          continue;
+        }
         if (!nearPocket) {
           if (b.x > HX - R) {
             b.x = HX - R;
@@ -977,43 +991,29 @@ export function BilliardsGame(props: GameProps) {
             if (b.vz < -0.4) GameAudio.cushion();
             b.vz = Math.abs(b.vz) * 0.8;
           }
+          // Masa içinde tut (çarpışma taşırması)
+          b.x = Math.max(-HX + R * 0.15, Math.min(HX - R * 0.15, b.x));
+          b.z = Math.max(-HZ + R * 0.15, Math.min(HZ - R * 0.15, b.z));
           syncBallVisual(b, R);
         } else {
-          // Deliğe doğru çek — dışarı taşırma / teleportsuz
-          if (bestPd > 1e-4) {
-            const pull = 36 * h;
-            b.vx += ((bestPx - b.x) / bestPd) * pull;
-            b.vz += ((bestPz - b.z) / bestPd) * pull;
-            // Hıza delik yönü kat
-            const toward = 1 - Math.min(1, bestPd / POCKET_JAW);
-            b.x += ((bestPx - b.x) / bestPd) * toward * 2.2 * h;
-            b.z += ((bestPz - b.z) / bestPd) * toward * 2.2 * h;
-          }
-          // Ağız çemberinin DIŞINA çıkmasın
-          let pd = Math.hypot(b.x - bestPx, b.z - bestPz);
-          if (pd > POCKET_JAW && pd > 1e-6) {
-            const s = POCKET_JAW / pd;
-            b.x = bestPx + (b.x - bestPx) * s;
-            b.z = bestPz + (b.z - bestPz) * s;
-            pd = POCKET_JAW;
-          }
-          // Yalnızca delik ağzındayken düş; ağız dışına taşırmadan
-          const over = pd < POCKET_R ? 1 - pd / POCKET_R : 0;
-          const y = R - over * over * 0.85;
-          if (pd < POCKET_SINK) {
-            b.sunk = true;
-            b.vx = 0;
-            b.vz = 0;
-            b.x = bestPx;
-            b.z = bestPz;
-            hideSunk(b);
-            if (!sunkThisShot.includes(b.id)) sunkThisShot.push(b.id);
-            GameAudio.pot();
-            continue;
-          }
-          syncBallVisual(b, y);
+          // Ağızda: yastık yok, hız değişmez — sadece delik merkezine yakın tut
+          const maxOut = POCKET_R * 0.2;
+          b.x = Math.max(-HX - maxOut, Math.min(HX + maxOut, b.x));
+          b.z = Math.max(-HZ - maxOut, Math.min(HZ + maxOut, b.z));
+          // Görsel düşüş yalnızca gerçek batmaya çok yakınken (dışarı fırlama illüzyonu yok)
+          const dropT = bestPd < POCKET_SINK * 1.35
+            ? Math.max(0, 1 - bestPd / (POCKET_SINK * 1.35))
+            : 0;
+          syncBallVisual(b, R - dropT * dropT * 0.35);
         }
       }
+      const nearestPocketDist = (x: number, z: number) => {
+        let best = Infinity;
+        for (const [px, pz] of POCKETS) {
+          best = Math.min(best, Math.hypot(x - px, z - pz));
+        }
+        return best;
+      };
       for (let i = 0; i < list.length; i++) {
         for (let j = i + 1; j < list.length; j++) {
           const a = list[i]!;
@@ -1030,6 +1030,19 @@ export function BilliardsGame(props: GameProps) {
           a.z -= nz * overlap;
           c.x += nx * overlap;
           c.z += nz * overlap;
+          // Çarpışma sonrası masa dışına fırlamayı kes (cep ağzındakileri bozma)
+          const clampBall = (b: Body) => {
+            if (nearestPocketDist(b.x, b.z) < POCKET_JAW) {
+              const maxOut = POCKET_R * 0.2;
+              b.x = Math.max(-HX - maxOut, Math.min(HX + maxOut, b.x));
+              b.z = Math.max(-HZ - maxOut, Math.min(HZ + maxOut, b.z));
+              return;
+            }
+            b.x = Math.max(-HX + R * 0.15, Math.min(HX - R * 0.15, b.x));
+            b.z = Math.max(-HZ + R * 0.15, Math.min(HZ - R * 0.15, b.z));
+          };
+          clampBall(a);
+          clampBall(c);
           // İlk temas — vrel koşulundan bağımsız (yanlış top faul kaçmasın)
           if (firstHitId === null) {
             if (a.id === 0) firstHitId = c.id;
@@ -1156,10 +1169,17 @@ export function BilliardsGame(props: GameProps) {
             hideSunk(b);
             continue;
           }
-          // Çarpışma sonrası x/z güncel; gölgeyi her kare taşı
-          const y = b.mesh.position.y;
-          const keepY = y < R - 0.02 ? y : R;
-          syncBallVisual(b, keepY);
+          // Düşük Y'yi taşıma — çarpışma sonrası masadan fırlama illüzyonu olmasın
+          let y = R;
+          let pd = Infinity;
+          for (const [px, pz] of POCKETS) {
+            pd = Math.min(pd, Math.hypot(b.x - px, b.z - pz));
+          }
+          if (pd < POCKET_SINK * 1.35) {
+            const dropT = Math.max(0, 1 - pd / (POCKET_SINK * 1.35));
+            y = R - dropT * dropT * 0.35;
+          }
+          syncBallVisual(b, y);
         }
         let moving = false;
         for (const b of bodies.values()) {

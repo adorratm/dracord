@@ -54,6 +54,16 @@ const CURATED_APPS: CuratedApp[] = [
     gameChannelHint: 'okey',
   },
   {
+    id: 'blackjack',
+    name: '21 Blackjack',
+    tagline: 'Kurpiyere karşı',
+    description: '4 kişilik blackjack masası — kart al, dur, double.',
+    icon: 'style',
+    gradient: 'from-emerald-800/70 via-green-950/50 to-surface-container-high',
+    kind: 'game',
+    gameChannelHint: 'blackjack',
+  },
+  {
     id: 'watch',
     name: 'Watch Party',
     tagline: 'Birlikte izle',

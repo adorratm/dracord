@@ -12,6 +12,7 @@ export type ActivityKind =
   | 'okey'
   | 'bowling'
   | 'tavla'
+  | 'blackjack'
   | 'watch_party';
 
 export type ActivityStatus = 'lobby' | 'playing' | 'ended';

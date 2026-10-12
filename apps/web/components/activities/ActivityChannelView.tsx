@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { BilliardsGame } from '@/components/activities/games/BilliardsGame';
+import { BlackjackGame } from '@/components/activities/games/BlackjackGame';
 import { BowlingGame } from '@/components/activities/games/BowlingGame';
 import { OkeyGame } from '@/components/activities/games/OkeyGame';
 import { TavlaGame } from '@/components/activities/games/TavlaGame';
@@ -19,6 +20,7 @@ const KIND_LABEL: Record<ActivityKind, string> = {
   okey: 'Okey',
   bowling: 'Bowling',
   tavla: 'Tavla',
+  blackjack: '21 Blackjack',
   watch_party: 'Watch Party',
 };
 
@@ -27,6 +29,7 @@ const KIND_ICON: Record<ActivityKind, string> = {
   okey: 'grid_view',
   bowling: 'sports_baseball',
   tavla: 'casino',
+  blackjack: 'style',
   watch_party: 'live_tv',
 };
 
@@ -450,6 +453,16 @@ export function ActivityChannelView({
             )}
             {session.kind === 'tavla' && (
               <TavlaGame
+                key={session.id}
+                session={session}
+                userId={me}
+                canPlay={isPlayer}
+                onPatch={patch}
+                nameByUserId={nameByUserId}
+              />
+            )}
+            {session.kind === 'blackjack' && (
+              <BlackjackGame
                 key={session.id}
                 session={session}
                 userId={me}

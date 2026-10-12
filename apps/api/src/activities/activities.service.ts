@@ -21,6 +21,7 @@ const CAPACITY: Record<
   okey: { min: 4, max: 4, spectatorCap: 32 },
   bowling: { min: 2, max: 8, spectatorCap: 32 },
   tavla: { min: 2, max: 2, spectatorCap: 32 },
+  blackjack: { min: 1, max: 4, spectatorCap: 32 },
   watch_party: { min: 1, max: 50, spectatorCap: 200 },
 };
 
@@ -29,11 +30,12 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
   okey: ['hands', 'scores', 'turn', 'melds', 'opened'],
   bowling: ['frames', 'turn', 'lastRoll'],
   tavla: ['board', 'dice', 'turn'],
+  blackjack: ['phase', 'deck', 'dealer', 'holeHidden', 'seats', 'turn', 'round'],
   watch_party: ['mediaUrl', 'playing', 'at'],
 };
 
 const MAX_STATE_JSON_BYTES = 48_000;
-const GAME_KINDS = new Set(['billiards', 'okey', 'bowling', 'tavla']);
+const GAME_KINDS = new Set(['billiards', 'okey', 'bowling', 'tavla', 'blackjack']);
 
 @Injectable()
 export class ActivitiesService {

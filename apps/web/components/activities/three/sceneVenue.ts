@@ -1,6 +1,6 @@
 import type { Material, Object3D, Scene, Texture, WebGLRenderer } from 'three';
 
-export type VenueTheme = 'billiards' | 'bowling' | 'tavla' | 'okey';
+export type VenueTheme = 'billiards' | 'bowling' | 'tavla' | 'okey' | 'blackjack';
 
 type Three = typeof import('three');
 
@@ -139,6 +139,10 @@ export function addGameVenue(
       g.addColorStop(0, '#161222');
       g.addColorStop(0.5, '#201828');
       g.addColorStop(1, '#0e0a14');
+    } else if (theme === 'blackjack') {
+      g.addColorStop(0, '#1a0e14');
+      g.addColorStop(0.5, '#140c12');
+      g.addColorStop(1, '#0a0608');
     } else {
       g.addColorStop(0, '#16120e');
       g.addColorStop(0.5, '#1c1612');
@@ -172,7 +176,15 @@ export function addGameVenue(
   }
 
   const accent =
-    theme === 'bowling' ? 0x6ec8d4 : theme === 'tavla' ? 0xd4a574 : theme === 'okey' ? 0xa78bfa : 0xc4a574;
+    theme === 'bowling'
+      ? 0x6ec8d4
+      : theme === 'tavla'
+        ? 0xd4a574
+        : theme === 'okey'
+          ? 0xa78bfa
+          : theme === 'blackjack'
+            ? 0xd4af37
+            : 0xc4a574;
 
   if (theme === 'bowling') {
     buildBowlingAlley(THREE, group, track, accent);
@@ -237,8 +249,18 @@ function buildTableRoom(
   const carpetTex = track(
     carpetTexture(
       THREE,
-      theme === 'billiards' ? '#3a2418' : theme === 'tavla' ? '#3a2458' : '#2a2040',
-      theme === 'billiards' ? '#241810' : '#1a1228',
+      theme === 'billiards'
+        ? '#3a2418'
+        : theme === 'blackjack'
+          ? '#3a1420'
+          : theme === 'tavla'
+            ? '#3a2458'
+            : '#2a2040',
+      theme === 'billiards'
+        ? '#241810'
+        : theme === 'blackjack'
+          ? '#1a0a10'
+          : '#1a1228',
     ),
   );
   carpetTex.repeat.set(6, 6);
@@ -317,11 +339,17 @@ function buildTableRoom(
           [-1.6, 3.8, 0],
           [1.6, 3.8, 0],
         ]
-      : [
-          [-2.4, 4.0, -1.2],
-          [2.4, 4.0, -1.2],
-          [0, 4.0, 1.8],
-        ];
+      : theme === 'blackjack'
+        ? [
+            [-2.2, 4.1, -0.8],
+            [2.2, 4.1, -0.8],
+            [0, 4.2, 1.4],
+          ]
+        : [
+            [-2.4, 4.0, -1.2],
+            [2.4, 4.0, -1.2],
+            [0, 4.0, 1.8],
+          ];
   for (const [x, y, z] of lampSpots) {
     const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.85, 0.22, 20), shadeMat);
     shade.position.set(x, y, z);
@@ -332,12 +360,57 @@ function buildTableRoom(
     );
     cord.position.set(x, y + 0.65, z);
     group.add(cord);
-    // Bilardo: bir spot gölge atsın; diğerleri yumuşak dolgu
-    const cast = theme === 'billiards' && x < 0;
-    softSpot(THREE, group, x, y - 0.15, z, z, theme === 'billiards' ? 1.45 : 1.75, cast);
+    // Bilardo / blackjack: bir spot gölge atsın; diğerleri yumuşak dolgu
+    const cast = (theme === 'billiards' || theme === 'blackjack') && x < 0;
+    softSpot(
+      THREE,
+      group,
+      x,
+      y - 0.15,
+      z,
+      z,
+      theme === 'billiards' ? 1.45 : theme === 'blackjack' ? 1.6 : 1.75,
+      cast,
+    );
   }
 
-  if (theme === 'billiards') {
+  if (theme === 'blackjack') {
+    // Yan chip / bar rafları
+    const gold = track(
+      new THREE.MeshPhysicalMaterial({
+        color: 0xd4af37,
+        metalness: 0.85,
+        roughness: 0.28,
+        clearcoat: 0.4,
+      }),
+    );
+    const velvet = track(new THREE.MeshStandardMaterial({ color: 0x4a1020, roughness: 0.9 }));
+    for (const sx of [-1, 1]) {
+      const cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 2.4), velvet);
+      cabinet.position.set(sx * (playR + 2.0), 0.2, -0.4);
+      cabinet.castShadow = true;
+      group.add(cabinet);
+      for (let i = 0; i < 4; i++) {
+        const chip = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 24), gold);
+        chip.position.set(sx * (playR + 1.75), 0.55 + i * 0.08, -1.2 + i * 0.35);
+        chip.castShadow = true;
+        group.add(chip);
+      }
+    }
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.55, 0.12),
+      track(
+        new THREE.MeshStandardMaterial({
+          color: 0x1a0a10,
+          emissive: 0xd4af37,
+          emissiveIntensity: 0.22,
+          roughness: 0.5,
+        }),
+      ),
+    );
+    sign.position.set(0, 3.2, -(playR + 5.7));
+    group.add(sign);
+  } else if (theme === 'billiards') {
     const rackMat = track(new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.6 }));
     for (const sx of [-1, 1]) {
       const rack = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.4, 2.8), rackMat);

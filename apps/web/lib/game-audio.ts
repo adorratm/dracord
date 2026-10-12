@@ -1,10 +1,13 @@
 /** Web Audio FX for activity games — unlock after first user gesture. */
 
+import { setDealerVoiceMuted } from './dealer-voice';
+
 let ctx: AudioContext | null = null;
 let muted = false;
 
 export function setGameAudioMuted(next: boolean) {
   muted = next;
+  setDealerVoiceMuted(next);
 }
 
 function ensureCtx(): AudioContext | null {
@@ -112,5 +115,32 @@ export const GameAudio = {
   hit: () => {
     beep(160, 70, 'sawtooth', 0.05);
     window.setTimeout(() => beep(120, 90, 'sine', 0.04), 50);
+  },
+  /** Blackjack */
+  cardFlip: () => {
+    noiseBurst(35, 0.028);
+    beep(720, 40, 'triangle', 0.028);
+  },
+  chip: () => {
+    beep(880, 35, 'sine', 0.035);
+    window.setTimeout(() => beep(1100, 40, 'sine', 0.03), 40);
+  },
+  bust: () => {
+    beep(180, 120, 'sawtooth', 0.05);
+    window.setTimeout(() => beep(120, 160, 'triangle', 0.04), 80);
+  },
+  blackjack: () => {
+    beep(523, 90, 'sine', 0.06);
+    window.setTimeout(() => beep(659, 90, 'sine', 0.06), 90);
+    window.setTimeout(() => beep(784, 140, 'sine', 0.07), 180);
+    window.setTimeout(() => beep(1046, 180, 'sine', 0.05), 280);
+  },
+  lose: () => {
+    beep(300, 100, 'triangle', 0.04);
+    window.setTimeout(() => beep(220, 140, 'sine', 0.035), 100);
+  },
+  push: () => {
+    beep(400, 80, 'sine', 0.04);
+    window.setTimeout(() => beep(400, 100, 'sine', 0.03), 120);
   },
 };

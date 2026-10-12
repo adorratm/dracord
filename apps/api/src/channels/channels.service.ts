@@ -140,7 +140,7 @@ export class ChannelsService {
       type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
-      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | null;
+      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | null;
     },
   ): Promise<ChannelSummary> {
     await this.guilds.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
@@ -164,9 +164,9 @@ export class ChannelsService {
 
     let gameKind: string | null = null;
     if (channelType === ChannelType.GAME) {
-      const allowed = new Set(['billiards', 'okey', 'bowling', 'tavla']);
+      const allowed = new Set(['billiards', 'okey', 'bowling', 'tavla', 'blackjack']);
       if (!data.gameKind || !allowed.has(data.gameKind)) {
-        throw new BadRequestException('Oyun türü gerekli (billiards/okey/bowling/tavla)');
+        throw new BadRequestException('Oyun türü gerekli (billiards/okey/bowling/tavla/blackjack)');
       }
       gameKind = data.gameKind;
     }

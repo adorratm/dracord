@@ -557,6 +557,314 @@ export function makeOkeyTileFace(
   return [sideMat, sideMat, face, sideMat, sideMat, sideMat];
 }
 
+const BJ_SUITS = ['♠', '♥', '♦', '♣'] as const;
+const BJ_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
+
+/** Poker kartı — yüz veya sırt */
+export function makePlayingCard(
+  THREE: Three,
+  cardId: number | 'back',
+  bagRef: AssetBag,
+  w = 0.72,
+  h = 1.05,
+): Mesh {
+  const map = canvasTex(THREE, 256, 384, (ctx, cw, ch) => {
+    if (cardId === 'back') {
+      const g = ctx.createLinearGradient(0, 0, cw, ch);
+      g.addColorStop(0, '#2a1848');
+      g.addColorStop(0.5, '#4a2080');
+      g.addColorStop(1, '#1a1028');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.strokeStyle = '#d4af37';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(12, 12, cw - 24, ch - 24);
+      ctx.strokeStyle = 'rgba(212,175,55,0.45)';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 8; i++) {
+        ctx.strokeRect(22 + i * 4, 22 + i * 4, cw - 44 - i * 8, ch - 44 - i * 8);
+      }
+      ctx.fillStyle = '#f1e4a8';
+      ctx.font = `bold ${Math.floor(cw * 0.22)}px Georgia,serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('♠', cw / 2, ch / 2);
+      return;
+    }
+    const rank = cardId % 13;
+    const suit = Math.floor(cardId / 13) % 4;
+    const red = suit === 1 || suit === 2;
+    const ivory = ctx.createLinearGradient(0, 0, 0, ch);
+    ivory.addColorStop(0, '#fffdf8');
+    ivory.addColorStop(1, '#ebe4d4');
+    ctx.fillStyle = ivory;
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(6, 6, cw - 12, ch - 12);
+    ctx.fillStyle = red ? '#c01c28' : '#141414';
+    ctx.font = `bold ${Math.floor(ch * 0.14)}px system-ui,sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const label = `${BJ_RANKS[rank]}${BJ_SUITS[suit]}`;
+    ctx.fillText(label, 16, 14);
+    ctx.font = `${Math.floor(ch * 0.28)}px Georgia,serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(BJ_SUITS[suit]!, cw / 2, ch * 0.52);
+    ctx.save();
+    ctx.translate(cw - 16, ch - 14);
+    ctx.rotate(Math.PI);
+    ctx.font = `bold ${Math.floor(ch * 0.14)}px system-ui,sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }, bagRef);
+  map.wrapS = THREE.ClampToEdgeWrapping;
+  map.wrapT = THREE.ClampToEdgeWrapping;
+
+  const edge = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.85 }),
+    bagRef,
+  );
+  const face = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      map,
+      roughness: 0.42,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.4,
+      envMapIntensity: 0.35,
+    }),
+    bagRef,
+  );
+  const geo = trackGeo(new THREE.BoxGeometry(w, 0.02, h), bagRef);
+  const mesh = new THREE.Mesh(geo, [edge, edge, face, edge, edge, edge]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+export type DealerRig = {
+  root: Group;
+  head: Group;
+  jaw: Mesh;
+  armR: Group;
+  armL: Group;
+  torso: Group;
+  setTalking: (v: boolean) => void;
+  setDealPulse: () => void;
+  lookAtSeat: (x: number, z: number) => void;
+  update: (t: number, dt: number) => void;
+};
+
+/** Prosedürel kadın kurpiyer — casino üniforması + konuşma/dağıtım animasyonu */
+export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
+  const root = new THREE.Group();
+  root.name = 'dealer';
+
+  const skin = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xe8b89a,
+      roughness: 0.55,
+      clearcoat: 0.15,
+      clearcoatRoughness: 0.6,
+    }),
+    bagRef,
+  );
+  const hairMat = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0x2a1410,
+      roughness: 0.45,
+      clearcoat: 0.35,
+      sheen: 0.4,
+      sheenColor: new THREE.Color(0x8a4030),
+    }),
+    bagRef,
+  );
+  const blouse = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xf4f0ea,
+      roughness: 0.55,
+      clearcoat: 0.1,
+    }),
+    bagRef,
+  );
+  const vest = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0x1a0e14,
+      roughness: 0.4,
+      metalness: 0.08,
+      clearcoat: 0.25,
+    }),
+    bagRef,
+  );
+  const gold = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xd4af37,
+      metalness: 0.9,
+      roughness: 0.25,
+    }),
+    bagRef,
+  );
+  const lipMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xb03040,
+      roughness: 0.35,
+      emissive: 0x401018,
+      emissiveIntensity: 0.15,
+    }),
+    bagRef,
+  );
+  const eyeMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1a1220, roughness: 0.3 }), bagRef);
+  const eyeWhite = trackMat(new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.55 }), bagRef);
+
+  const torso = new THREE.Group();
+  torso.position.y = 0.95;
+  root.add(torso);
+
+  const hips = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.22, 0.26, 0.35, 16), bagRef), vest);
+  hips.position.y = -0.15;
+  hips.castShadow = true;
+  torso.add(hips);
+
+  const body = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 18), bagRef), blouse);
+  body.position.y = 0.28;
+  body.castShadow = true;
+  torso.add(body);
+
+  const vestMesh = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.21, 0.25, 0.42, 18), bagRef), vest);
+  vestMesh.position.y = 0.32;
+  vestMesh.scale.set(1.02, 1, 0.92);
+  vestMesh.castShadow = true;
+  torso.add(vestMesh);
+
+  const bow = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.18, 0.06, 0.04), bagRef), gold);
+  bow.position.set(0, 0.52, 0.2);
+  torso.add(bow);
+
+  const head = new THREE.Group();
+  head.position.y = 1.72;
+  root.add(head);
+
+  const skull = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.2, 28, 22), bagRef), skin);
+  skull.scale.set(0.95, 1.05, 0.92);
+  skull.castShadow = true;
+  head.add(skull);
+
+  const jaw = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.08, 12, 10), bagRef), lipMat);
+  jaw.position.set(0, -0.12, 0.14);
+  jaw.scale.set(1.1, 0.45, 0.7);
+  head.add(jaw);
+
+  for (const sx of [-1, 1]) {
+    const white = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.035, 10, 8), bagRef), eyeWhite);
+    white.position.set(sx * 0.07, 0.02, 0.16);
+    head.add(white);
+    const iris = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.018, 10, 8), bagRef), eyeMat);
+    iris.position.set(sx * 0.07, 0.02, 0.19);
+    head.add(iris);
+  }
+
+  const hairCap = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.22, 24, 18), bagRef), hairMat);
+  hairCap.position.y = 0.04;
+  hairCap.scale.set(1.05, 1.1, 1.05);
+  head.add(hairCap);
+  for (const [x, y, z, s] of [
+    [-0.18, -0.05, 0.05, 0.12],
+    [0.18, -0.05, 0.05, 0.12],
+    [-0.12, -0.18, -0.02, 0.14],
+    [0.12, -0.18, -0.02, 0.14],
+    [0, -0.22, -0.08, 0.16],
+  ] as const) {
+    const lock = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(s, 12, 10), bagRef), hairMat);
+    lock.position.set(x, y, z);
+    head.add(lock);
+  }
+
+  const mkArm = (side: 1 | -1) => {
+    const g = new THREE.Group();
+    g.position.set(side * 0.28, 1.35, 0);
+    const upper = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.055, 0.06, 0.38, 10), bagRef),
+      blouse,
+    );
+    upper.position.y = -0.18;
+    upper.castShadow = true;
+    g.add(upper);
+    const fore = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.045, 0.05, 0.34, 10), bagRef),
+      skin,
+    );
+    fore.position.set(0, -0.48, 0.04);
+    fore.rotation.x = -0.35;
+    fore.castShadow = true;
+    g.add(fore);
+    const hand = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.055, 10, 8), bagRef), skin);
+    hand.position.set(0, -0.68, 0.08);
+    g.add(hand);
+    root.add(g);
+    return g;
+  };
+  const armL = mkArm(-1);
+  const armR = mkArm(1);
+  armR.rotation.z = -0.25;
+  armL.rotation.z = 0.25;
+
+  let talking = false;
+  let dealT = 0;
+  let lookX = 0;
+  let lookZ = -1;
+
+  return {
+    root,
+    head,
+    jaw,
+    armR,
+    armL,
+    torso,
+    setTalking(v) {
+      talking = v;
+    },
+    setDealPulse() {
+      dealT = 1;
+    },
+    lookAtSeat(x, z) {
+      lookX = x;
+      lookZ = z;
+    },
+    update(t, dt) {
+      const breath = Math.sin(t * 2.2) * 0.012;
+      torso.position.y = 0.95 + breath;
+      torso.rotation.y = Math.sin(t * 0.6) * 0.04;
+
+      const targetYaw = Math.atan2(lookX - 0, lookZ - (-2.2)) * 0.35;
+      head.rotation.y += (targetYaw - head.rotation.y) * Math.min(1, dt * 4);
+      head.rotation.x = Math.sin(t * 1.4) * 0.03 + (talking ? Math.sin(t * 14) * 0.04 : 0);
+
+      if (talking) {
+        const open = 0.55 + Math.abs(Math.sin(t * 16)) * 0.9;
+        jaw.scale.set(1.1, 0.35 + open * 0.35, 0.7);
+        jaw.position.y = -0.12 - open * 0.02;
+      } else {
+        jaw.scale.set(1.1, 0.45, 0.7);
+        jaw.position.y = -0.12;
+      }
+
+      if (dealT > 0) {
+        dealT = Math.max(0, dealT - dt * 1.8);
+        const wave = Math.sin((1 - dealT) * Math.PI) * 1.1;
+        armR.rotation.x = -0.2 - wave * 0.9;
+        armR.rotation.z = -0.25 - wave * 0.4;
+      } else {
+        armR.rotation.x += (Math.sin(t * 1.1) * 0.08 - armR.rotation.x) * 0.08;
+        armR.rotation.z += (-0.25 - armR.rotation.z) * 0.08;
+      }
+      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.06;
+    },
+  };
+}
+
 export function createAssetBag(): AssetBag {
   return bag();
 }

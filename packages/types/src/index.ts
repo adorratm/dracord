@@ -9,7 +9,7 @@ export type ChannelType =
   | 'WATCH_PARTY';
 
 /** GAME kanalı alt türü (WATCH_PARTY ayrı ChannelType) */
-export type GameChannelKind = 'billiards' | 'okey' | 'bowling' | 'tavla';
+export type GameChannelKind = 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack';
 
 export interface SocialLinks {
   website?: string;
@@ -504,6 +504,7 @@ export type ActivityKind =
   | 'okey'
   | 'bowling'
   | 'tavla'
+  | 'blackjack'
   | 'watch_party';
 
 export type ActivityStatus = 'lobby' | 'playing' | 'ended';

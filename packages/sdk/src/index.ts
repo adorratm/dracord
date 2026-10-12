@@ -504,7 +504,7 @@ export class DracordClient {
       type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
-      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | null;
+      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | null;
     },
   ): Promise<ChannelSummary> {
     return this.request(`/guilds/${guildId}/channels`, {

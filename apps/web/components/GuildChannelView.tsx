@@ -175,9 +175,9 @@ export function GuildChannelView({
   const [channelType, setChannelType] = useState<
     'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY'
   >('TEXT');
-  const [gameKind, setGameKind] = useState<'billiards' | 'okey' | 'bowling' | 'tavla'>(
-    'billiards',
-  );
+  const [gameKind, setGameKind] = useState<
+    'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack'
+  >('billiards');
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [serverNameDraft, setServerNameDraft] = useState('');
@@ -3563,7 +3563,12 @@ export function GuildChannelView({
                   value={gameKind}
                   onChange={(e) =>
                     setGameKind(
-                      e.target.value as 'billiards' | 'okey' | 'bowling' | 'tavla',
+                      e.target.value as
+                        | 'billiards'
+                        | 'okey'
+                        | 'bowling'
+                        | 'tavla'
+                        | 'blackjack',
                     )
                   }
                   className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
@@ -3572,6 +3577,7 @@ export function GuildChannelView({
                   <option value="okey">Okey</option>
                   <option value="bowling">Bowling</option>
                   <option value="tavla">Tavla</option>
+                  <option value="blackjack">21 Blackjack</option>
                 </select>
               </label>
             )}
