@@ -95,40 +95,53 @@ export function makeFeltMaterial(THREE: Three, color = '#1f7a42', bagRef: AssetB
   );
 }
 
-/** Cilalı ahşap */
+/** Cilalı ahşap — sıcak damar, üstten bakınca düzgün */
 export function makeWoodMaterial(THREE: Three, bagRef: AssetBag, tone: 'dark' | 'warm' = 'warm') {
-  const base = tone === 'dark' ? '#2c1a10' : '#5c3a22';
+  const base = tone === 'dark' ? '#3a2416' : '#8a5a32';
   const map = canvasTex(THREE, 512, 512, (ctx, w, h) => {
-    ctx.fillStyle = base;
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    if (tone === 'dark') {
+      g.addColorStop(0, '#2a1810');
+      g.addColorStop(0.5, '#3d2618');
+      g.addColorStop(1, '#2a1810');
+    } else {
+      g.addColorStop(0, '#6e4528');
+      g.addColorStop(0.35, '#9a683c');
+      g.addColorStop(0.65, '#7a4e2c');
+      g.addColorStop(1, '#6e4528');
+    }
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 90; i++) {
-      const y = (i / 90) * h;
-      ctx.strokeStyle = `rgba(0,0,0,${0.05 + (i % 4) * 0.03})`;
-      ctx.lineWidth = 1 + (i % 2);
+    for (let i = 0; i < 110; i++) {
+      const y = (i / 110) * h + Math.sin(i * 0.7) * 2;
+      ctx.strokeStyle = `rgba(30,15,5,${0.06 + (i % 5) * 0.025})`;
+      ctx.lineWidth = 1 + (i % 3 === 0 ? 1.2 : 0);
       ctx.beginPath();
       ctx.moveTo(0, y);
-      for (let x = 0; x <= w; x += 6) {
-        ctx.lineTo(x, y + Math.sin(x * 0.05 + i * 0.4) * 3);
+      for (let x = 0; x <= w; x += 5) {
+        ctx.lineTo(x, y + Math.sin(x * 0.035 + i * 0.5) * 2.8);
       }
       ctx.stroke();
     }
-    for (let i = 0; i < 30; i++) {
-      ctx.strokeStyle = `rgba(180,120,60,${0.04})`;
+    for (let i = 0; i < 40; i++) {
+      ctx.strokeStyle = `rgba(220,170,100,${0.035})`;
       ctx.beginPath();
       const x0 = Math.random() * w;
       ctx.moveTo(x0, 0);
-      ctx.bezierCurveTo(x0 + 20, h * 0.3, x0 - 15, h * 0.7, x0 + 10, h);
+      ctx.bezierCurveTo(x0 + 25, h * 0.3, x0 - 18, h * 0.7, x0 + 12, h);
       ctx.stroke();
     }
   }, bagRef);
-  map.repeat.set(2, 2);
+  map.repeat.set(2.5, 1.5);
+  map.colorSpace = THREE.SRGBColorSpace;
   return trackMat(
     new THREE.MeshPhysicalMaterial({
       map,
-      roughness: 0.42,
-      metalness: 0.08,
-      clearcoat: 0.35,
-      clearcoatRoughness: 0.4,
+      color: base,
+      roughness: 0.4,
+      metalness: 0.04,
+      clearcoat: 0.45,
+      clearcoatRoughness: 0.32,
     }),
     bagRef,
   );
