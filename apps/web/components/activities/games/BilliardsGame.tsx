@@ -14,6 +14,13 @@ import {
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
 import { addGameVenue } from '../three/sceneVenue';
+import {
+  createAssetBag,
+  makeCueStick,
+  makeFeltMaterial,
+  makePoolBall,
+  makeWoodMaterial,
+} from '../three/gameAssets';
 import { GameAudio } from '@/lib/game-audio';
 
 type Ball = { id: number; x: number; y: number; vx: number; vy: number; sunk?: boolean };
@@ -243,46 +250,59 @@ export function BilliardsGame(props: GameProps) {
 
     const root = new THREE.Group();
     scene.add(root);
-    const disposeVenue = addGameVenue(THREE, scene, root, 'billiards');
+    const disposeVenue = addGameVenue(THREE, scene, root, 'billiards', {
+      renderer,
+      playRadius: 7.5,
+    });
+    const assets = createAssetBag();
     const textures: Texture[] = [];
 
-    const wood = new THREE.MeshStandardMaterial({ color: 0x4a3020, roughness: 0.55, metalness: 0.08 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.75, 6.6), wood);
-    base.position.y = -0.42;
+    const wood = makeWoodMaterial(THREE, assets, 'warm');
+    const base = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.85, 6.6), wood);
+    base.position.y = -0.48;
     base.castShadow = true;
     base.receiveShadow = true;
     root.add(base);
     const apron = new THREE.Mesh(
-      new THREE.BoxGeometry(11.8, 0.22, 6.8),
-      new THREE.MeshStandardMaterial({ color: 0x2c1a12, roughness: 0.7 }),
+      new THREE.BoxGeometry(11.9, 0.24, 6.9),
+      makeWoodMaterial(THREE, assets, 'dark'),
     );
-    apron.position.y = -0.08;
+    apron.position.y = -0.1;
     root.add(apron);
-    const felt = new THREE.Mesh(
-      new THREE.BoxGeometry(W, 0.1, D),
-      new THREE.MeshStandardMaterial({ color: 0x1a6b3a, roughness: 0.92 }),
-    );
+    const legs = makeWoodMaterial(THREE, assets, 'dark');
+    for (const [lx, lz] of [
+      [-5.2, -2.8],
+      [5.2, -2.8],
+      [-5.2, 2.8],
+      [5.2, 2.8],
+    ] as const) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.9, 12), legs);
+      leg.position.set(lx, -0.95, lz);
+      leg.castShadow = true;
+      root.add(leg);
+    }
+    const felt = new THREE.Mesh(new THREE.BoxGeometry(W, 0.1, D), makeFeltMaterial(THREE, '#1a6b3a', assets));
     felt.position.y = -0.05;
     felt.receiveShadow = true;
     root.add(felt);
-    const cushionMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.65 });
+    const cushionMat = makeFeltMaterial(THREE, '#14532d', assets);
     const cush = (w: number, d: number, x: number, z: number) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.28, d), cushionMat);
       m.position.set(x, 0.12, z);
       m.castShadow = true;
       root.add(m);
     };
-    // Bantlar — deliklerde boşluk bırak
     cush(3.6, 0.38, -2.5, -2.68);
     cush(3.6, 0.38, 2.5, -2.68);
     cush(3.6, 0.38, -2.5, 2.68);
     cush(3.6, 0.38, 2.5, 2.68);
     cush(0.38, 3.4, -5.18, 0);
     cush(0.38, 3.4, 5.18, 0);
-    const railMat = new THREE.MeshStandardMaterial({ color: 0x5c3d24, roughness: 0.5 });
+    const railMat = makeWoodMaterial(THREE, assets, 'warm');
     const rail = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.16, d), railMat);
-      m.position.set(x, 0.26, z);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), railMat);
+      m.position.set(x, 0.28, z);
+      m.castShadow = true;
       root.add(m);
     };
     rail(11.5, 0.55, 0, -3.05);
@@ -291,10 +311,11 @@ export function BilliardsGame(props: GameProps) {
     rail(0.55, 5.6, 5.55, 0);
     const pocketGeo = new THREE.CircleGeometry(POCKET_R * 0.95, 28);
     const pocketMat = new THREE.MeshStandardMaterial({ color: 0x050508, roughness: 1 });
-    const pocketRimGeo = new THREE.RingGeometry(POCKET_R * 0.95, POCKET_R * 1.2, 28);
-    const pocketRimMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a1a,
-      roughness: 0.4,
+    const pocketRimGeo = new THREE.RingGeometry(POCKET_R * 0.95, POCKET_R * 1.25, 28);
+    const pocketRimMat = new THREE.MeshPhysicalMaterial({
+      color: 0x222222,
+      roughness: 0.35,
+      metalness: 0.4,
       side: THREE.DoubleSide,
     });
     for (const [px, pz] of POCKETS) {
@@ -308,44 +329,10 @@ export function BilliardsGame(props: GameProps) {
       root.add(rim);
     }
 
-    const ballGeo = new THREE.SphereGeometry(R, 28, 20);
     const bodies = new Map<number, Body>();
     for (let id = 0; id <= 15; id++) {
-      const cv = document.createElement('canvas');
-      cv.width = 128;
-      cv.height = 64;
-      const ctx = cv.getContext('2d')!;
       const color = BALL_COLORS[id === 0 ? 0 : id <= 8 ? id : id - 8]!;
-      if (id >= 9) {
-        ctx.fillStyle = '#f8f8f2';
-        ctx.fillRect(0, 0, 128, 64);
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 16, 128, 32);
-      } else {
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, 128, 64);
-      }
-      if (id > 0) {
-        for (const cx of [32, 96]) {
-          ctx.fillStyle = '#f8f8f2';
-          ctx.beginPath();
-          ctx.arc(cx, 32, 13, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#111';
-          ctx.font = 'bold 16px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(id), cx, 33);
-        }
-      }
-      const tex = new THREE.CanvasTexture(cv);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      textures.push(tex);
-      const mesh = new THREE.Mesh(
-        ballGeo,
-        new THREE.MeshStandardMaterial({ map: tex, roughness: 0.2, metalness: 0.1 }),
-      );
-      mesh.castShadow = true;
+      const mesh = makePoolBall(THREE, id, R, color, id >= 9, assets);
       mesh.position.y = R;
       root.add(mesh);
       bodies.set(id, { id, x: 0, z: 0, vx: 0, vz: 0, sunk: false, tx: 0, tz: 0, mesh });
@@ -362,10 +349,7 @@ export function BilliardsGame(props: GameProps) {
     aimLine.visible = false;
     root.add(aimLine);
     const CUE_LEN = 4;
-    const cueMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09, 0.045, CUE_LEN, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffb86c, roughness: 0.4 }),
-    );
+    const cueMesh = makeCueStick(THREE, CUE_LEN, assets);
     cueMesh.visible = false;
     root.add(cueMesh);
 
@@ -1064,6 +1048,7 @@ export function BilliardsGame(props: GameProps) {
       disposeVenue();
       scene.remove(root);
       disposeObject(root);
+      assets.dispose();
       textures.forEach((t) => t.dispose());
     };
   }, []);

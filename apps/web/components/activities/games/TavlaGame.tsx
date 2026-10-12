@@ -13,6 +13,12 @@ import {
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
 import { addGameVenue } from '../three/sceneVenue';
+import {
+  createAssetBag,
+  makeChecker,
+  makeFeltMaterial,
+  makeWoodMaterial,
+} from '../three/gameAssets';
 import { GameAudio } from '@/lib/game-audio';
 
 type Board = { points: number[]; bar: [number, number]; off: [number, number] };
@@ -254,36 +260,48 @@ export function TavlaGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
-    const disposeVenue = addGameVenue(THREE, scene, root, 'tavla');
+    const disposeVenue = addGameVenue(THREE, scene, root, 'tavla', {
+      renderer,
+      playRadius: 9.5,
+    });
+    const assets = createAssetBag();
     GameAudio.unlock();
     const dyn = new THREE.Group();
 
     // --- Tahta ---
     const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(18.2, 0.5, 11.6),
-      new THREE.MeshStandardMaterial({ color: 0x2c1f40, roughness: 0.6 }),
+      new THREE.BoxGeometry(18.2, 0.55, 11.6),
+      makeWoodMaterial(THREE, assets, 'dark'),
     );
-    frame.position.y = -0.3;
+    frame.position.y = -0.32;
+    frame.castShadow = true;
+    frame.receiveShadow = true;
     root.add(frame);
     const felt = new THREE.Mesh(
       new THREE.BoxGeometry(14.6, 0.1, 10.4),
-      new THREE.MeshStandardMaterial({ color: 0x1c5a38, roughness: 0.95 }),
+      makeFeltMaterial(THREE, '#1c5a38', assets),
     );
     felt.position.set(0, -0.02, 0);
+    felt.receiveShadow = true;
     root.add(felt);
     const bar = new THREE.Mesh(
       new THREE.BoxGeometry(0.9, 0.16, 10.4),
-      new THREE.MeshStandardMaterial({ color: 0x3b2a4f, roughness: 0.5 }),
+      makeWoodMaterial(THREE, assets, 'warm'),
     );
     bar.position.set(0, 0.02, 0);
     root.add(bar);
     const tray = new THREE.Mesh(
       new THREE.BoxGeometry(1.7, 0.14, 10.4),
-      new THREE.MeshStandardMaterial({ color: 0x241a36, roughness: 0.6 }),
+      makeWoodMaterial(THREE, assets, 'dark'),
     );
     tray.position.set(8.3, -0.03, 0);
     root.add(tray);
-    const rimMat = new THREE.MeshBasicMaterial({ color: 0xbd93f9 });
+    const rimMat = new THREE.MeshPhysicalMaterial({
+      color: 0xbd93f9,
+      emissive: 0xbd93f9,
+      emissiveIntensity: 0.45,
+      roughness: 0.4,
+    });
     for (const [w, d, x, z] of [
       [14.8, 0.06, 0, -5.25],
       [14.8, 0.06, 0, 5.25],
@@ -307,8 +325,18 @@ export function TavlaGame(props: GameProps) {
     const triGeo = new THREE.ShapeGeometry(triShape);
     // DoubleSide: üst sıra (i<12) Math.PI/2 ile normale aşağı bakar; FrontSide raycast kaçırır
     const triMats = [
-      new THREE.MeshStandardMaterial({ color: 0x6d4ac0, roughness: 0.7, side: THREE.DoubleSide }),
-      new THREE.MeshStandardMaterial({ color: 0xd6c9a8, roughness: 0.7, side: THREE.DoubleSide }),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x6d4ac0,
+        roughness: 0.55,
+        clearcoat: 0.2,
+        side: THREE.DoubleSide,
+      }),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xd6c9a8,
+        roughness: 0.55,
+        clearcoat: 0.15,
+        side: THREE.DoubleSide,
+      }),
     ];
     const hlMat = new Map<string, Material>();
     const hlMaterial = (color: number, opacity: number) => {
@@ -365,15 +393,9 @@ export function TavlaGame(props: GameProps) {
     root.add(dyn);
 
     // --- Pul / zar kaynakları ---
-    const checkerGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.16, 28);
-    const checkerMats = [
-      new THREE.MeshStandardMaterial({ color: 0xf8f8f2, roughness: 0.3, emissive: 0x333333 }),
-      new THREE.MeshStandardMaterial({
-        color: 0x7c4dff,
-        roughness: 0.25,
-        metalness: 0.2,
-        emissive: 0x24104a,
-      }),
+    const checkerProto = [
+      makeChecker(THREE, 'white', assets),
+      makeChecker(THREE, 'purple', assets),
     ];
     const diceGeo = new THREE.BoxGeometry(0.85, 0.85, 0.85);
     const textures: Texture[] = [];
@@ -434,7 +456,7 @@ export function TavlaGame(props: GameProps) {
       const myT = isMyTurn(p) && (pl === 0 || pl === 1);
 
       const addChecker = (side: 0 | 1, x: number, y: number, z: number, spot: Spot) => {
-        const m = new THREE.Mesh(checkerGeo, checkerMats[side]!) as unknown as Pm;
+        const m = checkerProto[side]!.clone() as unknown as Pm;
         m.position.set(x, y, z);
         m.castShadow = true;
         m.userData = { spot };
@@ -569,10 +591,9 @@ export function TavlaGame(props: GameProps) {
       disposeVenue();
       scene.remove(root);
       disposeObject(root);
+      assets.dispose();
       triGeo.dispose();
       triMats.forEach((m) => m.dispose());
-      checkerGeo.dispose();
-      checkerMats.forEach((m) => m.dispose());
       diceGeo.dispose();
       diceMats.forEach((m) => m.dispose());
       hlMat.forEach((m) => m.dispose());

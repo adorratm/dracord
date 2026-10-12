@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Line, Mesh, PerspectiveCamera, Quaternion } from 'three';
+import type { Group, Line, Object3D, PerspectiveCamera, Quaternion } from 'three';
 import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import {
   disposeObject,
@@ -11,6 +11,12 @@ import {
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
 import { addGameVenue } from '../three/sceneVenue';
+import {
+  createAssetBag,
+  makeBowlingBall,
+  makeBowlingPin,
+  makeWoodMaterial,
+} from '../three/gameAssets';
 import { GameAudio } from '@/lib/game-audio';
 
 type FrameState = { rolls: number[]; complete: boolean };
@@ -137,7 +143,7 @@ type Pin = {
   fall: number;
   axis: [number, number];
   active: boolean;
-  mesh: Mesh;
+  mesh: Object3D;
 };
 
 export function BowlingGame(props: GameProps) {
@@ -165,28 +171,43 @@ export function BowlingGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
-    const disposeVenue = addGameVenue(THREE, scene, root, 'bowling');
+    const disposeVenue = addGameVenue(THREE, scene, root, 'bowling', {
+      renderer,
+      playRadius: 4,
+    });
+    const assets = createAssetBag();
     GameAudio.unlock();
 
     // --- Hat ---
-    const laneMat = new THREE.MeshStandardMaterial({ color: 0xc98a4b, roughness: 0.35 });
+    const laneMat = makeWoodMaterial(THREE, assets, 'warm');
+    laneMat.roughness = 0.32;
+    laneMat.clearcoat = 0.45;
     const lane = new THREE.Mesh(new THREE.BoxGeometry(LANE_HALF * 2, 0.2, 24), laneMat);
     lane.position.set(0, -0.1, -1);
     lane.receiveShadow = true;
     root.add(lane);
-    const gutterMat = new THREE.MeshStandardMaterial({ color: 0x1b1d2b, roughness: 0.6 });
+    const gutterMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1b1d2b,
+      roughness: 0.55,
+      metalness: 0.35,
+    });
     for (const sx of [-1, 1]) {
       const g = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 24), gutterMat);
       g.position.set(sx * (LANE_HALF + 0.3), -0.2, -1);
       root.add(g);
       const rail = new THREE.Mesh(
         new THREE.BoxGeometry(0.06, 0.05, 24),
-        new THREE.MeshBasicMaterial({ color: 0xbd93f9 }),
+        new THREE.MeshPhysicalMaterial({
+          color: 0xbd93f9,
+          emissive: 0xbd93f9,
+          emissiveIntensity: 0.65,
+          roughness: 0.35,
+        }),
       );
       rail.position.set(sx * (LANE_HALF + 0.62), 0.02, -1);
       root.add(rail);
     }
-    const arrowMat = new THREE.MeshBasicMaterial({ color: 0x3b2a2a });
+    const arrowMat = new THREE.MeshStandardMaterial({ color: 0x3b2a2a, roughness: 0.8 });
     const arrowGeo = new THREE.ConeGeometry(0.1, 0.35, 3);
     for (let i = -2; i <= 2; i++) {
       const a = new THREE.Mesh(arrowGeo, arrowMat);
@@ -196,55 +217,34 @@ export function BowlingGame(props: GameProps) {
     }
     const foul = new THREE.Mesh(
       new THREE.BoxGeometry(LANE_HALF * 2, 0.01, 0.08),
-      new THREE.MeshBasicMaterial({ color: 0xff5555 }),
+      new THREE.MeshStandardMaterial({ color: 0xff5555, emissive: 0xff2222, emissiveIntensity: 0.4 }),
     );
     foul.position.set(0, 0.006, START_Z + 0.7);
     root.add(foul);
     const back = new THREE.Mesh(
       new THREE.BoxGeometry(8, 4, 0.3),
-      new THREE.MeshStandardMaterial({ color: 0x1c1f33, roughness: 0.8 }),
+      new THREE.MeshPhysicalMaterial({ color: 0x1c1f33, roughness: 0.7, metalness: 0.15 }),
     );
     back.position.set(0, 1.8, -12.6);
     root.add(back);
     const backNeon = new THREE.Mesh(
       new THREE.BoxGeometry(7.4, 0.08, 0.05),
-      new THREE.MeshBasicMaterial({ color: 0xbd93f9 }),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xff79c6,
+        emissive: 0xff79c6,
+        emissiveIntensity: 1.1,
+      }),
     );
     backNeon.position.set(0, 3.2, -12.4);
     root.add(backNeon);
 
     // --- Labutlar ---
-    const prof: [number, number][] = [
-      [0, 0],
-      [0.11, 0],
-      [0.15, 0.1],
-      [0.17, 0.26],
-      [0.14, 0.48],
-      [0.08, 0.68],
-      [0.065, 0.8],
-      [0.09, 0.92],
-      [0.1, 1.04],
-      [0.07, 1.14],
-      [0, 1.17],
-    ];
-    const pinGeo = new THREE.LatheGeometry(
-      prof.map(([r, y]) => new THREE.Vector2(r, y)),
-      16,
-    );
-    const pinMat = new THREE.MeshStandardMaterial({ color: 0xf8f8f2, roughness: 0.3 });
-    const ringGeo = new THREE.TorusGeometry(0.075, 0.022, 8, 16);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0xff5555, roughness: 0.4 });
     const pins: Pin[] = [];
     {
       let id = 0;
       for (let row = 0; row < 4; row++) {
         for (let i = 0; i <= row; i++) {
-          const mesh = new THREE.Mesh(pinGeo, pinMat);
-          mesh.castShadow = true;
-          const ring = new THREE.Mesh(ringGeo, ringMat);
-          ring.rotation.x = Math.PI / 2;
-          ring.position.y = 0.88;
-          mesh.add(ring);
+          const mesh = makeBowlingPin(THREE, assets);
           const bx = (i - row / 2) * 0.72;
           const bz = PIN_Z - row * 0.62;
           mesh.position.set(bx, 0, bz);
@@ -268,16 +268,7 @@ export function BowlingGame(props: GameProps) {
     }
 
     // --- Top ---
-    const ballMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(BALL_R, 28, 20),
-      new THREE.MeshStandardMaterial({
-        color: 0x6d3fc0,
-        roughness: 0.15,
-        metalness: 0.4,
-        emissive: 0x2a1450,
-      }),
-    );
-    ballMesh.castShadow = true;
+    const ballMesh: Group = makeBowlingBall(THREE, BALL_R, assets);
     root.add(ballMesh);
     const ball = { x: 0, z: START_Z, vx: 0, vz: 0, active: false, gutter: 0 };
     const resetBall = () => {
@@ -652,6 +643,7 @@ export function BowlingGame(props: GameProps) {
       disposeVenue();
       scene.remove(root);
       disposeObject(root);
+      assets.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

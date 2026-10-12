@@ -66,6 +66,9 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(w, h, false);
       renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
       el.appendChild(renderer.domElement);
       Object.assign(renderer.domElement.style, {
         width: '100%',

@@ -13,6 +13,11 @@ import {
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
 import { addGameVenue } from '../three/sceneVenue';
+import {
+  createAssetBag,
+  makeOkeyTileFace,
+  makeWoodMaterial,
+} from '../three/gameAssets';
 import { GameAudio } from '@/lib/game-audio';
 import {
   COLOR_HEX,
@@ -378,87 +383,62 @@ export function OkeyGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
-    const disposeVenue = addGameVenue(THREE, scene, root, 'okey');
+    const disposeVenue = addGameVenue(THREE, scene, root, 'okey', {
+      renderer,
+      playRadius: 8.5,
+    });
+    const assets = createAssetBag();
     GameAudio.unlock();
     const dyn = new THREE.Group();
     root.add(dyn);
 
     const top = new THREE.Mesh(
-      new THREE.CylinderGeometry(9.6, 9.9, 0.6, 48),
-      new THREE.MeshStandardMaterial({ color: 0x3b2a4f, roughness: 0.55 }),
+      new THREE.CylinderGeometry(9.6, 9.9, 0.65, 64),
+      makeWoodMaterial(THREE, assets, 'dark'),
     );
-    top.position.y = -0.34;
+    top.position.y = -0.36;
+    top.castShadow = true;
+    top.receiveShadow = true;
     root.add(top);
     const felt = new THREE.Mesh(
-      new THREE.CylinderGeometry(9.0, 9.0, 0.06, 48),
-      new THREE.MeshStandardMaterial({ color: 0x1f6b3f, roughness: 0.95 }),
+      new THREE.CylinderGeometry(9.0, 9.0, 0.06, 64),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x1f6b3f,
+        roughness: 0.9,
+        sheen: 0.3,
+        sheenRoughness: 0.8,
+        sheenColor: new THREE.Color(0x2a8a50),
+      }),
     );
     felt.position.y = -0.03;
+    felt.receiveShadow = true;
     root.add(felt);
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(9.05, 0.05, 8, 64),
-      new THREE.MeshBasicMaterial({ color: 0xbd93f9 }),
+      new THREE.TorusGeometry(9.05, 0.06, 10, 64),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xbd93f9,
+        emissive: 0xbd93f9,
+        emissiveIntensity: 0.5,
+        roughness: 0.35,
+      }),
     );
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.02;
     root.add(rim);
 
     const tileGeo = new THREE.BoxGeometry(0.8, 0.22, 1.1);
-    const sideMat = new THREE.MeshStandardMaterial({ color: 0xe9dfc6, roughness: 0.5 });
+    const sideMat = new THREE.MeshPhysicalMaterial({
+      color: 0xe9dfc6,
+      roughness: 0.45,
+      clearcoat: 0.2,
+    });
     const textures: Texture[] = [];
     const matCache = new Map<string, Material[]>();
 
     const makeFace = (key: string): Material[] => {
       const cached = matCache.get(key);
       if (cached) return cached;
-      const cv = document.createElement('canvas');
-      cv.width = 128;
-      cv.height = 176;
-      const ctx = cv.getContext('2d')!;
-      if (key === 'back') {
-        ctx.fillStyle = '#44307a';
-        ctx.fillRect(0, 0, 128, 176);
-        ctx.strokeStyle = '#bd93f9';
-        ctx.lineWidth = 6;
-        ctx.strokeRect(10, 10, 108, 156);
-        ctx.fillStyle = '#bd93f9';
-        ctx.font = 'bold 54px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('♛', 64, 90);
-      } else {
-        const [cs, ns, ws] = key.split('-');
-        const wild = ws === '1';
-        ctx.fillStyle = '#f3ecd6';
-        ctx.fillRect(0, 0, 128, 176);
-        if (wild) {
-          ctx.strokeStyle = '#bd93f9';
-          ctx.lineWidth = 8;
-          ctx.strokeRect(5, 5, 118, 166);
-        }
-        if (cs === 'j') {
-          ctx.fillStyle = '#7c3aed';
-          ctx.font = 'bold 80px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('★', 64, 88);
-        } else {
-          const c = Number(cs);
-          ctx.fillStyle = COLOR_HEX[c]!;
-          ctx.font = 'bold 84px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(ns!, 64, 74);
-          ctx.beginPath();
-          ctx.arc(64, 138, 14, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      const tex = new THREE.CanvasTexture(cv);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      textures.push(tex);
-      const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 });
-      const mats = [sideMat, sideMat, face, sideMat, sideMat, sideMat];
+      const mats = makeOkeyTileFace(THREE, key, assets, sideMat);
       matCache.set(key, mats);
       return mats;
     };
@@ -636,9 +616,9 @@ export function OkeyGame(props: GameProps) {
       disposeVenue();
       scene.remove(root);
       disposeObject(root);
+      assets.dispose();
       tileGeo.dispose();
       sideMat.dispose();
-      matCache.forEach((mats) => mats.forEach((m) => m.dispose()));
       textures.forEach((t) => t.dispose());
     };
   }, []);
