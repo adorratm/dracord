@@ -259,13 +259,17 @@ export function BilliardsGame(props: GameProps) {
     const textures: Texture[] = [];
 
     const woodDark = makeWoodMaterial(THREE, assets, 'dark');
-    // Yekpare ahşap apron (Extrude UV bozulması yok) + üstte cilalı ban
+    const railWood = makeWoodMaterial(THREE, assets, 'warm');
+    railWood.roughness = 0.38;
+    railWood.clearcoat = 0.5;
+    // Keçe / çerçeve ölçüleri
     const FELT_W = 10.2;
     const FELT_D = 5.2;
     const RAIL_T = 0.58;
     const OUTER_W = FELT_W + RAIL_T * 2;
     const OUTER_D = FELT_D + RAIL_T * 2;
-    const railH = 0.28;
+    const railH = 0.26;
+    const feltY = 0.06;
 
     const base = new THREE.Mesh(new THREE.BoxGeometry(OUTER_W, 0.7, OUTER_D), woodDark);
     base.position.y = -0.42;
@@ -284,33 +288,11 @@ export function BilliardsGame(props: GameProps) {
       root.add(leg);
     }
 
-    // Tek parça dikdörtgen ahşap ban — merkez keçe ile örtülür
-    const railWood = makeWoodMaterial(THREE, assets, 'warm');
-    railWood.roughness = 0.38;
-    railWood.clearcoat = 0.55;
-    railWood.clearcoatRoughness = 0.28;
-    if (railWood.map) {
-      railWood.map.repeat.set(3.5, 2);
-      railWood.map.needsUpdate = true;
-    }
-    const woodApron = new THREE.Mesh(new THREE.BoxGeometry(OUTER_W, railH, OUTER_D), railWood);
-    woodApron.position.y = railH * 0.35;
-    woodApron.castShadow = true;
-    woodApron.receiveShadow = true;
-    root.add(woodApron);
-    // İç basamak (keçe oturumu) — koyu ahşap şerit
-    const ledge = new THREE.Mesh(
-      new THREE.BoxGeometry(FELT_W + 0.12, 0.06, FELT_D + 0.12),
-      woodDark,
-    );
-    ledge.position.y = 0.02;
-    root.add(ledge);
-
     const pocketBed = new THREE.Mesh(
       new THREE.BoxGeometry(FELT_W, 0.1, FELT_D),
       new THREE.MeshStandardMaterial({ color: 0x050508, roughness: 1 }),
     );
-    pocketBed.position.y = -0.04;
+    pocketBed.position.y = -0.03;
     root.add(pocketBed);
 
     const addCircleHoles = (shape: { holes: InstanceType<typeof THREE.Path>[] }, r: number) => {
@@ -321,6 +303,7 @@ export function BilliardsGame(props: GameProps) {
       }
     };
 
+    // Yeşil keçe (ortada görünür) + delikler
     const feltShape = new THREE.Shape();
     feltShape.moveTo(-FELT_W / 2, -FELT_D / 2);
     feltShape.lineTo(FELT_W / 2, -FELT_D / 2);
@@ -330,29 +313,62 @@ export function BilliardsGame(props: GameProps) {
     addCircleHoles(feltShape, POCKET_R);
     const feltMat = makeFeltMaterial(THREE, '#1a8f42', assets);
     feltMat.side = THREE.DoubleSide;
+    feltMat.depthWrite = true;
     const felt = new THREE.Mesh(new THREE.ShapeGeometry(feltShape, 56), feltMat);
     felt.rotation.x = -Math.PI / 2;
-    felt.position.y = 0.055;
+    felt.position.y = feltY;
     felt.receiveShadow = true;
+    felt.renderOrder = 1;
     root.add(felt);
 
-    // Yastıklar — keçe kenarı boyunca uzun; yalnızca cep ağzında kısa boşluk
+    // Yekpare ahşap ÇERÇEVE — ortası boş (keçe/delik görünür)
+    const woodShape = new THREE.Shape();
+    const ow = OUTER_W / 2;
+    const od = OUTER_D / 2;
+    woodShape.moveTo(-ow, -od);
+    woodShape.lineTo(ow, -od);
+    woodShape.lineTo(ow, od);
+    woodShape.lineTo(-ow, od);
+    woodShape.closePath();
+    const inner = new THREE.Path();
+    const iw = FELT_W / 2 - 0.02;
+    const id = FELT_D / 2 - 0.02;
+    inner.moveTo(-iw, -id);
+    inner.lineTo(iw, -id);
+    inner.lineTo(iw, id);
+    inner.lineTo(-iw, id);
+    inner.closePath();
+    woodShape.holes.push(inner);
+    addCircleHoles(woodShape, POCKET_R * 1.05);
+    const woodGeo = new THREE.ExtrudeGeometry(woodShape, {
+      depth: railH,
+      bevelEnabled: false,
+      curveSegments: 40,
+    });
+    const woodFrame = new THREE.Mesh(woodGeo, railWood);
+    // Extrude +Z → rot X 90°: üst yüz y=railH
+    woodFrame.rotation.x = Math.PI / 2;
+    woodFrame.position.y = railH;
+    woodFrame.castShadow = true;
+    woodFrame.receiveShadow = true;
+    root.add(woodFrame);
+
+    // Yastıklar — keçe üstünde
     const cushionMat = makeFeltMaterial(THREE, '#1a7a3c', assets);
     const cush = (w: number, d: number, x: number, z: number) => {
       if (w < 0.12 || d < 0.12) return;
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.17, d), cushionMat);
-      m.position.set(x, 0.125, z);
+      m.position.set(x, feltY + 0.09, z);
       m.castShadow = true;
       m.receiveShadow = true;
       root.add(m);
     };
     const CUSH_Z = FELT_D / 2 - 0.12;
     const CUSH_X = FELT_W / 2 - 0.12;
-    const GAP_CORNER = POCKET_R * 0.88; // köşe ağzı
-    const GAP_SIDE = POCKET_R * 0.92; // orta cep ağzı
+    const GAP_CORNER = POCKET_R * 0.88;
+    const GAP_SIDE = POCKET_R * 0.92;
     for (const sz of [-1, 1] as const) {
       const z = sz * CUSH_Z;
-      // köşe cep → orta cep (uzun segment)
       const x0 = -CUSH_X + GAP_CORNER;
       const x1 = -GAP_SIDE;
       const len = x1 - x0;
@@ -362,9 +378,7 @@ export function BilliardsGame(props: GameProps) {
     }
     for (const sx of [-1, 1] as const) {
       const x = sx * CUSH_X;
-      // kısa kenar: iki köşe cep arası neredeyse tam boy
-      const len = (CUSH_Z - GAP_CORNER) * 2;
-      cush(0.32, len, x, 0);
+      cush(0.32, (CUSH_Z - GAP_CORNER) * 2, x, 0);
     }
 
     const diamondMat = new THREE.MeshPhysicalMaterial({
@@ -374,7 +388,7 @@ export function BilliardsGame(props: GameProps) {
       clearcoat: 0.35,
     });
     const diamondGeo = new THREE.SphereGeometry(0.045, 12, 10);
-    const dY = railH * 0.35 + railH * 0.5 + 0.02;
+    const dY = railH + 0.02;
     for (const sz of [-1, 1] as const) {
       const z = sz * (OUTER_D / 2 - RAIL_T / 2);
       for (const t of [-0.67, -0.33, 0.33, 0.67]) {
@@ -397,7 +411,7 @@ export function BilliardsGame(props: GameProps) {
     for (const [px, pz] of POCKETS) {
       const mouth = new THREE.Mesh(new THREE.CircleGeometry(POCKET_R * 0.98, 40), pocketMouthMat);
       mouth.rotation.x = -Math.PI / 2;
-      mouth.position.set(px, 0.05, pz);
+      mouth.position.set(px, feltY - 0.005, pz);
       root.add(mouth);
       const well = new THREE.Mesh(
         new THREE.CylinderGeometry(POCKET_R * 0.92, POCKET_R * 1.08, 0.55, 32),
