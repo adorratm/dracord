@@ -144,6 +144,13 @@ export class ActivitiesService {
         }
         out.at = Math.min(Math.floor(at * 1000) / 1000, 86_400 * 12);
       }
+    } else if (kind === 'blackjack' && 'turn' in out) {
+      // Blackjack: turn = oyuncu userId veya null
+      const t = out.turn;
+      if (t !== null && (typeof t !== 'string' || t.length < 1 || t.length > 128)) {
+        throw new BadRequestException('Geçersiz tur');
+      }
+      out.turn = t;
     } else if ('turn' in out) {
       const turn = Number(out.turn);
       if (!Number.isInteger(turn) || turn < 0 || turn > 1_000_000) {

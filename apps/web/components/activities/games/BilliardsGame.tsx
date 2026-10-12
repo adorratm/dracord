@@ -46,12 +46,12 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-/** Cep — çekim yok; yalnızca merkez delikte batma + ağızda yastık muafiyeti */
+/** Cep — çekim yok; merkez deliğe girince bat + ağızda yastık muafiyeti */
 const POCKET_R = 0.42;
-/** Yastık sekmesini kapatma (çekim / yerçekimi yok) */
-const POCKET_JAW = 0.48;
-/** Batır: top merkezi delik ağzının içinde */
-const POCKET_SINK = POCKET_R * 0.72;
+/** Yastık sekmesini kapatma */
+const POCKET_JAW = 0.62;
+/** Batır: top merkezi delik içinde (cep merkezine ulaşılabilir clamp ile) */
+const POCKET_SINK = POCKET_R * 0.92;
 const POCKETS: [number, number][] = [
   [-5.0, -2.5],
   [0, -2.68],
@@ -991,28 +991,40 @@ export function BilliardsGame(props: GameProps) {
             if (b.vz < -0.4) GameAudio.cushion();
             b.vz = Math.abs(b.vz) * 0.8;
           }
-          // Masa içinde tut (çarpışma taşırması)
-          b.x = Math.max(-HX + R * 0.15, Math.min(HX - R * 0.15, b.x));
-          b.z = Math.max(-HZ + R * 0.15, Math.min(HZ - R * 0.15, b.z));
+          // Hafif masa içi tut (cep yollarını kapatma)
+          b.x = Math.max(-HX - 0.02, Math.min(HX + 0.02, b.x));
+          b.z = Math.max(-HZ - 0.02, Math.min(HZ + 0.02, b.z));
           syncBallVisual(b, R);
         } else {
-          // Ağızda: yastık yok, hız değişmez — sadece delik merkezine yakın tut
-          const maxOut = POCKET_R * 0.2;
-          b.x = Math.max(-HX - maxOut, Math.min(HX + maxOut, b.x));
-          b.z = Math.max(-HZ - maxOut, Math.min(HZ + maxOut, b.z));
-          // Görsel düşüş yalnızca gerçek batmaya çok yakınken (dışarı fırlama illüzyonu yok)
-          const dropT = bestPd < POCKET_SINK * 1.35
-            ? Math.max(0, 1 - bestPd / (POCKET_SINK * 1.35))
+          // Ağızda: yastık yok — cep merkezine kadar izin ver (batabilsin)
+          const maxR = POCKET_R * 1.05;
+          const ox = b.x - bestPx;
+          const oz = b.z - bestPz;
+          const od = Math.hypot(ox, oz);
+          if (od > maxR && od > 1e-6) {
+            b.x = bestPx + (ox / od) * maxR;
+            b.z = bestPz + (oz / od) * maxR;
+          }
+          const pd = Math.hypot(b.x - bestPx, b.z - bestPz);
+          const dropT = pd < POCKET_SINK * 1.25
+            ? Math.max(0, 1 - pd / (POCKET_SINK * 1.25))
             : 0;
-          syncBallVisual(b, R - dropT * dropT * 0.35);
+          syncBallVisual(b, R - dropT * dropT * 0.4);
         }
       }
-      const nearestPocketDist = (x: number, z: number) => {
+      const nearestPocket = (x: number, z: number) => {
         let best = Infinity;
+        let bx = 0;
+        let bz = 0;
         for (const [px, pz] of POCKETS) {
-          best = Math.min(best, Math.hypot(x - px, z - pz));
+          const d = Math.hypot(x - px, z - pz);
+          if (d < best) {
+            best = d;
+            bx = px;
+            bz = pz;
+          }
         }
-        return best;
+        return { d: best, px: bx, pz: bz };
       };
       for (let i = 0; i < list.length; i++) {
         for (let j = i + 1; j < list.length; j++) {
@@ -1030,16 +1042,19 @@ export function BilliardsGame(props: GameProps) {
           a.z -= nz * overlap;
           c.x += nx * overlap;
           c.z += nz * overlap;
-          // Çarpışma sonrası masa dışına fırlamayı kes (cep ağzındakileri bozma)
+          // Çarpışma sonrası: cepteyse delik etrafında tut, değilse masa içinde
           const clampBall = (b: Body) => {
-            if (nearestPocketDist(b.x, b.z) < POCKET_JAW) {
-              const maxOut = POCKET_R * 0.2;
-              b.x = Math.max(-HX - maxOut, Math.min(HX + maxOut, b.x));
-              b.z = Math.max(-HZ - maxOut, Math.min(HZ + maxOut, b.z));
+            const n = nearestPocket(b.x, b.z);
+            if (n.d < POCKET_JAW) {
+              const maxR = POCKET_R * 1.05;
+              if (n.d > maxR && n.d > 1e-6) {
+                b.x = n.px + ((b.x - n.px) / n.d) * maxR;
+                b.z = n.pz + ((b.z - n.pz) / n.d) * maxR;
+              }
               return;
             }
-            b.x = Math.max(-HX + R * 0.15, Math.min(HX - R * 0.15, b.x));
-            b.z = Math.max(-HZ + R * 0.15, Math.min(HZ - R * 0.15, b.z));
+            b.x = Math.max(-HX - 0.02, Math.min(HX + 0.02, b.x));
+            b.z = Math.max(-HZ - 0.02, Math.min(HZ + 0.02, b.z));
           };
           clampBall(a);
           clampBall(c);

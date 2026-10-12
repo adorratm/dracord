@@ -658,158 +658,260 @@ export type DealerRig = {
   update: (t: number, dt: number) => void;
 };
 
-/** Prosedürel kadın kurpiyer — casino üniforması + konuşma/dağıtım animasyonu */
+/** Prosedürel kadın kurpiyer — seksi casino look + konuşma/dağıtım animasyonu */
 export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
   const root = new THREE.Group();
   root.name = 'dealer';
 
   const skin = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0xe8b89a,
-      roughness: 0.55,
-      clearcoat: 0.15,
-      clearcoatRoughness: 0.6,
+      color: 0xf0c4a8,
+      roughness: 0.42,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.45,
+      sheen: 0.35,
+      sheenColor: new THREE.Color(0xffd0c0),
     }),
     bagRef,
   );
   const hairMat = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0x2a1410,
-      roughness: 0.45,
-      clearcoat: 0.35,
-      sheen: 0.4,
-      sheenColor: new THREE.Color(0x8a4030),
+      color: 0x1a0a08,
+      roughness: 0.32,
+      clearcoat: 0.55,
+      clearcoatRoughness: 0.25,
+      sheen: 0.65,
+      sheenColor: new THREE.Color(0xc45a3a),
     }),
     bagRef,
   );
-  const blouse = trackMat(
+  const dress = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0xf4f0ea,
-      roughness: 0.55,
-      clearcoat: 0.1,
-    }),
-    bagRef,
-  );
-  const vest = trackMat(
-    new THREE.MeshPhysicalMaterial({
-      color: 0x1a0e14,
-      roughness: 0.4,
-      metalness: 0.08,
-      clearcoat: 0.25,
+      color: 0x120810,
+      roughness: 0.28,
+      metalness: 0.12,
+      clearcoat: 0.45,
+      clearcoatRoughness: 0.3,
+      sheen: 0.5,
+      sheenColor: new THREE.Color(0x6a2040),
     }),
     bagRef,
   );
   const gold = trackMat(
     new THREE.MeshPhysicalMaterial({
       color: 0xd4af37,
-      metalness: 0.9,
-      roughness: 0.25,
+      metalness: 0.92,
+      roughness: 0.22,
     }),
     bagRef,
   );
   const lipMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0xb03040,
-      roughness: 0.35,
-      emissive: 0x401018,
-      emissiveIntensity: 0.15,
+      color: 0xd42040,
+      roughness: 0.28,
+      emissive: 0x601020,
+      emissiveIntensity: 0.22,
     }),
     bagRef,
   );
-  const eyeMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1a1220, roughness: 0.3 }), bagRef);
-  const eyeWhite = trackMat(new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.55 }), bagRef);
+  const blushMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xff8a9a,
+      transparent: true,
+      opacity: 0.35,
+      roughness: 0.8,
+      depthWrite: false,
+    }),
+    bagRef,
+  );
+  const eyeMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x2a1838, roughness: 0.25 }),
+    bagRef,
+  );
+  const eyeWhite = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0xfff8f0, roughness: 0.45 }),
+    bagRef,
+  );
+  const lashMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x0a0608, roughness: 0.5 }), bagRef);
 
+  // —— Vücut: hourglass ——
   const torso = new THREE.Group();
-  torso.position.y = 0.95;
+  torso.position.y = 0.88;
   root.add(torso);
 
-  const hips = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.22, 0.26, 0.35, 16), bagRef), vest);
-  hips.position.y = -0.15;
+  const hips = new THREE.Mesh(
+    trackGeo(new THREE.SphereGeometry(0.28, 20, 16), bagRef),
+    dress,
+  );
+  hips.scale.set(1.15, 0.72, 0.85);
+  hips.position.y = -0.08;
   hips.castShadow = true;
   torso.add(hips);
 
-  const body = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 18), bagRef), blouse);
-  body.position.y = 0.28;
-  body.castShadow = true;
-  torso.add(body);
+  const waist = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.14, 0.2, 0.28, 18), bagRef),
+    dress,
+  );
+  waist.position.y = 0.18;
+  waist.castShadow = true;
+  torso.add(waist);
 
-  const vestMesh = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.21, 0.25, 0.42, 18), bagRef), vest);
-  vestMesh.position.y = 0.32;
-  vestMesh.scale.set(1.02, 1, 0.92);
-  vestMesh.castShadow = true;
-  torso.add(vestMesh);
+  // Dekolte / göğüs
+  const bust = new THREE.Mesh(
+    trackGeo(new THREE.SphereGeometry(0.2, 20, 16), bagRef),
+    skin,
+  );
+  bust.scale.set(1.35, 0.85, 0.75);
+  bust.position.set(0, 0.42, 0.06);
+  bust.castShadow = true;
+  torso.add(bust);
 
-  const bow = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.18, 0.06, 0.04), bagRef), gold);
-  bow.position.set(0, 0.52, 0.2);
-  torso.add(bow);
+  const dressTop = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.18, 0.22, 0.22, 18), bagRef),
+    dress,
+  );
+  dressTop.position.set(0, 0.38, -0.02);
+  dressTop.scale.set(1.05, 1, 0.75);
+  torso.add(dressTop);
+
+  // Derin V yaka çizgisi (altın)
+  const neckline = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.06, 0.28, 0.02), bagRef),
+    gold,
+  );
+  neckline.position.set(0, 0.48, 0.16);
+  neckline.rotation.x = -0.15;
+  torso.add(neckline);
+
+  const skirt = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.32, 0.22, 0.55, 20), bagRef),
+    dress,
+  );
+  skirt.position.y = -0.42;
+  skirt.castShadow = true;
+  torso.add(skirt);
+
+  // Bacaklar (masa arkasında kısmen görünür)
+  for (const sx of [-1, 1] as const) {
+    const leg = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.055, 0.065, 0.55, 10), bagRef),
+      skin,
+    );
+    leg.position.set(sx * 0.1, 0.05, 0.02);
+    leg.castShadow = true;
+    root.add(leg);
+    const heel = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(0.1, 0.06, 0.18), bagRef),
+      dress,
+    );
+    heel.position.set(sx * 0.1, -0.22, 0.04);
+    root.add(heel);
+  }
 
   const head = new THREE.Group();
-  head.position.y = 1.72;
+  head.position.y = 1.68;
   root.add(head);
 
-  const skull = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.2, 28, 22), bagRef), skin);
-  skull.scale.set(0.95, 1.05, 0.92);
+  const skull = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.195, 28, 22), bagRef), skin);
+  skull.scale.set(0.92, 1.08, 0.9);
   skull.castShadow = true;
   head.add(skull);
 
-  const jaw = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.08, 12, 10), bagRef), lipMat);
-  jaw.position.set(0, -0.12, 0.14);
-  jaw.scale.set(1.1, 0.45, 0.7);
-  head.add(jaw);
-
-  for (const sx of [-1, 1]) {
-    const white = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.035, 10, 8), bagRef), eyeWhite);
-    white.position.set(sx * 0.07, 0.02, 0.16);
-    head.add(white);
-    const iris = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.018, 10, 8), bagRef), eyeMat);
-    iris.position.set(sx * 0.07, 0.02, 0.19);
-    head.add(iris);
+  // Elmacık / allık
+  for (const sx of [-1, 1] as const) {
+    const blush = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.045, 10, 8), bagRef), blushMat);
+    blush.position.set(sx * 0.11, -0.02, 0.14);
+    blush.scale.set(1.2, 0.7, 0.5);
+    head.add(blush);
   }
 
-  const hairCap = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.22, 24, 18), bagRef), hairMat);
-  hairCap.position.y = 0.04;
-  hairCap.scale.set(1.05, 1.1, 1.05);
+  const jaw = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.09, 12, 10), bagRef), lipMat);
+  jaw.position.set(0, -0.11, 0.155);
+  jaw.scale.set(1.25, 0.42, 0.75);
+  head.add(jaw);
+
+  for (const sx of [-1, 1] as const) {
+    const white = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.038, 10, 8), bagRef), eyeWhite);
+    white.position.set(sx * 0.065, 0.025, 0.165);
+    head.add(white);
+    const iris = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.02, 10, 8), bagRef), eyeMat);
+    iris.position.set(sx * 0.065, 0.025, 0.195);
+    head.add(iris);
+    const lash = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.07, 0.012, 0.02), bagRef), lashMat);
+    lash.position.set(sx * 0.065, 0.055, 0.18);
+    lash.rotation.z = sx * -0.15;
+    head.add(lash);
+  }
+
+  // Uzun dalgalı saç
+  const hairCap = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.23, 24, 18), bagRef), hairMat);
+  hairCap.position.y = 0.05;
+  hairCap.scale.set(1.08, 1.15, 1.08);
   head.add(hairCap);
   for (const [x, y, z, s] of [
-    [-0.18, -0.05, 0.05, 0.12],
-    [0.18, -0.05, 0.05, 0.12],
-    [-0.12, -0.18, -0.02, 0.14],
-    [0.12, -0.18, -0.02, 0.14],
-    [0, -0.22, -0.08, 0.16],
+    [-0.2, -0.08, 0.08, 0.13],
+    [0.2, -0.08, 0.08, 0.13],
+    [-0.16, -0.28, 0.02, 0.14],
+    [0.16, -0.28, 0.02, 0.14],
+    [-0.14, -0.48, -0.02, 0.13],
+    [0.14, -0.48, -0.02, 0.13],
+    [-0.1, -0.68, -0.04, 0.12],
+    [0.1, -0.68, -0.04, 0.12],
+    [0, -0.55, -0.12, 0.15],
+    [-0.22, -0.2, -0.1, 0.11],
+    [0.22, -0.2, -0.1, 0.11],
   ] as const) {
     const lock = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(s, 12, 10), bagRef), hairMat);
     lock.position.set(x, y, z);
     head.add(lock);
   }
 
+  // Küpeler
+  for (const sx of [-1, 1] as const) {
+    const ear = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.035, 8, 8), bagRef), gold);
+    ear.position.set(sx * 0.195, -0.02, 0.02);
+    head.add(ear);
+    const drop = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.028, 8, 8), bagRef), gold);
+    drop.position.set(sx * 0.2, -0.1, 0.02);
+    head.add(drop);
+  }
+
   const mkArm = (side: 1 | -1) => {
     const g = new THREE.Group();
-    g.position.set(side * 0.28, 1.35, 0);
+    g.position.set(side * 0.26, 1.32, 0.02);
     const upper = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.055, 0.06, 0.38, 10), bagRef),
-      blouse,
+      trackGeo(new THREE.CylinderGeometry(0.048, 0.055, 0.36, 10), bagRef),
+      skin,
     );
-    upper.position.y = -0.18;
+    upper.position.y = -0.16;
     upper.castShadow = true;
     g.add(upper);
     const fore = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.045, 0.05, 0.34, 10), bagRef),
+      trackGeo(new THREE.CylinderGeometry(0.04, 0.045, 0.32, 10), bagRef),
       skin,
     );
-    fore.position.set(0, -0.48, 0.04);
-    fore.rotation.x = -0.35;
+    fore.position.set(0, -0.45, 0.05);
+    fore.rotation.x = -0.4;
     fore.castShadow = true;
     g.add(fore);
-    const hand = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.055, 10, 8), bagRef), skin);
-    hand.position.set(0, -0.68, 0.08);
+    const hand = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.05, 10, 8), bagRef), skin);
+    hand.position.set(0, -0.64, 0.1);
     g.add(hand);
+    // Bilezik
+    const bracelet = new THREE.Mesh(
+      trackGeo(new THREE.TorusGeometry(0.048, 0.01, 8, 16), bagRef),
+      gold,
+    );
+    bracelet.position.set(0, -0.55, 0.08);
+    bracelet.rotation.x = Math.PI / 2;
+    g.add(bracelet);
     root.add(g);
     return g;
   };
   const armL = mkArm(-1);
   const armR = mkArm(1);
-  armR.rotation.z = -0.25;
-  armL.rotation.z = 0.25;
+  armR.rotation.z = -0.35;
+  armL.rotation.z = 0.35;
 
   let talking = false;
   let dealT = 0;
@@ -834,33 +936,35 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
       lookZ = z;
     },
     update(t, dt) {
-      const breath = Math.sin(t * 2.2) * 0.012;
-      torso.position.y = 0.95 + breath;
-      torso.rotation.y = Math.sin(t * 0.6) * 0.04;
+      const breath = Math.sin(t * 2.4) * 0.014;
+      torso.position.y = 0.88 + breath;
+      torso.rotation.y = Math.sin(t * 0.55) * 0.05;
+      torso.rotation.z = Math.sin(t * 0.7) * 0.03;
 
-      const targetYaw = Math.atan2(lookX - 0, lookZ - (-2.2)) * 0.35;
+      const targetYaw = Math.atan2(lookX - 0, lookZ - (-2.2)) * 0.4;
       head.rotation.y += (targetYaw - head.rotation.y) * Math.min(1, dt * 4);
-      head.rotation.x = Math.sin(t * 1.4) * 0.03 + (talking ? Math.sin(t * 14) * 0.04 : 0);
+      head.rotation.x = Math.sin(t * 1.3) * 0.035 + (talking ? Math.sin(t * 14) * 0.045 : 0);
 
       if (talking) {
         const open = 0.55 + Math.abs(Math.sin(t * 16)) * 0.9;
-        jaw.scale.set(1.1, 0.35 + open * 0.35, 0.7);
-        jaw.position.y = -0.12 - open * 0.02;
+        jaw.scale.set(1.25, 0.32 + open * 0.38, 0.75);
+        jaw.position.y = -0.11 - open * 0.02;
       } else {
-        jaw.scale.set(1.1, 0.45, 0.7);
-        jaw.position.y = -0.12;
+        jaw.scale.set(1.25, 0.42, 0.75);
+        jaw.position.y = -0.11;
       }
 
       if (dealT > 0) {
         dealT = Math.max(0, dealT - dt * 1.8);
         const wave = Math.sin((1 - dealT) * Math.PI) * 1.1;
-        armR.rotation.x = -0.2 - wave * 0.9;
-        armR.rotation.z = -0.25 - wave * 0.4;
+        armR.rotation.x = -0.25 - wave * 0.95;
+        armR.rotation.z = -0.35 - wave * 0.45;
       } else {
-        armR.rotation.x += (Math.sin(t * 1.1) * 0.08 - armR.rotation.x) * 0.08;
-        armR.rotation.z += (-0.25 - armR.rotation.z) * 0.08;
+        armR.rotation.x += (Math.sin(t * 1.1) * 0.1 - armR.rotation.x) * 0.08;
+        armR.rotation.z += (-0.35 - armR.rotation.z) * 0.08;
       }
-      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.06;
+      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.08;
+      armL.rotation.z = 0.35 + Math.sin(t * 0.9) * 0.04;
     },
   };
 }

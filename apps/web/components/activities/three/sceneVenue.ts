@@ -333,45 +333,44 @@ function buildTableRoom(
       roughness: 0.5,
     }),
   );
-  const lampSpots: [number, number, number][] =
-    theme === 'billiards'
-      ? [
-          [-1.6, 3.8, 0],
-          [1.6, 3.8, 0],
-        ]
-      : theme === 'blackjack'
+  // Blackjack: tavan lambası yok — yalnızca yumuşak gizli spot
+  if (theme === 'blackjack') {
+    softSpot(THREE, group, -1.5, 4.2, 0.2, 0.4, 1.15, false);
+    softSpot(THREE, group, 1.5, 4.2, 0.2, 0.4, 1.0, false);
+  } else {
+    const lampSpots: [number, number, number][] =
+      theme === 'billiards'
         ? [
-            [-2.2, 4.1, -0.8],
-            [2.2, 4.1, -0.8],
-            [0, 4.2, 1.4],
+            [-1.6, 3.8, 0],
+            [1.6, 3.8, 0],
           ]
         : [
             [-2.4, 4.0, -1.2],
             [2.4, 4.0, -1.2],
             [0, 4.0, 1.8],
           ];
-  for (const [x, y, z] of lampSpots) {
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.85, 0.22, 20), shadeMat);
-    shade.position.set(x, y, z);
-    group.add(shade);
-    const cord = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.018, 1.0, 6),
-      track(new THREE.MeshStandardMaterial({ color: 0x111111 })),
-    );
-    cord.position.set(x, y + 0.65, z);
-    group.add(cord);
-    // Bilardo / blackjack: bir spot gölge atsın; diğerleri yumuşak dolgu
-    const cast = (theme === 'billiards' || theme === 'blackjack') && x < 0;
-    softSpot(
-      THREE,
-      group,
-      x,
-      y - 0.15,
-      z,
-      z,
-      theme === 'billiards' ? 1.45 : theme === 'blackjack' ? 1.6 : 1.75,
-      cast,
-    );
+    for (const [x, y, z] of lampSpots) {
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.85, 0.22, 20), shadeMat);
+      shade.position.set(x, y, z);
+      group.add(shade);
+      const cord = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.018, 1.0, 6),
+        track(new THREE.MeshStandardMaterial({ color: 0x111111 })),
+      );
+      cord.position.set(x, y + 0.65, z);
+      group.add(cord);
+      const cast = theme === 'billiards' && x < 0;
+      softSpot(
+        THREE,
+        group,
+        x,
+        y - 0.15,
+        z,
+        z,
+        theme === 'billiards' ? 1.45 : 1.75,
+        cast,
+      );
+    }
   }
 
   if (theme === 'blackjack') {
@@ -397,19 +396,6 @@ function buildTableRoom(
         group.add(chip);
       }
     }
-    const sign = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 0.55, 0.12),
-      track(
-        new THREE.MeshStandardMaterial({
-          color: 0x1a0a10,
-          emissive: 0xd4af37,
-          emissiveIntensity: 0.22,
-          roughness: 0.5,
-        }),
-      ),
-    );
-    sign.position.set(0, 3.2, -(playR + 5.7));
-    group.add(sign);
   } else if (theme === 'billiards') {
     const rackMat = track(new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.6 }));
     for (const sx of [-1, 1]) {
