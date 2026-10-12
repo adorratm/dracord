@@ -9,6 +9,8 @@ export type GameHudPlayer = {
   detail?: string;
   active?: boolean;
   highlight?: string;
+  /** Oyuncu satırının altında ek içerik (örn. giren toplar) */
+  extra?: ReactNode;
 };
 
 /** Ortak, responsive oyun HUD — 3D sahne üstü */
@@ -60,19 +62,22 @@ export function GameHud({
           {players && players.length > 0 ? (
             <div className="pointer-events-none max-h-[40vh] min-w-[9.5rem] max-w-[min(100%,16rem)] overflow-y-auto rounded-xl border border-[#bd93f9]/30 bg-[#11131e]/88 p-2 text-[10px] text-[#f8f8f2] shadow-lg backdrop-blur-md sm:min-w-[12rem] sm:text-[11px]">
               <p className="mb-1 font-semibold text-[#bd93f9]">Oyuncular</p>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {players.map((p) => (
                   <li
                     key={p.id}
                     className={cn(
-                      'flex items-baseline justify-between gap-2 rounded-md px-1 py-0.5',
+                      'rounded-md px-1 py-0.5',
                       p.active && 'bg-[#50fa7b]/12 text-[#50fa7b]',
                     )}
                   >
-                    <span className="min-w-0 truncate font-medium">{p.label}</span>
-                    <span className="shrink-0 tabular-nums text-[#f8f8f2]/75">
-                      {p.highlight ?? p.detail ?? ''}
-                    </span>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate font-medium">{p.label}</span>
+                      <span className="shrink-0 tabular-nums text-[#f8f8f2]/75">
+                        {p.highlight ?? p.detail ?? ''}
+                      </span>
+                    </div>
+                    {p.extra ? <div className="mt-0.5 text-[#f8f8f2]">{p.extra}</div> : null}
                   </li>
                 ))}
               </ul>

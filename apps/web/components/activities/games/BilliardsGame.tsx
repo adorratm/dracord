@@ -49,8 +49,8 @@ const HZ = 2.3;
 /** Cep — ağız açık; batırma eşiği top ahşaba binmeden */
 const POCKET_R = 0.42;
 const POCKET_JAW = 1.25;
-/** Batır: merkez deliğe bu mesafede (görünür ahşaba çıkmadan) */
-const POCKET_SINK = POCKET_R + R * 0.35;
+/** Batır: delik ağzının içinde (dışarı taşırmadan) */
+const POCKET_SINK = POCKET_R * 0.72;
 const POCKETS: [number, number][] = [
   [-5.0, -2.5],
   [0, -2.68],
@@ -616,28 +616,39 @@ export function BilliardsGame(props: GameProps) {
       b.mesh.rotateOnWorldAxis(tmpAxis, d / R);
     };
 
+    const ballShadow = (b: Body) =>
+      (b.mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow;
+
     const hideSunk = (b: Body) => {
       b.mesh.visible = false;
       b.mesh.position.set(b.x, -2, b.z);
-      const sh = (b.mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow;
+      const sh = ballShadow(b);
       if (sh) {
         sh.visible = false;
+        sh.scale.setScalar(1);
         sh.position.set(b.x, -2, b.z);
       }
     };
 
-    const placeMesh = (b: Body) => {
+    /** Mesh + gölge — her hareket sonrası */
+    const syncBallVisual = (b: Body, y = R) => {
       if (b.sunk) {
         hideSunk(b);
         return;
       }
       b.mesh.visible = true;
-      b.mesh.position.set(b.x, R, b.z);
-      const sh = (b.mesh as Mesh & { userData: { shadow?: Mesh } }).userData.shadow;
+      b.mesh.position.set(b.x, y, b.z);
+      const sh = ballShadow(b);
       if (sh) {
-        sh.visible = true;
-        sh.position.set(b.x + 0.04, 0.012, b.z + 0.04);
+        const dropping = y < R * 0.85;
+        sh.visible = !dropping;
+        sh.scale.setScalar(dropping ? 0.4 : 1);
+        sh.position.set(b.x + 0.03, 0.012, b.z + 0.03);
       }
+    };
+
+    const placeMesh = (b: Body) => {
+      syncBallVisual(b, R);
     };
 
     const exportBalls = (): Ball[] => {
@@ -761,7 +772,7 @@ export function BilliardsGame(props: GameProps) {
       };
       if (oppId && !nextPocketed[oppId]) nextPocketed[oppId] = [...(prevPocketed[oppId] ?? [])];
 
-      const beforeBalls = parseBalls(p.session.state.balls) ?? defaultBalls();
+      const tableBalls = parseBalls(p.session.state.balls) ?? defaultBalls();
 
       // İlk temas: kendi grubundan önce rakip / yanlış top → faul
       if (firstHitId === null) foul = true;
@@ -769,7 +780,8 @@ export function BilliardsGame(props: GameProps) {
         const mine = prevGroups[shooterId]!;
         const g = ballGroup(firstHitId);
         if (g === 'eight') {
-          if (!groupCleared(beforeBalls, mine)) foul = true;
+          // 8'e ilk değme ancak kendi 7 topu bitmişse legal
+          if (!groupCleared(tableBalls, mine)) foul = true;
         } else if (g !== mine) {
           foul = true; // rakip topuna veya yanlış gruba önce değdi
         }
@@ -806,11 +818,13 @@ export function BilliardsGame(props: GameProps) {
       }
 
       const myGroup = nextGroups[shooterId] ?? prevGroups[shooterId];
-      const myClearedBefore = myGroup ? groupCleared(beforeBalls, myGroup) : false;
+      // Vuruş sonrası durum: kendi 7 topu bitmeden 8 → rakip kazanır
+      const finalBalls = exportBalls();
+      const myCleared = myGroup ? groupCleared(finalBalls, myGroup) : false;
 
-      // 8 erken (grup bitmeden / faul ile) → anında rakip kazanır
+      // 8 erken (7 top bitmeden) veya faul/beyaz ile 8 → rakip kazanır
       if (eightSunk) {
-        const legalEight = Boolean(myGroup && myClearedBefore && !foul && !cueSunk);
+        const legalEight = Boolean(myGroup && myCleared && !foul && !cueSunk);
         if (legalEight) win = shooterId;
         else {
           lose = shooterId;
@@ -833,12 +847,12 @@ export function BilliardsGame(props: GameProps) {
       if (!win && !lose && !legalContinue) nextTurn = turn + 1;
 
       if (cueSunk) clearCueFromPocket();
-      const finalBalls = exportBalls();
+      const outBalls = exportBalls();
       // Faul → sıra rakipte + top el (beyaz yerleştirme)
       const nextCueInHand = Boolean((foul || cueSunk) && !win);
 
       return {
-        balls: finalBalls,
+        balls: outBalls,
         turn: nextTurn,
         groups: nextGroups,
         pocketed: nextPocketed,
@@ -944,18 +958,6 @@ export function BilliardsGame(props: GameProps) {
           }
         }
         if (bestPd < POCKET_JAW) nearPocket = true;
-        // Ahşaba binmeden batır — eşiği geniş
-        if (bestPd < POCKET_SINK) {
-          b.sunk = true;
-          b.vx = 0;
-          b.vz = 0;
-          b.x = bestPx;
-          b.z = bestPz;
-          hideSunk(b);
-          if (!sunkThisShot.includes(b.id)) sunkThisShot.push(b.id);
-          GameAudio.pot();
-          continue;
-        }
         if (!nearPocket) {
           if (b.x > HX - R) {
             b.x = HX - R;
@@ -975,19 +977,41 @@ export function BilliardsGame(props: GameProps) {
             if (b.vz < -0.4) GameAudio.cushion();
             b.vz = Math.abs(b.vz) * 0.8;
           }
-          b.mesh.position.set(b.x, R, b.z);
-        } else if (bestPd > 1e-4) {
-          const pull = 40 * h;
-          b.vx += ((bestPx - b.x) / bestPd) * pull;
-          b.vz += ((bestPz - b.z) / bestPd) * pull;
-          // Cepte kal; masa dışına / ahşap üstüne kaçmasın
-          const maxOut = POCKET_R + 0.15;
-          b.x = Math.max(-HX - maxOut, Math.min(HX + maxOut, b.x));
-          b.z = Math.max(-HZ - maxOut, Math.min(HZ + maxOut, b.z));
-          // Deliğe yaklaşırken aşağı düş (ahşap üstünde kalmasın)
-          const drop = Math.max(0, 1 - bestPd / POCKET_SINK);
-          b.mesh.position.set(b.x, R - drop * 0.75, b.z);
-          b.mesh.visible = true;
+          syncBallVisual(b, R);
+        } else {
+          // Deliğe doğru çek — dışarı taşırma / teleportsuz
+          if (bestPd > 1e-4) {
+            const pull = 36 * h;
+            b.vx += ((bestPx - b.x) / bestPd) * pull;
+            b.vz += ((bestPz - b.z) / bestPd) * pull;
+            // Hıza delik yönü kat
+            const toward = 1 - Math.min(1, bestPd / POCKET_JAW);
+            b.x += ((bestPx - b.x) / bestPd) * toward * 2.2 * h;
+            b.z += ((bestPz - b.z) / bestPd) * toward * 2.2 * h;
+          }
+          // Ağız çemberinin DIŞINA çıkmasın
+          let pd = Math.hypot(b.x - bestPx, b.z - bestPz);
+          if (pd > POCKET_JAW && pd > 1e-6) {
+            const s = POCKET_JAW / pd;
+            b.x = bestPx + (b.x - bestPx) * s;
+            b.z = bestPz + (b.z - bestPz) * s;
+            pd = POCKET_JAW;
+          }
+          // Yalnızca delik ağzındayken düş; ağız dışına taşırmadan
+          const over = pd < POCKET_R ? 1 - pd / POCKET_R : 0;
+          const y = R - over * over * 0.85;
+          if (pd < POCKET_SINK) {
+            b.sunk = true;
+            b.vx = 0;
+            b.vz = 0;
+            b.x = bestPx;
+            b.z = bestPz;
+            hideSunk(b);
+            if (!sunkThisShot.includes(b.id)) sunkThisShot.push(b.id);
+            GameAudio.pot();
+            continue;
+          }
+          syncBallVisual(b, y);
         }
       }
       for (let i = 0; i < list.length; i++) {
@@ -1132,10 +1156,10 @@ export function BilliardsGame(props: GameProps) {
             hideSunk(b);
             continue;
           }
-          // integrate zaten cep yakınında Y ayarladı; değilse masa üstü
-          if (b.mesh.position.y > R - 0.01) b.mesh.position.set(b.x, R, b.z);
-          else b.mesh.position.x = b.x;
-          b.mesh.position.z = b.z;
+          // Çarpışma sonrası x/z güncel; gölgeyi her kare taşı
+          const y = b.mesh.position.y;
+          const keepY = y < R - 0.02 ? y : R;
+          syncBallVisual(b, keepY);
         }
         let moving = false;
         for (const b of bodies.values()) {
@@ -1366,6 +1390,28 @@ export function BilliardsGame(props: GameProps) {
   const myGroup = userId ? groups[userId] : undefined;
   const turnPlayer = session.playerIds[turnIndex(session)];
 
+  const ballChip = (id: number) => {
+    const striped = id >= 9;
+    const colorIdx = id === 8 ? 8 : id <= 8 ? id : id - 8;
+    const bg = BALL_COLORS[colorIdx] ?? '#888';
+    const dark = id === 8 || bg === '#141414';
+    return (
+      <span
+        key={id}
+        title={striped ? `Çizgili ${id}` : id === 8 ? '8' : `Düz ${id}`}
+        className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/40 text-[8px] font-bold leading-none sm:h-[1.125rem] sm:min-w-[1.125rem] sm:text-[9px]"
+        style={{
+          background: striped
+            ? `linear-gradient(180deg, #f7f4ec 30%, ${bg} 30%, ${bg} 70%, #f7f4ec 70%)`
+            : bg,
+          color: dark || striped ? (id === 8 ? '#fff' : '#111') : '#111',
+        }}
+      >
+        {id}
+      </span>
+    );
+  };
+
   return (
     <ThreeSceneHost
       className="absolute inset-0 min-h-0 touch-none overflow-hidden"
@@ -1378,19 +1424,32 @@ export function BilliardsGame(props: GameProps) {
           <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
             Masada {remaining}
             {turnPlayer ? ` · Sıra: ${labelFor(props, turnPlayer)}` : ''}
-            {myGroup ? ` · Senin: ${myGroup === 'solid' ? 'Düz' : 'Çizgili'}` : ''}
+            {myGroup ? ` · Senin: ${myGroup === 'solid' ? 'Düz' : 'Çizgili'}` : ' · Grup: açık'}
             {cueInHand ? ' · Top el' : ''}
           </span>
         }
         players={session.playerIds.map((pid) => {
           const g = groups[pid];
-          const sunk = pocketed[pid] ?? [];
+          const sunk = [...(pocketed[pid] ?? [])].sort((a, b) => a - b);
+          const groupLabel = g ? (g === 'solid' ? 'Düz' : 'Çizgili') : '—';
           return {
             id: pid,
             label: labelFor(props, pid),
             active: pid === turnPlayer && !winner,
-            detail: g ? (g === 'solid' ? 'Düz' : 'Çizgili') : '—',
-            highlight: sunk.length ? `${sunk.length} delik` : undefined,
+            detail: groupLabel,
+            highlight: `${sunk.length}/7`,
+            extra: (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] text-[#f8f8f2]/55">
+                  {g === 'solid' ? 'Düz toplar' : g === 'stripe' ? 'Çizgili toplar' : 'Henüz grup yok'}
+                </span>
+                <div className="flex flex-wrap gap-0.5">
+                  {sunk.length ? sunk.map(ballChip) : (
+                    <span className="text-[9px] text-[#f8f8f2]/35">Giren top yok</span>
+                  )}
+                </div>
+              </div>
+            ),
           };
         })}
         actions={
