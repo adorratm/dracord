@@ -10,6 +10,7 @@ import {
   type GameProps,
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
+import { addGameVenue } from '../three/sceneVenue';
 import { GameAudio } from '@/lib/game-audio';
 
 type FrameState = { rolls: number[]; complete: boolean };
@@ -164,6 +165,7 @@ export function BowlingGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
+    const disposeVenue = addGameVenue(THREE, scene, root, 'bowling');
     GameAudio.unlock();
 
     // --- Hat ---
@@ -647,6 +649,7 @@ export function BowlingGame(props: GameProps) {
       dom.removeEventListener('pointermove', onMove);
       dom.removeEventListener('pointerdown', onDown);
       syncRef.current = null;
+      disposeVenue();
       scene.remove(root);
       disposeObject(root);
     };

@@ -12,6 +12,7 @@ import {
   type GameProps,
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
+import { addGameVenue } from '../three/sceneVenue';
 import { GameAudio } from '@/lib/game-audio';
 import {
   COLOR_HEX,
@@ -377,6 +378,7 @@ export function OkeyGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
+    const disposeVenue = addGameVenue(THREE, scene, root, 'okey');
     GameAudio.unlock();
     const dyn = new THREE.Group();
     root.add(dyn);
@@ -631,6 +633,7 @@ export function OkeyGame(props: GameProps) {
       dom.removeEventListener('pointerup', onUp);
       syncRef.current = null;
       clearDyn();
+      disposeVenue();
       scene.remove(root);
       disposeObject(root);
       tileGeo.dispose();

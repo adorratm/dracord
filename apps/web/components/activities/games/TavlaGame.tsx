@@ -12,6 +12,7 @@ import {
   type GameProps,
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
+import { addGameVenue } from '../three/sceneVenue';
 import { GameAudio } from '@/lib/game-audio';
 
 type Board = { points: number[]; bar: [number, number]; off: [number, number] };
@@ -253,6 +254,7 @@ export function TavlaGame(props: GameProps) {
     const dom = renderer.domElement;
     const root = new THREE.Group();
     scene.add(root);
+    const disposeVenue = addGameVenue(THREE, scene, root, 'tavla');
     GameAudio.unlock();
     const dyn = new THREE.Group();
 
@@ -564,6 +566,7 @@ export function TavlaGame(props: GameProps) {
       dom.removeEventListener('pointerup', onUp);
       syncRef.current = null;
       clearDyn();
+      disposeVenue();
       scene.remove(root);
       disposeObject(root);
       triGeo.dispose();

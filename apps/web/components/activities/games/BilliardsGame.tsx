@@ -13,6 +13,7 @@ import {
   type GameProps,
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
+import { addGameVenue } from '../three/sceneVenue';
 import { GameAudio } from '@/lib/game-audio';
 
 type Ball = { id: number; x: number; y: number; vx: number; vy: number; sunk?: boolean };
@@ -38,17 +39,19 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-const POCKET_R = 0.58;
-/** Bant çarpışmasını kapatmak için delik ağzı yarıçapı */
-const POCKET_JAW = 0.72;
+/** Gerçekçi cep — masa yüzeyini yutmayacak kadar küçük */
+const POCKET_R = 0.34;
+const POCKET_JAW = 0.48;
 const POCKETS: [number, number][] = [
-  [-4.95, -2.45],
-  [0, -2.5],
-  [4.95, -2.45],
-  [-4.95, 2.45],
-  [0, 2.5],
-  [4.95, 2.45],
+  [-4.92, -2.42],
+  [0, -2.48],
+  [4.92, -2.42],
+  [-4.92, 2.42],
+  [0, 2.48],
+  [4.92, 2.42],
 ];
+/** Güç çubuğu: boştan doluya süre (ms) */
+const CHARGE_DURATION_MS = 1600;
 const CUE_START = { x: -3, z: 0 };
 const BALL_COLORS = [
   '#f8f8f2',
@@ -240,46 +243,69 @@ export function BilliardsGame(props: GameProps) {
 
     const root = new THREE.Group();
     scene.add(root);
+    const disposeVenue = addGameVenue(THREE, scene, root, 'billiards');
     const textures: Texture[] = [];
 
-    const wood = new THREE.MeshStandardMaterial({ color: 0x3b2a4f, roughness: 0.6 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(11.4, 0.7, 6.4), wood);
-    base.position.y = -0.4;
+    const wood = new THREE.MeshStandardMaterial({ color: 0x4a3020, roughness: 0.55, metalness: 0.08 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.75, 6.6), wood);
+    base.position.y = -0.42;
+    base.castShadow = true;
+    base.receiveShadow = true;
     root.add(base);
+    const apron = new THREE.Mesh(
+      new THREE.BoxGeometry(11.8, 0.22, 6.8),
+      new THREE.MeshStandardMaterial({ color: 0x2c1a12, roughness: 0.7 }),
+    );
+    apron.position.y = -0.08;
+    root.add(apron);
     const felt = new THREE.Mesh(
       new THREE.BoxGeometry(W, 0.1, D),
-      new THREE.MeshStandardMaterial({ color: 0x1f6b3f, roughness: 0.95 }),
+      new THREE.MeshStandardMaterial({ color: 0x1a6b3a, roughness: 0.92 }),
     );
     felt.position.y = -0.05;
     felt.receiveShadow = true;
     root.add(felt);
-    const cushionMat = new THREE.MeshStandardMaterial({ color: 0x2c1f40, roughness: 0.7 });
+    const cushionMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.65 });
     const cush = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.32, d), cushionMat);
-      m.position.set(x, 0.14, z);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.28, d), cushionMat);
+      m.position.set(x, 0.12, z);
+      m.castShadow = true;
       root.add(m);
     };
-    cush(11.4, 0.7, 0, -2.85);
-    cush(11.4, 0.7, 0, 2.85);
-    cush(0.7, 5.0, -5.35, 0);
-    cush(0.7, 5.0, 5.35, 0);
-    const neonMat = new THREE.MeshBasicMaterial({ color: 0xbd93f9 });
-    const neon = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, d), neonMat);
-      m.position.set(x, 0.31, z);
+    // Bantlar — deliklerde boşluk bırak
+    cush(3.6, 0.38, -2.5, -2.68);
+    cush(3.6, 0.38, 2.5, -2.68);
+    cush(3.6, 0.38, -2.5, 2.68);
+    cush(3.6, 0.38, 2.5, 2.68);
+    cush(0.38, 3.4, -5.18, 0);
+    cush(0.38, 3.4, 5.18, 0);
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x5c3d24, roughness: 0.5 });
+    const rail = (w: number, d: number, x: number, z: number) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.16, d), railMat);
+      m.position.set(x, 0.26, z);
       root.add(m);
     };
-    neon(10.1, 0.04, 0, -2.5);
-    neon(10.1, 0.04, 0, 2.5);
-    neon(0.04, 5.0, -5.05, 0);
-    neon(0.04, 5.0, 5.05, 0);
-    const pocketGeo = new THREE.CircleGeometry(POCKET_R * 1.05, 24);
-    const pocketMat = new THREE.MeshBasicMaterial({ color: 0x050508 });
+    rail(11.5, 0.55, 0, -3.05);
+    rail(11.5, 0.55, 0, 3.05);
+    rail(0.55, 5.6, -5.55, 0);
+    rail(0.55, 5.6, 5.55, 0);
+    const pocketGeo = new THREE.CircleGeometry(POCKET_R * 0.95, 28);
+    const pocketMat = new THREE.MeshStandardMaterial({ color: 0x050508, roughness: 1 });
+    const pocketRimGeo = new THREE.RingGeometry(POCKET_R * 0.95, POCKET_R * 1.2, 28);
+    const pocketRimMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      roughness: 0.4,
+      side: THREE.DoubleSide,
+    });
     for (const [px, pz] of POCKETS) {
       const m = new THREE.Mesh(pocketGeo, pocketMat);
       m.rotation.x = -Math.PI / 2;
-      m.position.set(px, 0.012, pz);
+      m.position.set(px, 0.01, pz);
       root.add(m);
+      const rim = new THREE.Mesh(pocketRimGeo, pocketRimMat);
+      rim.rotation.x = -Math.PI / 2;
+      rim.position.set(px, 0.015, pz);
+      root.add(rim);
     }
 
     const ballGeo = new THREE.SphereGeometry(R, 28, 20);
@@ -349,6 +375,7 @@ export function BilliardsGame(props: GameProps) {
     let simTime = 0;
     let charging = false;
     let chargePower = 0;
+    let chargeStartedAt = 0;
     let placingCue = false;
     let aimX = 0;
     let aimZ = 0;
@@ -359,7 +386,6 @@ export function BilliardsGame(props: GameProps) {
     let sunkThisShot: number[] = [];
     let shotOwner: string | null = null;
     let isLocalAuthority = false;
-    const CHARGE_PER_SEC = 0.85;
     const raycaster = new THREE.Raycaster();
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -R);
     const hit = new THREE.Vector3();
@@ -502,15 +528,18 @@ export function BilliardsGame(props: GameProps) {
 
       const beforeBalls = parseBalls(p.session.state.balls) ?? defaultBalls();
 
+      // İlk temas: kendi grubundan önce rakip / yanlış top → faul
       if (firstHitId === null) foul = true;
       else if (prevGroups[shooterId]) {
         const mine = prevGroups[shooterId]!;
         const g = ballGroup(firstHitId);
         if (g === 'eight') {
           if (!groupCleared(beforeBalls, mine)) foul = true;
-        } else if (g !== mine) foul = true;
+        } else if (g !== mine) {
+          foul = true; // rakip topuna veya yanlış gruba önce değdi
+        }
       } else if (firstHitId === 8) {
-        foul = true;
+        foul = true; // açık masada 8'e ilk vuruş faul
       }
 
       if (cueSunk) foul = true;
@@ -541,20 +570,24 @@ export function BilliardsGame(props: GameProps) {
         }
       }
 
-      const myGroup = nextGroups[shooterId];
+      const myGroup = nextGroups[shooterId] ?? prevGroups[shooterId];
       const myClearedBefore = myGroup ? groupCleared(beforeBalls, myGroup) : false;
 
+      // 8 erken (grup bitmeden / faul ile) → anında rakip kazanır
       if (eightSunk) {
-        if (cueSunk || foul || !myGroup || !myClearedBefore) {
+        const legalEight = Boolean(myGroup && myClearedBefore && !foul && !cueSunk);
+        if (legalEight) win = shooterId;
+        else {
           lose = shooterId;
-        } else {
-          win = shooterId;
+          win = oppId || null;
         }
       }
 
       const legalContinue =
         !foul &&
         !eightSunk &&
+        !win &&
+        !lose &&
         objectSunk.some((id) => {
           if (id === 8) return false;
           if (!myGroup) return true;
@@ -564,12 +597,10 @@ export function BilliardsGame(props: GameProps) {
       let nextTurn = turn;
       if (!win && !lose && !legalContinue) nextTurn = turn + 1;
 
-      if (lose) win = oppId || null;
-
       if (cueSunk) clearCueFromPocket();
       const finalBalls = exportBalls();
-      // 8-top: her faulde rakibe top-el (ball-in-hand)
-      const nextCueInHand = Boolean(foul && !win);
+      // Faul → sıra rakipte + top el (beyaz yerleştirme)
+      const nextCueInHand = Boolean((foul || cueSunk) && !win);
 
       return {
         balls: finalBalls,
@@ -727,6 +758,11 @@ export function BilliardsGame(props: GameProps) {
           a.z -= nz * overlap;
           c.x += nx * overlap;
           c.z += nz * overlap;
+          // İlk temas — vrel koşulundan bağımsız (yanlış top faul kaçmasın)
+          if (firstHitId === null) {
+            if (a.id === 0) firstHitId = c.id;
+            else if (c.id === 0) firstHitId = a.id;
+          }
           const vrel = (a.vx - c.vx) * nx + (a.vz - c.vz) * nz;
           if (vrel > 0) {
             a.vx -= vrel * nx;
@@ -734,10 +770,6 @@ export function BilliardsGame(props: GameProps) {
             c.vx += vrel * nx;
             c.vz += vrel * nz;
             if (vrel > 0.8) GameAudio.collide();
-            if (firstHitId === null) {
-              if (a.id === 0) firstHitId = c.id;
-              else if (c.id === 0) firstHitId = a.id;
-            }
           }
         }
       }
@@ -762,14 +794,17 @@ export function BilliardsGame(props: GameProps) {
       if (!show) {
         charging = false;
         chargePower = 0;
+        chargeStartedAt = 0;
         if (lastPower !== 0) {
           lastPower = 0;
           setPower(0);
         }
         return;
       }
-      if (charging) {
-        chargePower = Math.min(1, chargePower + CHARGE_PER_SEC * dt);
+      if (charging && chargeStartedAt > 0) {
+        // Zamana bağlı şarj — dt birikimi / kare takılmasından etkilenmez
+        const t = Math.min(1, (performance.now() - chargeStartedAt) / CHARGE_DURATION_MS);
+        chargePower = 0.06 + t * 0.94;
       }
       let dx = aimX - cue.x;
       let dz = aimZ - cue.z;
@@ -865,6 +900,7 @@ export function BilliardsGame(props: GameProps) {
     const cancelCharge = () => {
       charging = false;
       chargePower = 0;
+      chargeStartedAt = 0;
       lastPower = 0;
       setPower(0);
     };
@@ -894,9 +930,10 @@ export function BilliardsGame(props: GameProps) {
         dx /= dist;
         dz /= dist;
       }
-      const pw = Math.min(1, Math.max(0.08, chargePower));
+      const pw = Math.min(1, Math.max(0.06, chargePower));
       charging = false;
       chargePower = 0;
+      chargeStartedAt = 0;
       const shot: Shot = {
         dx: round4(dx),
         dz: round4(dz),
@@ -963,9 +1000,10 @@ export function BilliardsGame(props: GameProps) {
         return;
       }
       charging = true;
-      chargePower = 0.08;
-      lastPower = 8;
-      setPower(8);
+      chargeStartedAt = performance.now();
+      chargePower = 0.06;
+      lastPower = 6;
+      setPower(6);
     };
     const onUp = (e: PointerEvent) => {
       const p = propsRef.current;
@@ -1023,6 +1061,7 @@ export function BilliardsGame(props: GameProps) {
       dom.removeEventListener('contextmenu', onContext);
       syncRef.current = null;
       applyShotRef.current = null;
+      disposeVenue();
       scene.remove(root);
       disposeObject(root);
       textures.forEach((t) => t.dispose());
