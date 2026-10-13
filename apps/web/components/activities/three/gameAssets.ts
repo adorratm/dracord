@@ -655,8 +655,113 @@ export type DealerRig = {
   setTalking: (v: boolean) => void;
   setDealPulse: () => void;
   lookAtSeat: (x: number, z: number) => void;
+  /** Kameraya / masaya bakış — yüz görünsün */
+  faceCamera: (camX: number, camY: number, camZ: number) => void;
   update: (t: number, dt: number) => void;
 };
+
+/** Güler yüzlü sarışın kurpiyer yüzü (UV canvas) — tepeden de okunur */
+function makeDealerFaceMap(THREE: Three, bagRef: AssetBag, openMouth = false): Texture {
+  return canvasTex(THREE, 512, 512, (ctx, w, h) => {
+    // Cilt
+    const skinG = ctx.createRadialGradient(w * 0.5, h * 0.45, 40, w * 0.5, h * 0.5, w * 0.55);
+    skinG.addColorStop(0, '#ffe4d0');
+    skinG.addColorStop(0.7, '#f5c8a8');
+    skinG.addColorStop(1, '#e8b090');
+    ctx.fillStyle = skinG;
+    ctx.beginPath();
+    ctx.ellipse(w * 0.5, h * 0.52, w * 0.38, h * 0.44, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Allık
+    ctx.fillStyle = 'rgba(255,120,140,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(w * 0.32, h * 0.55, 36, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(w * 0.68, h * 0.55, 36, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Kaşlar
+    ctx.strokeStyle = '#c4a050';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.28, h * 0.38);
+    ctx.quadraticCurveTo(w * 0.35, h * 0.34, w * 0.42, h * 0.37);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.58, h * 0.37);
+    ctx.quadraticCurveTo(w * 0.65, h * 0.34, w * 0.72, h * 0.38);
+    ctx.stroke();
+
+    // Gözler
+    const drawEye = (cx: number) => {
+      ctx.fillStyle = '#fffaf5';
+      ctx.beginPath();
+      ctx.ellipse(cx, h * 0.44, 28, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3a9ad4';
+      ctx.beginPath();
+      ctx.arc(cx, h * 0.445, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0a0810';
+      ctx.beginPath();
+      ctx.arc(cx + 2, h * 0.445, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(cx - 3, h * 0.435, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Kirpik
+      ctx.strokeStyle = '#1a1010';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx - 26, h * 0.42);
+      ctx.quadraticCurveTo(cx, h * 0.385, cx + 26, h * 0.42);
+      ctx.stroke();
+    };
+    drawEye(w * 0.35);
+    drawEye(w * 0.65);
+
+    // Burun
+    ctx.strokeStyle = 'rgba(180,120,90,0.55)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.5, h * 0.48);
+    ctx.lineTo(w * 0.47, h * 0.58);
+    ctx.quadraticCurveTo(w * 0.5, h * 0.6, w * 0.53, h * 0.58);
+    ctx.stroke();
+
+    // Ağız — gülümseme / açık
+    if (openMouth) {
+      ctx.fillStyle = '#5a1020';
+      ctx.beginPath();
+      ctx.ellipse(w * 0.5, h * 0.72, 42, 28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff8f0';
+      ctx.fillRect(w * 0.5 - 30, h * 0.66, 60, 10);
+      ctx.fillStyle = '#e04060';
+      ctx.beginPath();
+      ctx.ellipse(w * 0.5, h * 0.78, 36, 12, 0, 0, Math.PI);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = '#d83858';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(w * 0.38, h * 0.7);
+      ctx.quadraticCurveTo(w * 0.5, h * 0.82, w * 0.62, h * 0.7);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(216,56,88,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(w * 0.4, h * 0.7);
+      ctx.quadraticCurveTo(w * 0.5, h * 0.78, w * 0.6, h * 0.7);
+      ctx.quadraticCurveTo(w * 0.5, h * 0.74, w * 0.4, h * 0.7);
+      ctx.fill();
+    }
+  }, bagRef);
+}
 
 /**
  * Klasik casino kurpiyer (Sketchfab croupier tarzı referans):
@@ -753,38 +858,6 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
     }),
     bagRef,
   );
-  const teethMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xfff8f0, roughness: 0.35 }),
-    bagRef,
-  );
-  const blushMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0xff9aaa,
-      transparent: true,
-      opacity: 0.38,
-      roughness: 0.85,
-      depthWrite: false,
-    }),
-    bagRef,
-  );
-  const eyeMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x3a8ec8,
-      roughness: 0.2,
-      emissive: 0x102838,
-      emissiveIntensity: 0.12,
-    }),
-    bagRef,
-  );
-  const eyeWhite = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xfffaf5, roughness: 0.4 }),
-    bagRef,
-  );
-  const lashMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1a1010, roughness: 0.45 }), bagRef);
-  const browMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xd4b060, roughness: 0.55 }),
-    bagRef,
-  );
 
   // —— Vücut: klasik kurpiyer üniforması ——
   const torso = new THREE.Group();
@@ -870,108 +943,63 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
     root.add(shoe);
   }
 
-  // —— Baş + güler yüz ——
+  // —— Baş: boyalı yüz paneli (tepeden de görünür) ——
   const head = new THREE.Group();
-  head.position.y = 1.7;
+  head.position.y = 1.72;
   root.add(head);
 
   const skull = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.2, 32, 24), bagRef), skin);
-  skull.scale.set(0.9, 1.1, 0.92);
+  skull.scale.set(0.92, 1.12, 0.9);
   skull.castShadow = true;
   head.add(skull);
 
-  for (const sx of [-1, 1] as const) {
-    const blush = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.05, 12, 10), bagRef), blushMat);
-    blush.position.set(sx * 0.115, -0.015, 0.145);
-    blush.scale.set(1.35, 0.75, 0.45);
-    head.add(blush);
-  }
+  const faceClosed = makeDealerFaceMap(THREE, bagRef, false);
+  const faceOpen = makeDealerFaceMap(THREE, bagRef, true);
+  faceClosed.wrapS = faceClosed.wrapT = THREE.ClampToEdgeWrapping;
+  faceOpen.wrapS = faceOpen.wrapT = THREE.ClampToEdgeWrapping;
 
-  // Gözler (gülerken hafif kısık)
-  for (const sx of [-1, 1] as const) {
-    const white = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.04, 12, 10), bagRef), eyeWhite);
-    white.position.set(sx * 0.068, 0.03, 0.168);
-    white.scale.set(1.05, 0.85, 0.7);
-    head.add(white);
-    const iris = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.022, 12, 10), bagRef), eyeMat);
-    iris.position.set(sx * 0.068, 0.028, 0.198);
-    head.add(iris);
-    const pupil = new THREE.Mesh(
-      trackGeo(new THREE.SphereGeometry(0.01, 8, 8), bagRef),
-      trackMat(new THREE.MeshStandardMaterial({ color: 0x0a0810 }), bagRef),
-    );
-    pupil.position.set(sx * 0.068, 0.028, 0.215);
-    head.add(pupil);
-    const lash = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.075, 0.01, 0.018), bagRef), lashMat);
-    lash.position.set(sx * 0.068, 0.058, 0.185);
-    lash.rotation.z = sx * -0.12;
-    head.add(lash);
-    // Kaş — yumuşak kavis
-    const brow = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.07, 0.012, 0.016), bagRef), browMat);
-    brow.position.set(sx * 0.07, 0.078, 0.175);
-    brow.rotation.z = sx * 0.18;
-    head.add(brow);
-  }
-
-  // Ağız grubu: üst dudak + alt çene + diş (konuşurken hareket)
-  const mouth = new THREE.Group();
-  mouth.position.set(0, -0.08, 0.17);
-  head.add(mouth);
-
-  const upperLip = new THREE.Mesh(
-    trackGeo(new THREE.SphereGeometry(0.055, 14, 10), bagRef),
-    lipMat,
+  const faceMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      map: faceClosed,
+      transparent: true,
+      roughness: 0.45,
+      metalness: 0,
+      side: THREE.DoubleSide,
+    }),
+    bagRef,
   );
-  upperLip.scale.set(1.55, 0.38, 0.55);
-  upperLip.position.set(0, 0.012, 0.01);
-  mouth.add(upperLip);
+  const face = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(0.4, 0.46), bagRef), faceMat);
+  face.position.set(0, 0.04, 0.2);
+  face.rotation.x = -0.42;
+  head.add(face);
 
-  const jaw = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.058, 14, 10), bagRef), lipMat);
-  jaw.scale.set(1.5, 0.4, 0.6);
-  jaw.position.set(0, -0.02, 0.012);
-  mouth.add(jaw);
+  const jaw = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.048, 12, 10), bagRef), lipMat);
+  jaw.scale.set(1.35, 0.32, 0.5);
+  jaw.position.set(0, -0.1, 0.24);
+  head.add(jaw);
 
-  // Gülümseme köşeleri
-  for (const sx of [-1, 1] as const) {
-    const corner = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.022, 10, 8), bagRef), lipMat);
-    corner.position.set(sx * 0.075, 0.0, 0.005);
-    corner.scale.set(0.9, 0.7, 0.6);
-    mouth.add(corner);
-  }
-
-  const teeth = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.025, 0.03), bagRef), teethMat);
-  teeth.position.set(0, -0.002, 0.02);
-  teeth.visible = false;
-  mouth.add(teeth);
-
-  // Burun
-  const nose = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.028, 10, 8), bagRef), skin);
-  nose.scale.set(0.7, 1.1, 0.9);
-  nose.position.set(0, -0.02, 0.2);
-  head.add(nose);
-
-  // Sarışın bob (klasik kurpiyer saçı)
-  const hairCap = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.24, 28, 20), bagRef), hairMat);
-  hairCap.position.y = 0.05;
-  hairCap.scale.set(1.12, 1.12, 1.12);
-  head.add(hairCap);
-  const bang = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.11, 16, 12), bagRef), hairHi);
-  bang.position.set(0, 0.1, 0.17);
-  bang.scale.set(1.7, 0.5, 0.45);
+  const hairTop = new THREE.Mesh(
+    trackGeo(new THREE.SphereGeometry(0.22, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.52), bagRef),
+    hairMat,
+  );
+  hairTop.position.y = 0.1;
+  hairTop.scale.set(1.18, 1.0, 1.12);
+  head.add(hairTop);
+  const bang = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.09, 14, 10), bagRef), hairHi);
+  bang.position.set(0, 0.16, 0.12);
+  bang.scale.set(1.55, 0.35, 0.4);
   head.add(bang);
   for (const [x, y, z, s, hi] of [
-    [-0.2, -0.02, 0.08, 0.12, 1],
-    [0.2, -0.02, 0.08, 0.12, 1],
-    [-0.19, -0.18, 0.02, 0.13, 0],
-    [0.19, -0.18, 0.02, 0.13, 0],
-    [-0.17, -0.32, -0.02, 0.12, 1],
-    [0.17, -0.32, -0.02, 0.12, 1],
-    [0, -0.28, -0.14, 0.14, 0],
-    [-0.22, -0.12, -0.08, 0.11, 1],
-    [0.22, -0.12, -0.08, 0.11, 1],
+    [-0.2, 0.04, 0.0, 0.11, 1],
+    [0.2, 0.04, 0.0, 0.11, 1],
+    [-0.18, -0.1, -0.08, 0.12, 0],
+    [0.18, -0.1, -0.08, 0.12, 0],
+    [-0.14, -0.2, -0.12, 0.11, 1],
+    [0.14, -0.2, -0.12, 0.11, 1],
+    [0, -0.06, -0.2, 0.14, 0],
   ] as const) {
     const lock = new THREE.Mesh(
-      trackGeo(new THREE.SphereGeometry(s, 14, 12), bagRef),
+      trackGeo(new THREE.SphereGeometry(s, 12, 10), bagRef),
       hi ? hairHi : hairMat,
     );
     lock.position.set(x, y, z);
@@ -1034,35 +1062,41 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
       lookX = x;
       lookZ = z;
     },
+    faceCamera(camX, camY, camZ) {
+      const hx = 0;
+      const hy = 1.72 * 1.08;
+      const hz = -2.85;
+      lookX = camX - hx;
+      lookZ = camZ - hz;
+      // Yukarı bak — masa kamerası yüzü görsün
+      head.rotation.x = -0.45;
+    },
     update(t, dt) {
       const breath = Math.sin(t * 2.4) * 0.012;
       torso.position.y = 0.9 + breath;
-      torso.rotation.y = Math.sin(t * 0.55) * 0.04;
-      torso.rotation.z = Math.sin(t * 0.7) * 0.025;
+      torso.rotation.y = Math.sin(t * 0.55) * 0.03;
+      torso.rotation.z = Math.sin(t * 0.7) * 0.02;
 
-      const targetYaw = Math.atan2(lookX - 0, lookZ - (-2.2)) * 0.4;
+      const targetYaw = Math.atan2(lookX, Math.max(0.2, lookZ)) * 0.55;
       head.rotation.y += (targetYaw - head.rotation.y) * Math.min(1, dt * 4);
-      head.rotation.x = Math.sin(t * 1.3) * 0.03 + (talking ? Math.sin(t * 12) * 0.035 : 0);
+      // Sabit yukarı eğim + hafif nefes
+      const basePitch = -0.42;
+      head.rotation.x =
+        basePitch + Math.sin(t * 1.3) * 0.02 + (talking ? Math.sin(t * 12) * 0.03 : 0);
 
-      // Güler yüz idle + konuşurken ağız
       if (talking) {
-        const open = 0.35 + Math.abs(Math.sin(t * 18)) * 1.15;
-        const open2 = 0.25 + Math.abs(Math.sin(t * 22 + 0.7)) * 0.9;
-        jaw.scale.set(1.5, 0.28 + open * 0.45, 0.6);
-        jaw.position.y = -0.02 - open * 0.035;
-        jaw.position.z = 0.012 + open * 0.01;
-        upperLip.scale.set(1.55, 0.32 + open2 * 0.12, 0.55);
-        upperLip.position.y = 0.012 + open * 0.008;
-        teeth.visible = open > 0.7;
-        teeth.scale.set(1, Math.min(1.4, open * 0.9), 1);
+        const open = 0.4 + Math.abs(Math.sin(t * 18)) * 1.1;
+        faceMat.map = open > 0.85 ? faceOpen : faceClosed;
+        faceMat.needsUpdate = true;
+        jaw.visible = true;
+        jaw.scale.set(1.35, 0.25 + open * 0.4, 0.5);
+        jaw.position.y = -0.1 - open * 0.03;
       } else {
-        // Hafif gülümseme
-        const smile = 0.5 + Math.sin(t * 1.5) * 0.08;
-        jaw.scale.set(1.55, 0.36, 0.58);
-        jaw.position.set(0, -0.018, 0.012);
-        upperLip.scale.set(1.58, 0.36, 0.52);
-        upperLip.position.set(0, 0.01 + smile * 0.004, 0.01);
-        teeth.visible = false;
+        faceMat.map = faceClosed;
+        faceMat.needsUpdate = true;
+        jaw.visible = true;
+        jaw.scale.set(1.4, 0.28, 0.48);
+        jaw.position.set(0, -0.1, 0.24);
       }
 
       if (dealT > 0) {

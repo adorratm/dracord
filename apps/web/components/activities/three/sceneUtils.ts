@@ -9,6 +9,8 @@ export type GameProps = {
   onPatch: (state: Record<string, unknown>) => Promise<void>;
   /** userId → görünen ad (sunucu üyeleri / ses katılımcıları) */
   nameByUserId?: Record<string, string>;
+  /** Masadan / aktiviteden ayrıl */
+  onLeave?: () => void | Promise<void>;
 };
 
 export function disposeMaterial(mat: Material) {

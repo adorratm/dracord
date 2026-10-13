@@ -78,10 +78,12 @@ function legalFor(b: Board, p: 0 | 1, die: number): Move[] {
     if (t >= 0 && t <= 23) {
       if (own(t) >= -1) moves.push({ from: i, to: t, die });
     } else if (allHome) {
-      const exact = p === 0 ? t === 24 : t === -1;
-      if (exact) {
+      // Evden çıkış mesafesi: p0 → 24-i, p1 → i+1
+      const need = p === 0 ? 24 - i : i + 1;
+      if (die === need) {
         moves.push({ from: i, to: 'off', die });
-      } else {
+      } else if (die > need) {
+        // Yüksek zar: yalnızca daha uzakta (daha yüksek need) pul yoksa
         let farther = false;
         if (p === 0) {
           for (let j = 18; j < i; j++) if (own(j) > 0) farther = true;
@@ -97,7 +99,7 @@ function legalFor(b: Board, p: 0 | 1, die: number): Move[] {
 
 function applyMove(b: Board, p: 0 | 1, m: Move): Board {
   const sign = p === 0 ? 1 : -1;
-  const next: Board = { points: [...b.points], bar: [...b.bar], off: [...b.off] };
+  const next: Board = { points: [...b.points], bar: [...b.bar] as [number, number], off: [...b.off] as [number, number] };
   if (m.from === 'bar') next.bar[p] -= 1;
   else next.points[m.from] = (next.points[m.from] ?? 0) - sign;
   if (m.to === 'off') {
@@ -113,10 +115,41 @@ function applyMove(b: Board, p: 0 | 1, m: Move): Board {
   return next;
 }
 
+function removeDie(dice: number[], die: number): number[] {
+  const i = dice.indexOf(die);
+  if (i < 0) return dice;
+  return [...dice.slice(0, i), ...dice.slice(i + 1)];
+}
+
+/** Bu zar dizisiyle oynanabilecek maksimum zar adedi */
+function maxDiceUsable(b: Board, p: 0 | 1, dice: number[]): number {
+  if (dice.length === 0) return 0;
+  let best = 0;
+  const seen = new Set<number>();
+  for (const d of dice) {
+    if (seen.has(d)) continue;
+    seen.add(d);
+    for (const m of legalFor(b, p, d)) {
+      const n = 1 + maxDiceUsable(applyMove(b, p, m), p, removeDie(dice, d));
+      if (n > best) best = n;
+      if (best >= dice.length) return best;
+    }
+  }
+  return best;
+}
+
+/** Hem tek zar hamleleri hem “mümkünse tüm zarları kullan” kuralı */
 function allLegal(b: Board, p: 0 | 1, dice: number[]): Move[] {
-  const out: Move[] = [];
-  for (const d of new Set(dice)) out.push(...legalFor(b, p, d));
-  return out;
+  if (dice.length === 0) return [];
+  const candidates: Move[] = [];
+  for (const d of new Set(dice)) candidates.push(...legalFor(b, p, d));
+  if (candidates.length === 0) return [];
+  const max = maxDiceUsable(b, p, dice);
+  if (max <= 1) return candidates;
+  return candidates.filter((m) => {
+    const after = 1 + maxDiceUsable(applyMove(b, p, m), p, removeDie(dice, m.die));
+    return after >= max;
+  });
 }
 
 const COL_X = (c: number) => (c < 6 ? -6 + c : 1 + (c - 6));
@@ -179,7 +212,13 @@ export function TavlaGame(props: GameProps) {
     },
     pass: () => {
       const p = propsRef.current;
-      if (!isMyTurn(p)) return;
+      if (!isMyTurn(p) || !p.userId) return;
+      const pl = p.session.playerIds.indexOf(p.userId);
+      if (pl !== 0 && pl !== 1) return;
+      const d = readDice(p.session.state.dice);
+      if (d.length === 0) return;
+      // Yasal hamle varken pas yok
+      if (allLegal(readBoard(p.session.state.board), pl, d).length > 0) return;
       setSelected(null);
       void send({ dice: [], turn: Number(p.session.state.turn ?? 0) + 1 });
     },
@@ -210,10 +249,9 @@ export function TavlaGame(props: GameProps) {
           const hit =
             m.to !== 'off' && (b.points[m.to] ?? 0) * (pl === 0 ? 1 : -1) === -1;
           const nb = applyMove(b, pl, m);
-          const remaining = [...d];
-          remaining.splice(remaining.indexOf(m.die), 1);
+          const remaining = removeDie(d, m.die);
           const done = nb.off[pl] >= 15;
-          const more = !done && remaining.some((x) => legalFor(nb, pl, x).length > 0);
+          const more = !done && allLegal(nb, pl, remaining).length > 0;
           setSelected(null);
           if (hit) GameAudio.hit();
           else GameAudio.checker();
@@ -659,7 +697,7 @@ export function TavlaGame(props: GameProps) {
                   Zar At
                 </GameHudButton>
               )}
-              {myTurn && dice.length > 0 && (
+              {myTurn && dice.length > 0 && !hasLegal && (
                 <GameHudButton variant="secondary" disabled={busy} onClick={() => actions.pass()}>
                   Sırayı Geç
                 </GameHudButton>

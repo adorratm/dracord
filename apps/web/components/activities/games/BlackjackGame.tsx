@@ -24,12 +24,13 @@ import {
 } from '@/lib/dealer-voice';
 import { dealerLine } from '@/lib/dealer-lines';
 
-type Phase = 'idle' | 'play' | 'dealer' | 'result';
+type Phase = 'idle' | 'dealing' | 'play' | 'dealer' | 'result';
 type SeatStatus = 'idle' | 'playing' | 'stand' | 'bust' | 'blackjack' | 'done';
 
 type Seat = {
   cards: number[];
   status: SeatStatus;
+  bet: number;
   result?: 'win' | 'lose' | 'push' | 'blackjack';
 };
 
@@ -41,7 +42,16 @@ type BjState = {
   seats: Record<string, Seat>;
   turn: string | null;
   round: number;
+  bank: Record<string, number>;
+  pendingBets: Record<string, number>;
+  /** Tur sonu otomatik devam (ms epoch) */
+  resultUntil: number | null;
 };
+
+const START_BANK = 1000;
+const BET_OPTIONS = [10, 25, 50, 100, 250] as const;
+const DEFAULT_BET = 25;
+const RESULT_MS = 5000;
 
 type CardAnim = {
   mesh: Mesh;
@@ -94,12 +104,40 @@ function draw(deck: number[], n: number): { cards: number[]; deck: number[] } {
   return { cards: deck.slice(0, n), deck: deck.slice(n) };
 }
 
-function emptySeat(): Seat {
-  return { cards: [], status: 'idle' };
+function emptySeat(bet = 0): Seat {
+  return { cards: [], status: 'idle', bet };
+}
+
+function parseBank(raw: unknown, playerIds: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  const src =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  for (const pid of playerIds) {
+    const n = Number(src[pid]);
+    out[pid] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : START_BANK;
+  }
+  return out;
+}
+
+function parseBets(raw: unknown, playerIds: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  const src =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  for (const pid of playerIds) {
+    const n = Number(src[pid]);
+    out[pid] = Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_BET;
+  }
+  return out;
 }
 
 function parseState(raw: Record<string, unknown>, playerIds: string[]): BjState {
-  const phase = (['idle', 'play', 'dealer', 'result'] as const).includes(raw.phase as Phase)
+  const phase = (['idle', 'dealing', 'play', 'dealer', 'result'] as const).includes(
+    raw.phase as Phase,
+  )
     ? (raw.phase as Phase)
     : 'idle';
   const deck = Array.isArray(raw.deck) ? raw.deck.map(Number).filter((n) => n >= 0 && n < 52) : [];
@@ -109,6 +147,12 @@ function parseState(raw: Record<string, unknown>, playerIds: string[]): BjState 
   const holeHidden = Boolean(raw.holeHidden ?? true);
   const turn = typeof raw.turn === 'string' ? raw.turn : null;
   const round = Number(raw.round ?? 0) || 0;
+  const resultUntil =
+    typeof raw.resultUntil === 'number' && Number.isFinite(raw.resultUntil)
+      ? raw.resultUntil
+      : null;
+  const bank = parseBank(raw.bank, playerIds);
+  const pendingBets = parseBets(raw.pendingBets, playerIds);
   const seatsRaw =
     raw.seats && typeof raw.seats === 'object' && !Array.isArray(raw.seats)
       ? (raw.seats as Record<string, unknown>)
@@ -123,12 +167,13 @@ function parseState(raw: Record<string, unknown>, playerIds: string[]): BjState 
         : [];
       const status = (o.status as SeatStatus) || 'idle';
       const result = o.result as Seat['result'];
-      seats[pid] = { cards, status, ...(result ? { result } : {}) };
+      const bet = Math.max(0, Math.floor(Number(o.bet) || 0));
+      seats[pid] = { cards, status, bet, ...(result ? { result } : {}) };
     } else {
-      seats[pid] = emptySeat();
+      seats[pid] = emptySeat(pendingBets[pid] ?? DEFAULT_BET);
     }
   }
-  return { phase, deck, dealer, holeHidden, seats, turn, round };
+  return { phase, deck, dealer, holeHidden, seats, turn, round, bank, pendingBets, resultUntil };
 }
 
 function nextPlayer(playerIds: string[], seats: Record<string, Seat>, after: string | null) {
@@ -140,22 +185,27 @@ function nextPlayer(playerIds: string[], seats: Record<string, Seat>, after: str
   return null;
 }
 
-function settle(dealerCards: number[], seats: Record<string, Seat>): Record<string, Seat> {
+function settle(
+  dealerCards: number[],
+  seats: Record<string, Seat>,
+  bank: Record<string, number>,
+): { seats: Record<string, Seat>; bank: Record<string, number> } {
   const d = handValue(dealerCards).total;
   const dealerBust = d > 21;
-  const next = { ...seats };
+  const nextSeats = { ...seats };
+  const nextBank = { ...bank };
   for (const [pid, seat] of Object.entries(seats)) {
+    const bet = Math.max(0, seat.bet || 0);
     if (seat.status === 'blackjack') {
       const dealerBj = dealerCards.length === 2 && d === 21;
-      next[pid] = {
-        ...seat,
-        status: 'done',
-        result: dealerBj ? 'push' : 'blackjack',
-      };
+      const result: Seat['result'] = dealerBj ? 'push' : 'blackjack';
+      nextSeats[pid] = { ...seat, status: 'done', result };
+      if (result === 'blackjack') nextBank[pid] = (nextBank[pid] ?? 0) + bet + Math.floor(bet * 1.5);
+      else nextBank[pid] = (nextBank[pid] ?? 0) + bet;
       continue;
     }
     if (seat.status === 'bust') {
-      next[pid] = { ...seat, status: 'done', result: 'lose' };
+      nextSeats[pid] = { ...seat, status: 'done', result: 'lose' };
       continue;
     }
     const p = handValue(seat.cards).total;
@@ -163,9 +213,11 @@ function settle(dealerCards: number[], seats: Record<string, Seat>): Record<stri
     if (dealerBust) result = 'win';
     else if (p > d) result = 'win';
     else if (p === d) result = 'push';
-    next[pid] = { ...seat, status: 'done', result };
+    nextSeats[pid] = { ...seat, status: 'done', result };
+    if (result === 'win') nextBank[pid] = (nextBank[pid] ?? 0) + bet * 2;
+    else if (result === 'push') nextBank[pid] = (nextBank[pid] ?? 0) + bet;
   }
-  return next;
+  return { seats: nextSeats, bank: nextBank };
 }
 
 type SceneCtl = {
@@ -186,10 +238,13 @@ export function BlackjackGame(props: GameProps) {
     [session.state, session.playerIds],
   );
 
-  const isHost = Boolean(userId && session.hostUserId === userId);
   const mySeat = userId ? st.seats[userId] : undefined;
   const myTurn = Boolean(userId && st.phase === 'play' && st.turn === userId && canPlay);
   const dealerVal = handValue(st.holeHidden ? st.dealer.slice(0, 1) : st.dealer);
+  const myBank = userId ? (st.bank[userId] ?? START_BANK) : 0;
+  const myPendingBet = userId ? (st.pendingBets[userId] ?? DEFAULT_BET) : DEFAULT_BET;
+  const [countdown, setCountdown] = useState(0);
+  const autoContinueRef = useRef(0);
 
   const patch = useCallback(
     async (next: Partial<BjState> & Record<string, unknown>) => {
@@ -204,21 +259,55 @@ export function BlackjackGame(props: GameProps) {
     [],
   );
 
+  const setMyBet = (amount: number) => {
+    const p = propsRef.current;
+    if (!p.userId || !canPlay || busy) return;
+    if (st.phase !== 'idle' && st.phase !== 'result') return;
+    const bank = st.bank[p.userId] ?? START_BANK;
+    const bet = Math.min(amount, Math.max(BET_OPTIONS[0], bank));
+    if (bet < BET_OPTIONS[0]) return;
+    GameAudio.chip();
+    void patch({
+      pendingBets: { ...st.pendingBets, [p.userId]: bet },
+      bank: st.bank,
+    });
+  };
+
   const startRound = () => {
     const p = propsRef.current;
-    if (!p.userId || p.session.hostUserId !== p.userId || busy) return;
+    if (!p.userId || !p.canPlay || busy) return;
+    const cur = parseState(p.session.state as Record<string, unknown>, p.session.playerIds);
+    if (cur.phase !== 'idle' && cur.phase !== 'result') return;
     const players = p.session.playerIds.slice(0, 4);
     if (players.length < 1) return;
+
+    let bank = parseBank(cur.bank, players);
+    const pending = parseBets(cur.pendingBets, players);
+    // Chip'i bitenlere min chip ver
+    for (const pid of players) {
+      if ((bank[pid] ?? 0) < BET_OPTIONS[0]) bank[pid] = START_BANK;
+    }
+
     let deck = shuffle();
     const seats: Record<string, Seat> = {};
     for (const pid of players) {
+      const want = pending[pid] ?? DEFAULT_BET;
+      let purse = bank[pid] ?? START_BANK;
+      if (purse < BET_OPTIONS[0]) purse = START_BANK;
+      const finalBet = Math.min(Math.max(BET_OPTIONS[0], want), purse);
+      bank[pid] = purse - finalBet;
+
       const d1 = draw(deck, 1);
       deck = d1.deck;
       const d2 = draw(deck, 1);
       deck = d2.deck;
       const cards = [...d1.cards, ...d2.cards];
       const v = handValue(cards).total;
-      seats[pid] = { cards, status: v === 21 ? 'blackjack' : 'playing' };
+      seats[pid] = {
+        cards,
+        bet: finalBet,
+        status: v === 21 ? 'blackjack' : 'playing',
+      };
     }
     const dd1 = draw(deck, 1);
     deck = dd1.deck;
@@ -228,21 +317,45 @@ export function BlackjackGame(props: GameProps) {
     const turn = nextPlayer(players, seats, null);
     GameAudio.deal();
     GameAudio.chip();
-    const round = Number(p.session.state.round ?? 0) + 1;
+    const round = cur.round + 1;
+    // Önce dağıtım animasyonu, sonra play
     void patch({
-      phase: turn ? 'play' : 'dealer',
+      phase: 'dealing',
       deck,
       dealer,
-      holeHidden: Boolean(turn),
+      holeHidden: true,
       seats,
       turn,
       round,
+      bank,
+      pendingBets: pending,
+      resultUntil: null,
+    });
+  };
+
+  const openPlayAfterDeal = () => {
+    const p = propsRef.current;
+    const cur = parseState(p.session.state as Record<string, unknown>, p.session.playerIds);
+    if (cur.phase !== 'dealing') return;
+    const turn = nextPlayer(p.session.playerIds, cur.seats, null);
+    void patch({
+      phase: turn ? 'play' : 'dealer',
+      deck: cur.deck,
+      dealer: cur.dealer,
+      holeHidden: Boolean(turn),
+      seats: cur.seats,
+      turn,
+      round: cur.round,
+      bank: cur.bank,
+      pendingBets: cur.pendingBets,
+      resultUntil: null,
     });
   };
 
   const runDealer = () => {
     const p = propsRef.current;
-    if (!p.userId || p.session.hostUserId !== p.userId) return;
+    // Herhangi bir oyuncu kurpiyer turunu ilerletebilir (tek tur için deterministic)
+    if (!p.userId || !p.session.playerIds.includes(p.userId)) return;
     const cur = parseState(p.session.state as Record<string, unknown>, p.session.playerIds);
     if (cur.phase !== 'dealer') return;
     let deck = [...cur.deck];
@@ -252,19 +365,27 @@ export function BlackjackGame(props: GameProps) {
       deck = d.deck;
       dealer = [...dealer, ...d.cards];
     }
-    const seats = settle(dealer, cur.seats);
+    const settled = settle(dealer, cur.seats, cur.bank);
     void patch({
       phase: 'result',
       deck,
       dealer,
       holeHidden: false,
-      seats,
+      seats: settled.seats,
       turn: null,
       round: cur.round,
+      bank: settled.bank,
+      pendingBets: cur.pendingBets,
+      resultUntil: Date.now() + RESULT_MS,
     });
   };
 
-  const finishToDealer = (deck: number[], dealer: number[], seats: Record<string, Seat>) => {
+  const finishToDealer = (
+    deck: number[],
+    dealer: number[],
+    seats: Record<string, Seat>,
+    cur: BjState,
+  ) => {
     void patch({
       phase: 'dealer',
       deck,
@@ -272,6 +393,10 @@ export function BlackjackGame(props: GameProps) {
       holeHidden: false,
       seats,
       turn: null,
+      round: cur.round,
+      bank: cur.bank,
+      pendingBets: cur.pendingBets,
+      resultUntil: null,
     });
   };
 
@@ -284,15 +409,24 @@ export function BlackjackGame(props: GameProps) {
     let deck = [...cur.deck];
     let cards = [...seat.cards];
     let status: SeatStatus = seat.status;
+    let bet = seat.bet;
+    let bank = { ...cur.bank };
 
     if (kind === 'hit' || kind === 'double') {
+      if (kind === 'double') {
+        // Double: bahisi ikiye katla (bankadan çek)
+        const extra = seat.bet;
+        if ((bank[p.userId] ?? 0) < extra) return;
+        bank[p.userId] = (bank[p.userId] ?? 0) - extra;
+        bet = seat.bet * 2;
+        GameAudio.chip();
+      }
       const d = draw(deck, 1);
       deck = d.deck;
       cards = [...cards, ...d.cards];
       if (kind === 'double') {
         const v = handValue(cards).total;
         status = v > 21 ? 'bust' : 'stand';
-        GameAudio.chip();
       } else {
         const v = handValue(cards).total;
         if (v > 21) status = 'bust';
@@ -305,13 +439,13 @@ export function BlackjackGame(props: GameProps) {
 
     const seats = {
       ...cur.seats,
-      [p.userId]: { ...seat, cards, status },
+      [p.userId]: { ...seat, cards, status, bet },
     };
     if (status === 'bust') GameAudio.bust();
 
     const turn = status === 'playing' ? p.userId : nextPlayer(p.session.playerIds, seats, p.userId);
     if (!turn) {
-      finishToDealer(deck, cur.dealer, seats);
+      finishToDealer(deck, cur.dealer, seats, { ...cur, bank });
       return;
     }
     void patch({
@@ -322,15 +456,58 @@ export function BlackjackGame(props: GameProps) {
       seats,
       turn,
       round: cur.round,
+      bank,
+      pendingBets: cur.pendingBets,
+      resultUntil: null,
     });
   };
 
+  // Dağıtım animasyonu bitsin → play / dealer
   useEffect(() => {
-    if (!isHost || st.phase !== 'dealer') return;
-    const t = window.setTimeout(() => runDealer(), 900);
+    if (st.phase !== 'dealing' || !userId || !canPlay) return;
+    // Tek istemci: listedeki ilk oyuncu ilerletsin
+    if (session.playerIds[0] !== userId) return;
+    const n = session.playerIds.length;
+    const dealMs = Math.min(4200, 380 + (n * 2 + 2) * 280);
+    const t = window.setTimeout(() => openPlayAfterDeal(), dealMs);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [st.phase, isHost, st.round]);
+  }, [st.phase, st.round, userId, canPlay, session.playerIds]);
+
+  // Kurpiyer eli — ilk oyuncu ilerletir
+  useEffect(() => {
+    if (st.phase !== 'dealer' || !userId || !canPlay) return;
+    if (session.playerIds[0] !== userId) return;
+    const t = window.setTimeout(() => runDealer(), 1100);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [st.phase, st.round, userId, canPlay, session.playerIds]);
+
+  // Tur sonu 5 sn geri sayım → otomatik devam
+  useEffect(() => {
+    if (st.phase !== 'result' || !st.resultUntil) {
+      setCountdown(0);
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((st.resultUntil! - Date.now()) / 1000));
+      setCountdown(left);
+      if (
+        left <= 0 &&
+        userId &&
+        canPlay &&
+        session.playerIds[0] === userId &&
+        autoContinueRef.current !== st.round
+      ) {
+        autoContinueRef.current = st.round;
+        startRound();
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [st.phase, st.resultUntil, st.round, userId, canPlay, session.playerIds]);
 
   // Sahne senkron
   useEffect(() => {
@@ -405,27 +582,30 @@ export function BlackjackGame(props: GameProps) {
 
   const statusText =
     st.phase === 'result'
-      ? 'Tur bitti'
+      ? countdown > 0
+        ? `Tur bitti · ${countdown}s`
+        : 'Tur bitti'
       : st.phase === 'dealer'
         ? 'Kurpiyer oynuyor…'
-        : st.phase === 'play'
-          ? st.turn
-            ? `Sıra: ${labelFor(props, st.turn)}`
-            : 'Oyun'
-          : canPlay
-            ? isHost
-              ? 'Dağıtmak için hazır'
-              : 'Host dağıtmasını bekliyor'
-            : 'İzleyici';
+        : st.phase === 'dealing'
+          ? 'Kartlar dağıtılıyor…'
+          : st.phase === 'play'
+            ? st.turn
+              ? `Sıra: ${labelFor(props, st.turn)}`
+              : 'Oyun'
+            : canPlay
+              ? 'Bahis seç · Turu başlat'
+              : 'İzleyici';
 
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, camera, renderer } = api;
     const cam = camera as PerspectiveCamera;
-    cam.fov = 42;
-    cam.position.set(0, 6.8, 7.6);
-    cam.lookAt(0, 0.6, -0.3);
+    cam.fov = 40;
+    // Daha alçak açı — kurpiyerin yüzü görünsün
+    cam.position.set(0, 5.4, 7.2);
+    cam.lookAt(0, 1.1, -1.2);
     cam.updateProjectionMatrix();
-    renderer.toneMappingExposure = 0.92;
+    renderer.toneMappingExposure = 0.95;
 
     const root = new THREE.Group();
     scene.add(root);
@@ -543,10 +723,10 @@ export function BlackjackGame(props: GameProps) {
       root.add(chip);
     }
 
-    // Kurpiyer
+    // Kurpiyer — yüz kameraya dönük
     const dealer: DealerRig = makeDealerWoman(THREE, assets);
-    dealer.root.position.set(0, 0, -2.85);
-    // Varsayılan yüz +Z — oyunculara bakıyor
+    dealer.root.position.set(0, 0.05, -2.75);
+    dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
     root.add(dealer.root);
 
     // İsim etiketleri (canvas plane)
@@ -690,7 +870,19 @@ export function BlackjackGame(props: GameProps) {
               y: 0.06 + ci * 0.012,
               z: sz - 0.15,
             };
-            spawnCard(key, c, to, isNewRound || bj.phase === 'play', 0.08 * (i + ci));
+            // Klasik sıra: 1. tur P0..Pn D, 2. tur P0..Pn D
+            const nSeats = Math.max(1, playerIds.length);
+            const delay =
+              isNewRound || bj.phase === 'dealing'
+                ? (ci * (nSeats + 1) + i) * 0.28
+                : 0.06 * ci;
+            spawnCard(
+              key,
+              c,
+              to,
+              isNewRound || bj.phase === 'dealing' || bj.phase === 'play',
+              delay,
+            );
           });
         }
       }
@@ -710,7 +902,12 @@ export function BlackjackGame(props: GameProps) {
           y: 0.06 + ci * 0.012,
           z: DEALER_CARD_Z,
         };
-        spawnCard(key, hidden ? 'back' : c, to, true, 0.05 * ci);
+        const nSeats = Math.max(1, playerIds.length);
+        const delay =
+          isNewRound || bj.phase === 'dealing'
+            ? (ci * (nSeats + 1) + nSeats) * 0.28
+            : 0.08 * ci;
+        spawnCard(key, hidden ? 'back' : c, to, true, delay);
       });
 
       // Aktif koltuğa bak
@@ -752,9 +949,9 @@ export function BlackjackGame(props: GameProps) {
           anims.splice(i, 1);
         }
       }
-      // Hafif kamera nefes
-      cam.position.x = Math.sin(t * 0.15) * 0.12;
-      cam.lookAt(0, 0.55 + Math.sin(t * 0.2) * 0.02, -0.25);
+      cam.position.x = Math.sin(t * 0.15) * 0.1;
+      cam.lookAt(0, 1.05 + Math.sin(t * 0.2) * 0.02, -1.1);
+      dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
     };
     tick();
 
@@ -795,6 +992,12 @@ export function BlackjackGame(props: GameProps) {
             <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
               {seatsOrdered.filter((id) => !id.startsWith('_empty_')).length}/4 oyuncu
               {st.round ? ` · Tur ${st.round}` : ''}
+              {canPlay ? ` · Chip ${myBank}` : ''}
+              {canPlay && (st.phase === 'idle' || st.phase === 'result')
+                ? ` · Bahis ${myPendingBet}`
+                : mySeat?.bet
+                  ? ` · Bahis ${mySeat.bet}`
+                  : ''}
               {st.phase === 'play' && myTurn ? ' · Senin sıran' : ''}
               {st.dealer.length > 0
                 ? st.holeHidden
@@ -808,6 +1011,11 @@ export function BlackjackGame(props: GameProps) {
         players={session.playerIds.map((pid) => {
           const seat = st.seats[pid];
           const v = seat ? handValue(seat.cards).total : 0;
+          const chips = st.bank[pid] ?? START_BANK;
+          const bet =
+            st.phase === 'idle' || st.phase === 'result'
+              ? st.pendingBets[pid] ?? DEFAULT_BET
+              : seat?.bet ?? 0;
           const res =
             seat?.result === 'blackjack'
               ? 'BJ!'
@@ -828,22 +1036,63 @@ export function BlackjackGame(props: GameProps) {
             id: pid,
             label: labelFor(props, pid),
             active: st.turn === pid && st.phase === 'play',
-            detail: res,
+            detail: `${res} · ${chips} chip · ${bet}`,
           };
         })}
         actions={
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {isHost && (st.phase === 'idle' || st.phase === 'result') && canPlay && (
-              <GameHudButton
-                disabled={busy || session.playerIds.length < 1}
-                onClick={() => {
-                  GameAudio.unlock();
-                  warmDealerVoices();
-                  startRound();
-                }}
-              >
-                {st.phase === 'result' ? 'Yeni tur' : 'Kartları dağıt'}
-              </GameHudButton>
+            {canPlay && (st.phase === 'idle' || st.phase === 'result') && (
+              <>
+                <div className="flex flex-wrap items-center gap-1">
+                  {BET_OPTIONS.map((b) => (
+                    <GameHudButton
+                      key={b}
+                      variant={myPendingBet === b ? 'success' : 'secondary'}
+                      disabled={busy || myBank < b}
+                      onClick={() => setMyBet(b)}
+                    >
+                      {b}
+                    </GameHudButton>
+                  ))}
+                </div>
+                {st.phase === 'idle' && (
+                  <GameHudButton
+                    disabled={busy || session.playerIds.length < 1 || myBank < BET_OPTIONS[0]}
+                    onClick={() => {
+                      GameAudio.unlock();
+                      warmDealerVoices();
+                      startRound();
+                    }}
+                  >
+                    Turu başlat
+                  </GameHudButton>
+                )}
+                {st.phase === 'result' && (
+                  <>
+                    <GameHudButton
+                      disabled={busy}
+                      onClick={() => {
+                        GameAudio.unlock();
+                        warmDealerVoices();
+                        autoContinueRef.current = st.round;
+                        startRound();
+                      }}
+                    >
+                      Devam et{countdown > 0 ? ` (${countdown})` : ''}
+                    </GameHudButton>
+                    <GameHudButton
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => {
+                        autoContinueRef.current = st.round;
+                        void props.onLeave?.();
+                      }}
+                    >
+                      Çık
+                    </GameHudButton>
+                  </>
+                )}
+              </>
             )}
             {myTurn && mySeat?.status === 'playing' && (
               <>
@@ -863,7 +1112,7 @@ export function BlackjackGame(props: GameProps) {
                 >
                   Dur
                 </GameHudButton>
-                {mySeat.cards.length === 2 && (
+                {mySeat.cards.length === 2 && (myBank >= mySeat.bet) && (
                   <GameHudButton
                     disabled={busy}
                     onClick={() => act('double')}

@@ -30,7 +30,18 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
   okey: ['hands', 'scores', 'turn', 'melds', 'opened'],
   bowling: ['frames', 'turn', 'lastRoll'],
   tavla: ['board', 'dice', 'turn'],
-  blackjack: ['phase', 'deck', 'dealer', 'holeHidden', 'seats', 'turn', 'round'],
+  blackjack: [
+    'phase',
+    'deck',
+    'dealer',
+    'holeHidden',
+    'seats',
+    'turn',
+    'round',
+    'bank',
+    'pendingBets',
+    'resultUntil',
+  ],
   watch_party: ['mediaUrl', 'playing', 'at'],
 };
 
@@ -135,7 +146,12 @@ export class ActivitiesService {
     }
 
     if (kind === 'watch_party') {
-      if ('mediaUrl' in out) out.mediaUrl = this.sanitizeMediaUrl(out.mediaUrl);
+      if ('mediaUrl' in out) {
+        out.mediaUrl = this.sanitizeMediaUrl(out.mediaUrl);
+        // Yeni link → oynatmayı sıfırla (patch’te yoksa da)
+        if (!('playing' in out)) out.playing = false;
+        if (!('at' in out)) out.at = 0;
+      }
       if ('playing' in out) out.playing = Boolean(out.playing);
       if ('at' in out) {
         const at = Number(out.at);
@@ -352,15 +368,27 @@ export class ActivitiesService {
 
     const isPlayer = (s.playerIds ?? []).includes(userId);
     const isHost = s.hostUserId === userId;
-    if (s.kind === 'watch_party' && !isHost) {
-      throw new ForbiddenException('Yalnızca moderatör medyayı kontrol eder');
-    }
-    if (s.kind !== 'watch_party' && !isPlayer && !isHost) {
+    if (s.kind === 'watch_party') {
+      if (!isHost && !isPlayer) {
+        throw new ForbiddenException('Watch party üyesi değilsin');
+      }
+    } else if (!isPlayer && !isHost) {
       throw new ForbiddenException('Oyuncu değilsin');
     }
 
     const prev = (s.state ?? {}) as Record<string, unknown>;
-    const clean = this.sanitizePatch(s.kind, prev, patch);
+    let clean = this.sanitizePatch(s.kind, prev, patch);
+    // Watch party: oyuncular link yükleyebilir; play/seek yalnızca host
+    if (s.kind === 'watch_party' && !isHost) {
+      if (!('mediaUrl' in clean)) {
+        throw new ForbiddenException('Oynatma kontrolü yalnızca moderatörde');
+      }
+      clean = {
+        mediaUrl: clean.mediaUrl,
+        playing: false,
+        at: 0,
+      };
+    }
     if (Object.keys(clean).length === 0) {
       throw new BadRequestException('Güncellenecek alan yok');
     }

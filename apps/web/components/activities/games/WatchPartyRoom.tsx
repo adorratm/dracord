@@ -691,7 +691,12 @@ export function WatchPartyRoom(props: Props) {
       <ThreeSceneHost className="absolute inset-0" onReady={onReady}>
         <div className="pointer-events-none absolute left-3 top-3 z-20 flex flex-col gap-1">
           <span className="inline-flex w-fit rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
-            Watch Party · {isHost ? 'Moderatörsün' : 'İzleyici — moderatör kontrol ediyor'}
+            Watch Party ·{' '}
+            {isHost
+              ? 'Moderatörsün'
+              : props.canPlay
+                ? 'Link yükleyebilirsin · oynatma moderatörde'
+                : 'İzleyici — moderatör kontrol ediyor'}
           </span>
           <span className="inline-flex w-fit rounded-lg bg-[#11131e]/70 px-3 py-1 text-[11px] text-[#bd93f9]">
             {session.playerIds.length + session.spectatorIds.length} kişi odada
@@ -859,7 +864,7 @@ export function WatchPartyRoom(props: Props) {
         )}
 
         <div className="absolute bottom-3 left-1/2 z-30 flex w-[min(720px,94%)] -translate-x-1/2 flex-col gap-2 rounded-xl border border-[#bd93f9]/30 bg-[#11131e]/90 p-2.5 text-[#f8f8f2]">
-          {isHost && (
+          {(isHost || props.canPlay) && (
             <div className="flex gap-2">
               <input
                 value={urlInput}

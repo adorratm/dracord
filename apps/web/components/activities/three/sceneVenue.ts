@@ -333,22 +333,19 @@ function buildTableRoom(
       roughness: 0.5,
     }),
   );
-  // Blackjack: tavan lambası yok — yalnızca yumuşak gizli spot
-  if (theme === 'blackjack') {
-    softSpot(THREE, group, -1.5, 4.2, 0.2, 0.4, 1.15, false);
-    softSpot(THREE, group, 1.5, 4.2, 0.2, 0.4, 1.0, false);
+  // Bilardo / tavla / blackjack: görünür tavan lambası yok — gizli soft spot
+  if (theme === 'blackjack' || theme === 'billiards' || theme === 'tavla') {
+    softSpot(THREE, group, -1.8, 4.4, 0.2, 0.3, theme === 'tavla' ? 1.25 : 1.15, false);
+    softSpot(THREE, group, 1.8, 4.4, 0.2, 0.3, theme === 'tavla' ? 1.1 : 1.0, false);
+    if (theme === 'tavla') {
+      softSpot(THREE, group, 0, 4.5, 1.2, 0.5, 1.0, false);
+    }
   } else {
-    const lampSpots: [number, number, number][] =
-      theme === 'billiards'
-        ? [
-            [-1.6, 3.8, 0],
-            [1.6, 3.8, 0],
-          ]
-        : [
-            [-2.4, 4.0, -1.2],
-            [2.4, 4.0, -1.2],
-            [0, 4.0, 1.8],
-          ];
+    const lampSpots: [number, number, number][] = [
+      [-2.4, 4.0, -1.2],
+      [2.4, 4.0, -1.2],
+      [0, 4.0, 1.8],
+    ];
     for (const [x, y, z] of lampSpots) {
       const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.85, 0.22, 20), shadeMat);
       shade.position.set(x, y, z);
@@ -359,17 +356,7 @@ function buildTableRoom(
       );
       cord.position.set(x, y + 0.65, z);
       group.add(cord);
-      const cast = theme === 'billiards' && x < 0;
-      softSpot(
-        THREE,
-        group,
-        x,
-        y - 0.15,
-        z,
-        z,
-        theme === 'billiards' ? 1.45 : 1.75,
-        cast,
-      );
+      softSpot(THREE, group, x, y - 0.15, z, z, 1.75, false);
     }
   }
 

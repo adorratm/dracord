@@ -29,7 +29,11 @@ type LastRoll = {
   standing: number[];
   /** Atış öncesi ayakta — rakip replay için */
   standingBefore: number[];
+  /** Hedef x (labut hattı) */
   tx: number;
+  /** Atış yönü — replay ile aynı yörünge */
+  vx: number;
+  vz: number;
   t: number;
 };
 
@@ -120,13 +124,18 @@ function readLastRoll(raw: unknown): LastRoll | null {
     else if (standing.length === 10) standingBefore = ALL_PINS;
     else standingBefore = [...new Set([...knocked, ...standing])].sort((a, b) => a - b);
   }
+  const tx = Number(o.tx ?? 0);
+  const vx = Number(o.vx);
+  const vz = Number(o.vz);
   return {
     by: String(o.by ?? ''),
     pins: Number(o.pins ?? 0),
     knocked,
     standing,
     standingBefore: standingBefore.length ? standingBefore : ALL_PINS,
-    tx: Number(o.tx ?? 0),
+    tx,
+    vx: Number.isFinite(vx) ? vx : tx * 0.55,
+    vz: Number.isFinite(vz) && vz < 0 ? vz : -16,
     t: Number(o.t ?? 0),
   };
 }
@@ -386,7 +395,11 @@ export function BowlingGame(props: GameProps) {
     /** Patch geldikten sonra labutları hemen dizme — settle + pinsetter bekleniyor */
     let pinsetQueued = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Yerel atış sonucu — React props gecikince rollback olmasın */
+    let localResult: LastRoll | null = null;
     let aimTx = 0;
+    let aimVx = 0;
+    let aimVz = -16;
     let raf = 0;
     let last = performance.now();
     const raycaster = new THREE.Raycaster();
@@ -436,13 +449,20 @@ export function BowlingGame(props: GameProps) {
     const sync = () => {
       const lr = readLastRoll(propsRef.current.session.state.lastRoll);
       const uid = propsRef.current.userId;
-      // Pinsetter / settle sırasında dizilim yapma (strike bug)
-      if (mode === 'pinset' || pinsetQueued || mode === 'sim' || mode === 'replay') {
+      // Yerel sim / pinsetter sırasında otorite state'i ezme
+      if (mode === 'pinset' || mode === 'sim' || mode === 'replay') {
         if (lr && (seenT === null || lr.t !== seenT) && lr.by === uid) {
           seenT = lr.t;
+          localResult = lr;
         }
-        if (mode === 'pinset' || pinsetQueued) pendingSync = false;
-        else pendingSync = true;
+        pendingSync = true;
+        return;
+      }
+      if (pinsetQueued) {
+        if (lr && lr.t !== seenT && lr.by === uid) {
+          seenT = lr.t;
+          localResult = lr;
+        }
         return;
       }
       pendingSync = false;
@@ -451,18 +471,22 @@ export function BowlingGame(props: GameProps) {
       } else if (lr && lr.t !== seenT) {
         seenT = lr.t;
         if (lr.by !== uid) {
+          // Rakip atışı: sadece otorite lastRoll ile replay (yerel fizik yok)
           resetPins(lr.standingBefore.length ? lr.standingBefore : ALL_PINS);
           resetBall();
           ball.active = true;
-          ball.vz = -16;
+          ball.vx = lr.vx;
+          ball.vz = lr.vz;
           replay = lr;
           mode = 'replay';
           modeTime = 0;
           aimLine.visible = false;
           return;
         }
+        localResult = lr;
       }
-      resetPins(lr?.standing ?? ALL_PINS);
+      const stand = localResult?.standing ?? lr?.standing ?? ALL_PINS;
+      resetPins(stand);
       resetBall();
     };
     syncRef.current = sync;
@@ -490,9 +514,12 @@ export function BowlingGame(props: GameProps) {
         standing: reset ? ALL_PINS : standingAfter,
         standingBefore,
         tx: Number(aimTx.toFixed(3)),
+        vx: Number(aimVx.toFixed(3)),
+        vz: Number(aimVz.toFixed(3)),
         t: Date.now(),
       };
       seenT = roll.t;
+      localResult = roll;
       const turn = Number(p.session.state.turn ?? 0);
       mode = 'idle';
       pinsetQueued = true; // sync labutları hemen dizmesin
@@ -508,12 +535,13 @@ export function BowlingGame(props: GameProps) {
         .finally(() => {
           setBusy(false);
           if (settleTimer) clearTimeout(settleTimer);
-          // Devrilen labutları göster, sonra tek pinsetter animasyonu
+          // Yerel roll kullan — props gecikince eski standing'e rollback olmasın
+          const settled = localResult;
           settleTimer = setTimeout(() => {
             settleTimer = null;
             if (mode === 'sim' || mode === 'replay') return;
-            const lr = readLastRoll(propsRef.current.session.state.lastRoll);
-            resetPins(lr?.standing ?? ALL_PINS, true);
+            pinsetQueued = false;
+            resetPins(settled?.standing ?? ALL_PINS, true);
             resetBall();
           }, 1200);
         });
@@ -662,22 +690,24 @@ export function BowlingGame(props: GameProps) {
         if ((ballDone && !moving && modeTime > 1.2) || modeTime > 7) finishSim();
       } else if (mode === 'replay' && replay) {
         modeTime += dt;
-        const dur = 1.1;
+        const dur = 1.15;
         const k = Math.min(1, modeTime / dur);
-        ball.x = replay.tx * k * 0.9;
+        // Otorite hedefi (tx) + hız — çizgiyle aynı yörünge
+        ball.x = replay.tx * k;
         ball.z = START_Z + (PIN_Z - START_Z) * k;
-        ball.vz = -16;
-        if (k >= 1 && !pins.some((pin) => pin.fallen)) {
+        ball.vx = replay.vx;
+        ball.vz = replay.vz;
+        if (k >= 0.92 && !pins.some((pin) => pin.fallen)) {
           for (const pin of pins) {
             if (!pin.active || !replay.knocked.includes(pin.id)) continue;
             pin.fallen = true;
             const a = pin.id * 2.399;
-            pin.vx = Math.sin(a) * 2.2;
+            pin.vx = Math.sin(a) * 2.2 + replay.vx * 0.08;
             pin.vz = -Math.abs(Math.cos(a)) * 2.8 - 0.8;
             pin.axis = [pin.vz, -pin.vx];
           }
         }
-        if (k >= 1) {
+        if (k >= 0.92) {
           for (const pin of pins) {
             if (!pin.active || !pin.fallen) continue;
             pin.x += pin.vx * dt;
@@ -688,12 +718,12 @@ export function BowlingGame(props: GameProps) {
         }
         syncMeshes(dt);
         if (modeTime > 2.6) {
+          const stand = replay.standing;
           mode = 'idle';
           replay = null;
-          pinsetQueued = true;
-          const lr = readLastRoll(p.session.state.lastRoll);
-          resetPins(lr?.standing ?? ALL_PINS, true);
+          resetPins(stand, true);
           resetBall();
+          if (pendingSync) sync();
         }
       } else if (mode === 'pinset') {
         modeTime += dt;
@@ -750,10 +780,12 @@ export function BowlingGame(props: GameProps) {
         }
         aimLine.visible = false;
       } else {
-        aimLine.visible = my && !busyRef.current;
+        aimLine.visible = my && !busyRef.current && !pinsetQueued;
         dom.style.cursor = aimLine.visible ? 'crosshair' : 'default';
         if (aimLine.visible) {
           const pos = aimGeo.attributes.position!;
+          // Çizgi top merkezinden labut hattındaki hedefe
+          pos.setXYZ(0, ball.x, 0.02, START_Z);
           pos.setXYZ(1, aimTx, 0.02, PIN_Z);
           pos.needsUpdate = true;
           aimGeo.computeBoundingSphere();
@@ -762,36 +794,53 @@ export function BowlingGame(props: GameProps) {
     };
     loop();
 
+    /** Mouse → top merkezinden geçen doğrultu; labut hattında aimTx */
     const toLane = (e: PointerEvent) => {
       const ndc = pointerNdc(e, dom);
       raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera);
-      if (raycaster.ray.intersectPlane(plane, hit)) {
-        aimTx = Math.max(-LANE_HALF + 0.1, Math.min(LANE_HALF - 0.1, hit.x));
+      if (!raycaster.ray.intersectPlane(plane, hit)) return;
+      const bx = ball.x;
+      const bz = START_Z;
+      let dx = hit.x - bx;
+      let dz = hit.z - bz;
+      // Kameraya çok yakın / geri tıklama: sadece yatay hedef
+      if (dz > -0.35) {
+        aimTx = Math.max(-LANE_HALF + 0.12, Math.min(LANE_HALF - 0.12, hit.x));
+        dx = aimTx - bx;
+        dz = PIN_Z - bz;
+      } else {
+        const scale = (PIN_Z - bz) / dz;
+        aimTx = bx + dx * scale;
+        aimTx = Math.max(-LANE_HALF + 0.12, Math.min(LANE_HALF - 0.12, aimTx));
+        dx = aimTx - bx;
+        dz = PIN_Z - bz;
       }
+      const len = Math.hypot(dx, dz) || 1;
+      const speed = 16;
+      aimVx = (dx / len) * speed;
+      aimVz = (dz / len) * speed;
     };
     const onMove = (e: PointerEvent) => {
-      if (mode === 'idle') toLane(e);
+      if (mode === 'idle' && !pinsetQueued) toLane(e);
     };
     const onDown = (e: PointerEvent) => {
       const p = propsRef.current;
       const sh = nextShooter(p.session.playerIds, readFrames(p.session.state.frames));
-      if (mode !== 'idle' || busyRef.current || !p.canPlay || !p.userId || sh !== p.userId) return;
+      if (mode !== 'idle' || pinsetQueued || busyRef.current || !p.canPlay || !p.userId || sh !== p.userId)
+        return;
       toLane(e);
       if (settleTimer) {
         clearTimeout(settleTimer);
         settleTimer = null;
       }
-      const lr = readLastRoll(p.session.state.lastRoll);
-      resetPins(lr?.standing ?? ALL_PINS);
+      const stand =
+        localResult?.standing ??
+        readLastRoll(p.session.state.lastRoll)?.standing ??
+        ALL_PINS;
+      resetPins(stand);
       resetBall();
-      const noise = (Math.random() - 0.5) * 0.05;
-      const dx = aimTx - 0;
-      const dz = PIN_Z - START_Z;
-      const len = Math.hypot(dx, dz);
-      const ang = Math.atan2(dx / len, -dz / len) + noise;
-      const speed = 16;
-      ball.vx = Math.sin(ang) * speed;
-      ball.vz = -Math.cos(ang) * speed;
+      ball.vx = aimVx;
+      ball.vz = aimVz;
       ball.active = true;
       mode = 'sim';
       modeTime = 0;

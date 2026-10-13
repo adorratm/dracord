@@ -5,10 +5,15 @@ export type WatchMediaProvider =
   | 'youtube'
   | 'vimeo'
   | 'dailymotion'
+  | 'twitch'
+  | 'streamable'
+  | 'rumble'
+  | 'googledrive'
   | 'instagram'
   | 'tiktok'
   | 'facebook'
-  | 'x';
+  | 'x'
+  | 'iframe';
 
 export type WatchMediaRef = {
   provider: WatchMediaProvider;
@@ -20,12 +25,12 @@ export type WatchMediaRef = {
   id: string | null;
   /** HTML5 <video> ile oynatılabilir mi */
   isDirectFile: boolean;
-  /** YouTube / Vimeo / Dailymotion — JS API ile senkron */
+  /** YouTube / Vimeo / Dailymotion / Twitch — JS API ile senkron */
   syncable: boolean;
   label: string;
 };
 
-const DIRECT_EXT = /\.(mp4|webm|ogg|ogv|m3u8|mov)(\?|#|$)/i;
+const DIRECT_EXT = /\.(mp4|webm|ogg|ogv|m3u8|mov|mkv)(\?|#|$)/i;
 
 function safeUrl(raw: string): URL | null {
   try {
@@ -35,6 +40,11 @@ function safeUrl(raw: string): URL | null {
   } catch {
     return null;
   }
+}
+
+function hostParent(): string {
+  if (typeof window === 'undefined') return 'localhost';
+  return window.location.hostname || 'localhost';
 }
 
 function youtubeId(u: URL): string | null {
@@ -72,6 +82,48 @@ function dailymotionId(u: URL): string | null {
   return m?.[1] ?? null;
 }
 
+function twitchRef(u: URL): { kind: 'video' | 'clip' | 'channel'; id: string } | null {
+  const host = u.hostname.replace(/^www\./, '');
+  if (host === 'clips.twitch.tv') {
+    const id = u.pathname.split('/').filter(Boolean)[0];
+    return id ? { kind: 'clip', id } : null;
+  }
+  if (host !== 'twitch.tv' && host !== 'm.twitch.tv') return null;
+  const parts = u.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'videos' && parts[1]) return { kind: 'video', id: parts[1] };
+  if (parts[1] === 'clip' && parts[2]) return { kind: 'clip', id: parts[2] };
+  if (parts[0] && !['directory', 'downloads', 'p'].includes(parts[0])) {
+    return { kind: 'channel', id: parts[0] };
+  }
+  return null;
+}
+
+function streamableId(u: URL): string | null {
+  const host = u.hostname.replace(/^www\./, '');
+  if (host !== 'streamable.com') return null;
+  const parts = u.pathname.split('/').filter(Boolean);
+  const id = parts[0] === 'e' || parts[0] === 'o' ? parts[1] : parts[0];
+  return id && /^[a-zA-Z0-9]+$/.test(id) ? id : null;
+}
+
+function rumbleId(u: URL): string | null {
+  const host = u.hostname.replace(/^www\./, '');
+  if (host !== 'rumble.com') return null;
+  const embed = u.pathname.match(/^\/embed\/([a-zA-Z0-9]+)/);
+  if (embed) return embed[1]!;
+  const m = u.pathname.match(/^\/(v[a-zA-Z0-9]+)/);
+  return m?.[1] ?? null;
+}
+
+function googleDriveId(u: URL): string | null {
+  const host = u.hostname.replace(/^www\./, '');
+  if (host !== 'drive.google.com' && host !== 'docs.google.com') return null;
+  const m = u.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1]!;
+  const id = u.searchParams.get('id');
+  return id && /^[a-zA-Z0-9_-]+$/.test(id) ? id : null;
+}
+
 function instagramCode(u: URL): string | null {
   const host = u.hostname.replace(/^www\./, '');
   if (host !== 'instagram.com' && host !== 'instagr.am') return null;
@@ -82,7 +134,6 @@ function instagramCode(u: URL): string | null {
 function tiktokId(u: URL): string | null {
   const host = u.hostname.replace(/^www\./, '');
   if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') {
-    // kısa link — id yok; orijinal URL ile embed deneme
     return u.pathname.replace(/^\//, '') || null;
   }
   if (host !== 'tiktok.com' && !host.endsWith('.tiktok.com')) return null;
@@ -110,6 +161,7 @@ export function resolveWatchMedia(raw: string): WatchMediaRef | null {
   const u = safeUrl(raw);
   if (!u) return null;
   const sourceUrl = u.toString();
+  const parent = encodeURIComponent(hostParent());
 
   const yt = youtubeId(u);
   if (yt) {
@@ -152,6 +204,66 @@ export function resolveWatchMedia(raw: string): WatchMediaRef | null {
     };
   }
 
+  const tw = twitchRef(u);
+  if (tw) {
+    let embedUrl = '';
+    if (tw.kind === 'video') {
+      embedUrl = `https://player.twitch.tv/?video=${tw.id}&parent=${parent}&autoplay=false`;
+    } else if (tw.kind === 'clip') {
+      embedUrl = `https://clips.twitch.tv/embed?clip=${tw.id}&parent=${parent}&autoplay=false`;
+    } else {
+      embedUrl = `https://player.twitch.tv/?channel=${tw.id}&parent=${parent}&autoplay=false`;
+    }
+    return {
+      provider: 'twitch',
+      sourceUrl,
+      embedUrl,
+      id: tw.id,
+      isDirectFile: false,
+      syncable: false,
+      label: 'Twitch',
+    };
+  }
+
+  const sm = streamableId(u);
+  if (sm) {
+    return {
+      provider: 'streamable',
+      sourceUrl,
+      embedUrl: `https://streamable.com/e/${sm}`,
+      id: sm,
+      isDirectFile: false,
+      syncable: false,
+      label: 'Streamable',
+    };
+  }
+
+  const rm = rumbleId(u);
+  if (rm) {
+    return {
+      provider: 'rumble',
+      sourceUrl,
+      embedUrl: `https://rumble.com/embed/${rm}/`,
+      id: rm,
+      isDirectFile: false,
+      syncable: false,
+      label: 'Rumble',
+    };
+  }
+
+  const gd = googleDriveId(u);
+  if (gd) {
+    return {
+      provider: 'googledrive',
+      sourceUrl,
+      embedUrl: `https://drive.google.com/file/d/${gd}/preview`,
+      id: gd,
+      isDirectFile: false,
+      syncable: false,
+      label: 'Google Drive',
+    };
+  }
+
   const ig = instagramCode(u);
   if (ig) {
     const [kind, code] = ig.split('/');
@@ -178,8 +290,7 @@ export function resolveWatchMedia(raw: string): WatchMediaRef | null {
       label: 'TikTok',
     };
   }
-  if (tt && (u.hostname.includes('tiktok.com'))) {
-    // kısa link — oEmbed sayfası yerine orijinali iframe’de deneme
+  if (tt && u.hostname.includes('tiktok.com')) {
     return {
       provider: 'tiktok',
       sourceUrl,
@@ -230,18 +341,18 @@ export function resolveWatchMedia(raw: string): WatchMediaRef | null {
     };
   }
 
-  // Bilinmeyen https — yine de dosya gibi dene (CDN vb.)
+  // Bilinmeyen https sayfa — iframe ile dene (birçok site X-Frame engelleyebilir)
   return {
-    provider: 'file',
+    provider: 'iframe',
     sourceUrl,
-    embedUrl: '',
+    embedUrl: sourceUrl,
     id: null,
-    isDirectFile: true,
-    syncable: true,
-    label: 'Medya',
+    isDirectFile: false,
+    syncable: false,
+    label: 'Bağlantı',
   };
 }
 
 export function watchMediaHint(): string {
-  return 'YouTube, Vimeo, Dailymotion, Instagram, TikTok, Facebook, X veya .mp4 bağlantısı';
+  return 'YouTube, Twitch, Vimeo, Streamable, Drive, TikTok veya herhangi bir video linki';
 }

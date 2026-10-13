@@ -166,6 +166,10 @@ export function VoiceStage({
   const screenVideoCbRef = useRef(screenShare?.videoRef);
   screenVideoCbRef.current = screenShare?.videoRef;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  /** Ekran paylaşımı izlerken sinema (tiyatro) görünümü */
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const [cinemaChrome, setCinemaChrome] = useState(true);
+  const cinemaHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pinnedCameraId, setPinnedCameraId] = useState<string | null>(null);
   const [localChatW, setLocalChatW] = useState(chatPanelWidth);
   const [localPartW, setLocalPartW] = useState(participantsPanelWidth);
@@ -228,7 +232,40 @@ export function VoiceStage({
     }
   }, []);
 
+  const bumpCinemaChrome = useCallback(() => {
+    setCinemaChrome(true);
+    if (cinemaHideTimer.current) clearTimeout(cinemaHideTimer.current);
+    cinemaHideTimer.current = setTimeout(() => setCinemaChrome(false), 2800);
+  }, []);
+
+  useEffect(() => {
+    if (!screenShare) setCinemaMode(false);
+  }, [screenShare]);
+
+  useEffect(() => {
+    if (!cinemaMode) {
+      setCinemaChrome(true);
+      if (cinemaHideTimer.current) clearTimeout(cinemaHideTimer.current);
+      return;
+    }
+    bumpCinemaChrome();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setCinemaMode(false);
+      } else {
+        bumpCinemaChrome();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (cinemaHideTimer.current) clearTimeout(cinemaHideTimer.current);
+    };
+  }, [cinemaMode, bumpCinemaChrome]);
+
   const focusedId = screenShare?.identity;
+  const inCinema = Boolean(cinemaMode && screenShare);
   const shareOptions = screenShares.length > 0 ? screenShares : screenShare
     ? [
         {
@@ -243,7 +280,14 @@ export function VoiceStage({
   const showParts = Boolean(participantsDrawerOpen && participantsPanel);
 
   return (
-    <div className={cn('flex flex-col flex-1 min-h-0 bg-surface relative', className)}>
+    <div
+      className={cn(
+        'flex flex-col flex-1 min-h-0 bg-surface relative',
+        inCinema && 'bg-black',
+        className,
+      )}
+    >
+      {!inCinema && (
       <div className="h-12 px-space-md flex items-center justify-between border-b border-surface-container-highest shrink-0">
         <div className="flex items-center gap-space-sm min-w-0">
           {onOpenChannels && (
@@ -270,6 +314,21 @@ export function VoiceStage({
               <span className="w-1.5 h-1.5 rounded-full bg-dracula-green" />
               Bağlı
             </span>
+          )}
+          {screenShare && (
+            <button
+              type="button"
+              onClick={() => {
+                setCinemaMode(true);
+                bumpCinemaChrome();
+              }}
+              className="hidden sm:inline-flex h-8 items-center gap-1 rounded-lg bg-primary-container/20 px-2.5 text-primary-container hover:bg-primary-container/35 font-label-sm transition-colors"
+              aria-label="Sinema modu"
+              title="Sinema modu"
+            >
+              <span className="material-symbols-outlined text-[18px]">movie</span>
+              Sinema
+            </button>
           )}
           <button
             type="button"
@@ -301,10 +360,11 @@ export function VoiceStage({
           </button>
         </div>
       </div>
+      )}
 
       <div className="flex flex-1 min-h-0 relative">
         {/* Metin — masaüstü yan panel */}
-        {showChat && (
+        {showChat && !inCinema && (
           <aside
             className="relative border-r border-surface-container-high bg-surface-container shrink-0 flex-col min-h-0 hidden md:flex"
             style={{ width: localChatW }}
@@ -322,7 +382,15 @@ export function VoiceStage({
           </aside>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 relative p-space-sm sm:p-space-md gap-space-sm sm:gap-space-md">
+        <div
+          className={cn(
+            'flex-1 flex flex-col min-w-0 relative',
+            inCinema
+              ? 'p-0 gap-0 bg-black'
+              : 'p-space-sm sm:p-space-md gap-space-sm sm:gap-space-md',
+          )}
+          onPointerMove={inCinema ? bumpCinemaChrome : undefined}
+        >
           {(() => {
             const cameraParticipants = participants.filter((p) => p.camera);
             const autoSpeaker =
@@ -339,7 +407,7 @@ export function VoiceStage({
               ? participants.find((p) => p.id === featuredCameraId)
               : null;
             const showMainStage = Boolean(screenShare || featuredCamera);
-            const stripMode = showMainStage;
+            const stripMode = showMainStage && !inCinema;
 
             return (
               <>
@@ -347,12 +415,20 @@ export function VoiceStage({
                   <div
                     ref={stageRef}
                     className={cn(
-                      'flex-1 min-h-0 rounded-xl bg-black border border-surface-container-high overflow-hidden relative flex flex-col',
+                      'flex-1 min-h-0 bg-black overflow-hidden relative flex flex-col',
+                      inCinema
+                        ? 'rounded-none border-0'
+                        : 'rounded-xl border border-surface-container-high',
                       isFullscreen && 'rounded-none border-0',
                     )}
                   >
                     {shareOptions.length > 1 && (
-                      <div className="absolute top-space-sm left-space-sm right-space-sm z-[2] flex flex-wrap gap-1.5 pointer-events-auto">
+                      <div
+                        className={cn(
+                          'absolute top-space-sm left-space-sm right-space-sm z-[2] flex flex-wrap gap-1.5 pointer-events-auto transition-opacity duration-300',
+                          inCinema && !cinemaChrome && 'opacity-0 pointer-events-none',
+                        )}
+                      >
                         {shareOptions.map((s) => {
                           const active = s.identity === focusedId;
                           return (
@@ -381,10 +457,26 @@ export function VoiceStage({
                       autoPlay
                       muted={screenShare.isLocal}
                     />
-                    <div className="absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[1] flex items-center gap-2 max-w-[min(100%-5rem,28rem)] flex-wrap">
+                    {/* Sinema letterbox vignette */}
+                    {inCinema && (
+                      <div
+                        className="pointer-events-none absolute inset-0 z-[1]"
+                        style={{
+                          background:
+                            'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.65) 100%)',
+                        }}
+                      />
+                    )}
+                    <div
+                      className={cn(
+                        'absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[2] flex items-center gap-2 max-w-[min(100%-8rem,32rem)] flex-wrap transition-opacity duration-300',
+                        inCinema && !cinemaChrome && 'opacity-0 pointer-events-none',
+                      )}
+                    >
                       <span className="truncate">
                         {screenShare.displayName}
                         {screenShare.isLocal ? ' (sen)' : ''}
+                        {inCinema ? ' · Sinema' : ''}
                       </span>
                       {!screenShare.isLocal &&
                         screenShare.identity &&
@@ -438,16 +530,54 @@ export function VoiceStage({
                           </label>
                         )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void toggleFullscreen()}
-                      className="absolute right-space-sm bottom-space-sm z-[1] w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
-                      aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+                    <div
+                      className={cn(
+                        'absolute right-space-sm bottom-space-sm z-[2] flex items-center gap-1 transition-opacity duration-300',
+                        inCinema && !cinemaChrome && 'opacity-0 pointer-events-none',
+                      )}
                     >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (inCinema) setCinemaMode(false);
+                          else {
+                            setCinemaMode(true);
+                            bumpCinemaChrome();
+                          }
+                        }}
+                        className={cn(
+                          'h-9 rounded-lg px-2.5 bg-black/60 hover:bg-black/80 text-white flex items-center justify-center gap-1 transition-colors',
+                          inCinema && 'bg-primary-container/90 text-on-primary-container hover:bg-primary-container',
+                        )}
+                        aria-label={inCinema ? 'Sinema modundan çık' : 'Sinema modu'}
+                        title={inCinema ? 'Sinemadan çık (Esc)' : 'Sinema modu'}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {inCinema ? 'close_fullscreen' : 'movie'}
+                        </span>
+                        <span className="hidden sm:inline font-label-sm text-[12px]">
+                          {inCinema ? 'Çık' : 'Sinema'}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void toggleFullscreen()}
+                        className="w-9 h-9 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
+                        aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+                        </span>
+                      </button>
+                    </div>
+                    {inCinema && !cinemaChrome && (
+                      <button
+                        type="button"
+                        className="absolute inset-0 z-[1]"
+                        aria-label="Kontrolleri göster"
+                        onClick={bumpCinemaChrome}
+                      />
+                    )}
                   </div>
                 ) : featuredCamera ? (
                   <div
@@ -499,6 +629,7 @@ export function VoiceStage({
                   </div>
                 ) : null}
 
+                {!inCinema && (
                 <div
                   className={cn(
                     'grid gap-space-sm sm:gap-space-md content-start overflow-y-auto p-0.5 min-w-0',
@@ -645,14 +776,15 @@ export function VoiceStage({
                     );
                   })}
                 </div>
+                )}
               </>
             );
           })()}
-          {stageOverlay}
+          {!inCinema && stageOverlay}
         </div>
 
         {/* Kullanıcılar — masaüstü yan panel */}
-        {showParts && (
+        {showParts && !inCinema && (
           <aside
             className="relative border-l border-surface-container-high bg-surface-container-low shrink-0 overflow-hidden flex-col min-h-0 hidden md:flex"
             style={{ width: localPartW }}
@@ -684,7 +816,7 @@ export function VoiceStage({
         )}
 
         {/* Mobil: sohbet / üyeler üstten overlay */}
-        {showChat && (
+        {showChat && !inCinema && (
           <div className="md:hidden absolute inset-0 z-50 flex flex-col pointer-events-none">
             <button
               type="button"
@@ -697,7 +829,7 @@ export function VoiceStage({
             </div>
           </div>
         )}
-        {showParts && (
+        {showParts && !inCinema && (
           <div className="md:hidden absolute inset-0 z-[51] flex flex-col pointer-events-none">
             <button
               type="button"
@@ -712,7 +844,18 @@ export function VoiceStage({
         )}
       </div>
 
-      <div className="h-16 px-space-lg flex items-center justify-center gap-space-md bg-surface-container-lowest border-t border-surface-container-highest shrink-0">
+      {/* Sinema: alt ses kontrolleri yüzer; normalde sabit bar */}
+      <div
+        className={cn(
+          'px-space-lg flex items-center justify-center gap-space-md shrink-0 transition-all duration-300',
+          inCinema
+            ? cn(
+                'absolute bottom-4 left-1/2 z-30 h-14 -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 backdrop-blur-md',
+                !cinemaChrome && 'opacity-0 pointer-events-none translate-y-2',
+              )
+            : 'h-16 bg-surface-container-lowest border-t border-surface-container-highest',
+        )}
+      >
         <button
           type="button"
           onClick={onToggleMute}

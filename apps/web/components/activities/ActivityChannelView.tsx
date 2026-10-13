@@ -468,6 +468,7 @@ export function ActivityChannelView({
                 userId={me}
                 canPlay={isPlayer}
                 onPatch={patch}
+                onLeave={() => void leave()}
                 nameByUserId={nameByUserId}
               />
             )}

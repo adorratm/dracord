@@ -95,7 +95,7 @@ type Props = {
 
 /**
  * Platform embed oynatıcı — YouTube/Vimeo/Dailymotion senkronlu;
- * Instagram/TikTok/Facebook/X görüntüleme odaklı.
+ * Twitch/Streamable/Drive/Rumble/sosyal ve genel iframe görüntüleme.
  */
 export function WatchEmbedPlayer({
   media,

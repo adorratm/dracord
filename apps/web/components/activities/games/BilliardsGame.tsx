@@ -46,12 +46,15 @@ const D = 5;
 const R = 0.2;
 const HX = 4.8;
 const HZ = 2.3;
-/** Cep — çekim yok; merkez deliğe girince bat + ağızda yastık muafiyeti */
+/** Cep — çekim yok; ağızda yastık kapalı, merkezde bat */
 const POCKET_R = 0.42;
-/** Yastık sekmesini kapatma */
-const POCKET_JAW = 0.62;
-/** Batır: top merkezi delik içinde (cep merkezine ulaşılabilir clamp ile) */
-const POCKET_SINK = POCKET_R * 0.92;
+/** Batır eşiği */
+const POCKET_SINK = POCKET_R * 0.88;
+/** Yan cep: yastık muafiyeti (x yarım genişlik) — gizli engel olmasın */
+const SIDE_MOUTH_X = 0.72;
+const SIDE_MOUTH_Z = 0.95;
+/** Köşe cep ağız yarıçapı */
+const CORNER_MOUTH = 0.78;
 const POCKETS: [number, number][] = [
   [-5.0, -2.5],
   [0, -2.68],
@@ -60,6 +63,18 @@ const POCKETS: [number, number][] = [
   [0, 2.68],
   [5.0, 2.5],
 ];
+
+function isSidePocket(px: number) {
+  return Math.abs(px) < 0.15;
+}
+
+/** Top cep ağzında mı? (yan cep için dikdörtgen ağız — yastık engellemesin) */
+function inPocketMouth(x: number, z: number, px: number, pz: number) {
+  if (isSidePocket(px)) {
+    return Math.abs(x - px) <= SIDE_MOUTH_X && Math.abs(z - pz) <= SIDE_MOUTH_Z;
+  }
+  return Math.hypot(x - px, z - pz) <= CORNER_MOUTH;
+}
 /** Güç çubuğu: 0→100 (ms) */
 const CHARGE_DURATION_MS = 1000;
 const CUE_START = { x: -3, z: 0 };
@@ -587,6 +602,8 @@ export function BilliardsGame(props: GameProps) {
     };
 
     let simulating = false;
+    /** Rakip simü bitti ama otorite balls henüz gelmedi — eski state'e snap etme */
+    let waitingAuthority = false;
     let pendingSync = false;
     let snapped = false;
     let simTime = 0;
@@ -692,12 +709,38 @@ export function BilliardsGame(props: GameProps) {
     };
 
     const sync = () => {
-      if (simulating) {
+      const st = propsRef.current.session.state;
+      const stateBalls = parseBalls(st.balls) ?? defaultBalls();
+      const sunkMismatch = stateBalls.some((b) => b.sunk !== bodies.get(b.id)?.sunk);
+      const posDrift = stateBalls.some((b) => {
+        const body = bodies.get(b.id);
+        if (!body || b.sunk || body.sunk) return false;
+        const tx = (b.x - 0.5) * W;
+        const tz = (b.y - 0.5) * D;
+        return Math.hypot(body.x - tx, body.z - tz) > 0.08;
+      });
+      const shotClear = !st.shot;
+      // Otorite vuruşu bitirdi (shot temiz + yeni balls) veya sapma görüldü
+      const authorityArrived =
+        waitingAuthority && (shotClear || sunkMismatch || posDrift);
+
+      // Rakip / izleyici: otorite balls gelince yerel sim'i kes
+      if ((simulating && !isLocalAuthority) || waitingAuthority) {
+        if (authorityArrived || (!waitingAuthority && (sunkMismatch || posDrift))) {
+          simulating = false;
+          waitingAuthority = false;
+          isLocalAuthority = false;
+          shotOwner = null;
+          forceSnap = true;
+        } else {
+          pendingSync = true;
+          return;
+        }
+      } else if (simulating) {
         pendingSync = true;
         return;
       }
       pendingSync = false;
-      const st = propsRef.current.session.state;
       const turnNow = Number(st.turn ?? 0);
       const turnChanged = turnNow !== lastSyncedTurn;
       lastSyncedTurn = turnNow;
@@ -706,12 +749,8 @@ export function BilliardsGame(props: GameProps) {
         localCueInHandOverride = null;
         inputLocked = false;
       }
-      const stateBalls = parseBalls(st.balls) ?? defaultBalls();
       const snap =
-        forceSnap ||
-        turnChanged ||
-        Boolean(st.cueInHand) ||
-        stateBalls.some((b) => b.sunk !== bodies.get(b.id)?.sunk);
+        forceSnap || turnChanged || Boolean(st.cueInHand) || sunkMismatch || posDrift;
       applyBallsState(stateBalls, snap);
       forceSnap = false;
     };
@@ -866,13 +905,14 @@ export function BilliardsGame(props: GameProps) {
     const finishShot = () => {
       simulating = false;
       if (!isLocalAuthority) {
-        // Rakip simülasyonu sadece görsel — otorite state'ine snap
-        forceSnap = true;
-        sync();
+        // Otorite sonucu gelene kadar bekle — eski toplara geri alma (rollback) yapma
+        waitingAuthority = true;
         isLocalAuthority = false;
         shotOwner = null;
+        pendingSync = true;
         return;
       }
+      waitingAuthority = false;
       const out = exportBalls();
       const patch = resolveRules(out);
       isLocalAuthority = false;
@@ -912,6 +952,7 @@ export function BilliardsGame(props: GameProps) {
       cue.vx = dx * speed;
       cue.vz = dz * speed;
       simulating = true;
+      waitingAuthority = false;
       simTime = 0;
       firstHitId = null;
       sunkThisShot = [];
@@ -945,7 +986,7 @@ export function BilliardsGame(props: GameProps) {
           b.vz *= ns / sp;
         }
         if (sp > 0.001) rollMesh(b, b.vx * h, b.vz * h);
-        // En yakın cep
+        // En yakın cep + ağız
         let nearPocket = false;
         let bestPx = 0;
         let bestPz = 0;
@@ -957,11 +998,33 @@ export function BilliardsGame(props: GameProps) {
             bestPx = px;
             bestPz = pz;
           }
+          if (inPocketMouth(b.x, b.z, px, pz)) nearPocket = true;
         }
-        // Ağızda mı? (çekim yok — yalnızca yastık muafiyeti)
-        if (bestPd < POCKET_JAW) nearPocket = true;
-        // Doğal batma: merkez gerçekten deliğe girince (vakum yok)
-        if (bestPd < POCKET_SINK) {
+        const spd = Math.hypot(b.vx, b.vz);
+        const toward =
+          bestPd > 1e-4
+            ? ((bestPx - b.x) * b.vx + (bestPz - b.z) * b.vz) / (bestPd * Math.max(spd, 1e-4))
+            : 1;
+        // Yastık çizgisinin ötesi = delik ağzı — köşede sıkışmayı kes
+        const pastRail = Math.abs(b.x) > HX - R * 0.35 || Math.abs(b.z) > HZ - R * 0.35;
+        const inMouth = inPocketMouth(b.x, b.z, bestPx, bestPz);
+        const shouldSink =
+          inMouth &&
+          (bestPd < POCKET_SINK ||
+            (pastRail && bestPd < (isSidePocket(bestPx) ? SIDE_MOUTH_X : CORNER_MOUTH) * 0.98) ||
+            (bestPd < POCKET_R * 0.98 && (spd < 1.5 || toward > 0.2)));
+        if (shouldSink) {
+          // İzleyici / rakip: batmayı otorite state'ine bırak (yanlış pot görüntüsü olmasın)
+          if (!isLocalAuthority) {
+            b.vx *= 0.85;
+            b.vz *= 0.85;
+            if (toward > 0 && bestPd > 1e-4) {
+              b.vx += ((bestPx - b.x) / bestPd) * 1.5 * h;
+              b.vz += ((bestPz - b.z) / bestPd) * 1.5 * h;
+            }
+            syncBallVisual(b, Math.max(0.06, R - (1 - bestPd / Math.max(POCKET_R, 1e-4)) * 0.25));
+            continue;
+          }
           b.sunk = true;
           b.vx = 0;
           b.vz = 0;
@@ -991,24 +1054,31 @@ export function BilliardsGame(props: GameProps) {
             if (b.vz < -0.4) GameAudio.cushion();
             b.vz = Math.abs(b.vz) * 0.8;
           }
-          // Hafif masa içi tut (cep yollarını kapatma)
           b.x = Math.max(-HX - 0.02, Math.min(HX + 0.02, b.x));
           b.z = Math.max(-HZ - 0.02, Math.min(HZ + 0.02, b.z));
           syncBallVisual(b, R);
         } else {
-          // Ağızda: yastık yok — cep merkezine kadar izin ver (batabilsin)
-          const maxR = POCKET_R * 1.05;
+          // Ağızda: yastık yok; kenarda dönmeyi kes — deliğe doğru sönümle
+          if (bestPd < POCKET_R * 1.15 && spd > 0.05) {
+            b.vx *= 0.92;
+            b.vz *= 0.92;
+            if (toward > 0) {
+              b.vx += ((bestPx - b.x) / bestPd) * 2.2 * h;
+              b.vz += ((bestPz - b.z) / bestPd) * 2.2 * h;
+            }
+          }
+          // Cep bölgesinden çok dışarı kaçmasın (köşe sıkışması yok)
+          const lim = isSidePocket(bestPx) ? SIDE_MOUTH_Z : CORNER_MOUTH;
           const ox = b.x - bestPx;
           const oz = b.z - bestPz;
           const od = Math.hypot(ox, oz);
-          if (od > maxR && od > 1e-6) {
-            b.x = bestPx + (ox / od) * maxR;
-            b.z = bestPz + (oz / od) * maxR;
+          if (od > lim && od > 1e-6) {
+            b.x = bestPx + (ox / od) * lim;
+            b.z = bestPz + (oz / od) * lim;
           }
           const pd = Math.hypot(b.x - bestPx, b.z - bestPz);
-          const dropT = pd < POCKET_SINK * 1.25
-            ? Math.max(0, 1 - pd / (POCKET_SINK * 1.25))
-            : 0;
+          const dropT =
+            pd < POCKET_SINK * 1.3 ? Math.max(0, 1 - pd / (POCKET_SINK * 1.3)) : 0;
           syncBallVisual(b, R - dropT * dropT * 0.4);
         }
       }
@@ -1042,19 +1112,18 @@ export function BilliardsGame(props: GameProps) {
           a.z -= nz * overlap;
           c.x += nx * overlap;
           c.z += nz * overlap;
-          // Çarpışma sonrası: cepteyse delik etrafında tut, değilse masa içinde
           const clampBall = (b: Body) => {
             const n = nearestPocket(b.x, b.z);
-            if (n.d < POCKET_JAW) {
-              const maxR = POCKET_R * 1.05;
-              if (n.d > maxR && n.d > 1e-6) {
-                b.x = n.px + ((b.x - n.px) / n.d) * maxR;
-                b.z = n.pz + ((b.z - n.pz) / n.d) * maxR;
+            if (inPocketMouth(b.x, b.z, n.px, n.pz)) {
+              const lim = isSidePocket(n.px) ? SIDE_MOUTH_Z : CORNER_MOUTH;
+              if (n.d > lim && n.d > 1e-6) {
+                b.x = n.px + ((b.x - n.px) / n.d) * lim;
+                b.z = n.pz + ((b.z - n.pz) / n.d) * lim;
               }
               return;
             }
-            b.x = Math.max(-HX - 0.02, Math.min(HX + 0.02, b.x));
-            b.z = Math.max(-HZ - 0.02, Math.min(HZ + 0.02, b.z));
+            b.x = Math.max(-HX + R * 0.05, Math.min(HX - R * 0.05, b.x));
+            b.z = Math.max(-HZ + R * 0.05, Math.min(HZ - R * 0.05, b.z));
           };
           clampBall(a);
           clampBall(c);
