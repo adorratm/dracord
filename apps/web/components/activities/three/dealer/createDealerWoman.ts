@@ -15,7 +15,7 @@ export const DEALER_GLB_URL = '/models/dealer/anime-dealer.glb';
 
 /** Masa kenarında belden yukarı — ölçek / gömme */
 export const DEALER_VRM_SCALE = 2.55;
-export const DEALER_VRM_POS = { x: 0, y: -1.05, z: -2.48 };
+export const DEALER_VRM_POS = { x: 0, y: -1.35, z: -2.48 };
 
 export type VrmDealerRig = DealerRig & {
   kind: 'vrm';
@@ -109,7 +109,8 @@ export async function createDealerWomanFromVrm(
       });
       root.add(scene);
       root.scale.setScalar(DEALER_VRM_SCALE);
-      root.rotation.y = Math.PI;
+      // Oyuncuya bak (+Z) — VRM/GLB varsayılanı bu yönde
+      root.rotation.y = 0;
       let talking = false;
       let dealT = 0;
       let lookX = 0;
@@ -143,7 +144,7 @@ export async function createDealerWomanFromVrm(
         },
         update(t, dt) {
           const yaw = Math.atan2(lookX, Math.max(0.4, lookZ)) * 0.2;
-          root.rotation.y = Math.PI + yaw;
+          root.rotation.y = yaw;
           // Hafif gövde sallanması (göğüs illüzyonu)
           scene.rotation.z = Math.sin(t * 2.4) * 0.03;
           scene.rotation.x = Math.sin(t * 1.7) * 0.02;
@@ -178,8 +179,8 @@ export async function createDealerWomanFromVrm(
     });
 
     root.scale.setScalar(DEALER_VRM_SCALE);
-    // Masaya / oyuncuya bak (+Z)
-    root.rotation.y = Math.PI;
+    // Oyuncuya bak (+Z) — önceki Math.PI yüzü arkaya çeviriyordu
+    root.rotation.y = 0;
 
     const humanoid = vrm.humanoid;
     const bone = (name: Parameters<typeof humanoid.getNormalizedBoneNode>[0]) =>

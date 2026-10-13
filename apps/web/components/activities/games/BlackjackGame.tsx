@@ -76,11 +76,11 @@ const SEAT_POS: [number, number][] = [
 const DEALER_CARD_Z = -1.28;
 const DEAL_ORIGIN = { x: 0.35, y: 1.55, z: -2.2 };
 
-/** Masa: yakın kenar aşağıda, kurpiyer belden yukarı + kartlar net */
-const CAM_Y = 5.15;
-const CAM_Z = 6.15;
-const LOOK_Y = 0.1;
-const LOOK_Z = -1.25;
+/** Masa biraz uzak — koltuk isimleri + kurpiyer kartları net */
+const CAM_Y = 5.35;
+const CAM_Z = 7.45;
+const LOOK_Y = 0.12;
+const LOOK_Z = -1.05;
 
 function handValue(cards: number[]): { total: number; soft: boolean } {
   let total = 0;
