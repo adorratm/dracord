@@ -16,6 +16,7 @@ import {
   makeWoodMaterial,
   type DealerRig,
 } from '../three/gameAssets';
+import { createDealerWomanFromVrm } from '../three/dealer/createDealerWoman';
 import { GameAudio } from '@/lib/game-audio';
 import {
   onDealerSpeakingChange,
@@ -744,11 +745,22 @@ export function BlackjackGame(props: GameProps) {
       root.add(chip);
     }
 
-    // Kurpiyer — yüz kameraya dönük
-    const dealer: DealerRig = makeDealerWoman(THREE, assets);
+    // Kurpiyer — önce prosedürel (anında), VRM varsa yükselt
+    let dealer: DealerRig = makeDealerWoman(THREE, assets);
     dealer.root.position.set(0, 0.05, -2.75);
     dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
     root.add(dealer.root);
+    let dealerCancelled = false;
+    void createDealerWomanFromVrm(THREE, assets).then((vrmDealer) => {
+      if (dealerCancelled || !vrmDealer) return;
+      root.remove(dealer.root);
+      dealer.dispose?.();
+      dealer = vrmDealer;
+      // Masa arkası — VRM boyuna göre hafif yere oturt
+      vrmDealer.root.position.set(0, 0, -2.85);
+      vrmDealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
+      root.add(vrmDealer.root);
+    });
 
     // İsim etiketleri (canvas plane)
     const labelGroup = new THREE.Group();
@@ -980,7 +992,9 @@ export function BlackjackGame(props: GameProps) {
 
     ctlRef.current = {
       applyState,
-      setTalking: (v) => dealer.setTalking(v),
+      setTalking: (v) => {
+        dealer.setTalking(v);
+      },
     };
 
     // İlk state
@@ -995,8 +1009,10 @@ export function BlackjackGame(props: GameProps) {
     applyState(init, propsRef.current.session.playerIds.slice(0, 4), labels);
 
     return () => {
+      dealerCancelled = true;
       cancelAnimationFrame(raf);
       ctlRef.current = null;
+      dealer.dispose?.();
       disposeVenue();
       disposeObject(root);
       assets.dispose();

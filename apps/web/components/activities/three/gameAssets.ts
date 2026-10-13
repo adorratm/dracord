@@ -658,6 +658,9 @@ export type DealerRig = {
   /** Kameraya / masaya bakış — yüz görünsün */
   faceCamera: (camX: number, camY: number, camZ: number) => void;
   update: (t: number, dt: number) => void;
+  /** VRM / harici model için opsiyonel temizlik */
+  dispose?: () => void;
+  kind?: 'procedural' | 'vrm';
 };
 
 /** Anime kurpiyer yüzü — tek canvas; ikinci 3D yüz yok */
@@ -1035,6 +1038,7 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
   let lookZ = -1;
 
   return {
+    kind: 'procedural' as const,
     root,
     head,
     jaw,
