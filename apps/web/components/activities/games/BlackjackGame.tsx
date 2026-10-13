@@ -16,7 +16,10 @@ import {
   makeWoodMaterial,
   type DealerRig,
 } from '../three/gameAssets';
-import { createDealerWomanFromVrm } from '../three/dealer/createDealerWoman';
+import {
+  createDealerWomanFromVrm,
+  DEALER_VRM_POS,
+} from '../three/dealer/createDealerWoman';
 import { GameAudio } from '@/lib/game-audio';
 import {
   onDealerSpeakingChange,
@@ -69,8 +72,15 @@ const SEAT_POS: [number, number][] = [
   [0.95, 2.15],
   [2.65, 1.55],
 ];
-const DEALER_CARD_Z = -1.55;
-const DEAL_ORIGIN = { x: 0.35, y: 1.35, z: -2.35 };
+/** Kurpiyer kartları — kameraya biraz daha yakın, felt üzerinde okunur */
+const DEALER_CARD_Z = -1.28;
+const DEAL_ORIGIN = { x: 0.35, y: 1.55, z: -2.2 };
+
+/** Masa: yakın kenar aşağıda, kurpiyer belden yukarı + kartlar net */
+const CAM_Y = 5.15;
+const CAM_Z = 6.15;
+const LOOK_Y = 0.1;
+const LOOK_Z = -1.25;
 
 function handValue(cards: number[]): { total: number; soft: boolean } {
   let total = 0;
@@ -601,10 +611,10 @@ export function BlackjackGame(props: GameProps) {
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, camera, renderer } = api;
     const cam = camera as PerspectiveCamera;
-    cam.fov = 42;
-    // Yan-alçak açı — masa altı (ayak/apron) ve kurpiyer birlikte görünsün
-    cam.position.set(0, 3.55, 8.4);
-    cam.lookAt(0, 0.35, -0.9);
+    cam.fov = 40;
+    // Daha dik bakış: yakın kenar aşağıda, kurpiyer kartları + belden yukarı
+    cam.position.set(0, CAM_Y, CAM_Z);
+    cam.lookAt(0, LOOK_Y, LOOK_Z);
     cam.updateProjectionMatrix();
     renderer.toneMappingExposure = 0.95;
 
@@ -747,7 +757,7 @@ export function BlackjackGame(props: GameProps) {
 
     // Kurpiyer — önce prosedürel (anında), VRM varsa yükselt
     let dealer: DealerRig = makeDealerWoman(THREE, assets);
-    dealer.root.position.set(0, 0.05, -2.75);
+    dealer.root.position.set(0, 0.05, -2.55);
     dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
     root.add(dealer.root);
     let dealerCancelled = false;
@@ -756,8 +766,12 @@ export function BlackjackGame(props: GameProps) {
       root.remove(dealer.root);
       dealer.dispose?.();
       dealer = vrmDealer;
-      // Masa arkası — VRM boyuna göre hafif yere oturt
-      vrmDealer.root.position.set(0, 0, -2.85);
+      // Belden yukarı: bacaklar masa altında, gövde uç kenarda
+      vrmDealer.root.position.set(
+        DEALER_VRM_POS.x,
+        DEALER_VRM_POS.y,
+        DEALER_VRM_POS.z,
+      );
       vrmDealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
       root.add(vrmDealer.root);
     });
@@ -982,10 +996,10 @@ export function BlackjackGame(props: GameProps) {
           anims.splice(i, 1);
         }
       }
-      cam.position.x = Math.sin(t * 0.12) * 0.08;
-      cam.position.y = 3.55;
-      cam.position.z = 8.4;
-      cam.lookAt(0, 0.4 + Math.sin(t * 0.18) * 0.02, -0.85);
+      cam.position.x = Math.sin(t * 0.12) * 0.05;
+      cam.position.y = CAM_Y;
+      cam.position.z = CAM_Z;
+      cam.lookAt(0, LOOK_Y + Math.sin(t * 0.18) * 0.012, LOOK_Z);
       dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
     };
     tick();
