@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     'denoise-voice-clarity',
   ],
   // NSFW modeli yalnızca istemci dinamik import; RSC bundle’ına sokma
-  serverExternalPackages: ['@tensorflow/tfjs', 'nsfwjs'],
+  serverExternalPackages: ['@tensorflow/tfjs', 'nsfwjs', 'edge-tts-universal'],
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
   async rewrites() {

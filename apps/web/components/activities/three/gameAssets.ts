@@ -645,6 +645,8 @@ export function makePlayingCard(
   return mesh;
 }
 
+export type DealerInteractKind = 'tickle' | 'chest';
+
 export type DealerRig = {
   root: Group;
   head: Group;
@@ -658,6 +660,8 @@ export type DealerRig = {
   /** Kameraya / masaya bakış — yüz görünsün */
   faceCamera: (camX: number, camY: number, camZ: number) => void;
   update: (t: number, dt: number) => void;
+  /** Dokunma: gıdıklama / göğüs — opsiyonel */
+  poke?: (kind: DealerInteractKind, strength?: number) => void;
   /** VRM / harici model için opsiyonel temizlik */
   dispose?: () => void;
   kind?: 'procedural' | 'vrm';
@@ -1036,6 +1040,8 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
   let dealT = 0;
   let lookX = 0;
   let lookZ = -1;
+  let tickle = 0;
+  let chestPlay = 0;
 
   return {
     kind: 'procedural' as const,
@@ -1051,6 +1057,11 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
     setDealPulse() {
       dealT = 1;
     },
+    poke(kind, strength = 1) {
+      const s = Math.min(1.4, Math.max(0.35, strength));
+      if (kind === 'chest') chestPlay = Math.min(1.2, chestPlay + 0.75 * s);
+      else tickle = Math.min(1.2, tickle + 0.85 * s);
+    },
     lookAtSeat(x, z) {
       lookX = x;
       lookZ = z;
@@ -1062,16 +1073,29 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
       head.rotation.x = -0.12;
     },
     update(t, dt) {
+      tickle = Math.max(0, tickle - dt * 1.35);
+      chestPlay = Math.max(0, chestPlay - dt * 0.95);
       const breath = Math.sin(t * 2.2) * 0.014;
-      torso.position.y = 0.88 + breath;
-      torso.rotation.y = Math.sin(t * 0.5) * 0.04;
-      torso.rotation.z = Math.sin(t * 0.65) * 0.015;
+      const tk = tickle;
+      const cp = chestPlay;
+      torso.position.y = 0.88 + breath + Math.sin(t * 28) * 0.02 * tk;
+      torso.rotation.y = Math.sin(t * 0.5) * 0.04 + Math.sin(t * 22) * 0.08 * tk;
+      torso.rotation.z =
+        Math.sin(t * 0.65) * 0.015 +
+        Math.sin(t * 18) * 0.06 * tk +
+        Math.sin(t * 9) * 0.05 * cp;
+      torso.rotation.x = Math.sin(t * 12) * 0.04 * cp;
 
       const targetYaw = Math.atan2(lookX, Math.max(0.35, lookZ)) * 0.45;
-      head.rotation.y += (targetYaw - head.rotation.y) * Math.min(1, dt * 4);
+      head.rotation.y +=
+        (targetYaw + Math.sin(t * 26) * 0.12 * tk - head.rotation.y) *
+        Math.min(1, dt * 4);
       const basePitch = -0.1;
       head.rotation.x =
-        basePitch + Math.sin(t * 1.2) * 0.015 + (talking ? Math.sin(t * 10) * 0.02 : 0);
+        basePitch +
+        Math.sin(t * 1.2) * 0.015 +
+        (talking ? Math.sin(t * 10) * 0.02 : 0) +
+        Math.sin(t * 20) * 0.05 * tk;
 
       // Konuşma yalnızca yüz texture değişimi — ikinci ağız yok
       if (talking) {
@@ -1090,10 +1114,12 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
         armR.rotation.x = -0.25 - wave * 0.95;
         armR.rotation.z = -0.32 - wave * 0.4;
       } else {
-        armR.rotation.x += (Math.sin(t * 1.1) * 0.08 - armR.rotation.x) * 0.08;
+        armR.rotation.x +=
+          (Math.sin(t * 1.1) * 0.08 - Math.sin(t * 30) * 0.25 * tk - armR.rotation.x) *
+          0.08;
         armR.rotation.z += (-0.32 - armR.rotation.z) * 0.08;
       }
-      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.06;
+      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.06 + Math.sin(t * 32) * 0.2 * tk;
       armL.rotation.z = 0.32 + Math.sin(t * 0.9) * 0.03;
     },
   };
