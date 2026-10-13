@@ -20,7 +20,6 @@ import {
 import {
   createDealerWomanFromVrm,
   DEALER_VRM_POS,
-  type VrmDealerRig,
 } from '../three/dealer/createDealerWoman';
 import { GameAudio } from '@/lib/game-audio';
 import {
@@ -971,68 +970,102 @@ export function BlackjackGame(props: GameProps) {
       }
     };
 
-    // Kurpiyer dokunma — gıdıklama / göğüs
+    // Kurpiyer dokunma — sadece ucuz hit-box; tam VRM mesh raycast yok
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
-    const hitTmp = new THREE.Vector3();
-    let holdingChest = false;
+    let holdKind: DealerInteractKind | null = null;
     let lastPokeVoice = 0;
+    let lastHoverCheck = 0;
+    let lastCursor = '';
+    let cachedRect = renderer.domElement.getBoundingClientRect();
+    const refreshRect = () => {
+      cachedRect = renderer.domElement.getBoundingClientRect();
+    };
+    window.addEventListener('resize', refreshRect);
 
-    const classifyDealerHit = (point: InstanceType<typeof THREE.Vector3>): DealerInteractKind => {
-      const vrm = dealer as VrmDealerRig;
-      if (vrm.classifyHit) return vrm.classifyHit(point);
-      dealer.torso.getWorldPosition(hitTmp);
-      const dy = point.y - hitTmp.y;
-      return dy > -0.2 && dy < 0.55 ? 'chest' : 'tickle';
+    const hitList = (): InstanceType<typeof THREE.Object3D>[] => {
+      const t = dealer.hitTargets;
+      return t && t.length ? t : [dealer.root];
     };
 
-    const pokeAtEvent = (e: PointerEvent, mode: 'down' | 'move' | 'hover') => {
-      const el = renderer.domElement;
-      const rect = el.getBoundingClientRect();
-      if (rect.width < 1 || rect.height < 1) return;
+    const kindFromHits = (
+      hits: Array<{ object: { userData?: { dealerHit?: DealerInteractKind } } }>,
+    ): DealerInteractKind | null => {
+      if (!hits.length) return null;
+      for (const h of hits) {
+        const k = h.object.userData?.dealerHit;
+        if (k === 'chest' || k === 'tickle') return k;
+      }
+      return 'tickle';
+    };
+
+    const rayHitKind = (e: PointerEvent): DealerInteractKind | null => {
+      const rect = cachedRect;
+      if (rect.width < 1 || rect.height < 1) return null;
       pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointerNdc, cam);
-      const hits = raycaster.intersectObject(dealer.root, true);
-      if (!hits.length) {
-        if (mode !== 'move' || e.buttons === 0) holdingChest = false;
-        if (mode === 'hover' || e.buttons === 0) el.style.cursor = '';
-        return;
-      }
-      el.style.cursor = 'pointer';
-      const kind = classifyDealerHit(hits[0]!.point);
-      if (mode === 'hover' && e.buttons === 0) return;
-
-      if (mode === 'down') {
-        holdingChest = kind === 'chest';
-        dealer.poke?.(kind, 1);
-        const now = performance.now();
-        if (now - lastPokeVoice > 2000) {
-          lastPokeVoice = now;
-          speakDealer(kind === 'tickle' ? 'Kıııh! Gıdıklama!' : 'Ahh…', {
-            interrupt: false,
-          });
-        }
-        return;
-      }
-
-      // Basılı tutarken sürükle → sürekli tepki
-      if (e.buttons !== 0) {
-        const useKind: DealerInteractKind =
-          holdingChest || kind === 'chest' ? 'chest' : 'tickle';
-        if (useKind === 'chest') holdingChest = true;
-        dealer.poke?.(useKind, 0.4);
-      }
+      const hits = raycaster.intersectObjects(hitList(), false);
+      return kindFromHits(hits);
     };
 
-    const onPointerDown = (e: PointerEvent) => pokeAtEvent(e, 'down');
-    const onPointerMove = (e: PointerEvent) =>
-      pokeAtEvent(e, e.buttons ? 'move' : 'hover');
+    const setCursor = (next: string) => {
+      if (next === lastCursor) return;
+      lastCursor = next;
+      renderer.domElement.style.cursor = next;
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      refreshRect();
+      const kind = rayHitKind(e);
+      if (!kind) {
+        holdKind = null;
+        dealer.setInteractHold?.(null);
+        return;
+      }
+      holdKind = kind;
+      dealer.setInteractHold?.(kind);
+      dealer.poke?.(kind, 1);
+      const now = performance.now();
+      if (now - lastPokeVoice > 2200) {
+        lastPokeVoice = now;
+        speakDealer(kind === 'tickle' ? 'Kıııh! Gıdıklama!' : 'Ahh…', {
+          interrupt: false,
+        });
+      }
+      setCursor('pointer');
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      const now = performance.now();
+      // Basılı: hold güncelle (~20Hz). Hover: sadece imleç (~8Hz)
+      if (e.buttons !== 0 && holdKind) {
+        if (now - lastHoverCheck < 50) return;
+        lastHoverCheck = now;
+        const kind = rayHitKind(e);
+        if (!kind) return;
+        // Göğüsten başladıysa sürüklerken göğüste kal
+        const next: DealerInteractKind =
+          holdKind === 'chest' || kind === 'chest' ? 'chest' : 'tickle';
+        holdKind = next;
+        dealer.setInteractHold?.(next);
+        setCursor('pointer');
+        return;
+      }
+      if (now - lastHoverCheck < 120) return;
+      lastHoverCheck = now;
+      const kind = rayHitKind(e);
+      setCursor(kind ? 'pointer' : '');
+    };
+
     const onPointerUp = () => {
-      holdingChest = false;
+      holdKind = null;
+      dealer.setInteractHold?.(null);
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener('pointermove', onPointerMove, {
+      passive: true,
+    });
     window.addEventListener('pointerup', onPointerUp);
 
     let raf = 0;
@@ -1062,11 +1095,15 @@ export function BlackjackGame(props: GameProps) {
           anims.splice(i, 1);
         }
       }
-      cam.position.x = Math.sin(t * 0.12) * 0.05;
+      const camX = Math.sin(t * 0.12) * 0.05;
+      cam.position.x = camX;
       cam.position.y = CAM_Y;
       cam.position.z = CAM_Z;
       cam.lookAt(0, LOOK_Y + Math.sin(t * 0.18) * 0.012, LOOK_Z);
-      dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
+      // Bakış nadiren değişir — her kare yüz güncellemesi gerekmez
+      if ((raf & 1) === 0) {
+        dealer.faceCamera(camX, CAM_Y, CAM_Z);
+      }
     };
     tick();
 
@@ -1095,7 +1132,9 @@ export function BlackjackGame(props: GameProps) {
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('resize', refreshRect);
       renderer.domElement.style.cursor = '';
+      dealer.setInteractHold?.(null);
       dealer.dispose?.();
       disposeVenue();
       disposeObject(root);
