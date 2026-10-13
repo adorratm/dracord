@@ -184,9 +184,9 @@ function speakWebSpeech(text: string, rate?: number): boolean {
   u.voice = voice;
   const isMs = /microsoft/i.test(voice.name);
   const isEmel = /emel/i.test(voice.name);
-  // Microsoft Emel Online: en doğal ayarlar
-  u.rate = rate ?? (isEmel ? 0.96 : isMs ? 0.94 : 0.9);
-  u.pitch = isEmel || isMs ? 1.04 : 1.1;
+  // Biraz daha tempolu — ağır/yavaş his kalksın
+  u.rate = rate ?? (isEmel ? 1.12 : isMs ? 1.1 : 1.08);
+  u.pitch = isEmel || isMs ? 1.06 : 1.12;
   u.volume = volume;
   u.onstart = () => setSpeaking(true);
   u.onend = () => setSpeaking(false);

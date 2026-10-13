@@ -658,72 +658,98 @@ export type DealerRig = {
   update: (t: number, dt: number) => void;
 };
 
-/** Sarışın, güler yüzlü kurpiyer — konuşurken ağız animasyonu */
+/**
+ * Klasik casino kurpiyer (Sketchfab croupier tarzı referans):
+ * beyaz gömlek + siyah yelek + kırmızı papyon, sarışın bob, güler yüz.
+ * Not: Sketchfab modeli lisanslı — dosya indirilmez, stil taklit edilir.
+ * @see https://sketchfab.com/3d-models/croupier-732a284aaee742efb57a30dc05651bd0
+ */
 export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
   const root = new THREE.Group();
   root.name = 'dealer';
+  root.scale.setScalar(1.08);
 
   const skin = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0xffd4b8,
-      roughness: 0.38,
-      clearcoat: 0.32,
-      clearcoatRoughness: 0.4,
-      sheen: 0.45,
-      sheenColor: new THREE.Color(0xffe0cc),
+      color: 0xffd8be,
+      roughness: 0.4,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.45,
+      sheen: 0.4,
+      sheenColor: new THREE.Color(0xffe8d8),
     }),
     bagRef,
   );
-  // Bal sarısı saç
   const hairMat = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0xe8c46a,
-      roughness: 0.28,
-      clearcoat: 0.65,
-      clearcoatRoughness: 0.2,
-      sheen: 0.8,
-      sheenColor: new THREE.Color(0xfff0c0),
-      emissive: 0x3a2810,
-      emissiveIntensity: 0.04,
+      color: 0xf0d078,
+      roughness: 0.3,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.22,
+      sheen: 0.75,
+      sheenColor: new THREE.Color(0xfff2c8),
     }),
     bagRef,
   );
   const hairHi = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0xffe9a8,
-      roughness: 0.25,
-      clearcoat: 0.7,
-      sheen: 0.9,
-      sheenColor: new THREE.Color(0xfff6d0),
+      color: 0xfff0b0,
+      roughness: 0.26,
+      clearcoat: 0.65,
+      sheen: 0.85,
+      sheenColor: new THREE.Color(0xfff8d8),
     }),
     bagRef,
   );
-  const dress = trackMat(
+  const shirt = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0x1a0c14,
-      roughness: 0.25,
-      metalness: 0.15,
-      clearcoat: 0.5,
-      clearcoatRoughness: 0.28,
-      sheen: 0.55,
-      sheenColor: new THREE.Color(0x8a2850),
+      color: 0xf7f4ef,
+      roughness: 0.55,
+      clearcoat: 0.12,
+    }),
+    bagRef,
+  );
+  const vest = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0x141018,
+      roughness: 0.35,
+      metalness: 0.08,
+      clearcoat: 0.35,
+      sheen: 0.25,
+      sheenColor: new THREE.Color(0x403040),
+    }),
+    bagRef,
+  );
+  const pants = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0x1a1520,
+      roughness: 0.45,
+      clearcoat: 0.15,
+    }),
+    bagRef,
+  );
+  const bow = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xc01828,
+      roughness: 0.4,
+      clearcoat: 0.2,
     }),
     bagRef,
   );
   const gold = trackMat(
     new THREE.MeshPhysicalMaterial({
-      color: 0xf0d060,
-      metalness: 0.92,
-      roughness: 0.2,
+      color: 0xe8c850,
+      metalness: 0.9,
+      roughness: 0.22,
     }),
     bagRef,
   );
   const lipMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0xe84068,
-      roughness: 0.22,
-      emissive: 0x701028,
-      emissiveIntensity: 0.28,
+      color: 0xd83858,
+      roughness: 0.25,
+      emissive: 0x601020,
+      emissiveIntensity: 0.22,
     }),
     bagRef,
   );
@@ -735,19 +761,18 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
     new THREE.MeshStandardMaterial({
       color: 0xff9aaa,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.38,
       roughness: 0.85,
       depthWrite: false,
     }),
     bagRef,
   );
-  // Mavi-yeşil göz
   const eyeMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x3a8ec8,
       roughness: 0.2,
       emissive: 0x102838,
-      emissiveIntensity: 0.15,
+      emissiveIntensity: 0.12,
     }),
     bagRef,
   );
@@ -757,67 +782,92 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
   );
   const lashMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1a1010, roughness: 0.45 }), bagRef);
   const browMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xc4a050, roughness: 0.55 }),
+    new THREE.MeshStandardMaterial({ color: 0xd4b060, roughness: 0.55 }),
     bagRef,
   );
 
-  // —— Vücut ——
+  // —— Vücut: klasik kurpiyer üniforması ——
   const torso = new THREE.Group();
-  torso.position.y = 0.88;
+  torso.position.y = 0.9;
   root.add(torso);
 
-  const hips = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.3, 22, 18), bagRef), dress);
-  hips.scale.set(1.18, 0.7, 0.88);
-  hips.position.y = -0.08;
+  // Pantolon
+  const hips = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.2, 0.22, 0.42, 20), bagRef), pants);
+  hips.position.y = -0.22;
   hips.castShadow = true;
   torso.add(hips);
 
-  const waist = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.135, 0.2, 0.3, 20), bagRef),
-    dress,
+  // Beyaz gömlek
+  const shirtMesh = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.18, 0.21, 0.58, 20), bagRef),
+    shirt,
   );
-  waist.position.y = 0.18;
-  waist.castShadow = true;
-  torso.add(waist);
+  shirtMesh.position.y = 0.28;
+  shirtMesh.castShadow = true;
+  torso.add(shirtMesh);
 
-  const bust = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.21, 22, 18), bagRef), skin);
-  bust.scale.set(1.4, 0.88, 0.78);
-  bust.position.set(0, 0.44, 0.07);
-  bust.castShadow = true;
+  // Yaka
+  for (const sx of [-1, 1] as const) {
+    const collar = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.06, 0.08), bagRef), shirt);
+    collar.position.set(sx * 0.08, 0.58, 0.12);
+    collar.rotation.z = sx * -0.35;
+    collar.rotation.x = -0.25;
+    torso.add(collar);
+  }
+
+  // Siyah yelek (öne doğru açık V)
+  const vestMesh = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.19, 0.22, 0.48, 20), bagRef),
+    vest,
+  );
+  vestMesh.position.set(0, 0.26, -0.01);
+  vestMesh.scale.set(1.05, 1, 0.88);
+  vestMesh.castShadow = true;
+  torso.add(vestMesh);
+
+  // Yelek düğmeleri
+  for (let i = 0; i < 3; i++) {
+    const btn = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.018, 8, 8), bagRef), gold);
+    btn.position.set(0, 0.4 - i * 0.1, 0.175);
+    torso.add(btn);
+  }
+
+  // Kırmızı papyon
+  const bowCenter = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.035, 10, 8), bagRef), bow);
+  bowCenter.position.set(0, 0.56, 0.2);
+  torso.add(bowCenter);
+  for (const sx of [-1, 1] as const) {
+    const wing = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.12, 0.055, 0.03), bagRef), bow);
+    wing.position.set(sx * 0.08, 0.56, 0.195);
+    wing.rotation.z = sx * 0.15;
+    torso.add(wing);
+  }
+
+  // Omuz dolgusu (üniforma silüeti)
+  for (const sx of [-1, 1] as const) {
+    const shoulder = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.09, 12, 10), bagRef), shirt);
+    shoulder.position.set(sx * 0.2, 0.52, 0);
+    shoulder.scale.set(1.1, 0.7, 0.9);
+    torso.add(shoulder);
+  }
+
+  // Büst (gömlek altında hafif)
+  const bust = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.16, 18, 14), bagRef), shirt);
+  bust.scale.set(1.35, 0.85, 0.85);
+  bust.position.set(0, 0.38, 0.06);
   torso.add(bust);
-
-  const dressTop = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.17, 0.22, 0.2, 20), bagRef),
-    dress,
-  );
-  dressTop.position.set(0, 0.4, -0.02);
-  dressTop.scale.set(1.08, 1, 0.72);
-  torso.add(dressTop);
-
-  const neckline = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.05, 0.3, 0.02), bagRef), gold);
-  neckline.position.set(0, 0.5, 0.17);
-  neckline.rotation.x = -0.18;
-  torso.add(neckline);
-
-  const skirt = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.34, 0.22, 0.55, 22), bagRef),
-    dress,
-  );
-  skirt.position.y = -0.42;
-  skirt.castShadow = true;
-  torso.add(skirt);
 
   for (const sx of [-1, 1] as const) {
     const leg = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.052, 0.062, 0.55, 12), bagRef),
-      skin,
+      trackGeo(new THREE.CylinderGeometry(0.055, 0.065, 0.58, 12), bagRef),
+      pants,
     );
-    leg.position.set(sx * 0.1, 0.05, 0.02);
+    leg.position.set(sx * 0.09, 0.02, 0.02);
     leg.castShadow = true;
     root.add(leg);
-    const heel = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.06, 0.18), bagRef), dress);
-    heel.position.set(sx * 0.1, -0.22, 0.04);
-    root.add(heel);
+    const shoe = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.06, 0.2), bagRef), vest);
+    shoe.position.set(sx * 0.09, -0.28, 0.04);
+    root.add(shoe);
   }
 
   // —— Baş + güler yüz ——
@@ -900,29 +950,25 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
   nose.position.set(0, -0.02, 0.2);
   head.add(nose);
 
-  // Sarışın uzun saç
-  const hairCap = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.235, 28, 20), bagRef), hairMat);
-  hairCap.position.y = 0.06;
-  hairCap.scale.set(1.1, 1.18, 1.1);
+  // Sarışın bob (klasik kurpiyer saçı)
+  const hairCap = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.24, 28, 20), bagRef), hairMat);
+  hairCap.position.y = 0.05;
+  hairCap.scale.set(1.12, 1.12, 1.12);
   head.add(hairCap);
-  const bang = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.12, 16, 12), bagRef), hairHi);
-  bang.position.set(0, 0.1, 0.16);
-  bang.scale.set(1.6, 0.55, 0.5);
+  const bang = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.11, 16, 12), bagRef), hairHi);
+  bang.position.set(0, 0.1, 0.17);
+  bang.scale.set(1.7, 0.5, 0.45);
   head.add(bang);
   for (const [x, y, z, s, hi] of [
-    [-0.2, -0.06, 0.1, 0.13, 1],
-    [0.2, -0.06, 0.1, 0.13, 1],
-    [-0.18, -0.28, 0.04, 0.145, 0],
-    [0.18, -0.28, 0.04, 0.145, 0],
-    [-0.15, -0.5, 0.0, 0.135, 1],
-    [0.15, -0.5, 0.0, 0.135, 1],
-    [-0.12, -0.72, -0.04, 0.125, 0],
-    [0.12, -0.72, -0.04, 0.125, 0],
-    [0, -0.6, -0.14, 0.16, 1],
-    [-0.24, -0.18, -0.08, 0.12, 0],
-    [0.24, -0.18, -0.08, 0.12, 0],
-    [-0.08, -0.85, -0.02, 0.11, 1],
-    [0.08, -0.85, -0.02, 0.11, 1],
+    [-0.2, -0.02, 0.08, 0.12, 1],
+    [0.2, -0.02, 0.08, 0.12, 1],
+    [-0.19, -0.18, 0.02, 0.13, 0],
+    [0.19, -0.18, 0.02, 0.13, 0],
+    [-0.17, -0.32, -0.02, 0.12, 1],
+    [0.17, -0.32, -0.02, 0.12, 1],
+    [0, -0.28, -0.14, 0.14, 0],
+    [-0.22, -0.12, -0.08, 0.11, 1],
+    [0.22, -0.12, -0.08, 0.11, 1],
   ] as const) {
     const lock = new THREE.Mesh(
       trackGeo(new THREE.SphereGeometry(s, 14, 12), bagRef),
@@ -932,50 +978,39 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
     head.add(lock);
   }
 
-  for (const sx of [-1, 1] as const) {
-    const ear = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.032, 8, 8), bagRef), gold);
-    ear.position.set(sx * 0.2, -0.015, 0.02);
-    head.add(ear);
-    const drop = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.03, 8, 8), bagRef), gold);
-    drop.position.set(sx * 0.205, -0.1, 0.02);
-    head.add(drop);
-  }
-
+  // Gömlek kollu kollar
   const mkArm = (side: 1 | -1) => {
     const g = new THREE.Group();
-    g.position.set(side * 0.26, 1.32, 0.02);
+    g.position.set(side * 0.28, 1.38, 0.02);
     const upper = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.048, 0.055, 0.36, 12), bagRef),
-      skin,
+      trackGeo(new THREE.CylinderGeometry(0.05, 0.058, 0.36, 12), bagRef),
+      shirt,
     );
     upper.position.y = -0.16;
     upper.castShadow = true;
     g.add(upper);
+    // Kol ağzı / manşet
+    const cuff = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.048, 0.05, 0.06, 12), bagRef), shirt);
+    cuff.position.set(0, -0.36, 0.02);
+    g.add(cuff);
     const fore = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.04, 0.045, 0.32, 12), bagRef),
+      trackGeo(new THREE.CylinderGeometry(0.04, 0.045, 0.28, 12), bagRef),
       skin,
     );
-    fore.position.set(0, -0.45, 0.05);
-    fore.rotation.x = -0.4;
+    fore.position.set(0, -0.5, 0.05);
+    fore.rotation.x = -0.35;
     fore.castShadow = true;
     g.add(fore);
     const hand = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.05, 10, 8), bagRef), skin);
-    hand.position.set(0, -0.64, 0.1);
+    hand.position.set(0, -0.66, 0.1);
     g.add(hand);
-    const bracelet = new THREE.Mesh(
-      trackGeo(new THREE.TorusGeometry(0.048, 0.01, 8, 16), bagRef),
-      gold,
-    );
-    bracelet.position.set(0, -0.55, 0.08);
-    bracelet.rotation.x = Math.PI / 2;
-    g.add(bracelet);
     root.add(g);
     return g;
   };
   const armL = mkArm(-1);
   const armR = mkArm(1);
-  armR.rotation.z = -0.35;
-  armL.rotation.z = 0.35;
+  armR.rotation.z = -0.28;
+  armL.rotation.z = 0.28;
 
   let talking = false;
   let dealT = 0;
@@ -1000,10 +1035,10 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
       lookZ = z;
     },
     update(t, dt) {
-      const breath = Math.sin(t * 2.4) * 0.014;
-      torso.position.y = 0.88 + breath;
-      torso.rotation.y = Math.sin(t * 0.55) * 0.05;
-      torso.rotation.z = Math.sin(t * 0.7) * 0.03;
+      const breath = Math.sin(t * 2.4) * 0.012;
+      torso.position.y = 0.9 + breath;
+      torso.rotation.y = Math.sin(t * 0.55) * 0.04;
+      torso.rotation.z = Math.sin(t * 0.7) * 0.025;
 
       const targetYaw = Math.atan2(lookX - 0, lookZ - (-2.2)) * 0.4;
       head.rotation.y += (targetYaw - head.rotation.y) * Math.min(1, dt * 4);
@@ -1034,13 +1069,13 @@ export function makeDealerWoman(THREE: Three, bagRef: AssetBag): DealerRig {
         dealT = Math.max(0, dealT - dt * 1.8);
         const wave = Math.sin((1 - dealT) * Math.PI) * 1.1;
         armR.rotation.x = -0.25 - wave * 0.95;
-        armR.rotation.z = -0.35 - wave * 0.45;
+        armR.rotation.z = -0.28 - wave * 0.4;
       } else {
-        armR.rotation.x += (Math.sin(t * 1.1) * 0.1 - armR.rotation.x) * 0.08;
-        armR.rotation.z += (-0.35 - armR.rotation.z) * 0.08;
+        armR.rotation.x += (Math.sin(t * 1.1) * 0.08 - armR.rotation.x) * 0.08;
+        armR.rotation.z += (-0.28 - armR.rotation.z) * 0.08;
       }
-      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.08;
-      armL.rotation.z = 0.35 + Math.sin(t * 0.9) * 0.04;
+      armL.rotation.x = Math.sin(t * 1.1 + 1) * 0.06;
+      armL.rotation.z = 0.28 + Math.sin(t * 0.9) * 0.03;
     },
   };
 }
