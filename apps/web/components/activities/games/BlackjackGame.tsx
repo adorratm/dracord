@@ -600,10 +600,10 @@ export function BlackjackGame(props: GameProps) {
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, camera, renderer } = api;
     const cam = camera as PerspectiveCamera;
-    cam.fov = 40;
-    // Daha alçak açı — kurpiyerin yüzü görünsün
-    cam.position.set(0, 5.4, 7.2);
-    cam.lookAt(0, 1.1, -1.2);
+    cam.fov = 42;
+    // Yan-alçak açı — masa altı (ayak/apron) ve kurpiyer birlikte görünsün
+    cam.position.set(0, 3.55, 8.4);
+    cam.lookAt(0, 0.35, -0.9);
     cam.updateProjectionMatrix();
     renderer.toneMappingExposure = 0.95;
 
@@ -670,11 +670,28 @@ export function BlackjackGame(props: GameProps) {
 
     const tableW = 7.2;
     const tableD = 5.4;
-    const apron = new THREE.Mesh(new THREE.BoxGeometry(tableW + 0.9, 0.55, tableD + 0.9), wood);
-    apron.position.y = -0.35;
+    // Kalın apron + görünür alt yüzey
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(tableW + 0.9, 0.72, tableD + 0.9), wood);
+    apron.position.y = -0.42;
     apron.castShadow = true;
     apron.receiveShadow = true;
     root.add(apron);
+    const apronBottom = new THREE.Mesh(
+      new THREE.BoxGeometry(tableW + 0.7, 0.06, tableD + 0.7),
+      makeWoodMaterial(THREE, assets, 'warm'),
+    );
+    apronBottom.position.y = -0.78;
+    apronBottom.castShadow = true;
+    root.add(apronBottom);
+    // Orta kaide — masa altını doldurur
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.1, 1.35, 0.55, 28),
+      wood,
+    );
+    pedestal.position.y = -1.05;
+    pedestal.castShadow = true;
+    pedestal.receiveShadow = true;
+    root.add(pedestal);
 
     // Yarım daire masa formu — üst keçe disk + dikdörtgen karma
     const feltMesh = new THREE.Mesh(new THREE.BoxGeometry(tableW, 0.08, tableD), felt);
@@ -703,10 +720,14 @@ export function BlackjackGame(props: GameProps) {
       [-3.2, 2.2],
       [3.2, 2.2],
     ] as const) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.85, 12), wood);
-      leg.position.set(lx, -0.85, lz);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.05, 14), wood);
+      leg.position.set(lx, -1.15, lz);
       leg.castShadow = true;
       root.add(leg);
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.08, 14), wood);
+      foot.position.set(lx, -1.68, lz);
+      foot.castShadow = true;
+      root.add(foot);
     }
 
     // Chip dekor
@@ -949,8 +970,10 @@ export function BlackjackGame(props: GameProps) {
           anims.splice(i, 1);
         }
       }
-      cam.position.x = Math.sin(t * 0.15) * 0.1;
-      cam.lookAt(0, 1.05 + Math.sin(t * 0.2) * 0.02, -1.1);
+      cam.position.x = Math.sin(t * 0.12) * 0.08;
+      cam.position.y = 3.55;
+      cam.position.z = 8.4;
+      cam.lookAt(0, 0.4 + Math.sin(t * 0.18) * 0.02, -0.85);
       dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
     };
     tick();

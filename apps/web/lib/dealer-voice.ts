@@ -82,8 +82,18 @@ export function prepareDealerText(raw: string): string {
     .replace(/\bDouble\b/gi, 'çift')
     .replace(/\bBust\b/gi, 'battı')
     .replace(/\bPush\b/gi, 'berabere')
-    .replace(/'(\w)/g, ' $1');
+    .replace(/'(\w)/g, ' $1')
+    // Doğal nefes / vurgu için kısa duraklar
+    .replace(/\s*[—–-]\s*/g, ', ')
+    .replace(/\s*;\s*/g, ', ');
   t = t.replace(/\s+/g, ' ').trim();
+  // Çok uzun cümleleri virgülle böl — TTS daha akıcı okur
+  if (t.length > 70 && !t.includes(',')) {
+    const mid = t.search(/\s+(ve|ama|çünkü|şimdi|hadı|hadi)\s+/i);
+    if (mid > 20) {
+      t = `${t.slice(0, mid).trim()}, ${t.slice(mid).trim()}`;
+    }
+  }
   if (!/[.!?…]$/.test(t)) t += '.';
   return t;
 }
@@ -97,12 +107,14 @@ function scoreVoice(v: SpeechSynthesisVoice): number {
   if (/^tr(-|_|$)/i.test(lang)) s += 100;
   else s += 50;
 
-  // Microsoft Natural Online — kullanıcının tercihi
-  if (/microsoft/i.test(name)) s += 120;
-  if (/emel/i.test(name)) s += 100;
-  if (/online|natural|neural/i.test(name)) s += 90;
-  if (/female|woman|kız|kadın|aylin|filiz|yelda|zira|seda/i.test(name)) s += 40;
-  if (/google/i.test(name)) s += 10; // Microsoft'un gerisinde
+  // Microsoft Natural / Online Neural — en gerçekçi
+  if (/microsoft/i.test(name)) s += 130;
+  if (/emel/i.test(name)) s += 110;
+  if (/online\s*\(natural\)|natural online|neural/i.test(name)) s += 100;
+  else if (/online|natural/i.test(name)) s += 85;
+  if (/desktop/i.test(name)) s -= 25; // Desktop eski sesler daha robotik
+  if (/female|woman|kız|kadın|aylin|filiz|yelda|zira|seda/i.test(name)) s += 45;
+  if (/google/i.test(name)) s += 15;
   if (/(ahmet|male|man|erkek|tolga)/i.test(name)) s -= 80;
   return s;
 }
@@ -183,24 +195,27 @@ function speakWebSpeech(text: string, rate?: number): boolean {
   u.lang = voice.lang || 'tr-TR';
   u.voice = voice;
   const isMs = /microsoft/i.test(voice.name);
+  const isNatural = /natural|neural|online/i.test(voice.name);
   const isEmel = /emel/i.test(voice.name);
-  // Biraz daha tempolu — ağır/yavaş his kalksın
-  u.rate = rate ?? (isEmel ? 1.12 : isMs ? 1.1 : 1.08);
-  u.pitch = isEmel || isMs ? 1.06 : 1.12;
+  // Doğal tempo: çok hızlı robotik, çok yavaş sıkıcı — ~1.0–1.05
+  u.rate = rate ?? (isEmel || isNatural ? 1.02 : isMs ? 1.04 : 1.0);
+  u.pitch = isEmel || isNatural ? 1.02 : isMs ? 1.04 : 1.08;
   u.volume = volume;
   u.onstart = () => setSpeaking(true);
   u.onend = () => setSpeaking(false);
   u.onerror = () => setSpeaking(false);
   setSpeaking(true);
+  // Kısa gecikme — ses motorunun cancel sonrası takılmasını azaltır
   window.setTimeout(() => {
     if (muted) return;
     try {
       window.speechSynthesis.speak(u);
+      // Chrome bazen paused kalır
       if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     } catch {
       setSpeaking(false);
     }
-  }, 40);
+  }, 60);
   return true;
 }
 
@@ -238,6 +253,13 @@ async function playGoogleFallback(text: string, token: number): Promise<boolean>
     currentAudio = audio;
     audio.preload = 'auto';
     audio.volume = volume;
+    // Google TTS biraz hızlı gelir — hafif yavaşlat, daha doğal
+    audio.playbackRate = 0.96;
+    try {
+      (audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    } catch {
+      /* ignore */
+    }
     audio.src = src!;
     let settled = false;
     const done = (ok: boolean) => {
@@ -288,8 +310,8 @@ export function speakDealer(text: string, opts?: { interrupt?: boolean; rate?: n
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         const u = new SpeechSynthesisUtterance(prepared);
         u.lang = 'tr-TR';
-        u.rate = 0.92;
-        u.pitch = 1.08;
+        u.rate = 1.0;
+        u.pitch = 1.04;
         u.volume = volume;
         const v = pickVoice();
         if (v) u.voice = v;

@@ -58,21 +58,43 @@ function ensureCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!ctx) {
     try {
-      ctx = new AudioContext();
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
     } catch {
       return null;
     }
   }
-  if (ctx.state === 'suspended') void ctx.resume();
   return ctx;
 }
 
+/** Kullanıcı jesti içinde çağır — AudioContext'i running yapar */
 export function unlockGameAudio() {
-  ensureCtx();
+  const ac = ensureCtx();
+  if (!ac) return;
+  if (ac.state === 'suspended' || ac.state === 'interrupted') {
+    void ac.resume().catch(() => undefined);
+  }
 }
 
 function gainOf(base: number) {
   return Math.max(0.0001, base * volume);
+}
+
+/** Suspended bağlamda sessiz kalmasın — resume sonrası çal */
+function withAudio(play: (ac: AudioContext) => void) {
+  if (muted || volume <= 0.001) return;
+  const ac = ensureCtx();
+  if (!ac) return;
+  if (ac.state === 'running') {
+    play(ac);
+    return;
+  }
+  void ac.resume().then(() => {
+    if (ac.state === 'running' && !muted && volume > 0.001) play(ac);
+  });
 }
 
 function beep(
@@ -81,40 +103,38 @@ function beep(
   type: OscillatorType = 'sine',
   gain = 0.06,
 ) {
-  if (muted || volume <= 0.001) return;
-  const ac = ensureCtx();
-  if (!ac) return;
-  const osc = ac.createOscillator();
-  const g = ac.createGain();
-  const level = gainOf(gain);
-  osc.type = type;
-  osc.frequency.value = freq;
-  g.gain.value = level;
-  osc.connect(g);
-  g.connect(ac.destination);
-  const t = ac.currentTime;
-  g.gain.setValueAtTime(level, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + durationMs / 1000);
-  osc.start(t);
-  osc.stop(t + durationMs / 1000);
+  withAudio((ac) => {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    const level = gainOf(gain);
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.value = level;
+    osc.connect(g);
+    g.connect(ac.destination);
+    const t = ac.currentTime;
+    g.gain.setValueAtTime(level, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + durationMs / 1000);
+    osc.start(t);
+    osc.stop(t + durationMs / 1000);
+  });
 }
 
 function noiseBurst(durationMs: number, gain = 0.04) {
-  if (muted || volume <= 0.001) return;
-  const ac = ensureCtx();
-  if (!ac) return;
-  const n = Math.floor((ac.sampleRate * durationMs) / 1000);
-  const buf = ac.createBuffer(1, n, ac.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
-  const src = ac.createBufferSource();
-  const g = ac.createGain();
-  const level = gainOf(gain);
-  src.buffer = buf;
-  g.gain.value = level;
-  src.connect(g);
-  g.connect(ac.destination);
-  src.start();
+  withAudio((ac) => {
+    const n = Math.floor((ac.sampleRate * durationMs) / 1000);
+    const buf = ac.createBuffer(1, n, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = ac.createBufferSource();
+    const g = ac.createGain();
+    const level = gainOf(gain);
+    src.buffer = buf;
+    g.gain.value = level;
+    src.connect(g);
+    g.connect(ac.destination);
+    src.start();
+  });
 }
 
 export const GameAudio = {
@@ -123,14 +143,24 @@ export const GameAudio = {
   setVolume: setGameAudioVolume,
   isMuted: isGameAudioMuted,
   getVolume: getGameAudioVolume,
-  /** Bilardo */
-  collide: () => beep(180, 80, 'triangle', 0.05),
-  pot: () => {
-    beep(420, 120, 'sine', 0.07);
-    window.setTimeout(() => beep(620, 100, 'sine', 0.05), 60);
+  /** Bilardo — biraz daha yüksek gain (masa gürültüsü duyulsun) */
+  collide: () => {
+    beep(220, 70, 'triangle', 0.09);
+    noiseBurst(40, 0.04);
   },
-  cushion: () => beep(140, 50, 'square', 0.03),
-  shoot: () => beep(90, 70, 'sawtooth', 0.04),
+  pot: () => {
+    beep(380, 100, 'sine', 0.1);
+    window.setTimeout(() => beep(560, 110, 'sine', 0.08), 55);
+    window.setTimeout(() => beep(720, 90, 'triangle', 0.05), 120);
+  },
+  cushion: () => {
+    beep(160, 55, 'square', 0.055);
+    noiseBurst(30, 0.025);
+  },
+  shoot: () => {
+    beep(95, 85, 'sawtooth', 0.08);
+    noiseBurst(50, 0.035);
+  },
   /** Bowling */
   bowl: () => {
     noiseBurst(180, 0.035);

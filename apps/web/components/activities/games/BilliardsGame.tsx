@@ -13,6 +13,7 @@ import {
   type GameProps,
 } from '../three/sceneUtils';
 import { GameHud, GameHudButton } from '../three/GameHud';
+import { GameSoundControls } from '../three/GameSoundControls';
 import { addGameVenue } from '../three/sceneVenue';
 import {
   createAssetBag,
@@ -1038,20 +1039,20 @@ export function BilliardsGame(props: GameProps) {
         if (!nearPocket) {
           if (b.x > HX - R) {
             b.x = HX - R;
-            if (b.vx > 0.4) GameAudio.cushion();
+            if (b.vx > 0.2) GameAudio.cushion();
             b.vx = -Math.abs(b.vx) * 0.8;
           } else if (b.x < -HX + R) {
             b.x = -HX + R;
-            if (b.vx < -0.4) GameAudio.cushion();
+            if (b.vx < -0.2) GameAudio.cushion();
             b.vx = Math.abs(b.vx) * 0.8;
           }
           if (b.z > HZ - R) {
             b.z = HZ - R;
-            if (b.vz > 0.4) GameAudio.cushion();
+            if (b.vz > 0.2) GameAudio.cushion();
             b.vz = -Math.abs(b.vz) * 0.8;
           } else if (b.z < -HZ + R) {
             b.z = -HZ + R;
-            if (b.vz < -0.4) GameAudio.cushion();
+            if (b.vz < -0.2) GameAudio.cushion();
             b.vz = Math.abs(b.vz) * 0.8;
           }
           b.x = Math.max(-HX - 0.02, Math.min(HX + 0.02, b.x));
@@ -1138,7 +1139,7 @@ export function BilliardsGame(props: GameProps) {
             a.vz -= vrel * nz;
             c.vx += vrel * nx;
             c.vz += vrel * nz;
-            if (vrel > 0.8) GameAudio.collide();
+            if (vrel > 0.25) GameAudio.collide();
           }
         }
       }
@@ -1316,6 +1317,7 @@ export function BilliardsGame(props: GameProps) {
     };
 
     const fireShot = () => {
+      GameAudio.unlock();
       const p = propsRef.current;
       const inHand =
         localCueInHandOverride !== null
@@ -1361,6 +1363,7 @@ export function BilliardsGame(props: GameProps) {
     };
 
     const onMove = (e: PointerEvent) => {
+      GameAudio.unlock();
       if (simulating || inputLocked) return;
       toTable(e);
       const p = propsRef.current;
@@ -1380,6 +1383,7 @@ export function BilliardsGame(props: GameProps) {
       }
     };
     const onDown = (e: PointerEvent) => {
+      GameAudio.unlock();
       if (simulating || inputLocked) return;
       const p = propsRef.current;
       if (p.session.state.winner) return;
@@ -1525,12 +1529,15 @@ export function BilliardsGame(props: GameProps) {
         title="8-Top Bilardo"
         status={statusText}
         meta={
-          <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
-            Masada {remaining}
-            {turnPlayer ? ` · Sıra: ${labelFor(props, turnPlayer)}` : ''}
-            {myGroup ? ` · Senin: ${myGroup === 'solid' ? 'Düz' : 'Çizgili'}` : ' · Grup: açık'}
-            {cueInHand ? ' · Top el' : ''}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+              Masada {remaining}
+              {turnPlayer ? ` · Sıra: ${labelFor(props, turnPlayer)}` : ''}
+              {myGroup ? ` · Senin: ${myGroup === 'solid' ? 'Düz' : 'Çizgili'}` : ' · Grup: açık'}
+              {cueInHand ? ' · Top el' : ''}
+            </span>
+            <GameSoundControls />
+          </div>
         }
         players={session.playerIds.map((pid) => {
           const g = groups[pid];

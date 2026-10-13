@@ -272,18 +272,27 @@ function buildTableRoom(
       metalness: 0.02,
     }),
   );
-  const floor = new THREE.Mesh(new THREE.RingGeometry(playR * 0.92, playR + 14, 64), floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = -0.9;
-  floor.receiveShadow = true;
-  group.add(floor);
+  // Blackjack: masa altı görünsün diye deliksiz zemin; diğerlerinde kamera deliği
+  if (theme === 'blackjack') {
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(playR + 14, 64), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.9;
+    floor.receiveShadow = true;
+    group.add(floor);
+  } else {
+    const floor = new THREE.Mesh(new THREE.RingGeometry(playR * 0.92, playR + 14, 64), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.9;
+    floor.receiveShadow = true;
+    group.add(floor);
 
-  const underMat = track(new THREE.MeshStandardMaterial({ color: 0x0a0810, roughness: 1 }));
-  const under = new THREE.Mesh(new THREE.CircleGeometry(playR * 0.9, 48), underMat);
-  under.rotation.x = -Math.PI / 2;
-  under.position.y = -0.95;
-  under.receiveShadow = true;
-  group.add(under);
+    const underMat = track(new THREE.MeshStandardMaterial({ color: 0x0a0810, roughness: 1 }));
+    const under = new THREE.Mesh(new THREE.CircleGeometry(playR * 0.9, 48), underMat);
+    under.rotation.x = -Math.PI / 2;
+    under.position.y = -0.95;
+    under.receiveShadow = true;
+    group.add(under);
+  }
 
   const wallTex = track(woodTexture(THREE, '#2c2038', '#1a1424'));
   wallTex.repeat.set(2, 1);
@@ -333,11 +342,16 @@ function buildTableRoom(
       roughness: 0.5,
     }),
   );
-  // Bilardo / tavla / blackjack: görünür tavan lambası yok — gizli soft spot
-  if (theme === 'blackjack' || theme === 'billiards' || theme === 'tavla') {
-    softSpot(THREE, group, -1.8, 4.4, 0.2, 0.3, theme === 'tavla' ? 1.25 : 1.15, false);
-    softSpot(THREE, group, 1.8, 4.4, 0.2, 0.3, theme === 'tavla' ? 1.1 : 1.0, false);
-    if (theme === 'tavla') {
+  // Bilardo / tavla / blackjack / okey: görünür tavan lambası yok — gizli soft spot
+  if (
+    theme === 'blackjack' ||
+    theme === 'billiards' ||
+    theme === 'tavla' ||
+    theme === 'okey'
+  ) {
+    softSpot(THREE, group, -1.8, 4.4, 0.2, 0.3, theme === 'tavla' || theme === 'okey' ? 1.25 : 1.15, false);
+    softSpot(THREE, group, 1.8, 4.4, 0.2, 0.3, theme === 'tavla' || theme === 'okey' ? 1.1 : 1.0, false);
+    if (theme === 'tavla' || theme === 'okey') {
       softSpot(THREE, group, 0, 4.5, 1.2, 0.5, 1.0, false);
     }
   } else {
