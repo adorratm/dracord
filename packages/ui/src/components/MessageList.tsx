@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { contentHasSelfMention, tokenizeMessageContent } from '../lib/mentions';
 import { Avatar } from './Avatar';
@@ -311,8 +312,22 @@ export function MessageItem({
   const [stickerLightbox, setStickerLightbox] = useState<string | null>(null);
   /** Popover: aşağıda yer yoksa yukarı aç */
   const [popoverPlacement, setPopoverPlacement] = useState<'up' | 'down'>('down');
+  const [menuFixed, setMenuFixed] = useState<{ top: number; right: number; bottom: number } | null>(
+    null,
+  );
   const menuRef = useRef<HTMLDivElement>(null);
   const popoverPanelRef = useRef<HTMLDivElement>(null);
+
+  const measureMenuAnchor = useCallback(() => {
+    const el = menuRef.current;
+    if (!el || typeof window === 'undefined') return null;
+    const rect = el.getBoundingClientRect();
+    return {
+      top: rect.bottom,
+      right: Math.max(8, window.innerWidth - rect.right),
+      bottom: rect.top,
+    };
+  }, []);
   const author = message.author;
   const isMine = Boolean(actions?.currentUserId && author.id === actions.currentUserId);
   const canDelete = isMine || Boolean(actions?.canManageMessages);
@@ -367,11 +382,11 @@ export function MessageItem({
   useEffect(() => {
     if (!menuOpen && !reactPickerOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) {
-        setMenuOpen(false);
-        setReactPickerOpen(false);
-        setSubmenu(null);
-      }
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || popoverPanelRef.current?.contains(t)) return;
+      setMenuOpen(false);
+      setReactPickerOpen(false);
+      setSubmenu(null);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -383,11 +398,6 @@ export function MessageItem({
     const height = panel?.offsetHeight ?? (reactPickerOpen || submenu === 'react' ? 180 : 420);
     setPopoverPlacement(computePlacement(height));
   }, [menuOpen, reactPickerOpen, submenu, computePlacement]);
-
-  const popoverPosClass =
-    popoverPlacement === 'up'
-      ? 'bottom-full mb-1'
-      : 'top-full mt-1';
 
   const closeAllMenus = () => {
     setMenuOpen(false);
@@ -402,6 +412,7 @@ export function MessageItem({
       setMenuOpen(false);
       return;
     }
+    setMenuFixed(measureMenuAnchor());
     setPopoverPlacement(computePlacement(420));
     setMenuOpen(true);
   };
@@ -418,6 +429,7 @@ export function MessageItem({
       setReactPickerOpen(false);
       return;
     }
+    setMenuFixed(measureMenuAnchor());
     setPopoverPlacement(computePlacement(180));
     setReactPickerOpen(true);
   };
@@ -757,13 +769,27 @@ export function MessageItem({
             >
               <span className="material-symbols-outlined text-[16px] leading-none">more_horiz</span>
             </button>
-            {menuOpen && (
+            {menuOpen &&
+              typeof document !== 'undefined' &&
+              createPortal(
               <div
                 ref={popoverPanelRef}
-                className={cn(
-                  'absolute right-0 w-[240px] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float py-1.5 z-[60]',
-                  popoverPosClass,
-                )}
+                data-dracord-portal
+                className="fixed w-[240px] rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float py-1.5 z-[250] dracord-pop"
+                style={
+                  popoverPlacement === 'up'
+                    ? {
+                        bottom:
+                          typeof window !== 'undefined'
+                            ? window.innerHeight - (menuFixed?.bottom ?? 0) + 4
+                            : undefined,
+                        right: menuFixed?.right ?? 8,
+                      }
+                    : {
+                        top: (menuFixed?.top ?? 0) + 4,
+                        right: menuFixed?.right ?? 8,
+                      }
+                }
               >
                 {!isHeading && (
                   <>
@@ -1087,15 +1113,31 @@ export function MessageItem({
                     }}
                   />
                 )}
-              </div>
+              </div>,
+              document.body,
             )}
-            {reactPickerOpen && !menuOpen && (
+            {reactPickerOpen &&
+              !menuOpen &&
+              typeof document !== 'undefined' &&
+              createPortal(
               <div
                 ref={popoverPanelRef}
-                className={cn(
-                  'absolute right-0 p-2 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[60] flex flex-wrap gap-1 w-52',
-                  popoverPosClass,
-                )}
+                data-dracord-portal
+                className="fixed p-2 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[250] flex flex-wrap gap-1 w-52 dracord-pop"
+                style={
+                  popoverPlacement === 'up'
+                    ? {
+                        bottom:
+                          typeof window !== 'undefined'
+                            ? window.innerHeight - (menuFixed?.bottom ?? 0) + 4
+                            : undefined,
+                        right: menuFixed?.right ?? 8,
+                      }
+                    : {
+                        top: (menuFixed?.top ?? 0) + 4,
+                        right: menuFixed?.right ?? 8,
+                      }
+                }
               >
                 {REACT_PICKER_EMOJIS.map((emoji) => (
                   <button
@@ -1110,7 +1152,8 @@ export function MessageItem({
                     {emoji}
                   </button>
                 ))}
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
         </div>

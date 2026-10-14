@@ -2,7 +2,6 @@
 
 import type { ActivityKind, ActivitySessionDto, ChannelSummary } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
-import { cn } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -14,6 +13,9 @@ import { OkeyGame } from '@/components/activities/games/OkeyGame';
 import { TavlaGame } from '@/components/activities/games/TavlaGame';
 import { WatchPartyRoom } from '@/components/activities/games/WatchPartyRoom';
 import { GameAudio } from '@/lib/game-audio';
+import { ActivityStageShell } from '@/components/activities/ActivityStageShell';
+import { trackGameJoin } from '@/lib/analytics';
+import type { ReactNode } from 'react';
 
 const KIND_LABEL: Record<ActivityKind, string> = {
   billiards: 'Bilardo',
@@ -48,11 +50,31 @@ export function ActivityChannelView({
   channel,
   className,
   onOpenChannels,
+  chatPanel,
+  participantsPanel,
+  chatOpen = false,
+  participantsOpen = false,
+  onToggleChat,
+  onToggleParticipants,
+  chatPanelWidth,
+  onChatPanelWidthChange,
+  participantsPanelWidth,
+  onParticipantsPanelWidthChange,
 }: {
   guildId: string;
   channel: ChannelSummary;
   className?: string;
   onOpenChannels?: () => void;
+  chatPanel?: ReactNode;
+  participantsPanel?: ReactNode;
+  chatOpen?: boolean;
+  participantsOpen?: boolean;
+  onToggleChat?: () => void;
+  onToggleParticipants?: () => void;
+  chatPanelWidth?: number;
+  onChatPanelWidthChange?: (w: number) => void;
+  participantsPanelWidth?: number;
+  onParticipantsPanelWidthChange?: (w: number) => void;
 }) {
   const { client, user } = useAuth();
   const voice = useVoiceSession();
@@ -137,6 +159,7 @@ export function ActivityChannelView({
     try {
       const s = await client.startActivity({ guildId, channelId });
       setSession(s);
+      trackGameJoin(s.kind, guildId);
     } catch (e) {
       // Aynı anda başka biri başlattıysa mevcut oturumu al
       const s = await refresh();
@@ -302,102 +325,114 @@ export function ActivityChannelView({
   );
   const kind: ActivityKind | null = session?.kind ?? null;
 
-  return (
-    <div
-      className={cn(
-        'flex h-full min-h-0 flex-col overflow-hidden bg-[#11131e]',
-        className,
+  const header = (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]">
+      {onOpenChannels && (
+        <button
+          type="button"
+          className="md:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-on-surface"
+          aria-label="Kanallar"
+          onClick={onOpenChannels}
+        >
+          <span className="material-symbols-outlined text-[20px]">menu</span>
+        </button>
       )}
-    >
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-container-highest bg-surface-container-low px-space-md py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]">
-        {onOpenChannels && (
-          <button
-            type="button"
-            className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
-            aria-label="Kanallar"
-            onClick={onOpenChannels}
-          >
-            <span className="material-symbols-outlined text-[20px]">menu</span>
-          </button>
-        )}
-        <span className="flex items-center gap-1.5 font-headline-md text-on-surface">
-          <span className="material-symbols-outlined text-[20px] text-[#bd93f9]">
-            {kind ? KIND_ICON[kind] : 'sports_esports'}
-          </span>
-          {channel.name}
+      <span className="flex min-w-0 items-center gap-1.5 font-headline-md text-on-surface">
+        <span className="material-symbols-outlined shrink-0 text-[20px] text-[#bd93f9]">
+          {kind ? KIND_ICON[kind] : 'sports_esports'}
         </span>
-        {session && (
+        <span className="truncate">{channel.name}</span>
+      </span>
+      {session && (
+        <>
+          <span className="hidden rounded-md bg-[#bd93f9]/15 px-2 py-0.5 font-label-sm uppercase text-[#bd93f9] sm:inline">
+            {KIND_LABEL[session.kind]}
+          </span>
+          <span className="hidden font-label-sm text-outline sm:inline">
+            {session.playerIds.length}/{session.maxPlayers} oyuncu
+            {session.spectatorIds.length > 0
+              ? ` · ${session.spectatorIds.length} izleyici`
+              : ''}
+          </span>
+        </>
+      )}
+      <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto sm:gap-2">
+        {session && !isMember && (
           <>
-            <span className="rounded-md bg-[#bd93f9]/15 px-2 py-0.5 font-label-sm uppercase text-[#bd93f9]">
-              {KIND_LABEL[session.kind]}
-            </span>
-            <span className="font-label-sm text-outline">
-              {session.playerIds.length}/{session.maxPlayers} oyuncu
-              {session.spectatorIds.length > 0 ? ` · ${session.spectatorIds.length} izleyici` : ''}
-            </span>
-          </>
-        )}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {session && !isMember && (
-            <>
-              {!full && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void join(false)}
-                  className="h-8 rounded-lg bg-[#bd93f9] px-3 font-label-sm text-[#11131e] disabled:opacity-50"
-                >
-                  {session.kind === 'watch_party' ? 'Katıl' : 'Oyuna katıl'}
-                </button>
-              )}
+            {!full && (
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void join(true)}
-                className="h-8 rounded-lg bg-surface-container-high px-3 font-label-sm text-on-surface disabled:opacity-50"
+                onClick={() => void join(false)}
+                className="h-8 rounded-lg bg-[#bd93f9] px-2.5 font-label-sm text-[#11131e] disabled:opacity-50 sm:px-3"
               >
-                İzle
+                {session.kind === 'watch_party' ? 'Katıl' : 'Katıl'}
               </button>
-            </>
-          )}
-          {session && isSpectator && !isPlayer && !full && session.kind !== 'watch_party' && (
+            )}
             <button
               type="button"
               disabled={busy}
-              onClick={() => void join(false)}
-              className="h-8 rounded-lg bg-[#bd93f9] px-3 font-label-sm text-[#11131e] disabled:opacity-50"
+              onClick={() => void join(true)}
+              className="h-8 rounded-lg bg-surface-container-high px-2.5 font-label-sm text-on-surface disabled:opacity-50 sm:px-3"
             >
-              Oyuna geç
+              İzle
             </button>
-          )}
-          {session && isMember && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void leave()}
-              className="h-8 rounded-lg px-3 font-label-sm text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
-            >
-              Ayrıl
-            </button>
-          )}
-          {session && isHost && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void end()}
-              className="h-8 rounded-lg px-3 font-label-sm text-error hover:bg-error/10 disabled:opacity-50"
-            >
-              Bitir
-            </button>
-          )}
-        </div>
-      </header>
+          </>
+        )}
+        {session && isSpectator && !isPlayer && !full && session.kind !== 'watch_party' && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void join(false)}
+            className="h-8 rounded-lg bg-[#bd93f9] px-2.5 font-label-sm text-[#11131e] disabled:opacity-50"
+          >
+            Oyuna geç
+          </button>
+        )}
+        {session && isMember && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void leave()}
+            className="h-8 rounded-lg px-2.5 font-label-sm text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
+          >
+            Ayrıl
+          </button>
+        )}
+        {session && isHost && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void end()}
+            className="h-8 rounded-lg px-2.5 font-label-sm text-error hover:bg-error/10 disabled:opacity-50"
+          >
+            Bitir
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
+  return (
+    <ActivityStageShell
+      className={className}
+      header={header}
+      chatPanel={chatPanel}
+      participantsPanel={participantsPanel}
+      chatOpen={chatOpen}
+      participantsOpen={participantsOpen}
+      onToggleChat={onToggleChat}
+      onToggleParticipants={onToggleParticipants}
+      chatPanelWidth={chatPanelWidth}
+      onChatPanelWidthChange={onChatPanelWidthChange}
+      participantsPanelWidth={participantsPanelWidth}
+      onParticipantsPanelWidthChange={onParticipantsPanelWidthChange}
+    >
       {error ? (
         <p className="shrink-0 bg-error/10 px-space-md py-1 font-body-sm text-error">{error}</p>
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center font-body-sm text-outline">
             Oda hazırlanıyor…
@@ -516,6 +551,6 @@ export function ActivityChannelView({
           </>
         )}
       </div>
-    </div>
+    </ActivityStageShell>
   );
 }

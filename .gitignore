@@ -30,6 +30,8 @@ coverage
 .DS_Store
 apps/desktop/out
 apps/desktop/release
+apps/desktop/ui
+apps/desktop-ui/dist
 apps/api/prisma/*.db
 *.tsbuildinfo
 .expo

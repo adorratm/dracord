@@ -1,0 +1,27 @@
+# Dracord
+
+> Dracord, Dracula temalı Türkçe topluluk sohbet platformudur. Metin kanalları, sesli odalar, ekran paylaşımı, müzik botu, oyun odaları (bilardo, okey, bowling, tavla, blackjack) ve watch party sunar.
+
+## Site
+- Ana site: https://dracord.com.tr
+- Giriş: https://dracord.com.tr/login
+- Gizlilik: https://dracord.com.tr/legal/privacy
+- Kullanım şartları: https://dracord.com.tr/legal/terms
+- KVKK: https://dracord.com.tr/legal/kvkk
+
+## Ürün
+- Web uygulaması (PWA benzeri deneyim)
+- Masaüstü: Windows (NSIS), macOS (DMG), Linux (AppImage) — Electron kabuğu
+- Marka / maskot: Draco
+- Dil: Türkçe arayüz (tr-TR)
+- Bölge: Türkiye
+
+## Özellikler
+- Sunucu, kanal, rol, davet
+- Sesli sohbet (LiveKit)
+- Oyun kanalları ve watch party
+- Keşfet (discoverable sunucular)
+
+## İletişim / varlık
+- Uygulama adı: Dracord
+- Schema.org: SocialNetworkingApplication

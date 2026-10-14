@@ -23,12 +23,20 @@ import {
   makeWoodMaterial,
 } from '../three/gameAssets';
 import { GameAudio } from '@/lib/game-audio';
-
-type Ball = { id: number; x: number; y: number; vx: number; vy: number; sunk?: boolean };
-type GroupKind = 'solid' | 'stripe';
-type GroupsMap = Record<string, GroupKind>;
-type PocketedMap = Record<string, number[]>;
-type Shot = { dx: number; dz: number; power: number; by: string; id: number };
+import {
+  type BilliardBall as Ball,
+  type BilliardGroupKind as GroupKind,
+  type BilliardGroupsMap as GroupsMap,
+  type BilliardPocketedMap as PocketedMap,
+  type BilliardShot as Shot,
+  billiardsBallGroup as ballGroup,
+  billiardsParseBalls as parseBalls,
+  billiardsParseGroups as parseGroups,
+  billiardsParsePocketed as parsePocketed,
+  billiardsParseShot as parseShot,
+  billiardsGroupCleared as groupCleared,
+  billiardsOpposite as opposite,
+} from '@dracord/game-core';
 
 type Body = {
   id: number;
@@ -97,12 +105,6 @@ function toNorm(x: number, z: number) {
   return { x: round4(x / W + 0.5), y: round4(z / D + 0.5) };
 }
 
-function ballGroup(id: number): GroupKind | 'eight' | 'cue' {
-  if (id === 0) return 'cue';
-  if (id === 8) return 'eight';
-  return id <= 7 ? 'solid' : 'stripe';
-}
-
 function defaultBalls(): Ball[] {
   const balls: Ball[] = [{ id: 0, ...toNorm(CUE_START.x, CUE_START.z), vx: 0, vy: 0 }];
   let k = 0;
@@ -115,63 +117,6 @@ function defaultBalls(): Ball[] {
     }
   }
   return balls;
-}
-
-function parseBalls(raw: unknown): Ball[] | null {
-  if (!Array.isArray(raw) || raw.length < 2) return null;
-  const out: Ball[] = [];
-  for (const b of raw) {
-    if (!b || typeof b !== 'object') return null;
-    const o = b as Record<string, unknown>;
-    const id = Number(o.id);
-    const x = Number(o.x);
-    const y = Number(o.y);
-    if (!Number.isInteger(id) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-    out.push({ id, x, y, vx: 0, vy: 0, sunk: Boolean(o.sunk) });
-  }
-  return out;
-}
-
-function parseGroups(raw: unknown): GroupsMap {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  const out: GroupsMap = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (v === 'solid' || v === 'stripe') out[k] = v;
-  }
-  return out;
-}
-
-function parsePocketed(raw: unknown): PocketedMap {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  const out: PocketedMap = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (!Array.isArray(v)) continue;
-    out[k] = v.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 15);
-  }
-  return out;
-}
-
-function parseShot(raw: unknown): Shot | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const o = raw as Record<string, unknown>;
-  const dx = Number(o.dx);
-  const dz = Number(o.dz);
-  const power = Number(o.power);
-  const by = typeof o.by === 'string' ? o.by : '';
-  const id = Number(o.id);
-  if (!by || !Number.isFinite(dx) || !Number.isFinite(dz) || !Number.isFinite(power)) return null;
-  if (!Number.isFinite(id)) return null;
-  return { dx, dz, power, by, id };
-}
-
-function groupCleared(balls: Ball[], group: GroupKind): boolean {
-  return balls
-    .filter((b) => ballGroup(b.id) === group)
-    .every((b) => b.sunk);
-}
-
-function opposite(g: GroupKind): GroupKind {
-  return g === 'solid' ? 'stripe' : 'solid';
 }
 
 export function BilliardsGame(props: GameProps) {
@@ -1521,12 +1466,14 @@ export function BilliardsGame(props: GameProps) {
   };
 
   return (
+    <div data-game-root className="absolute inset-0 min-h-0 max-w-[100vw] overflow-hidden">
     <ThreeSceneHost
       className="absolute inset-0 min-h-0 touch-none overflow-hidden"
       onReady={onReady}
     >
       <GameHud
         title="8-Top Bilardo"
+        lockLandscape
         status={statusText}
         meta={
           <div className="flex flex-wrap items-center gap-2">
@@ -1591,5 +1538,6 @@ export function BilliardsGame(props: GameProps) {
         )}
       </GameHud>
     </ThreeSceneHost>
+    </div>
   );
 }

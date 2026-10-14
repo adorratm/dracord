@@ -2,17 +2,54 @@
   "expo": {
     "name": "Dracord",
     "slug": "dracord",
-    "version": "0.0.1",
-    "orientation": "portrait",
+    "version": "0.1.0",
+    "orientation": "default",
     "scheme": "dracord",
     "userInterfaceStyle": "dark",
     "platforms": ["ios", "android"],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#11131e"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dracord.mobile"
+      "bundleIdentifier": "com.dracord.mobile",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Sesli odalarda konuşmak için mikrofon gerekir.",
+        "NSCameraUsageDescription": "Kamera ile görüntülü katılım için kullanılır.",
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
-      "package": "com.dracord.mobile"
+      "package": "com.dracord.mobile",
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "MODIFY_AUDIO_SETTINGS",
+        "INTERNET"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#11131e"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-video"
+    ],
+    "extra": {
+      "apiUrl": "https://api.dracord.com.tr",
+      "eas": {
+        "projectId": "replace-with-eas-project-id"
+      },
+      "router": {
+        "origin": false
+      }
     }
   }
 }

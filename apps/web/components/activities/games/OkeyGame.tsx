@@ -647,9 +647,11 @@ export function OkeyGame(props: GameProps) {
   }, [staged, okey]);
 
   return (
+    <div data-game-root className="absolute inset-0 min-h-0 max-w-[100vw] overflow-hidden">
     <ThreeSceneHost className="absolute inset-0 min-h-0 touch-none overflow-hidden" onReady={onReady}>
       <GameHud
         title="Okey 101"
+        lockLandscape
         status={statusText}
         error={error}
         meta={
@@ -749,6 +751,7 @@ export function OkeyGame(props: GameProps) {
         )}
       </GameHud>
     </ThreeSceneHost>
+    </div>
   );
 }
 

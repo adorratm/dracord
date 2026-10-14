@@ -1,15 +1,52 @@
 {
   "name": "@dracord/mobile",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
-  "main": "index.js",
+  "main": "expo-router/entry",
   "scripts": {
-    "dev": "echo \"Mobil uygulama henüz uygulanmadı — bkz. README.md\"",
-    "start": "echo \"Expo bağımlılıkları ertelendi (node-forge CVE). Mobil aktifleşince expo yeniden eklenecek.\"",
+    "dev": "expo start",
+    "start": "expo start",
+    "android": "expo run:android",
+    "android:run": "expo run:android",
+    "ios": "expo run:ios",
+    "ios:run": "expo run:ios",
+    "prebuild": "expo prebuild",
     "lint": "echo ok",
-    "build": "echo ok"
+    "build": "echo \"EAS build: eas build --platform all\""
+  },
+  "dependencies": {
+    "@dracord/app-theme": "workspace:*",
+    "@dracord/game-core": "workspace:*",
+    "@dracord/sdk": "workspace:*",
+    "@dracord/types": "workspace:*",
+    "@livekit/react-native": "^3.0.0",
+    "@livekit/react-native-webrtc": "^144.2.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.29",
+    "expo-constants": "~57.0.22",
+    "expo-dev-client": "~57.0.20",
+    "expo-gl": "~57.0.2",
+    "expo-image-picker": "~57.0.20",
+    "expo-linking": "~57.0.13",
+    "expo-router": "~57.0.27",
+    "expo-secure-store": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "expo-video": "~57.0.5",
+    "expo-web-browser": "~57.0.3",
+    "livekit-client": "^2.22.4",
+    "react": "19.3.1",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.2",
+    "react-native-svg": "15.15.5",
+    "react-native-worklets": "0.10.1",
+    "three": "^0.186.1"
   },
   "devDependencies": {
+    "@types/react": "~19.2.18",
+    "@types/three": "^0.186.0",
     "typescript": "^6.0.3"
   }
 }

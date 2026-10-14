@@ -13,11 +13,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/legal/kvkk',
     '/legal/cookies',
     '/legal/community',
+    '/llms.txt',
   ];
   return paths.map((path) => ({
     url: `${siteUrl}${path || '/'}`,
     lastModified: now,
     changeFrequency: path === '' ? 'weekly' : 'monthly',
-    priority: path === '' ? 1 : path.startsWith('/legal') ? 0.4 : 0.7,
+    priority: path === '' ? 1 : path.startsWith('/legal') ? 0.4 : path === '/llms.txt' ? 0.3 : 0.7,
   }));
 }

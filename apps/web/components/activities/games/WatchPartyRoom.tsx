@@ -292,16 +292,12 @@ export function WatchPartyRoom(props: Props) {
   };
 
   const toggleFullscreen = useCallback(async () => {
+    const { exitGameFullscreen } = await import('@/lib/game-fullscreen');
     if (document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        /* ignore */
-      }
+      await exitGameFullscreen();
       setCinemaMode('panel');
       return;
     }
-    // Shell mount olsun (duvar+dosya modundan da)
     setCinemaMode('fullscreen');
   }, []);
 
@@ -309,7 +305,9 @@ export function WatchPartyRoom(props: Props) {
     if (cinemaMode !== 'fullscreen') return;
     const el = cinemaShellRef.current;
     if (el && !document.fullscreenElement) {
-      void el.requestFullscreen().catch(() => undefined);
+      void import('@/lib/game-fullscreen').then(({ enterGameFullscreen }) => {
+        void enterGameFullscreen(el, { lockLandscape: true });
+      });
     }
   }, [cinemaMode, mediaUrl]);
 
@@ -687,8 +685,8 @@ export function WatchPartyRoom(props: Props) {
         : null;
 
   return (
-    <div className="absolute inset-0">
-      <ThreeSceneHost className="absolute inset-0" onReady={onReady}>
+    <div data-game-root className="absolute inset-0 min-h-0 max-w-[100vw] overflow-hidden">
+      <ThreeSceneHost className="absolute inset-0 min-h-0 overflow-hidden" onReady={onReady}>
         <div className="pointer-events-none absolute left-3 top-3 z-20 flex flex-col gap-1">
           <span className="inline-flex w-fit rounded-lg border border-[#bd93f9]/50 bg-[#11131e]/80 px-3 py-1 text-xs font-semibold text-[#f8f8f2]">
             Watch Party ·{' '}

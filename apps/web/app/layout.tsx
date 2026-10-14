@@ -105,10 +105,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     name: 'Dracord',
     url: siteUrl,
     applicationCategory: 'SocialNetworkingApplication',
-    operatingSystem: 'Web',
+    operatingSystem: 'Web, Windows, macOS, Linux',
     description: siteDescription,
     inLanguage: 'tr-TR',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'TRY' },
+    featureList: [
+      'Metin kanalları',
+      'Sesli odalar',
+      'Oyun odaları',
+      'Watch party',
+      'Müzik botu',
+      'Ekran paylaşımı',
+    ],
   };
 
   return (

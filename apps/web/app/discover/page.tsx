@@ -13,6 +13,7 @@ import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
 import { Draco } from '@/components/Draco';
 import { useGuildNav, invalidateGuildNavCache, prefetchGuildNav } from '@/hooks/useGuildNav';
+import { trackDiscoverJoin } from '@/lib/analytics';
 
 const CATEGORIES = [
   { id: 'all' as const, label: 'Ana Sayfa' },
@@ -169,6 +170,7 @@ export default function DiscoverPage() {
     setError(null);
     try {
       const joined = await client.joinDiscoverableGuild(g.id);
+      trackDiscoverJoin(joined.id);
       invalidateGuildNavCache(joined.id);
       const snap = await prefetchGuildNav(client, joined.id);
       const ch =
@@ -373,33 +375,27 @@ export default function DiscoverPage() {
                             className="text-left rounded-xl overflow-hidden bg-surface-container-low border border-surface-container-highest hover:border-outline-variant/40 transition-colors disabled:opacity-60"
                           >
                             <div
-                              className={cn(
-                                'h-28 w-full bg-cover bg-center',
-                                !g.bannerUrl &&
-                                  'bg-gradient-to-br from-primary-container/50 via-secondary-container/40 to-surface-container-highest',
-                              )}
-                              style={
-                                g.bannerUrl
-                                  ? { backgroundImage: `url(${g.bannerUrl})` }
-                                  : undefined
-                              }
+                              className="h-28 w-full bg-cover bg-center bg-surface-container-highest"
+                              style={{
+                                backgroundImage: `url(${g.bannerUrl || '/guild-banner-default.webp'})`,
+                              }}
                             />
-                            <div className="relative px-3 pb-3 pt-5">
-                              <div className="absolute -top-5 left-3 w-12 h-12 rounded-full bg-surface-container-high border-4 border-surface-container-low overflow-hidden flex items-center justify-center font-label-md text-on-surface">
+                            <div className="relative px-3 pb-3 pt-6">
+                              <div className="absolute -top-6 left-3 flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border-4 border-surface-container-low bg-surface-container-high font-label-md text-on-surface shadow-md">
                                 {g.iconUrl ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
                                     src={g.iconUrl}
                                     alt=""
-                                    className="w-full h-full object-cover"
+                                    className="h-full w-full object-cover"
                                   />
                                 ) : (
                                   guildInitials(g.name)
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="w-2 h-2 rounded-full bg-dracula-green shrink-0" />
-                                <p className="font-label-md text-on-surface truncate font-semibold">
+                              <div className="flex min-w-0 items-center gap-1.5 pl-14">
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-dracula-green" />
+                                <p className="truncate font-label-md font-semibold text-on-surface">
                                   {g.name}
                                 </p>
                               </div>

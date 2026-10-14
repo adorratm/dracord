@@ -1,41 +1,84 @@
 # @dracord/desktop
 
-Dracord için Electron masaüstü kabuğu. Geliştirmede yerel web uygulamasını (`http://localhost:3000`), üretimde `https://dracord.com.tr` adresini yükler.
+Dracord **tam native** Electron istemcisi (WebView / uzak site yok). Paketlenmiş [`apps/desktop-ui`](../desktop-ui): AppShell, zengin sohbet, Friends/DM, LiveKit ses+ekran, oyunlar, arama, bildirimler, sunucu yönetimi, ayarlar. Ortak mantık `@dracord/sdk` + `@dracord/game-core`.
+
+Parity: [`docs/native-parity-checklist.md`](../../docs/native-parity-checklist.md).
 
 ## Çalıştırma
 
-Önce web istemcisini başlatın:
-
 ```bash
-yarn web
-```
-
-Ardından masaüstü uygulamasını:
-
-```bash
+# Paketli UI ile (Vite gerekmez) — önerilen
 yarn desktop
+
+# Hot-reload: Vite + Electron birlikte
+yarn desktop:dev
 ```
+
+Pencere / taskbar / tray ikonu: `build/icon.png` + `build/icon.ico` (Draco maskotu). Yenilemek için:
+
+```bash
+yarn workspace @dracord/desktop icons
+```
+
+İsteğe bağlı API: `yarn api`.
 
 ## Ortam değişkenleri
 
 | Değişken | Açıklama |
 | --- | --- |
-| `DRACORD_APP_URL` | Yüklenecek URL (varsayılan: dev → `http://localhost:3000`, prod → `https://dracord.com.tr`) |
-| `DRACORD_ELECTRON_DEV` | `1` ise `NODE_ENV=production` olsa bile dev URL kullanılır |
-| `DRACORD_FRAMELESS` | `true` ise çerçevesiz pencere (`titleBarStyle: hidden`) |
-
-## OAuth (`dracord://`)
-
-Uygulama `dracord://` özel protokolünü kaydeder. Masaüstü girişinde web `intent=desktop` ile Google OAuth başlatır; API başarılı/2FA dönüşünü `dracord://oauth?…` olarak yönlendirir. Electron deep link’i `/auth/callback?electron=1&payload=…` adresine yükler. Windows’ta `second-instance`, macOS’ta `open-url` dinlenir.
-
-## Pencere kontrolleri
-
-`preload.js`, sayfaya `window.windowControls` API’sini açar (`minimize`, `maximize`, `close`). Özel başlık çubuğu kullanmak için `DRACORD_FRAMELESS=true` ile birlikte bu API’yi çağırın.
+| `DRACORD_APP_URL` | UI URL override (varsayılan: dev → `http://localhost:5173`) |
+| `DRACORD_ELECTRON_DEV` | `1` → production NODE_ENV’de bile Vite URL |
+| `DRACORD_FRAMELESS` | `true` → çerçevesiz pencere |
+| `VITE_API_URL` | desktop-ui API (varsayılan prod `https://api.dracord.com.tr`) |
 
 ## Paketleme
 
 ```bash
-yarn workspace @dracord/desktop build
+yarn workspace @dracord/desktop build:win   # veya build:mac / build:linux
 ```
 
-Çıktılar `apps/desktop/release` altında oluşur.
+`prebuild`: `desktop-ui` derlenir → `apps/desktop/ui/` kopyalanır → `electron-builder` paketler. Prod’da `loadFile(ui/index.html)` (HashRouter).
+
+Çıktılar: `apps/desktop/release/`.
+
+## Kod imzalama
+
+`electron-builder` ortam değişkenlerini okur.
+
+### Windows (Authenticode)
+
+| Değişken | Açıklama |
+| --- | --- |
+| `CSC_LINK` | `.pfx` yolu veya base64 |
+| `CSC_KEY_PASSWORD` | PFX şifresi |
+
+### macOS (Developer ID + Notarize)
+
+| Değişken | Açıklama |
+| --- | --- |
+| `CSC_LINK` / Keychain identity | Developer ID Application |
+| `APPLE_ID` | Apple ID e-posta |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
+| `APPLE_TEAM_ID` | Team ID |
+
+### Linux
+
+AppImage için imza zorunlu değil.
+
+## OAuth (`dracord://`)
+
+Protokol kaydı + deep link → HashRouter `/auth/callback?electron=1&payload=…`. Tray: kapatınca gizle (tercih `system-prefs` IPC).
+
+## Parity (masaüstü)
+
+| Özellik | Durum |
+| --- | --- |
+| Login / session | Evet |
+| Guilds + text | Evet |
+| DMs | Evet |
+| Voice + ekran paylaşımı* | Ses Evet; ekran paylaşımı LiveKit ile genişletilebilir |
+| Oyunlar (game-core + Three) | Evet |
+| Watch party | Activity paneli üzerinden |
+| Keşfet / ayarlar | Evet |
+
+\* Tam ekran paylaşımı web LiveKit ile aynı Chromium yığını üzerindedir.

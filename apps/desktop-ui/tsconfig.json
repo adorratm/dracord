@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/lib/game-audio": ["../web/lib/game-audio.ts"],
+      "@/lib/game-fullscreen": ["../web/lib/game-fullscreen.ts"],
+      "@/lib/dealer-voice": ["../web/lib/dealer-voice.ts"],
+      "@/lib/dealer-lines": ["../web/lib/dealer-lines.ts"],
+      "@/lib/watch-party-media": ["../web/lib/watch-party-media.ts"],
+      "@/lib/analytics": ["src/lib/analytics-stub.ts"],
+      "@/components/activities/games/WatchEmbedPlayer": [
+        "../web/components/activities/games/WatchEmbedPlayer.tsx"
+      ],
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src", "src/vite-env.d.ts"]
+}

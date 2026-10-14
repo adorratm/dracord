@@ -272,10 +272,12 @@ export class DracordClient {
     return this.request('/auth/2fa/setup', { method: 'DELETE' });
   }
 
-  getGoogleLoginUrl(intent: 'web' | 'admin' | 'desktop' = 'web') {
+  getGoogleLoginUrl(intent: 'web' | 'admin' | 'desktop' | 'mobile' = 'web') {
     const url = new URL(`${this.baseUrl}/auth/google`);
-    if (intent === 'admin' || intent === 'desktop') {
-      url.searchParams.set('intent', intent);
+    // mobile → aynı dracord:// deep link (desktop intent)
+    const resolved = intent === 'mobile' ? 'desktop' : intent;
+    if (resolved === 'admin' || resolved === 'desktop') {
+      url.searchParams.set('intent', resolved);
     }
     return url.toString();
   }
@@ -1078,15 +1080,18 @@ export class DracordClient {
   }
 
   async uploadFile(file: File, folder = 'attachments'): Promise<MessageAttachment> {
+    const { ensureWebpUpload } = await import('./to-webp');
+    const payload = await ensureWebpUpload(file);
+    const contentType = payload.type || 'application/octet-stream';
     const presign = await this.presignUpload({
-      filename: file.name,
-      contentType: file.type || 'application/octet-stream',
+      filename: payload.name,
+      contentType,
       folder,
     });
     const put = await fetch(presign.uploadUrl, {
       method: 'PUT',
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      body: file,
+      headers: { 'Content-Type': contentType },
+      body: payload,
     });
     if (!put.ok) {
       throw new Error(`Yükleme başarısız (${put.status})`);
@@ -1094,9 +1099,9 @@ export class DracordClient {
     return {
       id: presign.key,
       url: presign.publicUrl,
-      filename: file.name,
-      contentType: file.type || 'application/octet-stream',
-      size: file.size,
+      filename: payload.name,
+      contentType,
+      size: payload.size,
     };
   }
 

@@ -39,8 +39,10 @@ const OFFLINE_GRACE_MS = 25_000;
     origin: [
       'http://localhost:3000',
       'http://localhost:3001',
+      'http://localhost:5173',
       'https://dracord.com.tr',
       'https://www.dracord.com.tr',
+      'https://admin.dracord.com.tr',
     ],
     credentials: true,
   },

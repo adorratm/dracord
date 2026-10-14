@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 
 export interface ModalProps {
@@ -13,8 +14,24 @@ export interface ModalProps {
 }
 
 export function Modal({ open, title, onClose, children, footer, className }: ModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[220] flex items-end sm:items-center justify-center p-0 sm:p-space-md">
       <button
         type="button"
@@ -49,6 +66,7 @@ export function Modal({ open, title, onClose, children, footer, className }: Mod
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

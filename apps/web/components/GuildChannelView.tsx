@@ -2625,6 +2625,128 @@ export function GuildChannelView({
           channel={channel}
           className="flex-1 min-w-0 min-h-0"
           onOpenChannels={() => setChannelsOpen(true)}
+          chatOpen={chatOpen}
+          participantsOpen={participantsOpen}
+          chatPanelWidth={voiceChatWidth}
+          onChatPanelWidthChange={setVoiceChatWidth}
+          participantsPanelWidth={voicePartsWidth}
+          onParticipantsPanelWidthChange={setVoicePartsWidth}
+          onToggleChat={() => {
+            setChatOpen((v) => {
+              const next = !v;
+              if (next) {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.matchMedia('(max-width: 767px)').matches
+                ) {
+                  setParticipantsOpen(false);
+                }
+                if (!voiceChatChannelId) {
+                  const text = channels.find((c) => c.type === 'TEXT');
+                  if (text) setVoiceChatChannelId(text.id);
+                }
+              }
+              return next;
+            });
+          }}
+          onToggleParticipants={() => {
+            setParticipantsOpen((v) => {
+              const next = !v;
+              if (
+                next &&
+                typeof window !== 'undefined' &&
+                window.matchMedia('(max-width: 767px)').matches
+              ) {
+                setChatOpen(false);
+              }
+              return next;
+            });
+          }}
+          chatPanel={
+            chatOpen ? (
+              <VoiceSideChat
+                guildId={guildId}
+                textChannels={channels.filter((c) => c.type === 'TEXT')}
+                channelId={voiceChatChannelId}
+                onChannelIdChange={setVoiceChatChannelId}
+                onClose={() => setChatOpen(false)}
+                onOpenDm={() => {
+                  setParticipantsOpen(true);
+                  setDmError('Üye listesinden birine tıklayarak DM aç');
+                }}
+              />
+            ) : undefined
+          }
+          participantsPanel={
+            participantsOpen ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="flex items-center justify-between gap-2 border-b border-surface-container-high px-space-md py-space-sm">
+                  <p className="font-label-sm uppercase tracking-wide text-outline">
+                    Odadakiler
+                  </p>
+                  <button
+                    type="button"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-outline hover:bg-surface-container"
+                    aria-label="Üyeleri kapat"
+                    onClick={() => setParticipantsOpen(false)}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+                </div>
+                <ul className="flex-1 space-y-space-sm overflow-y-auto p-space-sm">
+                  {voice.participants.map((p) => {
+                    const isLocal = p.id === user?.id;
+                    const m = guildMembers.find((g) => g.id === p.id);
+                    const avatarUrl =
+                      p.avatarUrl || m?.avatarUrl || (isLocal ? user?.avatarUrl : null);
+                    const vol = voice.participantVolumes[p.id] ?? 100;
+                    return (
+                      <li
+                        key={p.id}
+                        className="box-border w-full rounded-lg bg-surface-container px-space-sm py-space-sm"
+                      >
+                        <div className="flex min-w-0 items-center gap-space-sm">
+                          <Avatar
+                            displayName={p.displayName}
+                            imageUrl={avatarUrl}
+                            size="sm"
+                            statusRing={false}
+                          />
+                          <span className="min-w-0 flex-1 truncate font-body-sm text-on-surface">
+                            {p.displayName}
+                            {isLocal ? ' (sen)' : ''}
+                          </span>
+                          {p.muted && (
+                            <span className="material-symbols-outlined text-[16px] text-error">
+                              mic_off
+                            </span>
+                          )}
+                        </div>
+                        {!isLocal && (
+                          <label className="mt-space-xs flex items-center gap-space-xs">
+                            <span className="material-symbols-outlined text-[16px] text-outline">
+                              {vol === 0 ? 'volume_off' : 'volume_up'}
+                            </span>
+                            <VolumeSlider
+                              value={vol}
+                              aria-label={`${p.displayName} ses`}
+                              onChange={(v) => voice.setParticipantVolume(p.id, v)}
+                            />
+                            <span className="w-7 text-right font-label-sm tabular-nums text-outline">
+                              {vol}
+                            </span>
+                          </label>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="max-h-[45%] min-h-0 overflow-y-auto border-t border-surface-container-high">
+                  <MemberList groups={memberGroups} className="w-full" />
+                </div>
+              </div>
+            ) : undefined
+          }
         />
       ) : showingVoiceStage ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
@@ -3398,12 +3520,15 @@ export function GuildChannelView({
           )}
 
           <div className="relative h-28 rounded-xl overflow-hidden bg-surface-container-highest border border-surface-container-high">
-            {guild?.bannerUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={guild.bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-outline font-label-sm">
-                Kapak görseli yok
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={guild?.bannerUrl || '/guild-banner-default.webp'}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            {!guild?.bannerUrl && (
+              <div className="absolute inset-x-0 bottom-0 bg-black/45 px-2 py-1 font-label-sm text-white/90">
+                Varsayılan kapak · özel görsel yükleyebilirsin
               </div>
             )}
             <label className="absolute right-2 bottom-2 h-8 px-space-sm rounded-lg bg-black/60 text-white font-label-sm flex items-center gap-1 cursor-pointer hover:bg-black/75">

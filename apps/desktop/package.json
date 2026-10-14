@@ -1,44 +1,105 @@
 {
   "name": "@dracord/desktop",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
+  "description": "Dracord native masaüstü istemcisi (Electron + desktop-ui)",
+  "author": "Dracord",
   "main": "main.js",
   "scripts": {
-    "dev": "electron .",
-    "start": "electron .",
-    "build": "electron-builder",
+    "icons": "node ./scripts/make-icons.js",
+    "ensure-ui": "node ./scripts/ensure-ui.js",
+    "electron:dev": "node ./scripts/make-icons.js && electron .",
+    "dev": "node ./scripts/dev.js",
+    "start": "node ./scripts/make-icons.js && node ./scripts/ensure-ui.js && electron .",
+    "prebuild": "node ./scripts/make-icons.js && yarn workspace @dracord/desktop-ui build && node ./scripts/copy-ui.js",
+    "build": "electron-builder --publish never",
+    "build:win": "yarn prebuild && electron-builder --win --publish never",
+    "build:mac": "yarn prebuild && electron-builder --mac --publish never",
+    "build:linux": "yarn prebuild && electron-builder --linux --publish never",
     "lint": "echo ok"
   },
   "devDependencies": {
-    "electron": "^44.7.0",
-    "electron-builder": "^26.17.0"
+    "electron": "^44.7.2",
+    "electron-builder": "^26.17.0",
+    "png-to-ico": "^3.0.2"
   },
   "build": {
     "appId": "com.dracord.desktop",
     "productName": "Dracord",
+    "copyright": "Copyright © Dracord",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "main.js",
       "preload.js",
-      "package.json"
+      "package.json",
+      "ui/**/*",
+      "build/icon.png",
+      "build/icon.ico"
     ],
+    "extraResources": [],
+    "icon": "build/icon.png",
+    "extraMetadata": {
+      "main": "main.js"
+    },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
-        "nsis"
-      ]
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Dracord-Setup-${version}.${ext}",
+      "publisherName": "Dracord"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dracord"
     },
     "mac": {
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
-      "category": "public.app-category.social-networking"
+      "category": "public.app-category.social-networking",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "artifactName": "Dracord-${version}-mac.${ext}"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "linux": {
       "target": [
         "AppImage"
-      ]
+      ],
+      "category": "Network",
+      "artifactName": "Dracord-${version}-linux.${ext}"
     },
     "protocols": [
       {

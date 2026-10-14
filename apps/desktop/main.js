@@ -1,41 +1,201 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  Tray,
+  Menu,
+  nativeImage,
+  session,
+} = require('electron');
 const path = require('path');
+const fs = require('fs');
 
-const isDev =
-  process.env.NODE_ENV !== 'production' || process.env.DRACORD_ELECTRON_DEV === '1';
+// Electron varsayılan cache klasörü Windows'ta kilitlenebiliyor (Access denied).
+// ready olmadan önce ayrı userData + GPU disk cache kapat.
+app.setName('Dracord');
+try {
+  app.setPath('userData', path.join(app.getPath('appData'), 'Dracord'));
+} catch {
+  // ignore
+}
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-gpu-program-cache');
+app.commandLine.appendSwitch('disk-cache-size', '1');
 
-const appUrl =
-  process.env.DRACORD_APP_URL ||
-  (isDev ? 'http://localhost:3000' : 'https://dracord.com.tr');
+/**
+ * Renderer origin (localhost:5173 / file://) prod CORS allowlist'te değil → Failed to fetch.
+ * API isteklerinde Origin'i web istemcisi gibi gönder.
+ */
+function registerApiOriginBridge() {
+  const filter = {
+    urls: [
+      'https://api.dracord.com.tr/*',
+      'http://localhost:4000/*',
+      'http://127.0.0.1:4000/*',
+    ],
+  };
+  session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+    callback({
+      requestHeaders: {
+        ...details.requestHeaders,
+        Origin: 'https://dracord.com.tr',
+      },
+    });
+  });
+}
+
+/** Sadece açıkça istenirse Vite; aksi halde paketli ui/ (ERR_CONNECTION_REFUSED önlenir) */
+const preferVite = process.env.DRACORD_ELECTRON_DEV === '1';
 
 const frameless = process.env.DRACORD_FRAMELESS === 'true';
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
+/** @type {Tray | null} */
+let tray = null;
+/** @type {boolean} */
+let trayEnabled = true;
 
-function resolveAppUrlFromDeepLink(rawUrl) {
-  if (!rawUrl || !rawUrl.startsWith('dracord://')) {
-    return null;
+function resolveAppIconPath() {
+  const candidates = [
+    path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    path.join(__dirname, 'build', 'icon.png'),
+    path.join(__dirname, 'icon.png'),
+  ];
+  return candidates.find((p) => fs.existsSync(p)) ?? null;
+}
+
+function loadAppIcon() {
+  const iconPath = resolveAppIconPath();
+  if (!iconPath) return undefined;
+  const img = nativeImage.createFromPath(iconPath);
+  return img.isEmpty() ? undefined : img;
+}
+
+function resolveLocalUiFile() {
+  const candidates = [
+    path.join(__dirname, 'ui', 'index.html'),
+    path.join(__dirname, '..', 'desktop-ui', 'dist', 'index.html'),
+    path.join(process.resourcesPath || __dirname, 'ui', 'index.html'),
+  ];
+  return candidates.find((p) => fs.existsSync(p)) ?? null;
+}
+
+function probeUrl(url, timeoutMs = 600) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const lib = u.protocol === 'https:' ? require('https') : require('http');
+      const req = lib.get(url, { timeout: timeoutMs }, (res) => {
+        res.resume();
+        resolve(true);
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function resolveUiEntry() {
+  if (process.env.DRACORD_APP_URL) {
+    return { type: 'url', value: process.env.DRACORD_APP_URL };
   }
-  // dracord://oauth?accessToken=…&refreshToken=… → web /auth/callback
-  const payload = rawUrl.replace(/^dracord:\/\//, '');
-  const base = appUrl.replace(/\/$/, '');
-  return `${base}/auth/callback?electron=1&payload=${encodeURIComponent(payload)}`;
+  if (preferVite) {
+    const vite = 'http://127.0.0.1:5173';
+    if (await probeUrl(vite)) return { type: 'url', value: vite };
+    const file = resolveLocalUiFile();
+    if (file) {
+      console.warn('Vite 5173 kapalı — paketli ui/ yükleniyor');
+      return { type: 'file', value: file };
+    }
+    return { type: 'url', value: vite };
+  }
+  const file = resolveLocalUiFile();
+  if (file) return { type: 'file', value: file };
+  const vite = 'http://127.0.0.1:5173';
+  if (await probeUrl(vite)) return { type: 'url', value: vite };
+  return { type: 'file', value: path.join(__dirname, 'ui', 'index.html') };
+}
+
+function applyUiEntry(win, entry) {
+  if (entry.type === 'file') {
+    void win.loadFile(entry.value);
+  } else {
+    void win.loadURL(entry.value);
+  }
+}
+
+function loadUi(win) {
+  void resolveUiEntry().then((entry) => applyUiEntry(win, entry));
 }
 
 function handleDeepLink(rawUrl) {
-  const target = resolveAppUrlFromDeepLink(rawUrl);
-  if (!target) return;
+  if (!rawUrl || !rawUrl.startsWith('dracord://')) return;
+  const payload = rawUrl.replace(/^dracord:\/\//, '');
+  const hash = `/auth/callback?electron=1&payload=${encodeURIComponent(payload)}`;
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
-    void mainWindow.loadURL(target);
-  } else {
-    shell.openExternal(target);
+    void resolveUiEntry().then((entry) => {
+      if (entry.type === 'file') {
+        void mainWindow.loadFile(entry.value, { hash });
+      } else {
+        void mainWindow.loadURL(`${entry.value.replace(/\/$/, '')}/#${hash}`);
+      }
+    });
   }
 }
 
+function createTray() {
+  if (tray) return;
+  const base = loadAppIcon() ?? nativeImage.createEmpty();
+  const trayImg = base.isEmpty()
+    ? nativeImage.createFromDataURL(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      )
+    : base.resize({
+        width: process.platform === 'darwin' ? 22 : 32,
+        height: process.platform === 'darwin' ? 22 : 32,
+      });
+  tray = new Tray(trayImg);
+  tray.setToolTip('Dracord');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Göster',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+          } else createWindow();
+        },
+      },
+      {
+        label: 'Çıkış',
+        click: () => {
+          trayEnabled = false;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 function createWindow() {
+  const icon = loadAppIcon();
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -43,7 +203,9 @@ function createWindow() {
     minHeight: 640,
     frame: !frameless,
     titleBarStyle: frameless ? 'hidden' : 'default',
-    backgroundColor: '#282a36',
+    backgroundColor: '#11131e',
+    title: 'Dracord',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -52,11 +214,35 @@ function createWindow() {
     },
   });
 
-  void mainWindow.loadURL(appUrl);
+  if (icon && process.platform === 'darwin') {
+    app.dock?.setIcon(icon);
+  }
+
+  loadUi(mainWindow);
+
+  // Renderer crash / blank screen teşhisi (DRACORD_DEBUG=1)
+  if (process.env.DRACORD_DEBUG === '1') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.webContents.on('console-message', (event) => {
+      console.log('[renderer]', event.message);
+    });
+    mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+      console.error('[did-fail-load]', code, desc, url);
+    });
+  }
+
+  mainWindow.on('close', (e) => {
+    if (trayEnabled && tray) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  createTray();
 }
 
 function registerProtocol() {
@@ -90,7 +276,6 @@ function registerWindowIpc() {
   ipcMain.on('window-close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
-    // minimizeToTray tercihini web gönderir; yoksa kapat
     if (trayEnabled) {
       win.hide();
     } else {
@@ -112,9 +297,6 @@ function registerWindowIpc() {
   });
 }
 
-/** @type {boolean} */
-let trayEnabled = true;
-
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -125,11 +307,16 @@ if (!gotLock) {
     if (deepLink) handleDeepLink(deepLink);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
       mainWindow.focus();
     }
   });
 
   app.whenReady().then(() => {
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('com.dracord.desktop');
+    }
+    registerApiOriginBridge();
     registerProtocol();
     registerWindowIpc();
     createWindow();
@@ -137,6 +324,8 @@ if (!gotLock) {
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
+      } else if (mainWindow) {
+        mainWindow.show();
       }
     });
   });
@@ -150,5 +339,9 @@ if (!gotLock) {
     if (process.platform !== 'darwin') {
       app.quit();
     }
+  });
+
+  app.on('before-quit', () => {
+    trayEnabled = false;
   });
 }

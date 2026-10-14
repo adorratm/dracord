@@ -13,7 +13,10 @@
     "web": "yarn workspace @dracord/web dev",
     "admin": "yarn workspace @dracord/admin dev",
     "api": "yarn workspace @dracord/api start:dev",
-    "desktop": "yarn workspace @dracord/desktop dev",
+    "desktop": "yarn workspace @dracord/desktop start",
+    "desktop:dev": "yarn workspace @dracord/desktop dev",
+    "desktop-ui": "yarn workspace @dracord/desktop-ui dev",
+    "mobile": "yarn workspace @dracord/mobile dev",
     "db:generate": "echo \"TypeORM: no client generation step\"",
     "db:migrate": "echo \"TypeORM synchronize on boot (non-production)\"",
     "db:seed": "yarn workspace @dracord/api db:seed",
@@ -25,15 +28,15 @@
     "search:reindex": "yarn workspace @dracord/api search:reindex"
   },
   "devDependencies": {
-    "turbo": "^2.11.7",
+    "turbo": "^2.11.8",
     "typescript": "^6.0.3"
   },
   "volta": {
-    "node": "26.11.1",
+    "node": "26.12.0",
     "yarn": "4.18.1"
   },
   "dependencies": {
-    "framer-motion": "^13.5.1"
+    "framer-motion": "^14.2.0"
   },
   "resolutions": {
     "uuid": "11.1.1",

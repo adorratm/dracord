@@ -9,6 +9,7 @@ function parseCorsOrigins(raw: string | undefined): string[] {
   const defaults = [
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:5173', // desktop-ui (Vite)
     'https://dracord.com.tr',
     'https://www.dracord.com.tr',
     'https://admin.dracord.com.tr',
@@ -35,8 +36,16 @@ async function bootstrap() {
     }),
   );
 
+  const allowedOrigins = parseCorsOrigins(config.get<string>('CORS_ORIGINS'));
   app.enableCors({
-    origin: parseCorsOrigins(config.get<string>('CORS_ORIGINS')),
+    // Electron file:// / native istemciler Origin göndermeyebilir
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   });
 

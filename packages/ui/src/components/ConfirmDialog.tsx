@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 
 export interface ConfirmDialogProps {
@@ -26,10 +27,20 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  if (!open) return null;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onCancel]);
 
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-space-md">
+  if (!open) return null;
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[230] flex items-center justify-center p-space-md">
       <button
         type="button"
         className="absolute inset-0 bg-black/70"
@@ -47,7 +58,9 @@ export function ConfirmDialog({
             <span
               className={cn(
                 'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-                danger ? 'bg-error-container text-on-error-container' : 'bg-surface-container-highest text-on-surface',
+                danger
+                  ? 'bg-error-container text-on-error-container'
+                  : 'bg-surface-container-highest text-on-surface',
               )}
             >
               <span className="material-symbols-outlined text-[22px]">
@@ -90,6 +103,7 @@ export function ConfirmDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -11,14 +11,14 @@
   },
   "dependencies": {
     "@dracord/types": "workspace:*",
-    "@livekit/rtc-ffi-bindings": "0.12.82",
+    "@livekit/rtc-ffi-bindings": "0.12.83",
     "@livekit/rtc-node": "^1.1.0",
-    "bullmq": "^6.3.12",
-    "dotenv": "^18.0.7",
+    "bullmq": "^6.3.15",
+    "dotenv": "^18.0.8",
     "ioredis": "^6.0.0"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }

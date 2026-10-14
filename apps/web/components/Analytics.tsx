@@ -31,6 +31,7 @@ export function Analytics() {
     function gtag(...args: unknown[]) {
       window.dataLayer.push(args);
     }
+    window.gtag = gtag;
     gtag('js', new Date());
     gtag('config', GA_ID, { anonymize_ip: true });
   }, [enabled]);
@@ -41,5 +42,6 @@ export function Analytics() {
 declare global {
   interface Window {
     dataLayer: unknown[];
+    gtag?: (...args: unknown[]) => void;
   }
 }

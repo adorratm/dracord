@@ -28,35 +28,23 @@ import {
   warmDealerVoices,
 } from '@/lib/dealer-voice';
 import { dealerLine } from '@/lib/dealer-lines';
-
-type Phase = 'idle' | 'dealing' | 'play' | 'dealer' | 'result';
-type SeatStatus = 'idle' | 'playing' | 'stand' | 'bust' | 'blackjack' | 'done';
-
-type Seat = {
-  cards: number[];
-  status: SeatStatus;
-  bet: number;
-  result?: 'win' | 'lose' | 'push' | 'blackjack';
-};
-
-type BjState = {
-  phase: Phase;
-  deck: number[];
-  dealer: number[];
-  holeHidden: boolean;
-  seats: Record<string, Seat>;
-  turn: string | null;
-  round: number;
-  bank: Record<string, number>;
-  pendingBets: Record<string, number>;
-  /** Tur sonu otomatik devam (ms epoch) */
-  resultUntil: number | null;
-};
-
-const START_BANK = 1000;
-const BET_OPTIONS = [10, 25, 50, 100, 250] as const;
-const DEFAULT_BET = 25;
-const RESULT_MS = 5000;
+import {
+  type BjPhase as Phase,
+  type BjSeat as Seat,
+  type BjSeatStatus as SeatStatus,
+  type BjState,
+  BJ_START_BANK as START_BANK,
+  BJ_BET_OPTIONS as BET_OPTIONS,
+  BJ_DEFAULT_BET as DEFAULT_BET,
+  BJ_RESULT_MS as RESULT_MS,
+  bjHandValue as handValue,
+  bjShuffle as shuffle,
+  bjDraw as draw,
+  bjEmptySeat as emptySeat,
+  bjParseState as parseState,
+  bjNextPlayer as nextPlayer,
+  bjSettle as settle,
+} from '@dracord/game-core';
 
 type CardAnim = {
   mesh: Mesh;
@@ -82,155 +70,6 @@ const CAM_Y = 5.35;
 const CAM_Z = 7.45;
 const LOOK_Y = 0.12;
 const LOOK_Z = -1.05;
-
-function handValue(cards: number[]): { total: number; soft: boolean } {
-  let total = 0;
-  let aces = 0;
-  for (const c of cards) {
-    const r = c % 13;
-    if (r === 0) {
-      aces += 1;
-      total += 11;
-    } else if (r >= 10) total += 10;
-    else total += r + 1;
-  }
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces -= 1;
-  }
-  return { total, soft: aces > 0 && total <= 21 };
-}
-
-function shuffle(): number[] {
-  const d = Array.from({ length: 52 }, (_, i) => i);
-  for (let i = d.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const t = d[i]!;
-    d[i] = d[j]!;
-    d[j] = t;
-  }
-  return d;
-}
-
-function draw(deck: number[], n: number): { cards: number[]; deck: number[] } {
-  return { cards: deck.slice(0, n), deck: deck.slice(n) };
-}
-
-function emptySeat(bet = 0): Seat {
-  return { cards: [], status: 'idle', bet };
-}
-
-function parseBank(raw: unknown, playerIds: string[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  const src =
-    raw && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
-  for (const pid of playerIds) {
-    const n = Number(src[pid]);
-    out[pid] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : START_BANK;
-  }
-  return out;
-}
-
-function parseBets(raw: unknown, playerIds: string[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  const src =
-    raw && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
-  for (const pid of playerIds) {
-    const n = Number(src[pid]);
-    out[pid] = Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_BET;
-  }
-  return out;
-}
-
-function parseState(raw: Record<string, unknown>, playerIds: string[]): BjState {
-  const phase = (['idle', 'dealing', 'play', 'dealer', 'result'] as const).includes(
-    raw.phase as Phase,
-  )
-    ? (raw.phase as Phase)
-    : 'idle';
-  const deck = Array.isArray(raw.deck) ? raw.deck.map(Number).filter((n) => n >= 0 && n < 52) : [];
-  const dealer = Array.isArray(raw.dealer)
-    ? raw.dealer.map(Number).filter((n) => n >= 0 && n < 52)
-    : [];
-  const holeHidden = Boolean(raw.holeHidden ?? true);
-  const turn = typeof raw.turn === 'string' ? raw.turn : null;
-  const round = Number(raw.round ?? 0) || 0;
-  const resultUntil =
-    typeof raw.resultUntil === 'number' && Number.isFinite(raw.resultUntil)
-      ? raw.resultUntil
-      : null;
-  const bank = parseBank(raw.bank, playerIds);
-  const pendingBets = parseBets(raw.pendingBets, playerIds);
-  const seatsRaw =
-    raw.seats && typeof raw.seats === 'object' && !Array.isArray(raw.seats)
-      ? (raw.seats as Record<string, unknown>)
-      : {};
-  const seats: Record<string, Seat> = {};
-  for (const pid of playerIds) {
-    const s = seatsRaw[pid];
-    if (s && typeof s === 'object' && !Array.isArray(s)) {
-      const o = s as Record<string, unknown>;
-      const cards = Array.isArray(o.cards)
-        ? o.cards.map(Number).filter((n) => n >= 0 && n < 52)
-        : [];
-      const status = (o.status as SeatStatus) || 'idle';
-      const result = o.result as Seat['result'];
-      const bet = Math.max(0, Math.floor(Number(o.bet) || 0));
-      seats[pid] = { cards, status, bet, ...(result ? { result } : {}) };
-    } else {
-      seats[pid] = emptySeat(pendingBets[pid] ?? DEFAULT_BET);
-    }
-  }
-  return { phase, deck, dealer, holeHidden, seats, turn, round, bank, pendingBets, resultUntil };
-}
-
-function nextPlayer(playerIds: string[], seats: Record<string, Seat>, after: string | null) {
-  const start = after ? playerIds.indexOf(after) + 1 : 0;
-  for (let i = 0; i < playerIds.length; i++) {
-    const id = playerIds[(start + i) % playerIds.length]!;
-    if (seats[id]?.status === 'playing') return id;
-  }
-  return null;
-}
-
-function settle(
-  dealerCards: number[],
-  seats: Record<string, Seat>,
-  bank: Record<string, number>,
-): { seats: Record<string, Seat>; bank: Record<string, number> } {
-  const d = handValue(dealerCards).total;
-  const dealerBust = d > 21;
-  const nextSeats = { ...seats };
-  const nextBank = { ...bank };
-  for (const [pid, seat] of Object.entries(seats)) {
-    const bet = Math.max(0, seat.bet || 0);
-    if (seat.status === 'blackjack') {
-      const dealerBj = dealerCards.length === 2 && d === 21;
-      const result: Seat['result'] = dealerBj ? 'push' : 'blackjack';
-      nextSeats[pid] = { ...seat, status: 'done', result };
-      if (result === 'blackjack') nextBank[pid] = (nextBank[pid] ?? 0) + bet + Math.floor(bet * 1.5);
-      else nextBank[pid] = (nextBank[pid] ?? 0) + bet;
-      continue;
-    }
-    if (seat.status === 'bust') {
-      nextSeats[pid] = { ...seat, status: 'done', result: 'lose' };
-      continue;
-    }
-    const p = handValue(seat.cards).total;
-    let result: Seat['result'] = 'lose';
-    if (dealerBust) result = 'win';
-    else if (p > d) result = 'win';
-    else if (p === d) result = 'push';
-    nextSeats[pid] = { ...seat, status: 'done', result };
-    if (result === 'win') nextBank[pid] = (nextBank[pid] ?? 0) + bet * 2;
-    else if (result === 'push') nextBank[pid] = (nextBank[pid] ?? 0) + bet;
-  }
-  return { seats: nextSeats, bank: nextBank };
-}
 
 type SceneCtl = {
   applyState: (st: BjState, playerIds: string[], labels: Record<string, string>) => void;
@@ -293,8 +132,8 @@ export function BlackjackGame(props: GameProps) {
     const players = p.session.playerIds.slice(0, 4);
     if (players.length < 1) return;
 
-    let bank = parseBank(cur.bank, players);
-    const pending = parseBets(cur.pendingBets, players);
+    let bank = { ...cur.bank };
+    const pending = { ...cur.pendingBets };
     // Chip'i bitenlere min chip ver
     for (const pid of players) {
       if ((bank[pid] ?? 0) < BET_OPTIONS[0]) bank[pid] = START_BANK;
@@ -1144,10 +983,14 @@ export function BlackjackGame(props: GameProps) {
   }, []);
 
   return (
-    <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden bg-[#0c080a]">
-      <ThreeSceneHost className="absolute inset-0" onReady={onReady} />
+    <div
+      data-game-root
+      className="absolute inset-0 flex min-h-0 max-w-[100vw] flex-col overflow-hidden bg-[#0c080a]"
+    >
+      <ThreeSceneHost className="absolute inset-0 min-h-0 overflow-hidden" onReady={onReady} />
       <GameHud
         title="21 Blackjack"
+        lockLandscape={false}
         status={statusText}
         meta={
           <div className="flex flex-wrap items-center gap-2">
