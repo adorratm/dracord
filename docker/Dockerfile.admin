@@ -13,12 +13,15 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/admin/package.json ./apps/admin/
 COPY apps/web/package.json ./apps/web/
 COPY apps/desktop/package.json ./apps/desktop/
+COPY apps/desktop-ui/package.json ./apps/desktop-ui/
 COPY apps/mobile/package.json ./apps/mobile/
 COPY apps/music-bot/package.json ./apps/music-bot/
 COPY packages/types/package.json ./packages/types/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/config/package.json ./packages/config/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/game-core/package.json ./packages/game-core/
+COPY packages/app-theme/package.json ./packages/app-theme/
 COPY vendor ./vendor
 RUN --mount=type=cache,id=dracord-yarn,target=/root/.yarn/berry/cache \
     yarn workspaces focus @dracord/admin
