@@ -17,6 +17,7 @@ import {
   SearchableSelect,
   ServerRail,
   TitleBar,
+  UserProfileCard,
   type MemberListAction,
   type ServerRailGuild,
   type ServerRailGuildAction,
@@ -73,6 +74,7 @@ export function Shell() {
   const [view, setView] = useState<View>({ kind: 'home' });
   const [showMembers, setShowMembers] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileUser, setProfileUser] = useState<PublicUser | null>(null);
   const [findChatOpen, setFindChatOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -1080,6 +1082,29 @@ export function Shell() {
                 'https://dracord.com.tr/guild-banner-default.webp'
               }
               onServerHeaderClick={() => setServerMenuOpen(true)}
+              onVoiceMemberClick={(userId) => {
+                const m = members.find((g) => g.id === userId);
+                if (m) {
+                  setProfileUser({
+                    ...m,
+                    status: liveMemberStatus(m.id, m.status),
+                  });
+                  return;
+                }
+                const fromVoice = Object.values(voiceMembersByChannel)
+                  .flat()
+                  .find((v) => v.id === userId);
+                if (fromVoice) {
+                  setProfileUser({
+                    id: fromVoice.id,
+                    username: fromVoice.id.slice(0, 8),
+                    displayName: fromVoice.displayName,
+                    avatarUrl: fromVoice.avatarUrl,
+                    isBot: fromVoice.isBot,
+                    status: 'ONLINE',
+                  } as PublicUser);
+                }
+              }}
               categories={categories}
               headerExtra={
                 <div className="px-2 pb-2 space-y-1.5">
@@ -2001,6 +2026,69 @@ export function Shell() {
         onOpenDm={(channelId) => {
           setView({ kind: 'dms', channelId });
         }}
+      />
+
+      <UserProfileCard
+        open={Boolean(profileUser)}
+        onClose={() => setProfileUser(null)}
+        variant="popout"
+        user={{
+          id: profileUser?.id ?? '',
+          displayName: profileUser?.displayName ?? '',
+          username: profileUser?.username,
+          avatarUrl: profileUser?.avatarUrl,
+          bannerUrl: profileUser?.bannerUrl,
+          bannerColor: profileUser?.bannerColor,
+          bio: profileUser?.bio,
+          status: profileUser?.status,
+          customStatus: profileUser?.customStatus,
+          isBot: profileUser?.isBot,
+          roles: profileUser?.roles,
+          socialLinks: profileUser?.socialLinks,
+          accentColor: profileUser?.accentColor,
+        }}
+        actions={
+          profileUser && profileUser.id !== user?.id
+            ? [
+                ...(profileUser.isBot || profileUser.id === DRACORD_BOT_USER_ID
+                  ? []
+                  : [
+                      {
+                        id: 'dm',
+                        label: 'Mesaj gönder',
+                        onClick: () => {
+                          void client.openDm(profileUser.id).then((ch) => {
+                            setProfileUser(null);
+                            setView({ kind: 'dms', channelId: ch.id });
+                          });
+                        },
+                      },
+                      ...(!friendIds.has(profileUser.id)
+                        ? [
+                            {
+                              id: 'friend',
+                              label: 'Arkadaşlık isteği gönder',
+                              onClick: () => {
+                                void client.sendFriendRequest(profileUser.id).then(() => {
+                                  setFriendIds((prev) => new Set([...prev, profileUser.id]));
+                                });
+                              },
+                            },
+                          ]
+                        : []),
+                      {
+                        id: 'block',
+                        label: 'Engelle',
+                        danger: true,
+                        onClick: () => {
+                          void client.blockUser(profileUser.id);
+                          setProfileUser(null);
+                        },
+                      },
+                    ]),
+              ]
+            : []
+        }
       />
 
       <AppTour />
