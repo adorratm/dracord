@@ -9,6 +9,8 @@ const desktopRoot = path.join(__dirname, '..');
 const repoRoot = path.join(desktopRoot, '..', '..');
 const uiIndex = path.join(desktopRoot, 'ui', 'index.html');
 const srcRoot = path.join(repoRoot, 'apps', 'desktop-ui', 'src');
+const publicRoot = path.join(repoRoot, 'apps', 'desktop-ui', 'public');
+const webGamesRoot = path.join(repoRoot, 'apps', 'web', 'components', 'activities');
 
 function newestMtime(dir) {
   let newest = 0;
@@ -28,7 +30,11 @@ function newestMtime(dir) {
 }
 
 const uiTime = fs.existsSync(uiIndex) ? fs.statSync(uiIndex).mtimeMs : 0;
-const srcTime = newestMtime(srcRoot);
+const srcTime = Math.max(
+  newestMtime(srcRoot),
+  newestMtime(publicRoot),
+  newestMtime(webGamesRoot),
+);
 const stale = !uiTime || srcTime > uiTime;
 
 if (!stale) {

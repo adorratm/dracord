@@ -272,6 +272,7 @@ export function ServerRail({
 
   return (
     <aside
+      data-tour="servers"
       className={cn(
         'w-[72px] bg-surface-container-lowest flex flex-col items-center pt-space-md pb-space-md md:pb-0 gap-space-sm shrink-0 relative z-0',
         className,
@@ -355,6 +356,7 @@ export function ServerRail({
           <button
             type="button"
             onClick={onExploreClick}
+            data-tour="discover"
             className={cn(
               'w-12 h-12 rounded-[50%] hover:rounded-[16px] bg-surface-container text-secondary',
               'hover:bg-secondary-container hover:text-on-secondary-container hover:scale-[1.04] active:scale-[0.98]',

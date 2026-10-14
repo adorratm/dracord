@@ -82,6 +82,37 @@ export async function synthesizeEmelNeural(text: string): Promise<Buffer | null>
   return null;
 }
 
+/** Edge/Azure yokken Türkçe ses (kısa satırlar) */
+export async function synthesizeGoogleTr(text: string): Promise<Buffer | null> {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const q = encodeURIComponent(trimmed.slice(0, 180));
+  const urls = [
+    `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=tr&q=${q}`,
+    `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=tr&q=${q}`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'tr-TR,tr;q=0.9',
+          Referer: 'https://translate.google.com/',
+        },
+        cache: 'no-store',
+      });
+      if (!res.ok) continue;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.byteLength > 64) return buf;
+    } catch (err) {
+      console.warn('[dealer-tts] Google TTS hata', err);
+    }
+  }
+  return null;
+}
+
 /** Resmi Azure Speech REST — AZURE_SPEECH_KEY varsa */
 export async function synthesizeAzureEmel(text: string): Promise<Buffer | null> {
   const key = process.env.AZURE_SPEECH_KEY?.trim();

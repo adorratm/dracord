@@ -7,9 +7,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { DracordClient } from '@dracord/sdk';
+import { DracordClient, SocketEvents } from '@dracord/sdk';
 import type { AuthTokens, PublicUser } from '@dracord/types';
+import {
+  applyStickerCloudState,
+  pullStickersFromCloud,
+  setStickerCloudBridge,
+} from '@dracord/ui';
 import { API_URL } from './config';
+import { mergeClientSettings } from './lib/client-settings';
 
 const ACCESS_KEY = 'dracord.desktop.access';
 const REFRESH_KEY = 'dracord.desktop.refresh';
@@ -22,6 +28,11 @@ type AuthCtx = {
   logout: () => void;
   setSession: (tokens: AuthTokens, user: PublicUser) => void;
   refreshUser: () => Promise<PublicUser | null>;
+  setUser: (user: PublicUser | null | ((prev: PublicUser | null) => PublicUser | null)) => void;
+  updatePresence: (data: {
+    status: PublicUser['status'];
+    customStatus?: string | null;
+  }) => Promise<PublicUser | null>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -81,8 +92,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.setToken(null);
     client.socket?.disconnect();
     client.socket = null;
+    setStickerCloudBridge(null);
     setUser(null);
   }, [client]);
+
+  useEffect(() => {
+    if (!user) {
+      setStickerCloudBridge(null);
+      return;
+    }
+    setStickerCloudBridge({
+      get: async () => {
+        const remote = await client.getClientSettings();
+        const merged = mergeClientSettings(remote as unknown as Record<string, unknown>);
+        return merged.stickers ?? null;
+      },
+      set: async (state) => {
+        await client.updateClientSettings({ stickers: state });
+      },
+    });
+    void client
+      .getClientSettings()
+      .then((remote) => {
+        const merged = mergeClientSettings(remote as unknown as Record<string, unknown>);
+        applyStickerCloudState(merged.stickers);
+        void pullStickersFromCloud();
+      })
+      .catch(() => undefined);
+    return () => setStickerCloudBridge(null);
+  }, [client, user?.id]);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -94,9 +132,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [client]);
 
+  const updatePresence = useCallback(
+    async (data: { status: PublicUser['status']; customStatus?: string | null }) => {
+      try {
+        const me = await client.updatePresence(data);
+        setUser(me);
+        return me;
+      } catch {
+        return null;
+      }
+    },
+    [client],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const onPresence = (payload: {
+      userId: string;
+      status: PublicUser['status'];
+      customStatus?: string | null;
+    }) => {
+      if (payload.userId !== user.id) return;
+      if (payload.status === 'OFFLINE' && sock.connected) return;
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: payload.status,
+              customStatus:
+                payload.customStatus !== undefined ? payload.customStatus : prev.customStatus,
+            }
+          : prev,
+      );
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+    };
+  }, [client, user?.id]);
+
   const value = useMemo(
-    () => ({ client, user, ready, loginGoogle, logout, setSession, refreshUser }),
-    [client, user, ready, loginGoogle, logout, setSession, refreshUser],
+    () => ({
+      client,
+      user,
+      ready,
+      loginGoogle,
+      logout,
+      setSession,
+      refreshUser,
+      setUser,
+      updatePresence,
+    }),
+    [client, user, ready, loginGoogle, logout, setSession, refreshUser, updatePresence],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

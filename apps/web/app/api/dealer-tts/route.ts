@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   synthesizeAzureEmel,
   synthesizeEmelNeural,
+  synthesizeGoogleTr,
 } from '@/lib/edge-emel-tts';
 
 export const runtime = 'nodejs';
@@ -19,8 +20,14 @@ export async function GET(req: NextRequest) {
   try {
     // 1) Resmi Azure anahtarı varsa
     let buf = await synthesizeAzureEmel(q);
+    let voice = 'tr-TR-EmelNeural';
     // 2) Edge Read Aloud → aynı Emel Neural sesi
     if (!buf) buf = await synthesizeEmelNeural(q);
+    // 3) Google TR (Edge/Azure yokken)
+    if (!buf) {
+      buf = await synthesizeGoogleTr(q);
+      voice = 'google-tr';
+    }
 
     if (!buf?.byteLength || buf.byteLength < 64) {
       return NextResponse.json({ error: 'TTS alınamadı' }, { status: 502 });
@@ -31,7 +38,7 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'public, max-age=86400, immutable',
-        'X-Dealer-Voice': 'tr-TR-EmelNeural',
+        'X-Dealer-Voice': voice,
       },
     });
   } catch {

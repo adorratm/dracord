@@ -56,7 +56,10 @@ function mapChannelItem(
   if (voiceMembers && extras?.selfUserId && (isVoice || isActivity)) {
     const inThis =
       (extras.selfVoiceChannelId != null && extras.selfVoiceChannelId === ch.id) ||
-      Boolean(extras.selfActivityChannelIds?.has(ch.id));
+      Boolean(
+        extras.selfActivityChannelIds instanceof Set &&
+          extras.selfActivityChannelIds.has(ch.id),
+      );
     if (!inThis) {
       voiceMembers = voiceMembers.filter((m) => m.id !== extras.selfUserId);
     }
@@ -64,7 +67,8 @@ function mapChannelItem(
   const selfInChannel = Boolean(
     extras?.selfUserId &&
       (extras.selfVoiceChannelId === ch.id ||
-        extras.selfActivityChannelIds?.has(ch.id) ||
+        (extras.selfActivityChannelIds instanceof Set &&
+          extras.selfActivityChannelIds.has(ch.id)) ||
         voiceMembers?.some((m) => m.id === extras.selfUserId)),
   );
   const viewerJoinedAt =

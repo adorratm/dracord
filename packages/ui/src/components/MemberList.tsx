@@ -139,6 +139,7 @@ export function MemberList({ groups, className }: MemberListProps) {
 
   return (
     <aside
+      data-tour="members"
       className={cn(
         'w-full min-w-0 bg-surface-container-low flex flex-col min-h-0 overflow-y-auto py-space-md px-space-sm shrink-0',
         className,

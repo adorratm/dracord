@@ -1299,6 +1299,7 @@ __metadata:
     concurrently: "npm:^10.0.6"
     cookie-parser: "npm:^1.4.7"
     dotenv: "npm:^18.0.8"
+    edge-tts-universal: "npm:1.4.0"
     ioredis: "npm:^6.0.0"
     livekit-server-sdk: "npm:^2.19.1"
     passport: "npm:^0.7.0"
@@ -1342,12 +1343,14 @@ __metadata:
     "@dracord/ui": "workspace:*"
     "@pixiv/three-vrm": "npm:3.5.5"
     "@tanstack/react-virtual": "npm:3.14.19"
+    "@tensorflow/tfjs": "npm:4.22.0"
     "@types/react": "npm:^19.3.0"
     "@types/react-dom": "npm:^19.3.0"
     "@types/three": "npm:^0.186.0"
     "@vitejs/plugin-react": "npm:^6.1.2"
     autoprefixer: "npm:10.6.1"
     livekit-client: "npm:^2.22.4"
+    nsfwjs: "npm:4.4.0"
     postcss: "npm:8.5.30"
     react: "npm:19.3.1"
     react-dom: "npm:19.3.1"
@@ -1363,6 +1366,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dracord/desktop@workspace:apps/desktop"
   dependencies:
+    edge-tts-universal: "npm:1.4.0"
     electron: "npm:^44.7.2"
     electron-builder: "npm:^26.17.0"
     png-to-ico: "npm:^3.0.2"
@@ -5018,7 +5022,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tensorflow/tfjs@npm:^4.22.0":
+"@tensorflow/tfjs@npm:4.22.0, @tensorflow/tfjs@npm:^4.22.0":
   version: 4.22.0
   resolution: "@tensorflow/tfjs@npm:4.22.0"
   dependencies:
@@ -7406,12 +7410,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"decode-uri-component@npm:^0.2.2":
-  version: 0.2.2
-  resolution: "decode-uri-component@npm:0.2.2"
-  checksum: 10c0/1f4fa54eb740414a816b3f6c24818fbfcabd74ac478391e9f4e2282c994127db02010ce804f3d08e38255493cfe68608b3f5c8e09fd6efc4ae46c807691f7a31
+"decode-uri-component@portal:./vendor/decode-uri-component::locator=dracord%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "decode-uri-component@portal:./vendor/decode-uri-component::locator=dracord%40workspace%3A."
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "decompress-response@npm:^6.0.0":
   version: 6.0.0
@@ -7710,7 +7713,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"edge-tts-universal@npm:^1.4.0":
+"edge-tts-universal@npm:1.4.0, edge-tts-universal@npm:^1.4.0":
   version: 1.4.0
   resolution: "edge-tts-universal@npm:1.4.0"
   dependencies:
@@ -11686,12 +11689,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-forge@npm:^1.3.3":
-  version: 1.4.0
-  resolution: "node-forge@npm:1.4.0"
-  checksum: 10c0/67330a5f1f95257a4c8a93b7d555abe87b5f15e350123aa396c97a21a8ca94f9c6549008eb2c73668a91e0d7e3a905785acbd8f8bd0751c29401292011f8f8e1
+"node-forge@portal:./vendor/node-forge::locator=dracord%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "node-forge@portal:./vendor/node-forge::locator=dracord%40workspace%3A."
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "node-gyp-build-optional-packages@npm:5.2.2":
   version: 5.2.2
@@ -11826,7 +11828,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nsfwjs@npm:^4.4.0":
+"nsfwjs@npm:4.4.0, nsfwjs@npm:^4.4.0":
   version: 4.4.0
   resolution: "nsfwjs@npm:4.4.0"
   peerDependencies:

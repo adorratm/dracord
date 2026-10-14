@@ -7,6 +7,8 @@ const {
   Menu,
   nativeImage,
   session,
+  desktopCapturer,
+  systemPreferences,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -22,6 +24,12 @@ try {
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('disable-gpu-program-cache');
 app.commandLine.appendSwitch('disk-cache-size', '1');
+// WebRTC STUN DNS (-105): Chromium AsyncDns Windows'ta sık bozuluyor
+app.commandLine.appendSwitch('disable-features', 'AsyncDns');
+// IPv6 AAAA hatalarını azalt (STUN lookup)
+app.commandLine.appendSwitch('disable-ipv6');
+// Peer join/leave UI tonları jest olmadan da çalsın
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 /**
  * Renderer origin (localhost:5173 / file://) prod CORS allowlist'te değil → Failed to fetch.
@@ -43,6 +51,119 @@ function registerApiOriginBridge() {
       },
     });
   });
+}
+
+/** Renderer'dan gelen ekran/pencere seçimi (getDisplayMedia öncesi) */
+/** @type {{ sourceId: string, systemAudio: boolean } | null} */
+let pendingDisplayMediaSelection = null;
+
+async function listDesktopCaptureSources() {
+  if (process.platform === 'darwin') {
+    const status = systemPreferences.getMediaAccessStatus('screen');
+    if (status !== 'granted') {
+      console.warn('[desktop] screen capture permission:', status);
+    }
+  }
+  const sources = await desktopCapturer.getSources({
+    types: ['screen', 'window'],
+    thumbnailSize: { width: 320, height: 180 },
+    fetchWindowIcons: true,
+  });
+  return sources.map((s) => ({
+    id: s.id,
+    name: s.name,
+    displayId: s.display_id || '',
+    thumbnail: s.thumbnail && !s.thumbnail.isEmpty() ? s.thumbnail.toDataURL() : '',
+    appIcon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
+    kind: s.id.startsWith('screen:') ? 'screen' : 'window',
+  }));
+}
+
+/** getDisplayMedia / ekran paylaşımı — seçici + sistem sesi (loopback) */
+function registerMediaCaptureHandlers() {
+  const ses = session.defaultSession;
+
+  ses.setPermissionRequestHandler((_wc, permission, callback) => {
+    const allow = [
+      'media',
+      'display-capture',
+      'mediaKeySystem',
+      'fullscreen',
+      'notifications',
+      'clipboard-sanitized-write',
+    ].includes(permission);
+    callback(allow);
+  });
+
+  ses.setPermissionCheckHandler((_wc, permission) => {
+    return [
+      'media',
+      'display-capture',
+      'mediaKeySystem',
+      'fullscreen',
+      'notifications',
+      'clipboard-sanitized-write',
+    ].includes(permission);
+  });
+
+  ipcMain.handle('desktop-capturer:get-sources', async () => listDesktopCaptureSources());
+
+  ipcMain.handle('desktop-capturer:set-selection', (_event, selection) => {
+    if (
+      !selection ||
+      typeof selection.sourceId !== 'string' ||
+      !selection.sourceId
+    ) {
+      pendingDisplayMediaSelection = null;
+      return { ok: false };
+    }
+    pendingDisplayMediaSelection = {
+      sourceId: selection.sourceId,
+      systemAudio: Boolean(selection.systemAudio),
+    };
+    return { ok: true };
+  });
+
+  ipcMain.handle('desktop-capturer:clear-selection', () => {
+    pendingDisplayMediaSelection = null;
+    return { ok: true };
+  });
+
+  if (typeof ses.setDisplayMediaRequestHandler === 'function') {
+    ses.setDisplayMediaRequestHandler(
+      async (_request, callback) => {
+        try {
+          const selection = pendingDisplayMediaSelection;
+          pendingDisplayMediaSelection = null;
+          const sources = await desktopCapturer.getSources({
+            types: ['screen', 'window'],
+            thumbnailSize: { width: 0, height: 0 },
+            fetchWindowIcons: false,
+          });
+          if (!sources.length) {
+            callback({});
+            return;
+          }
+          const picked = selection
+            ? sources.find((s) => s.id === selection.sourceId)
+            : null;
+          const video = picked || sources.find((s) => s.id.startsWith('screen:')) || sources[0];
+          const wantAudio = selection ? selection.systemAudio : true;
+          // Windows: loopback = masaüstü/uygulama sesleri (Chrome "sistem sesini paylaş")
+          callback({
+            video,
+            audio: wantAudio && process.platform === 'win32' ? 'loopback' : undefined,
+          });
+        } catch (err) {
+          console.error('[desktop] displayMedia handler', err);
+          pendingDisplayMediaSelection = null;
+          callback({});
+        }
+      },
+      // Kendi seçicimizi kullanıyoruz (Windows'ta sistem picker yok)
+      { useSystemPicker: false },
+    );
+  }
 }
 
 /** Sadece açıkça istenirse Vite; aksi halde paketli ui/ (ERR_CONNECTION_REFUSED önlenir) */
@@ -195,6 +316,9 @@ function createTray() {
 }
 
 function createWindow() {
+  // File / Edit / View / Window menüsünü kaldır
+  Menu.setApplicationMenu(null);
+
   const icon = loadAppIcon();
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -203,6 +327,7 @@ function createWindow() {
     minHeight: 640,
     frame: !frameless,
     titleBarStyle: frameless ? 'hidden' : 'default',
+    autoHideMenuBar: true,
     backgroundColor: '#11131e',
     title: 'Dracord',
     ...(icon ? { icon } : {}),
@@ -297,6 +422,18 @@ function registerWindowIpc() {
   });
 }
 
+function registerDealerTtsIpc() {
+  const { synthesizeDealerTts } = require('./dealer-tts');
+  ipcMain.handle('dealer-tts:synthesize', async (_event, text) => {
+    try {
+      return await synthesizeDealerTts(text);
+    } catch (err) {
+      console.warn('[dealer-tts] ipc hata', err);
+      return { ok: false, error: 'exception' };
+    }
+  });
+}
+
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -317,6 +454,8 @@ if (!gotLock) {
       app.setAppUserModelId('com.dracord.desktop');
     }
     registerApiOriginBridge();
+    registerMediaCaptureHandlers();
+    registerDealerTtsIpc();
     registerProtocol();
     registerWindowIpc();
     createWindow();

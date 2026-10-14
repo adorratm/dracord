@@ -10,8 +10,20 @@ import type { AssetBag, DealerInteractKind, DealerRig } from '../gameAssets';
 
 type Three = typeof import('three');
 
-export const DEALER_VRM_URL = '/models/dealer/anime-dealer.vrm';
-export const DEALER_GLB_URL = '/models/dealer/anime-dealer.glb';
+/** Vite `base: './'` (Electron) ve Next `/` ile uyumlu */
+function dealerAssetUrl(relPath: string): string {
+  const base =
+    (typeof import.meta !== 'undefined' &&
+      import.meta.env &&
+      typeof import.meta.env.BASE_URL === 'string' &&
+      import.meta.env.BASE_URL) ||
+    '/';
+  const root = base.endsWith('/') ? base : `${base}/`;
+  return `${root}${relPath.replace(/^\//, '')}`;
+}
+
+export const DEALER_VRM_URL = dealerAssetUrl('models/dealer/anime-dealer.vrm');
+export const DEALER_GLB_URL = dealerAssetUrl('models/dealer/anime-dealer.glb');
 
 /** Masa kenarında belden yukarı — ölçek / gömme (z: masa içine girmesin) */
 export const DEALER_VRM_SCALE = 2.55;
@@ -91,6 +103,18 @@ function createBoneRotator(THREE: Three) {
 
 async function urlExists(url: string): Promise<boolean> {
   try {
+    // Electron file:// HEAD’i sık reddeder — GET (Range) dene
+    const isFile =
+      url.startsWith('file:') ||
+      (typeof location !== 'undefined' && location.protocol === 'file:');
+    if (isFile) {
+      const g = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Range: 'bytes=0-0' },
+      });
+      return g.ok || g.status === 206;
+    }
     const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
     if (res.ok) return true;
     if (res.status === 405 || res.status === 501) {
@@ -114,19 +138,28 @@ export async function createDealerWomanFromVrm(
   const candidates = [modelUrl, DEALER_GLB_URL].filter(
     (u, i, a) => a.indexOf(u) === i,
   );
-  let url: string | null = null;
-  for (const c of candidates) {
-    if (await urlExists(c)) {
-      url = c;
-      break;
-    }
-  }
-  if (!url) return null;
+  const isFileProto =
+    typeof location !== 'undefined' && location.protocol === 'file:';
 
   try {
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
-    const gltf = await loader.loadAsync(url);
+
+    let gltf: Awaited<ReturnType<GLTFLoader['loadAsync']>> | null = null;
+    let url: string | null = null;
+    for (const c of candidates) {
+      try {
+        // Electron file:// : HEAD güvenilmez — doğrudan yükle
+        if (!isFileProto && !(await urlExists(c))) continue;
+        gltf = await loader.loadAsync(c);
+        url = c;
+        break;
+      } catch (probeErr) {
+        console.warn('[dealer] model adayı yok/bozuk:', c, probeErr);
+      }
+    }
+    if (!gltf || !url) return null;
+
     const vrm = gltf.userData.vrm as VRM | undefined;
 
     // Saf GLB (VRM humanoid yok)

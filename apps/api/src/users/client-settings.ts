@@ -92,6 +92,11 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     x: 0,
     z: 2.2,
   },
+  stickers: {
+    custom: [],
+    favoriteIds: [],
+    recentIds: [],
+  },
 };
 
 function isObject(v: unknown): v is Record<string, unknown> {

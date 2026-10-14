@@ -1,0 +1,14 @@
+start
+keys ok
+using EdgeTTS
+err TypeError: voice must be a string
+    at _TTSConfig.validateStringParam (C:\Users\adorr\Downloads\dracord\node_modules\edge-tts-universal\dist\index.cjs:219:13)
+    at _TTSConfig.validate (C:\Users\adorr\Downloads\dracord\node_modules\edge-tts-universal\dist\index.cjs:208:16)
+    at new _TTSConfig (C:\Users\adorr\Downloads\dracord\node_modules\edge-tts-universal\dist\index.cjs:194:10)
+    at new Communicate (C:\Users\adorr\Downloads\dracord\node_modules\edge-tts-universal\dist\index.cjs:355:22)
+    at EdgeTTS.synthesize (C:\Users\adorr\Downloads\dracord\node_modules\edge-tts-universal\dist\index.cjs:733:25)
+    at main (C:\Users\adorr\Downloads\dracord\apps\desktop\_tts-smoke2.js:21:11)
+    at Object.<anonymous> (C:\Users\adorr\Downloads\dracord\apps\desktop\_tts-smoke2.js:49:1)
+    at Module._compile (node:internal/modules/cjs/loader:1956:14)
+    at Object..js (node:internal/modules/cjs/loader:2096:10)
+    at Module.load (node:internal/modules/cjs/loader:1678:32)

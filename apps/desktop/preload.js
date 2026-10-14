@@ -12,4 +12,10 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   setSystemPrefs: (prefs) => {
     ipcRenderer.send('system-prefs', prefs);
   },
+  getDesktopSources: () => ipcRenderer.invoke('desktop-capturer:get-sources'),
+  setDisplayMediaSelection: (selection) =>
+    ipcRenderer.invoke('desktop-capturer:set-selection', selection),
+  clearDisplayMediaSelection: () => ipcRenderer.invoke('desktop-capturer:clear-selection'),
+  /** @param {string} text */
+  synthesizeDealerTts: (text) => ipcRenderer.invoke('dealer-tts:synthesize', text),
 });

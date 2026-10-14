@@ -13,6 +13,7 @@ import { colors } from '@dracord/app-theme';
 import { API_URL } from '../../lib/config';
 import { useAuth } from '../../lib/auth';
 import { inputStyle, primaryBtn, primaryBtnText } from '../../lib/ui';
+import { resetMobileAppTour, startMobileAppTour } from '../../components/AppTour';
 
 type Tab =
   | 'account'
@@ -108,6 +109,21 @@ export default function SettingsScreen() {
               />
               <Text style={{ color: colors.text }}>Açılışta hatırla (tercih)</Text>
             </View>
+            <Text style={{ color: colors.textMuted, marginTop: 20, marginBottom: 8, fontSize: 13 }}>
+              Arayüzü yeniden tanımak için uygulama turunu başlatabilirsin.
+            </Text>
+            <Pressable
+              style={{
+                ...primaryBtn,
+                backgroundColor: colors.surfaceHigh,
+                marginTop: 0,
+              }}
+              onPress={() => {
+                void resetMobileAppTour().then(() => startMobileAppTour());
+              }}
+            >
+              <Text style={{ ...primaryBtnText, color: colors.text }}>Uygulama turunu başlat</Text>
+            </Pressable>
           </>
         )}
 

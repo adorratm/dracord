@@ -1471,6 +1471,7 @@ export function ChannelSidebar({
 
   return (
     <aside
+      data-tour="channels"
       className={cn(
         'w-72 bg-surface-container-low flex flex-col justify-between shadow-bar shrink-0 min-h-0 overflow-visible',
         className,

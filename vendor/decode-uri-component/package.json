@@ -1,0 +1,28 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.5.0",
+  "description": "A better decodeURIComponent (Dracord CJS security backport of v0.5.0 for CVE-2026-45822 / GHSA-vcc3-ghjq-m6fr).",
+  "license": "MIT",
+  "repository": "SamVerschueren/decode-uri-component",
+  "author": {
+    "name": "Sam Verschueren",
+    "email": "sam.verschueren@gmail.com",
+    "url": "github.com/SamVerschueren"
+  },
+  "engines": {
+    "node": ">=0.10"
+  },
+  "files": [
+    "index.js"
+  ],
+  "main": "index.js",
+  "keywords": [
+    "decode",
+    "uri",
+    "component",
+    "decodeuricomponent",
+    "components",
+    "decoder",
+    "url"
+  ]
+}

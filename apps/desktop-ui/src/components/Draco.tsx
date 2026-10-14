@@ -1,14 +1,44 @@
+import type { ReactNode } from 'react';
+
+/** Web DracoMood ile aynı isimler — CSS animasyon varyantları */
+export type DracoMood =
+  | 'idle'
+  | 'float'
+  | 'wave'
+  | 'peek'
+  | 'confused'
+  | 'happy'
+  | 'sleep'
+  | 'wink'
+  | 'shock'
+  | 'power';
+
 /** CSS animasyonlu Draco maskotu (web framer-motion bağımlılığı yok) */
 export function Draco({
   size = 160,
+  mood = 'float',
+  glow = true,
+  headset = true,
   className,
 }: {
   size?: number;
+  mood?: DracoMood;
+  glow?: boolean;
+  headset?: boolean;
   className?: string;
 }) {
+  const floatClass =
+    mood === 'sleep'
+      ? 'draco-float draco-float--sleep'
+      : mood === 'happy'
+        ? 'draco-float draco-float--happy'
+        : mood === 'confused' || mood === 'peek'
+          ? 'draco-float draco-float--peek'
+          : 'draco-float';
+
   return (
     <div
-      className={className}
+      className={`shrink-0 overflow-hidden ${className ?? ''}`}
       role="img"
       aria-label="Draco maskotu"
       style={{
@@ -20,8 +50,8 @@ export function Draco({
         justifyContent: 'center',
       }}
     >
-      <div className="draco-glow" aria-hidden />
-      <div className="draco-float" style={{ width: size, height: size }}>
+      {glow && <div className="draco-glow" aria-hidden />}
+      <div className={floatClass} style={{ width: size, height: size }}>
         <svg
           width={size}
           height={size}
@@ -89,25 +119,49 @@ export function Draco({
           <path d="M138 70 L158 28 L122 58 Z" fill="#a78bdb" />
           <path d="M136 66 L150 38 L126 58 Z" fill="#ff79c6" />
 
-          {/* Headset */}
-          <path
-            d="M58 86 Q100 58 142 86"
-            stroke="#1e2a22"
-            strokeWidth="7"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <rect x="48" y="78" width="14" height="22" rx="4" fill="#1e2a22" />
-          <rect x="138" y="78" width="14" height="22" rx="4" fill="#1e2a22" />
-          <rect x="50" y="82" width="10" height="6" rx="1" fill="#50fa7b" />
+          {headset && (
+            <>
+              <path
+                d="M58 86 Q100 58 142 86"
+                stroke="#1e2a22"
+                strokeWidth="7"
+                fill="none"
+                strokeLinecap="round"
+              />
+              <rect x="48" y="78" width="14" height="22" rx="4" fill="#1e2a22" />
+              <rect x="138" y="78" width="14" height="22" rx="4" fill="#1e2a22" />
+              <rect x="50" y="82" width="10" height="6" rx="1" fill="#50fa7b" />
+            </>
+          )}
 
-          <g className="draco-blink">
-            <ellipse cx="86" cy="86" rx="10" ry="12" fill="#2a1f3d" />
-            <ellipse cx="86" cy="86" rx="7.5" ry="10" fill="url(#dracoEyeDesktop)" />
-            <circle cx="89" cy="82" r="3" fill="#ffffff" />
-            <ellipse cx="114" cy="86" rx="10" ry="12" fill="#2a1f3d" />
-            <ellipse cx="114" cy="86" rx="7.5" ry="10" fill="url(#dracoEyeDesktop)" />
-            <circle cx="117" cy="82" r="3" fill="#ffffff" />
+          <g className={mood === 'sleep' ? 'draco-blink draco-blink--sleep' : 'draco-blink'}>
+            {mood === 'sleep' ? (
+              <>
+                <path
+                  d="M78 86 Q86 92 94 86"
+                  stroke="#2a1f3d"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M106 86 Q114 92 122 86"
+                  stroke="#2a1f3d"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              </>
+            ) : (
+              <>
+                <ellipse cx="86" cy="86" rx="10" ry="12" fill="#2a1f3d" />
+                <ellipse cx="86" cy="86" rx="7.5" ry="10" fill="url(#dracoEyeDesktop)" />
+                <circle cx="89" cy="82" r="3" fill="#ffffff" />
+                <ellipse cx="114" cy="86" rx="10" ry="12" fill="#2a1f3d" />
+                <ellipse cx="114" cy="86" rx="7.5" ry="10" fill="url(#dracoEyeDesktop)" />
+                <circle cx="117" cy="82" r="3" fill="#ffffff" />
+              </>
+            )}
           </g>
 
           <ellipse cx="70" cy="98" rx="6" ry="3.5" fill="#ff79c6" opacity={0.45} />
@@ -128,6 +182,41 @@ export function Draco({
           </g>
         </svg>
       </div>
+    </div>
+  );
+}
+
+export interface DracoEmptyProps {
+  mood?: DracoMood;
+  size?: number;
+  title?: string;
+  description?: string;
+  headset?: boolean;
+  children?: ReactNode;
+  className?: string;
+}
+
+export function DracoEmpty({
+  mood = 'peek',
+  size = 96,
+  title,
+  description,
+  headset,
+  children,
+  className,
+}: DracoEmptyProps) {
+  return (
+    <div
+      className={`w-full min-w-0 self-stretch flex flex-col items-center justify-center gap-3 text-center px-4 py-6 box-border ${className ?? ''}`}
+    >
+      <Draco size={size} mood={mood} glow headset={headset ?? mood === 'peek'} />
+      {title && (
+        <p className="font-headline-md text-on-surface max-w-md w-full">{title}</p>
+      )}
+      {description && (
+        <p className="font-body-sm text-outline max-w-xs w-full">{description}</p>
+      )}
+      {children}
     </div>
   );
 }

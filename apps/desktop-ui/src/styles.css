@@ -97,6 +97,18 @@ html.dark {
   z-index: 1;
   animation: dracoFloat 3.2s ease-in-out infinite;
 }
+.draco-float--sleep {
+  animation: dracoFloatSleep 4.5s ease-in-out infinite;
+}
+.draco-float--happy {
+  animation: dracoFloatHappy 1.5s ease-in-out infinite;
+}
+.draco-float--peek {
+  animation: dracoFloatPeek 2.8s ease-in-out infinite;
+}
+.draco-blink--sleep {
+  animation: none;
+}
 .draco-wing-l {
   transform-origin: 62px 110px;
   animation: dracoWingL 2.2s ease-in-out infinite;
@@ -120,6 +132,33 @@ html.dark {
   }
   50% {
     transform: translateY(-10px) rotate(1.5deg);
+  }
+}
+@keyframes dracoFloatSleep {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes dracoFloatHappy {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
+  }
+}
+@keyframes dracoFloatPeek {
+  0%,
+  100% {
+    transform: translateY(4px) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(0) rotate(2deg);
   }
 }
 @keyframes dracoGlow {

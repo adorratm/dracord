@@ -1,5 +1,7 @@
 import type { ClientSettings } from '@dracord/types';
 
+export const PREFS_STORAGE_KEY = 'dracord.userPreferences.v1';
+
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   privacy: {
     dmFilter: 'friends',
@@ -92,6 +94,11 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     x: 0,
     z: 2.2,
   },
+  stickers: {
+    custom: [],
+    favoriteIds: [],
+    recentIds: [],
+  },
 };
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -131,4 +138,19 @@ export function applyPrefsDom(prefs: ClientSettings) {
   root.classList.toggle('no-hw-accel', !prefs.system.hardwareAcceleration);
   root.classList.toggle('experimental-ui', prefs.developer.experimental);
   root.lang = prefs.language.locale === 'en' ? 'en' : 'tr';
+}
+
+export function loadLocalPrefs(): ClientSettings {
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+    if (!raw) return DEFAULT_CLIENT_SETTINGS;
+    return mergeClientSettings(JSON.parse(raw) as Record<string, unknown>);
+  } catch {
+    return DEFAULT_CLIENT_SETTINGS;
+  }
+}
+
+export function saveLocalPrefs(prefs: ClientSettings) {
+  localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  applyPrefsDom(prefs);
 }

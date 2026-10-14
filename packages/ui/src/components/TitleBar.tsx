@@ -57,14 +57,27 @@ export function TitleBar({
         </span>
       </div>
 
-      <nav className="hidden md:flex items-center gap-space-sm" aria-label="Ana gezinme">
+      <nav
+        className="hidden md:flex items-center gap-space-sm"
+        aria-label="Ana gezinme"
+        data-tour="nav"
+      >
         {NAV_ITEMS.map((item) => {
           const active = item.id === activeNav;
+          const tourKey =
+            item.id === 'direct-messages'
+              ? 'dms'
+              : item.id === 'voice'
+                ? 'voice'
+                : item.id === 'settings'
+                  ? 'settings'
+                  : undefined;
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => onNavClick?.(item.id)}
+              data-tour={tourKey}
               className={cn(
                 'font-body-sm text-body-sm px-space-sm py-space-xs rounded-lg transition-[color,background-color,transform] duration-200 ease-out motion-reduce:transition-none',
                 active

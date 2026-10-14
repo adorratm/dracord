@@ -1,6 +1,7 @@
 import { Redirect, Stack, useSegments } from 'expo-router';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { AppTour } from '../../components/AppTour';
 
 export default function AppLayout() {
   const { user, ready } = useAuth();
@@ -14,12 +15,15 @@ export default function AppLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
-        contentStyle: { backgroundColor: colors.bg },
-      }}
-    />
+    <>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      />
+      {!onOnboarding ? <AppTour /> : null}
+    </>
   );
 }

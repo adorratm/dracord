@@ -1,4 +1,13 @@
 /** Vite web activity imports — tip kontrolü için gevşek deklarasyonlar */
+declare module '@/components/MusicPlayerBar' {
+  import type { ComponentType } from 'react';
+  export const MusicPlayerBar: ComponentType<{
+    guildId: string;
+    textChannelId?: string | null;
+    variant?: 'chat' | 'stage';
+  }>;
+}
+
 declare module '../../../web/components/activities/games/BilliardsGame' {
   import type { ComponentType } from 'react';
   export const BilliardsGame: ComponentType<Record<string, unknown>>;

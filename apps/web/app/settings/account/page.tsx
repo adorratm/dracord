@@ -10,7 +10,7 @@ import {
   SettingsSection,
   SettingsNote,
 } from '@/components/settings/SettingsControls';
-import { resetAppTour } from '@/lib/onboarding';
+import { resetAppTour } from '@dracord/types';
 
 const STATUSES: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
 

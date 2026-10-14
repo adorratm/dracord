@@ -77,9 +77,7 @@ function DmChatInner({
   } | null>(null);
   const [threadRoot, setThreadRoot] = useState<MessageDto | null>(null);
   const [threadMessages, setThreadMessages] = useState<MessageDto[]>([]);
-  const [threadDraft, setThreadDraft] = useState('');
   const [threadBusy, setThreadBusy] = useState(false);
-  const [threadSending, setThreadSending] = useState(false);
   const [threadScrollEl, setThreadScrollEl] = useState<HTMLDivElement | null>(null);
 
   const mentionNames = user
@@ -131,7 +129,6 @@ function DmChatInner({
     setReplyTo(null);
     setPinsOpen(false);
     setThreadRoot(null);
-    setThreadDraft('');
     void client.markChannelRead(channelId).catch(() => undefined);
   }, [client, channelId]);
 
@@ -411,10 +408,7 @@ function DmChatInner({
                 void pinMessage(m.id, pin).then(() => void refreshPins());
               },
               onBookmark: (m, bookmark) => void bookmarkMessage(m.id, bookmark),
-              onOpenThread: (m) => {
-                setThreadRoot(m);
-                setThreadDraft('');
-              },
+              onOpenThread: (m) => setThreadRoot(m),
               onCreateHeading: (m) => {
                 setHeadingText(m.content.slice(0, 120));
                 setHeadingOpen(true);
@@ -671,10 +665,7 @@ function DmChatInner({
         title={
           threadRoot ? `Thread · ${threadRoot.author.displayName}` : 'Thread'
         }
-        onClose={() => {
-          setThreadRoot(null);
-          setThreadDraft('');
-        }}
+        onClose={() => setThreadRoot(null)}
       >
         {threadRoot && (
           <p className="font-body-sm text-outline mb-space-sm line-clamp-2">
@@ -713,42 +704,34 @@ function DmChatInner({
             <p className="font-body-sm text-outline">Henüz yanıt yok — ilk yanıtı sen yaz.</p>
           )}
         </div>
-        <div className="flex gap-space-sm">
-          <input
-            value={threadDraft}
-            onChange={(e) => setThreadDraft(e.target.value)}
+        {threadRoot && (
+          <ChatInput
+            key={`thread-${threadRoot.id}`}
             placeholder="Thread’e yanıt yaz…"
-            disabled={threadSending}
-            className="flex-1 h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none disabled:opacity-50"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && threadDraft.trim() && threadRoot && !threadSending) {
-                e.preventDefault();
-                setThreadSending(true);
-                void sendMessage(threadDraft.trim(), undefined, {
-                  threadRootId: threadRoot.id,
-                })
-                  .then(() => setThreadDraft(''))
-                  .finally(() => setThreadSending(false));
-              }
+            onSend={(text) => {
+              void sendMessage(text, undefined, {
+                threadRootId: threadRoot.id,
+              });
             }}
-          />
-          <button
-            type="button"
-            disabled={!threadDraft.trim() || !threadRoot || threadSending}
-            className="h-10 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
-            onClick={() => {
-              if (!threadRoot || !threadDraft.trim() || threadSending) return;
-              setThreadSending(true);
-              void sendMessage(threadDraft.trim(), undefined, {
+            onAttachFiles={(files) =>
+              void sendWithAttachments(files, {
                 threadRootId: threadRoot.id,
               })
-                .then(() => setThreadDraft(''))
-                .finally(() => setThreadSending(false));
+            }
+            onSendMedia={(payload) =>
+              void sendMedia(payload, { threadRootId: threadRoot.id })
+            }
+            onTyping={notifyTyping}
+            searchGifs={searchGifs}
+            loadFeaturedGifs={loadFeaturedGifs}
+            mentionUsers={friends}
+            spellCheck={prefs.messaging.spellcheck}
+            uploadStickerFile={async (file) => {
+              const uploaded = await client.uploadFile(file, 'stickers');
+              return { url: uploaded.url, contentType: uploaded.contentType };
             }}
-          >
-            Gönder
-          </button>
-        </div>
+          />
+        )}
       </Modal>
     </AppShell>
   );

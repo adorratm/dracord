@@ -237,7 +237,6 @@ export function GuildChannelView({
     import('@dracord/types').MessageDto[]
   >([]);
   const [threadBusy, setThreadBusy] = useState(false);
-  const [threadDraft, setThreadDraft] = useState('');
   const [botSlashCommands, setBotSlashCommands] = useState<
     Array<{ name: string; aliases?: string[]; description: string; usage: string }>
   >([]);
@@ -248,8 +247,6 @@ export function GuildChannelView({
     null,
   );
   const [pinCount, setPinCount] = useState(0);
-  const threadScrollRef = useRef<HTMLDivElement | null>(null);
-  const [threadSending, setThreadSending] = useState(false);
   const [threadsPreviewOpen, setThreadsPreviewOpen] = useState(false);
   const [threadsPreview, setThreadsPreview] = useState<
     import('@dracord/types').MessageDto[]
@@ -572,7 +569,6 @@ export function GuildChannelView({
   // Kanal değişince thread kapat
   useEffect(() => {
     setThreadRoot(null);
-    setThreadDraft('');
     setThreadsPreviewOpen(false);
     setThreadsPreview([]);
   }, [channelId]);
@@ -643,12 +639,6 @@ export function GuildChannelView({
       sock.off(SocketEvents.MESSAGE_CREATE, onCreate);
     };
   }, [threadRoot, client]);
-
-  useEffect(() => {
-    const el = threadScrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [threadMessages.length, threadRoot?.id]);
 
   useEffect(() => {
     void client
@@ -1156,7 +1146,6 @@ export function GuildChannelView({
           if (body) {
             const msg = await client.sendMessage(target.id, body);
             setThreadRoot(msg);
-            setThreadDraft('');
           } else {
             openThreadsPreview(target.id);
           }
@@ -2309,7 +2298,6 @@ export function GuildChannelView({
         setReplyTo(null);
         if (isForumView && msg && !meta?.replyToId) {
           setThreadRoot(msg);
-          setThreadDraft('');
         }
       });
     },
@@ -2353,7 +2341,7 @@ export function GuildChannelView({
   const renderSidebar = () => (
     <ChannelSidebar
       serverName={serverName}
-      serverBannerUrl={guild?.bannerUrl}
+      serverBannerUrl={guild?.bannerUrl || '/guild-banner-default.webp'}
       categories={categories}
       threadsSection={null}
       onServerHeaderClick={() => setServerMenuOpen(true)}
@@ -3142,10 +3130,7 @@ export function GuildChannelView({
                   type="button"
                   className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                   aria-label="Kanala dön"
-                  onClick={() => {
-                    setThreadRoot(null);
-                    setThreadDraft('');
-                  }}
+                  onClick={() => setThreadRoot(null)}
                 >
                   <span className="material-symbols-outlined text-[18px]">arrow_back</span>
                 </button>
@@ -3159,10 +3144,7 @@ export function GuildChannelView({
                   type="button"
                   className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                   aria-label="Thread’i kapat"
-                  onClick={() => {
-                    setThreadRoot(null);
-                    setThreadDraft('');
-                  }}
+                  onClick={() => setThreadRoot(null)}
                 >
                   <span className="material-symbols-outlined text-[18px]">close</span>
                 </button>
@@ -3173,83 +3155,121 @@ export function GuildChannelView({
               {threadBusy && (
                 <p className="px-space-md py-space-sm font-body-sm text-outline">Yükleniyor…</p>
               )}
-              <div
-                ref={threadScrollRef}
-                className="flex-1 min-h-0 overflow-y-auto space-y-space-sm px-space-md py-space-sm"
-              >
-                {threadMessages.map((m, idx) => {
-                  const isRoot = idx === 0 && m.id === threadRoot?.id;
-                  return (
-                    <div
-                      key={m.id}
-                      className={
-                        isRoot
-                          ? 'rounded-lg border border-primary-container/40 bg-primary-container/10 px-space-sm py-space-xs'
-                          : 'rounded-lg bg-surface-container-highest px-space-sm py-space-xs'
+              <MessageList
+                className="flex-1 min-h-0"
+                scrollKey={`thread-${threadRoot.id}`}
+                messages={
+                  threadMessages.some((m) => m.id === threadRoot.id)
+                    ? threadMessages
+                    : [threadRoot, ...threadMessages]
+                }
+                mentionNames={mentionNames}
+                channelNames={channelNames}
+                imageModeration={imageModeration}
+                censorLinkPreviews={Boolean(user?.censorLinkPreviews)}
+                hideEmbeds={!prefs.messaging.autoEmbed}
+                messageActions={{
+                  currentUserId: user?.id,
+                  guildId,
+                  canManageMessages,
+                  developerMode: prefs.developer.developerMode,
+                  onEdit: (m) => {
+                    setEditMessageTarget({ id: m.id, content: m.content });
+                  },
+                  onDelete: (m) => {
+                    setDeleteMessageTarget({
+                      id: m.id,
+                      preview: m.content.slice(0, 80) || 'Ek / medya',
+                    });
+                  },
+                  onReact: (m, emoji) => {
+                    void reactToMessage(m.id, emoji).then((msg) => {
+                      if (!msg) return;
+                      setThreadMessages((prev) =>
+                        prev.map((x) => (x.id === msg.id ? msg : x)),
+                      );
+                    });
+                  },
+                  onReply: (m) =>
+                    setReplyTo({
+                      id: m.id,
+                      authorName: m.author.displayName,
+                      contentPreview: m.content.slice(0, 120) || 'Ek / medya',
+                    }),
+                  onPin: (m, pin) => {
+                    void pinMessage(m.id, pin).then((msg) => {
+                      if (msg) {
+                        setThreadMessages((prev) =>
+                          prev.map((x) => (x.id === msg.id ? msg : x)),
+                        );
                       }
-                    >
-                      <p className="font-label-sm text-primary-container truncate flex items-center gap-1">
-                        {m.author.displayName}
-                        {isRoot && (
-                          <span className="text-outline font-normal">· başlangıç</span>
-                        )}
-                      </p>
-                      <p className="font-body-sm text-on-surface whitespace-pre-wrap break-words">
-                        {m.content || 'Ek / medya'}
-                      </p>
-                    </div>
-                  );
-                })}
-                {!threadBusy && threadMessages.length === 0 && (
-                  <p className="font-body-sm text-outline">
+                      void refreshPins();
+                    });
+                  },
+                  onBookmark: (m, bookmark) => {
+                    void bookmarkMessage(m.id, bookmark).then((msg) => {
+                      if (!msg) return;
+                      setThreadMessages((prev) =>
+                        prev.map((x) => (x.id === msg.id ? msg : x)),
+                      );
+                    });
+                  },
+                  onVotePoll: (m, optionId) => {
+                    void votePoll(m.id, optionId).then((msg) => {
+                      if (!msg) return;
+                      setThreadMessages((prev) =>
+                        prev.map((x) => (x.id === msg.id ? msg : x)),
+                      );
+                    });
+                  },
+                  onAuthorClick: (author) => {
+                    const m = guildMembers.find((g) => g.id === author.id);
+                    if (m) setProfileUser(m);
+                  },
+                }}
+                emptyState={
+                  <p className="px-space-md py-space-sm font-body-sm text-outline">
                     Henüz yanıt yok — ilk yanıtı sen yaz.
                   </p>
-                )}
-              </div>
-              <div className="shrink-0 p-space-md border-t border-surface-container-high flex gap-space-sm">
-                <input
-                  value={threadDraft}
-                  onChange={(e) => setThreadDraft(e.target.value)}
+                }
+              />
+              <div className="shrink-0 border-t border-surface-container-high relative z-[100]">
+                <ChatInput
+                  key={`thread-${threadRoot.id}`}
+                  channelName={channel?.name}
                   placeholder="Thread’e yanıt yaz…"
-                  disabled={threadSending}
-                  className="flex-1 h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none disabled:opacity-50"
-                  onKeyDown={(e) => {
-                    if (
-                      e.key === 'Enter' &&
-                      threadDraft.trim() &&
-                      threadRoot &&
-                      !threadSending
-                    ) {
-                      e.preventDefault();
-                      setThreadSending(true);
-                      void sendMessage(threadDraft.trim(), undefined, {
-                        threadRootId: threadRoot.id,
-                      })
-                        .then(() => {
-                          setThreadDraft('');
-                        })
-                        .finally(() => setThreadSending(false));
-                    }
+                  onSend={(text, meta) => {
+                    void sendMessage(text, undefined, {
+                      threadRootId: threadRoot.id,
+                      replyToId: meta?.replyToId ?? replyTo?.id,
+                    }).then(() => setReplyTo(null));
+                  }}
+                  onAttachFiles={(files) =>
+                    void sendWithAttachments(files, {
+                      threadRootId: threadRoot.id,
+                      replyToId: replyTo?.id,
+                    }).then(() => setReplyTo(null))
+                  }
+                  onSendMedia={(payload) =>
+                    void sendMedia(payload, { threadRootId: threadRoot.id })
+                  }
+                  onPollClick={() => setPollOpen(true)}
+                  onTyping={notifyTyping}
+                  replyTo={replyTo}
+                  onCancelReply={() => setReplyTo(null)}
+                  searchGifs={searchGifs}
+                  loadFeaturedGifs={loadFeaturedGifs}
+                  mentionUsers={mentionUsers}
+                  mentionChannels={mentionChannels}
+                  botSlashCommands={
+                    botSlashCommands.length ? botSlashCommands : undefined
+                  }
+                  spellCheck={prefs.messaging.spellcheck}
+                  uploadStickerFile={async (file) => {
+                    const uploaded = await client.uploadFile(file, 'stickers');
+                    return { url: uploaded.url, contentType: uploaded.contentType };
                   }}
                 />
-                <button
-                  type="button"
-                  disabled={!threadDraft.trim() || !threadRoot || threadSending}
-                  className="h-10 px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
-                  onClick={() => {
-                    if (!threadRoot || !threadDraft.trim() || threadSending) return;
-                    setThreadSending(true);
-                    void sendMessage(threadDraft.trim(), undefined, {
-                      threadRootId: threadRoot.id,
-                    })
-                      .then(() => {
-                        setThreadDraft('');
-                      })
-                      .finally(() => setThreadSending(false));
-                  }}
-                >
-                  Gönder
-                </button>
               </div>
             </div>
           ) : (
@@ -3314,10 +3334,7 @@ export function GuildChannelView({
                       });
                     },
                     onReply: isForumView
-                      ? (m) => {
-                          setThreadRoot(m);
-                          setThreadDraft('');
-                        }
+                      ? (m) => setThreadRoot(m)
                       : (m) =>
                           setReplyTo({
                             id: m.id,
@@ -3338,10 +3355,7 @@ export function GuildChannelView({
                       void pinMessage(m.id, pin).then(() => void refreshPins());
                     },
                     onBookmark: (m, bookmark) => void bookmarkMessage(m.id, bookmark),
-                    onOpenThread: (m) => {
-                      setThreadRoot(m);
-                      setThreadDraft('');
-                    },
+                    onOpenThread: (m) => setThreadRoot(m),
                     onCreateHeading: isForumView
                       ? undefined
                       : (m) => {
@@ -4165,7 +4179,12 @@ export function GuildChannelView({
                 .filter(Boolean);
               if (options.length < 2) return;
               setMsgBusy(true);
-              void sendPoll(pollQuestion.trim(), options)
+              void sendPoll(
+                pollQuestion.trim(),
+                options,
+                false,
+                threadRoot ? { threadRootId: threadRoot.id } : undefined,
+              )
                 .then(() => {
                   setPollOpen(false);
                   setPollQuestion('');
@@ -4355,7 +4374,6 @@ export function GuildChannelView({
                   onClick={() => {
                     const root = m;
                     setThreadsPreviewOpen(false);
-                    setThreadDraft('');
                     if (root.channelId && root.channelId !== channelId) {
                       const ch = channels.find((c) => c.id === root.channelId);
                       if (ch) selectChannel(ch);

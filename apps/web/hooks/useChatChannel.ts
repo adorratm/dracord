@@ -277,7 +277,10 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
   );
 
   const sendWithAttachments = useCallback(
-    async (files: FileList | File[]) => {
+    async (
+      files: FileList | File[],
+      opts?: { replyToId?: string; threadRootId?: string },
+    ) => {
       if (!channelId) return;
       try {
         const list = Array.from(files as ArrayLike<File>);
@@ -288,7 +291,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         }
         const content =
           uploaded.length === 1 ? '' : uploaded.map((a) => a.filename).join(', ');
-        await sendMessage(content || uploaded[0]!.filename, uploaded);
+        await sendMessage(content || uploaded[0]!.filename, uploaded, opts);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Dosya yüklenemedi');
       }
@@ -297,21 +300,24 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
   );
 
   const sendMedia = useCallback(
-    async (payload: ChatMediaPayload) => {
+    async (
+      payload: ChatMediaPayload,
+      opts?: { replyToId?: string; threadRootId?: string },
+    ) => {
       if (!channelId) return;
       try {
         if (payload.type === 'sticker') {
-          await sendMessage(`sticker:${payload.emoji}`);
+          await sendMessage(`sticker:${payload.emoji}`, undefined, opts);
           return;
         }
         if (payload.type === 'sticker-image') {
           if (payload.url.startsWith('data:')) {
             const file = await dataUrlToFile(payload.url, payload.label || 'sticker');
             const uploaded = await client.uploadFile(file, 'stickers');
-            await sendMessage(`sticker:${uploaded.url}`);
+            await sendMessage(`sticker:${uploaded.url}`, undefined, opts);
             return;
           }
-          await sendMessage(`sticker:${payload.url}`);
+          await sendMessage(`sticker:${payload.url}`, undefined, opts);
           return;
         }
         const attachment: MessageAttachment = {
@@ -321,7 +327,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
           contentType: 'image/gif',
           size: 0,
         };
-        await sendMessage(payload.label || 'GIF', [attachment]);
+        await sendMessage(payload.label || 'GIF', [attachment], opts);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Medya gönderilemedi');
       }
@@ -417,13 +423,33 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
   );
 
   const sendPoll = useCallback(
-    async (question: string, options: string[], multi = false) => {
+    async (
+      question: string,
+      options: string[],
+      multi = false,
+      opts?: { threadRootId?: string },
+    ) => {
       if (!channelId) return;
-      const message = await client.sendMessage(channelId, question, undefined, {
+      const message = await client.sendMessage(
+        channelId,
         question,
-        options,
-        multi,
-      });
+        undefined,
+        { question, options, multi },
+        opts,
+      );
+      if (message.threadRootId || opts?.threadRootId) {
+        const rootId = message.threadRootId ?? opts?.threadRootId;
+        if (rootId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === rootId
+                ? { ...m, threadReplyCount: (m.threadReplyCount ?? 0) + 1 }
+                : m,
+            ),
+          );
+        }
+        return message;
+      }
       setAtLiveEdge(true);
       setPendingNewCount(0);
       setMessages((prev) => {
@@ -432,6 +458,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         remember(channelId, { items: next, hasMore });
         return next;
       });
+      return message;
     },
     [channelId, client, hasMore],
   );

@@ -2,58 +2,14 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Draco } from '@/components/Draco';
-import { useAuth } from '@/components/AuthProvider';
 import {
+  APP_TOUR_STEPS,
+  appTourTargetSelector,
   hasCompletedAppTour,
   markAppTourCompleted,
-} from '@/lib/onboarding';
-
-type TourStep = {
-  id: string;
-  title: string;
-  body: string;
-  /** CSS selector; yoksa ortalanmış kart */
-  target?: string;
-  mood?: 'happy' | 'wave' | 'peek' | 'float' | 'idle';
-};
-
-const STEPS: TourStep[] = [
-  {
-    id: 'welcome',
-    title: 'Dracord’a hoş geldin!',
-    body: 'Draco kısa bir turla arayüzü gösterecek. İstediğin zaman atlayabilirsin.',
-    mood: 'wave',
-  },
-  {
-    id: 'servers',
-    title: 'Sunucu çubuğu',
-    body: 'Soldaki simgeler sunucuların. Artı ile yeni sunucu oluştur, keşfet ile herkese açık sunuculara bak.',
-    target: '[data-tour="servers"]',
-    mood: 'peek',
-  },
-  {
-    id: 'nav',
-    title: 'Üst menü',
-    body: 'Sunucular, direkt mesajlar, ses ve ayarlar arasında buradan geçiş yaparsın.',
-    target: '[data-tour="nav"]',
-    mood: 'idle',
-  },
-  {
-    id: 'notifications',
-    title: 'Bildirimler',
-    body: 'Birisi seni etiketlediğinde veya önemli bir şey olduğunda zil burada yanar.',
-    target: '[data-tour="notifications"]',
-    mood: 'happy',
-  },
-  {
-    id: 'chat',
-    title: 'Sohbet alanı',
-    body: 'Mesaj yaz, dosya ekle, anket oluştur, emoji ve GIF gönder. @ ile bahset, # ile kanal işaretle.',
-    target: '[data-tour="chat"]',
-    mood: 'float',
-  },
-];
+} from '@dracord/types';
+import { Draco } from '@/components/Draco';
+import { useAuth } from '@/components/AuthProvider';
 
 type Rect = { top: number; left: number; width: number; height: number };
 
@@ -84,8 +40,7 @@ export function AppTour() {
     if (!ready || !user) return;
     if (user.usernameConfirmed === false) return;
     if (hasCompletedAppTour(user.id)) return;
-    // Kısa gecikme: layout / data-tour hedefleri yerleşsin
-    const t = window.setTimeout(() => setOpen(true), 600);
+    const t = window.setTimeout(() => setOpen(true), 700);
     return () => window.clearTimeout(t);
   }, [ready, user]);
 
@@ -98,15 +53,14 @@ export function AppTour() {
     return () => window.removeEventListener('dracord:start-tour', onStart);
   }, []);
 
-  const current = STEPS[step]!;
+  const current = APP_TOUR_STEPS[step]!;
 
   const refreshHole = useCallback(() => {
     if (!current.target) {
       setHole(null);
       return;
     }
-    // Mobilde sunucu çubuğu gizli olabilir — delik yoksa yine kart gösterilir
-    setHole(measure(current.target));
+    setHole(measure(appTourTargetSelector(current.target)));
   }, [current.target]);
 
   useLayoutEffect(() => {
@@ -127,14 +81,17 @@ export function AppTour() {
   }, [user?.id]);
 
   const next = () => {
-    if (step >= STEPS.length - 1) {
+    if (step >= APP_TOUR_STEPS.length - 1) {
       finish();
       return;
     }
     setStep((s) => s + 1);
   };
 
-  const skip = () => finish();
+  const back = () => {
+    if (step <= 0) return;
+    setStep((s) => s - 1);
+  };
 
   if (!mounted || !open) return null;
 
@@ -142,15 +99,9 @@ export function AppTour() {
     ? {
         position: 'fixed',
         zIndex: 10001,
-        top: Math.min(
-          hole.top + hole.height + 16,
-          window.innerHeight - 220,
-        ),
-        left: Math.min(
-          Math.max(16, hole.left),
-          window.innerWidth - 336,
-        ),
-        width: 'min(20rem, calc(100vw - 2rem))',
+        top: Math.min(hole.top + hole.height + 16, window.innerHeight - 260),
+        left: Math.min(Math.max(16, hole.left), window.innerWidth - 360),
+        width: 'min(22rem, calc(100vw - 2rem))',
       }
     : {
         position: 'fixed',
@@ -158,17 +109,15 @@ export function AppTour() {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 'min(22rem, calc(100vw - 2rem))',
+        width: 'min(24rem, calc(100vw - 2rem))',
       };
 
-  // Spotlight yukarıda kalırsa kartı üste al
   if (hole && hole.top + hole.height > window.innerHeight * 0.55) {
-    cardStyle.top = Math.max(16, hole.top - 200);
+    cardStyle.top = Math.max(16, hole.top - 240);
   }
 
   return createPortal(
     <div className="fixed inset-0 z-[10000]" role="dialog" aria-modal="true" aria-label="Uygulama turu">
-      {/* Karartma + delik */}
       <svg className="absolute inset-0 w-full h-full" aria-hidden>
         <defs>
           <mask id="tour-mask">
@@ -214,7 +163,7 @@ export function AppTour() {
           <Draco size={64} mood={current.mood ?? 'happy'} glow />
           <div className="min-w-0 flex-1 pt-1">
             <p className="font-label-sm text-[#6272a4] mb-1">
-              {step + 1} / {STEPS.length}
+              {step + 1} / {APP_TOUR_STEPS.length}
             </p>
             <h2 className="font-headline-md text-lg text-[#f8f8f2]">{current.title}</h2>
             <p className="font-body-sm text-sm text-[#9a95b0] mt-1 leading-relaxed">
@@ -225,18 +174,29 @@ export function AppTour() {
         <div className="flex items-center justify-between gap-2 pt-1">
           <button
             type="button"
-            onClick={skip}
+            onClick={finish}
             className="px-3 py-2 rounded-lg text-sm text-[#6272a4] hover:text-[#f8f8f2] transition-colors"
           >
             Atla
           </button>
-          <button
-            type="button"
-            onClick={next}
-            className="px-5 py-2.5 rounded-full font-bold text-sm text-[#1e1e2e] bg-gradient-to-r from-[#ff79c6] to-[#bd93f9] hover:opacity-95 active:scale-95 transition-all"
-          >
-            {step >= STEPS.length - 1 ? 'Tamamla' : 'İleri'}
-          </button>
+          <div className="flex items-center gap-2">
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={back}
+                className="px-3 py-2 rounded-lg text-sm text-[#bd93f9] hover:bg-[#44475a]/40 transition-colors"
+              >
+                Geri
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={next}
+              className="px-5 py-2.5 rounded-full font-bold text-sm text-[#1e1e2e] bg-gradient-to-r from-[#ff79c6] to-[#bd93f9] hover:opacity-95 active:scale-95 transition-all"
+            >
+              {step >= APP_TOUR_STEPS.length - 1 ? 'Tamamla' : 'İleri'}
+            </button>
+          </div>
         </div>
       </div>
     </div>,

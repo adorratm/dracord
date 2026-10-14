@@ -19,6 +19,7 @@ import {
   loadCustomStickers,
   loadFavoriteIds,
   loadRecentIds,
+  pullStickersFromCloud,
   pushRecentId,
   readImageFileAsSticker,
   removeCustomSticker,
@@ -268,6 +269,8 @@ export function ChatInput({
 
   useEffect(() => {
     refreshStickerState();
+    if (!pickerOpen) return;
+    void pullStickersFromCloud().then(() => refreshStickerState());
   }, [refreshStickerState, pickerOpen]);
 
   useEffect(() => {

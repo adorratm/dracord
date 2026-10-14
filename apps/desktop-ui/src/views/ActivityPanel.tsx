@@ -11,6 +11,7 @@ import { WatchPartyRoom } from '../../../web/components/activities/games/WatchPa
 import { ActivityStageShell } from '../../../web/components/activities/ActivityStageShell';
 import { GameAudio } from '@/lib/game-audio';
 import { useAuth } from '../auth';
+import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -51,6 +52,7 @@ export function ActivityPanel({
   textChannels?: ChannelSummary[];
 }) {
   const { client, user } = useAuth();
+  const voice = useVoiceSession();
   const channelId = channel.id;
   const [session, setSession] = useState<ActivitySessionDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +65,8 @@ export function ActivityPanel({
   const [chatChannelId, setChatChannelId] = useState<string | null>(
     () => textChannels.find((c) => c.type === 'TEXT')?.id ?? null,
   );
+  const [dmChannel, setDmChannel] = useState<ChannelSummary | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const bootRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   sessionIdRef.current = session?.id ?? null;
@@ -73,6 +77,17 @@ export function ActivityPanel({
   useEffect(() => {
     GameAudio.unlock();
   }, []);
+
+  // Oyun / watch party = ses odası; web gibi kanala geçince LiveKit'e de katıl
+  // type şart: AFK otomatik taşıma GAME/WATCH_PARTY'de çalışmaz
+  const joinVoice = voice.join;
+  useEffect(() => {
+    void joinVoice(guildId, {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+    });
+  }, [channel.id, channel.name, channel.type, guildId, joinVoice]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,10 +242,31 @@ export function ActivityPanel({
     }
   };
 
+  const textOnly = useMemo(
+    () => textChannels.filter((c) => c.type === 'TEXT'),
+    [textChannels],
+  );
+
   const chatChannel =
-    textChannels.find((c) => c.id === chatChannelId) ??
-    textChannels.find((c) => c.type === 'TEXT') ??
+    dmChannel ??
+    textOnly.find((c) => c.id === chatChannelId) ??
+    textOnly[0] ??
     null;
+
+  const chatTitle = dmChannel
+    ? 'Direkt mesaj'
+    : chatChannel
+      ? `#${chatChannel.name}`
+      : 'Kanal seç';
+
+  const openDmWith = (targetUserId: string) => {
+    void client.openDm(targetUserId).then((ch) => {
+      setDmChannel(ch);
+      setChatChannelId(ch.id);
+      setChatOpen(true);
+      setPickerOpen(false);
+    });
+  };
 
   const participantGroups: MemberListGroup[] = useMemo(() => {
     if (!session) return [];
@@ -244,6 +280,7 @@ export function ActivityPanel({
         status: (m?.status ?? 'ONLINE') as 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE',
         subtitle: role,
         isBot: Boolean(m?.isBot),
+        onClick: id !== me ? () => openDmWith(id) : undefined,
       };
     };
     const groups: MemberListGroup[] = [];
@@ -353,28 +390,55 @@ export function ActivityPanel({
         chatOpen ? (
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-surface-container-high px-2">
-              {textChannels.filter((c) => c.type === 'TEXT').length > 1 ? (
-                <select
-                  className="h-8 min-w-0 flex-1 rounded-lg bg-surface-container-highest px-2 text-sm outline-none"
-                  value={chatChannel?.id ?? ''}
-                  onChange={(e) => setChatChannelId(e.target.value)}
+              <div className="relative min-w-0 flex-1">
+                <button
+                  type="button"
+                  className="w-full h-8 px-2 rounded-lg bg-surface-container-highest text-left font-body-sm truncate flex items-center gap-1"
+                  onClick={() => setPickerOpen((v) => !v)}
                 >
-                  {textChannels
-                    .filter((c) => c.type === 'TEXT')
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
+                  <span className="truncate">{chatTitle}</span>
+                  <span className="material-symbols-outlined text-[16px] text-outline ml-auto">
+                    expand_more
+                  </span>
+                </button>
+                {pickerOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-surface-container-highest bg-surface-container-low shadow-float max-h-48 overflow-y-auto">
+                    {textOnly.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full h-9 px-2 text-left font-body-sm hover:bg-surface-container truncate"
+                        onClick={() => {
+                          setDmChannel(null);
+                          setChatChannelId(c.id);
+                          setPickerOpen(false);
+                        }}
+                      >
                         #{c.name}
-                      </option>
+                      </button>
                     ))}
-                </select>
-              ) : (
-                <span className="min-w-0 flex-1 truncate font-body-sm text-on-surface">
-                  {chatChannel ? `#${chatChannel.name}` : 'Sohbet'}
-                </span>
-              )}
+                    <div className="border-t border-surface-container-high py-1">
+                      <p className="px-2 py-1 font-label-sm text-outline uppercase">DM</p>
+                      {members
+                        .filter((m) => m.id !== me)
+                        .slice(0, 12)
+                        .map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            className="w-full h-9 px-2 text-left font-body-sm hover:bg-surface-container truncate"
+                            onClick={() => openDmWith(m.id)}
+                          >
+                            {m.displayName}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-on-surface"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-outline hover:bg-surface-container"
                 aria-label="Sohbeti kapat"
                 onClick={() => setChatOpen(false)}
               >
@@ -383,7 +447,13 @@ export function ActivityPanel({
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
               {chatChannel ? (
-                <ChatPanel guildId={guildId} channel={chatChannel} />
+                <ChatPanel
+                  guildId={dmChannel ? (dmChannel.guildId ?? guildId) : guildId}
+                  channel={chatChannel}
+                  members={members}
+                  hideHeader
+                  titleOverride={chatTitle}
+                />
               ) : (
                 <p className="p-4 text-sm text-on-surface-variant">Metin kanalı yok.</p>
               )}

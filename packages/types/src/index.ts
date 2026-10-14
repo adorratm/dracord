@@ -667,6 +667,19 @@ export interface ClientSettings {
     x: number;
     z: number;
   };
+  /** Özel sticker kütüphanesi (cihazlar arası senkron) */
+  stickers: {
+    custom: Array<{
+      id: string;
+      kind: 'emoji' | 'image';
+      value: string;
+      label: string;
+      contentType?: string;
+      createdAt: number;
+    }>;
+    favoriteIds: string[];
+    recentIds: string[];
+  };
 }
 
 export interface GuildEventDto {
@@ -699,3 +712,17 @@ export interface GifDto {
 
 /** @deprecated Use GifDto — Tenor API kapatıldı, Klipy kullanılıyor */
 export type TenorGifDto = GifDto;
+
+export {
+  APP_TOUR_STEPS,
+  APP_TOUR_STORAGE_KEY,
+  APP_TOUR_STORAGE_KEY_LEGACY,
+  APP_TOUR_STORAGE_KEY_LEGACY_DESKTOP,
+  appTourTargetSelector,
+  hasCompletedAppTour,
+  markAppTourCompleted,
+  parseAppTourCompleted,
+  resetAppTour,
+  serializeAppTourCompleted,
+} from './app-tour';
+export type { AppTourMood, AppTourStep } from './app-tour';

@@ -1232,7 +1232,6 @@ export function MessageList({
   const prevLenRef = useRef(messages.length);
   const highlightDoneRef = useRef<string | null>(null);
   const [scrolledAway, setScrolledAway] = useState(false);
-  const [parentHeight, setParentHeight] = useState(0);
   /** Görsel vurgu: prop'tan kopyalanır, kısa süre sonra söner */
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
 
@@ -1262,18 +1261,16 @@ export function MessageList({
     });
   }, [messages.length, virtualizer]);
 
-  // Viewport yüksekliğini izle — player açılınca da alta yapış
+  // Viewport yüksekliğini izle — player / pencere boyutu değişince alta yapış
   useLayoutEffect(() => {
     const el = parentRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      setParentHeight(el.clientHeight);
       if (stickToBottomRef.current && !activeHighlightId) {
         el.scrollTop = el.scrollHeight;
       }
     });
     ro.observe(el);
-    setParentHeight(el.clientHeight);
     return () => ro.disconnect();
   }, [activeHighlightId]);
 
@@ -1340,13 +1337,13 @@ export function MessageList({
     prevLenRef.current = messages.length;
   }, [messages.length, highlightMessageId, activeHighlightId, scrollToBottom, scrollKey]);
 
-  // Ölçüm / spacer değişince de alta yapış (embed, görsel, player)
+  // Ölçüm değişince de alta yapış (embed, görsel, player)
   const totalSizeForStick = virtualizer.getTotalSize();
   useLayoutEffect(() => {
     if (!stickToBottomRef.current || highlightMessageId || activeHighlightId) return;
     const el = parentRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [totalSizeForStick, parentHeight, highlightMessageId, activeHighlightId]);
+  }, [totalSizeForStick, highlightMessageId, activeHighlightId]);
 
   // Arama: tek mesaja kaydır + kısa vurgu
   useEffect(() => {
@@ -1415,7 +1412,12 @@ export function MessageList({
 
   if (messages.length === 0 && emptyState) {
     return (
-      <div className={cn('flex-1 flex items-center justify-center text-outline', className)}>
+      <div
+        className={cn(
+          'flex-1 min-h-0 min-w-0 w-full flex flex-col items-center justify-center text-outline',
+          className,
+        )}
+      >
         {emptyState}
       </div>
     );
@@ -1424,26 +1426,25 @@ export function MessageList({
   const items = virtualizer.getVirtualItems();
   const showJump = scrolledAway || pendingNewCount > 0;
   const totalSize = virtualizer.getTotalSize();
-  // Kısa liste: üstten spacer — flex justify-end kullanma (virtualizer bozuluyor)
-  const topPad = Math.max(0, parentHeight - totalSize);
 
   return (
     <div className={cn('relative z-0 flex-1 min-h-0 flex flex-col isolate', className)}>
       <div
         ref={parentRef}
-        className="flex-1 overflow-y-auto min-h-0 relative z-0"
+        className="flex flex-1 min-h-0 flex-col overflow-y-auto relative z-0"
         role="log"
         aria-live="polite"
         onScroll={onScroll}
       >
         {loadingOlder && (
-          <div className="py-space-sm text-center font-label-sm text-outline">
+          <div className="py-space-sm text-center font-label-sm text-outline shrink-0">
             Eski mesajlar yükleniyor…
           </div>
         )}
+        {/* mt-auto: az mesajda listeyi alta yaslar (JS topPad ölçümüne gerek yok) */}
         <div
-          className="relative w-full"
-          style={{ height: `${totalSize + topPad}px` }}
+          className="relative w-full mt-auto shrink-0"
+          style={{ height: `${Math.max(totalSize, 1)}px` }}
         >
           {items.map((virtualRow) => {
             const message = messages[virtualRow.index];
@@ -1474,7 +1475,7 @@ export function MessageList({
                   top: 0,
                   left: 0,
                   width: '100%',
-                  transform: `translateY(${virtualRow.start + topPad}px)`,
+                  transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
                 <MessageItem

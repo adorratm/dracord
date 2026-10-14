@@ -36,6 +36,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^18.0.8",
+    "edge-tts-universal": "1.4.0",
     "ioredis": "^6.0.0",
     "livekit-server-sdk": "^2.19.1",
     "passport": "^0.7.0",

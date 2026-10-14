@@ -34,6 +34,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "dealer-tts.js",
       "package.json",
       "ui/**/*",
       "build/icon.png",
@@ -109,5 +110,8 @@
         ]
       }
     ]
+  },
+  "dependencies": {
+    "edge-tts-universal": "1.4.0"
   }
 }

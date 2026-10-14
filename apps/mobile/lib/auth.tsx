@@ -14,6 +14,7 @@ import * as Linking from 'expo-linking';
 import { DracordClient } from '@dracord/sdk';
 import type { AuthTokens, PublicUser } from '@dracord/types';
 import { API_URL } from './config';
+import { syncStickersWithCloud } from './sticker-sync';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -154,6 +155,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.socket = null;
     setUser(null);
   }, [client]);
+
+  useEffect(() => {
+    if (!user) return;
+    void syncStickersWithCloud(client);
+  }, [client, user?.id]);
 
   const value = useMemo(
     () => ({ client, user, ready, loginGoogle, logout, setSession, refreshUser }),

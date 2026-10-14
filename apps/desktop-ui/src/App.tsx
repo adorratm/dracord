@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { Shell } from './pages/Shell';
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { OnboardingUsername } from './pages/OnboardingUsername';
+import { VoiceSessionProvider } from './voice/VoiceSession';
 
 export function App() {
   const { user, ready, refreshUser } = useAuth();
@@ -33,7 +34,9 @@ export function App() {
               }}
             />
           ) : (
-            <Shell />
+            <VoiceSessionProvider>
+              <Shell />
+            </VoiceSessionProvider>
           )
         }
       />

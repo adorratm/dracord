@@ -1,4 +1,4 @@
-/** Client-side sticker library: custom uploads, favorites, recently used. */
+/** Client-side sticker library + isteğe bağlı bulut senkronu (ClientSettings). */
 
 export type StickerKind = 'emoji' | 'image';
 
@@ -12,12 +12,30 @@ export interface StoredSticker {
   createdAt: number;
 }
 
+export type StickerCloudState = {
+  custom: StoredSticker[];
+  favoriteIds: string[];
+  recentIds: string[];
+};
+
 const CUSTOM_KEY = 'dracord:stickers:custom';
 const FAVORITES_KEY = 'dracord:stickers:favorites';
 const RECENT_KEY = 'dracord:stickers:recent';
 const MAX_CUSTOM = 40;
 const MAX_RECENT = 24;
 const MAX_FILE_BYTES = 3_000_000;
+
+type CloudBridge = {
+  get: () => Promise<StickerCloudState | null>;
+  set: (state: StickerCloudState) => Promise<void>;
+};
+
+let cloudBridge: CloudBridge | null = null;
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+/** React Native / SSR — localStorage yoksa bellek */
+let memCustom: StoredSticker[] = [];
+let memFavorites: string[] = [];
+let memRecent: string[] = [];
 
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -28,31 +46,53 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
+function canUseLocalStorage(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage != null;
+  } catch {
+    return false;
+  }
+}
+
 export function loadCustomStickers(): StoredSticker[] {
-  if (typeof window === 'undefined') return [];
+  if (!canUseLocalStorage()) return memCustom;
   return safeParse<StoredSticker[]>(localStorage.getItem(CUSTOM_KEY), []);
 }
 
 export function saveCustomStickers(list: StoredSticker[]) {
-  localStorage.setItem(CUSTOM_KEY, JSON.stringify(list.slice(0, MAX_CUSTOM)));
+  const next = list.slice(0, MAX_CUSTOM);
+  memCustom = next;
+  if (canUseLocalStorage()) {
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+  }
+  scheduleCloudPush();
 }
 
 export function loadFavoriteIds(): string[] {
-  if (typeof window === 'undefined') return [];
+  if (!canUseLocalStorage()) return memFavorites;
   return safeParse<string[]>(localStorage.getItem(FAVORITES_KEY), []);
 }
 
 export function saveFavoriteIds(ids: string[]) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+  memFavorites = ids;
+  if (canUseLocalStorage()) {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+  }
+  scheduleCloudPush();
 }
 
 export function loadRecentIds(): string[] {
-  if (typeof window === 'undefined') return [];
+  if (!canUseLocalStorage()) return memRecent;
   return safeParse<string[]>(localStorage.getItem(RECENT_KEY), []);
 }
 
 export function saveRecentIds(ids: string[]) {
-  localStorage.setItem(RECENT_KEY, JSON.stringify(ids.slice(0, MAX_RECENT)));
+  const next = ids.slice(0, MAX_RECENT);
+  memRecent = next;
+  if (canUseLocalStorage()) {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  }
+  scheduleCloudPush();
 }
 
 export function toggleFavoriteId(id: string): string[] {
@@ -83,6 +123,75 @@ export function removeCustomSticker(id: string) {
   saveCustomStickers(loadCustomStickers().filter((s) => s.id !== id));
   saveFavoriteIds(loadFavoriteIds().filter((x) => x !== id));
   saveRecentIds(loadRecentIds().filter((x) => x !== id));
+}
+
+export function snapshotStickers(): StickerCloudState {
+  return {
+    custom: loadCustomStickers(),
+    favoriteIds: loadFavoriteIds(),
+    recentIds: loadRecentIds(),
+  };
+}
+
+/** Yerel + uzak birleştir (id’ye göre; daha yeni createdAt kazanır) */
+export function applyStickerCloudState(remote: StickerCloudState | null | undefined) {
+  if (!remote) return;
+  const localCustom = loadCustomStickers();
+  const byId = new Map<string, StoredSticker>();
+  for (const s of localCustom) byId.set(s.id, s);
+  for (const s of remote.custom ?? []) {
+    const prev = byId.get(s.id);
+    if (!prev || (s.createdAt ?? 0) >= (prev.createdAt ?? 0)) byId.set(s.id, s);
+  }
+  const mergedCustom = [...byId.values()]
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .slice(0, MAX_CUSTOM);
+  memCustom = mergedCustom;
+  if (canUseLocalStorage()) {
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(mergedCustom));
+  }
+
+  const fav = Array.from(
+    new Set([...(remote.favoriteIds ?? []), ...loadFavoriteIds()]),
+  );
+  memFavorites = fav;
+  if (canUseLocalStorage()) {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(fav));
+  }
+
+  const recent = Array.from(
+    new Set([...(remote.recentIds ?? []), ...loadRecentIds()]),
+  ).slice(0, MAX_RECENT);
+  memRecent = recent;
+  if (canUseLocalStorage()) {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+  }
+}
+
+function scheduleCloudPush() {
+  if (!cloudBridge) return;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    void cloudBridge?.set(snapshotStickers()).catch(() => undefined);
+  }, 400);
+}
+
+/** Web / desktop / mobil Auth sonrası bağla */
+export function setStickerCloudBridge(bridge: CloudBridge | null) {
+  cloudBridge = bridge;
+}
+
+export async function pullStickersFromCloud(): Promise<void> {
+  if (!cloudBridge) return;
+  try {
+    const remote = await cloudBridge.get();
+    applyStickerCloudState(remote);
+    // Yerelde yeni sticker varsa uzakla birleştirip geri yaz
+    await cloudBridge.set(snapshotStickers());
+  } catch {
+    /* ignore */
+  }
 }
 
 export function readImageFileAsSticker(file: File): Promise<Omit<StoredSticker, 'id' | 'createdAt'>> {

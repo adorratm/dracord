@@ -633,9 +633,10 @@ export function VoiceStage({
                 <div
                   className={cn(
                     'grid gap-space-sm sm:gap-space-md content-start overflow-y-auto p-0.5 min-w-0',
+                    // minmax: dar masaüstü panellerinde kutu küçülmesin, sütun sayısı azalsın
                     stripMode
-                      ? 'grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 shrink-0 max-h-52'
-                      : 'flex-1 grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+                      ? 'grid-cols-[repeat(auto-fill,minmax(min(100%,9.5rem),1fr))] shrink-0 max-h-52'
+                      : 'flex-1 grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))]',
                   )}
                 >
                   {participants.map((p) => {
@@ -668,10 +669,10 @@ export function VoiceStage({
                             : undefined
                         }
                         className={cn(
-                          'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-sm relative overflow-hidden transition-shadow duration-200 box-border w-full min-w-0',
+                          'rounded-xl bg-surface-container-low flex flex-col items-center justify-center gap-space-sm p-space-sm relative overflow-hidden transition-shadow duration-200 box-border w-full',
                           stripMode
-                            ? 'aspect-video min-h-[6.5rem] sm:min-h-[8.5rem]'
-                            : 'aspect-video min-h-[8rem] sm:min-h-0',
+                            ? 'aspect-video min-h-[6.5rem] min-w-[9.5rem]'
+                            : 'aspect-video min-h-[8.5rem] min-w-[12rem]',
                           p.speaking && 'ring-2 ring-inset ring-primary-container',
                           (isFocusedShare || isFeaturedCam) && 'ring-2 ring-inset ring-primary',
                           p.isBot && 'ring-1 ring-inset ring-secondary-container/60',

@@ -1,5 +1,18 @@
 export { cn } from './lib/cn';
 export { presenceDotClass, presenceLabelTr } from './lib/presence';
+export {
+  APP_TOUR_STEPS,
+  APP_TOUR_STORAGE_KEY,
+  APP_TOUR_STORAGE_KEY_LEGACY,
+  APP_TOUR_STORAGE_KEY_LEGACY_DESKTOP,
+  appTourTargetSelector,
+  hasCompletedAppTour,
+  markAppTourCompleted,
+  parseAppTourCompleted,
+  resetAppTour,
+  serializeAppTourCompleted,
+} from '@dracord/types';
+export type { AppTourMood, AppTourStep } from '@dracord/types';
 
 export { Logo } from './components/Logo';
 export type { LogoProps } from './components/Logo';
@@ -126,13 +139,17 @@ export type {
 
 export {
   addCustomSticker,
+  applyStickerCloudState,
   dataUrlToFile,
   loadCustomStickers,
   loadFavoriteIds,
   loadRecentIds,
+  pullStickersFromCloud,
   pushRecentId,
   readImageFileAsSticker,
   removeCustomSticker,
+  setStickerCloudBridge,
+  snapshotStickers,
   toggleFavoriteId,
 } from './lib/sticker-store';
-export type { StoredSticker, StickerKind } from './lib/sticker-store';
+export type { StoredSticker, StickerKind, StickerCloudState } from './lib/sticker-store';

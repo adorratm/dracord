@@ -199,7 +199,9 @@ export function FriendsHub({
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-space-md space-y-0.5 min-w-0">
         {list.length === 0 ? (
           tab === 'online' && emptyState ? (
-            emptyState
+            <div className="w-full min-w-0 flex flex-col items-center justify-center py-space-md">
+              {emptyState}
+            </div>
           ) : (
             <p className="px-space-md text-outline font-body-md text-body-md">
               {tab === 'online' && 'Çevrimiçi arkadaş yok.'}

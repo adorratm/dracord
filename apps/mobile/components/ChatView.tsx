@@ -17,6 +17,12 @@ import type { ChannelSummary, MessageAttachment, MessageDto } from '@dracord/typ
 import { SocketEvents } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
+import {
+  getLocalStickers,
+  loadStickersFromDisk,
+  syncStickersWithCloud,
+  type MobileSticker,
+} from '../lib/sticker-sync';
 import { uploadImageFromUri } from '../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 
@@ -37,13 +43,20 @@ export function ChatView({ channel }: { channel: ChannelSummary }) {
   const [pollOpen, setPollOpen] = useState(false);
   const [pollQ, setPollQ] = useState('');
   const [pollOpts, setPollOpts] = useState('Evet\nHayır');
+  const [stickersOpen, setStickersOpen] = useState(false);
+  const [stickers, setStickers] = useState<MobileSticker[]>([]);
   const listRef = useRef<FlatList<MessageDto>>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    void loadStickersFromDisk().then((s) => setStickers(s.custom));
+    void syncStickersWithCloud(client).then(setStickers);
+  }, [client]);
+
+  useEffect(() => {
     client.joinChannel(channel.id);
     void client.getMessages(channel.id).then((page) => {
-      setMessages([...(page.items ?? [])].reverse());
+      setMessages(page.items ?? []);
     });
     void client.listPinnedMessages(channel.id).then(setPins).catch(() => setPins([]));
     const sock = client.connectSocket();
@@ -105,7 +118,7 @@ export function ChatView({ channel }: { channel: ChannelSummary }) {
       setReplyTo(null);
       if (threadRoot) {
         const page = await client.getMessageThread(threadRoot.id);
-        setThreadMsgs([...(page.items ?? [])].reverse());
+        setThreadMsgs(page.items ?? []);
       }
     } finally {
       setBusy(false);
@@ -115,7 +128,7 @@ export function ChatView({ channel }: { channel: ChannelSummary }) {
   const openThread = (m: MessageDto) => {
     setThreadRoot(m);
     void client.getMessageThread(m.id).then((page) => {
-      setThreadMsgs([...(page.items ?? [])].reverse());
+      setThreadMsgs(page.items ?? []);
     });
   };
 
@@ -319,6 +332,45 @@ export function ChatView({ channel }: { channel: ChannelSummary }) {
         </View>
       ) : null}
 
+      {stickersOpen ? (
+        <ScrollView
+          horizontal
+          style={{ maxHeight: 88, borderTopWidth: 1, borderTopColor: colors.surfaceHigh }}
+          contentContainerStyle={{ padding: 8, gap: 8, alignItems: 'center' }}
+        >
+          {stickers.length === 0 ? (
+            <Text style={{ color: colors.textMuted, paddingHorizontal: 8 }}>
+              Henüz sticker yok — web’de eklediğin stickerlar burada görünür.
+            </Text>
+          ) : (
+            stickers.map((s) => (
+              <Pressable
+                key={s.id}
+                onPress={() => {
+                  void send(s.kind === 'image' ? s.value : s.value);
+                  setStickersOpen(false);
+                }}
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceHigh,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                }}
+              >
+                {s.kind === 'image' ? (
+                  <Image source={{ uri: s.value }} style={{ width: 56, height: 56 }} resizeMode="contain" />
+                ) : (
+                  <Text style={{ fontSize: 28 }}>{s.value}</Text>
+                )}
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      ) : null}
+
       <View
         style={{
           flexDirection: 'row',
@@ -331,6 +383,16 @@ export function ChatView({ channel }: { channel: ChannelSummary }) {
       >
         <Pressable onPress={() => void pickImage()} style={iconBtn}>
           <Text>📎</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setStickersOpen((v) => !v);
+            setStickers(getLocalStickers());
+            void syncStickersWithCloud(client).then(setStickers);
+          }}
+          style={iconBtn}
+        >
+          <Text>🎭</Text>
         </Pressable>
         <Pressable onPress={() => setPollOpen((v) => !v)} style={iconBtn}>
           <Text>📊</Text>

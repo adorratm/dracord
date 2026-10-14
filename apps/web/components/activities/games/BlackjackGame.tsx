@@ -10,7 +10,6 @@ import { GameSoundControls } from '../three/GameSoundControls';
 import { addGameVenue } from '../three/sceneVenue';
 import {
   createAssetBag,
-  makeDealerWoman,
   makeFeltMaterial,
   makePlayingCard,
   makeWoodMaterial,
@@ -21,6 +20,34 @@ import {
   createDealerWomanFromVrm,
   DEALER_VRM_POS,
 } from '../three/dealer/createDealerWoman';
+
+/** VRM yüklenene kadar görünmez stub — prosedürel karakter yok */
+function makePendingDealerRig(THREE: typeof import('three')): DealerRig {
+  const root = new THREE.Group();
+  root.name = 'dealer-pending';
+  root.visible = false;
+  const empty = new THREE.Group();
+  const jaw = new THREE.Mesh(
+    new THREE.SphereGeometry(0.001, 4, 4),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  jaw.visible = false;
+  return {
+    root,
+    head: empty,
+    jaw,
+    armR: empty,
+    armL: empty,
+    torso: empty,
+    setTalking: () => undefined,
+    setDealPulse: () => undefined,
+    lookAtSeat: () => undefined,
+    faceCamera: () => undefined,
+    update: () => undefined,
+    hitTargets: [],
+    kind: 'procedural',
+  };
+}
 import { GameAudio } from '@/lib/game-audio';
 import {
   onDealerSpeakingChange,
@@ -595,18 +622,18 @@ export function BlackjackGame(props: GameProps) {
       root.add(chip);
     }
 
-    // Kurpiyer — önce prosedürel (anında), VRM varsa yükselt
-    let dealer: DealerRig = makeDealerWoman(THREE, assets);
-    dealer.root.position.set(0, 0.05, -2.55);
-    dealer.faceCamera(cam.position.x, cam.position.y, cam.position.z);
-    root.add(dealer.root);
+    // Kurpiyer — yalnızca .vrm (prosedürel default karakter yok)
+    let dealer: DealerRig = makePendingDealerRig(THREE);
     let dealerCancelled = false;
     void createDealerWomanFromVrm(THREE, assets).then((vrmDealer) => {
-      if (dealerCancelled || !vrmDealer) return;
-      root.remove(dealer.root);
+      if (dealerCancelled || !vrmDealer) {
+        if (!vrmDealer) {
+          console.warn('[blackjack] VRM kurpiyer yüklenemedi — sahne boş bırakıldı');
+        }
+        return;
+      }
       dealer.dispose?.();
       dealer = vrmDealer;
-      // Belden yukarı: bacaklar masa altında, gövde uç kenarda
       vrmDealer.root.position.set(
         DEALER_VRM_POS.x,
         DEALER_VRM_POS.y,

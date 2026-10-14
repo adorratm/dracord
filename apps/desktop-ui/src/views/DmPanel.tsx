@@ -1,145 +1,188 @@
-import { useEffect, useRef, useState } from 'react';
-import { Room, RoomEvent, Track, type RemoteTrack } from 'livekit-client';
+import { useEffect, useState } from 'react';
 import type { ChannelSummary } from '@dracord/types';
+import { DM_CALL_GUILD_ID } from '@dracord/types';
+import { SocketEvents } from '@dracord/sdk';
 import { useAuth } from '../auth';
+import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
 
-export function DmPanel() {
-  const { client } = useAuth();
-  const [dms, setDms] = useState<ChannelSummary[]>([]);
-  const [active, setActive] = useState<ChannelSummary | null>(null);
-  const [callStatus, setCallStatus] = useState<string | null>(null);
-  const roomRef = useRef<Room | null>(null);
-  const attached = useRef<HTMLMediaElement[]>([]);
+export function DmPanel({
+  channelId,
+  onBack,
+}: {
+  channelId: string;
+  onBack?: () => void;
+}) {
+  const { client, user } = useAuth();
+  const voice = useVoiceSession();
+  const [channel, setChannel] = useState<ChannelSummary | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
+  const [callBusy, setCallBusy] = useState(false);
 
-  const reload = () =>
-    client.listDms().then((list) => {
-      setDms(list);
-      setActive((cur) => cur ?? list[0] ?? null);
+  const inThisCall =
+    voice.voiceChannelId === channelId && voice.voiceGuildId === DM_CALL_GUILD_ID;
+  const selfNotes = Boolean(channel?.selfNotes);
+  const peerOffline = channel?.peerStatus === 'OFFLINE';
+
+  useEffect(() => {
+    let cancelled = false;
+    void client.listDms().then((list) => {
+      if (cancelled) return;
+      setChannel(list.find((c) => c.id === channelId) ?? null);
     });
-
-  useEffect(() => {
-    void reload();
-  }, [client]);
-
-  useEffect(() => {
+    void client.markChannelRead(channelId).catch(() => undefined);
     return () => {
-      void endCall();
+      cancelled = true;
     };
-  }, []);
+  }, [client, channelId]);
 
-  const endCall = async () => {
-    const room = roomRef.current;
-    roomRef.current = null;
-    for (const el of attached.current) {
-      el.pause();
-      el.srcObject = null;
-      el.remove();
-    }
-    attached.current = [];
-    if (room) await room.disconnect();
-    if (active) {
-      try {
-        await client.declineDmCall(active.id);
-      } catch {
-        /* ignore */
-      }
-    }
-    setCallStatus(null);
-  };
+  useEffect(() => {
+    if (!user || !channel?.peerUserId) return;
+    const sock = client.connectSocket();
+    const onPresence = (payload: { userId: string; status: string }) => {
+      if (payload.userId !== channel.peerUserId) return;
+      setChannel((prev) =>
+        prev
+          ? {
+              ...prev,
+              peerStatus: payload.status as ChannelSummary['peerStatus'],
+            }
+          : prev,
+      );
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+    };
+  }, [client, user, channel?.peerUserId]);
 
   const startCall = async (mode: 'audio' | 'video') => {
-    if (!active) return;
-    setCallStatus('Aranıyor…');
+    if (selfNotes) return;
+    if (peerOffline) {
+      setCallError('Karşı taraf çevrimdışı — arama yapılamaz');
+      return;
+    }
+    setCallBusy(true);
+    setCallError(null);
     try {
-      await client.startDmCall(active.id, mode);
-      const tok = await client.getVoiceToken(active.id);
-      const room = new Room();
-      roomRef.current = room;
-      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub) => {
-        if (pub.kind === Track.Kind.Audio) {
-          const el = track.attach();
-          document.body.appendChild(el);
-          attached.current.push(el);
-        }
+      if (voice.voiceChannelId && voice.voiceChannelId !== channelId) {
+        await voice.leave();
+      }
+      await client.startDmCall(channelId, mode);
+      await voice.join(DM_CALL_GUILD_ID, {
+        id: channelId,
+        name: channel?.name ?? 'DM',
       });
-      await room.connect(tok.url, tok.token);
-      await room.localParticipant.setMicrophoneEnabled(true);
-      if (mode === 'video') await room.localParticipant.setCameraEnabled(true);
-      setCallStatus(mode === 'video' ? 'Görüntülü arama' : 'Sesli arama');
+      if (mode === 'video') {
+        window.setTimeout(() => {
+          void voice.toggleCamera();
+        }, 800);
+      }
     } catch (e) {
-      setCallStatus(e instanceof Error ? e.message : 'Arama başarısız');
+      setCallError(e instanceof Error ? e.message : 'Arama başarısız');
+    } finally {
+      setCallBusy(false);
     }
   };
 
+  const hangUp = () => {
+    void voice.leave();
+    void client.declineDmCall(channelId).catch(() => undefined);
+  };
+
+  if (!channel) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-outline font-body-sm">
+        DM yükleniyor…
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="w-60 shrink-0 border-r border-outline-variant p-2 overflow-auto bg-surface-container-low">
-        <div className="font-bold px-2 py-2">Direkt mesajlar</div>
-        {dms.map((c) => (
+    <div className="flex flex-1 min-w-0 min-h-0 flex-col bg-surface">
+      <header className="h-12 px-4 flex items-center gap-2 border-b border-surface-container-high shadow-bar shrink-0">
+        {onBack && (
           <button
-            key={c.id}
             type="button"
-            onClick={() => {
-              void endCall();
-              setActive(c);
-            }}
-            className={`block w-full text-left px-3 py-2 rounded-lg text-sm ${
-              active?.id === c.id
-                ? 'bg-surface-container-high text-on-surface font-semibold'
-                : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-            }`}
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container"
+            onClick={onBack}
+            aria-label="Geri"
           >
-            {c.name || c.peerUserId || 'DM'}
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
           </button>
-        ))}
-        {dms.length === 0 && (
-          <p className="text-on-surface-variant px-2 text-sm">
-            Henüz DM yok. Arkadaşlar üzerinden aç.
-          </p>
         )}
-      </aside>
-      <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        {active ? (
-          <>
-            <div className="h-11 border-b border-outline-variant flex items-center gap-2 px-3 shrink-0">
-              <strong className="flex-1 truncate">{active.name || 'DM'}</strong>
-              {callStatus && (
-                <span className="text-xs text-on-surface-variant">{callStatus}</span>
-              )}
+        <div className="min-w-0 flex-1">
+          <span className="font-headline-md text-on-surface truncate block">
+            {channel.name || 'DM'}
+          </span>
+          {channel.peerStatus && !selfNotes && (
+            <span className="font-label-sm text-outline capitalize">
+              {channel.peerStatus === 'ONLINE'
+                ? 'Çevrimiçi'
+                : channel.peerStatus === 'IDLE'
+                  ? 'Boşta'
+                  : channel.peerStatus === 'DND'
+                    ? 'Rahatsız etmeyin'
+                    : 'Çevrimdışı'}
+            </span>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-1">
+          {!selfNotes && (
+            <>
               <button
                 type="button"
-                className="h-8 w-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest"
+                disabled={callBusy || inThisCall}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container disabled:opacity-40"
                 onClick={() => void startCall('audio')}
                 title="Sesli ara"
+                aria-label="Sesli ara"
               >
                 <span className="material-symbols-outlined text-[18px]">call</span>
               </button>
               <button
                 type="button"
-                className="h-8 w-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest"
+                disabled={callBusy || inThisCall}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container disabled:opacity-40"
                 onClick={() => void startCall('video')}
                 title="Görüntülü ara"
+                aria-label="Görüntülü ara"
               >
                 <span className="material-symbols-outlined text-[18px]">videocam</span>
               </button>
-              {callStatus && (
-                <button
-                  type="button"
-                  className="h-8 px-3 rounded-lg bg-error-container text-on-error-container text-sm font-bold"
-                  onClick={() => void endCall()}
-                >
-                  Bitir
-                </button>
-              )}
-            </div>
-            <div className="flex-1 min-h-0">
-              <ChatPanel guildId="" channel={active} />
-            </div>
-          </>
-        ) : (
-          <div className="p-6 text-on-surface-variant">Bir DM seç</div>
-        )}
+            </>
+          )}
+          {inThisCall && (
+            <button
+              type="button"
+              className="h-8 px-3 rounded-lg bg-error-container text-on-error-container font-label-sm"
+              onClick={hangUp}
+            >
+              Bitir
+            </button>
+          )}
+        </div>
+      </header>
+      {callError && (
+        <p className="px-4 py-2 text-error font-body-sm border-b border-surface-container-highest">
+          {callError}
+        </p>
+      )}
+      {inThisCall && (
+        <div className="px-4 py-2 flex items-center gap-2 bg-dracula-green/10 border-b border-surface-container-highest">
+          <span className="w-2 h-2 rounded-full bg-dracula-green animate-pulse" />
+          <span className="font-label-sm text-dracula-green">
+            {voice.cameraEnabled ? 'Görüntülü arama' : 'Sesli arama'} devam ediyor
+          </span>
+        </div>
+      )}
+      <div className="flex-1 min-h-0">
+        <ChatPanel
+          guildId=""
+          channel={channel}
+          hideHeader
+          titleOverride={channel.name || 'DM'}
+        />
       </div>
     </div>
   );

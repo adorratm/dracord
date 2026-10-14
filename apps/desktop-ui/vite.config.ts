@@ -17,11 +17,33 @@ export default defineConfig({
       { find: '@/lib/game-fullscreen', replacement: path.join(webRoot, 'lib/game-fullscreen.ts') },
       { find: '@/lib/dealer-voice', replacement: path.join(webRoot, 'lib/dealer-voice.ts') },
       { find: '@/lib/dealer-lines', replacement: path.join(webRoot, 'lib/dealer-lines.ts') },
+      { find: '@/lib/sounds', replacement: path.join(webRoot, 'lib/sounds.ts') },
       { find: '@/lib/watch-party-media', replacement: path.join(webRoot, 'lib/watch-party-media.ts') },
       { find: '@/lib/analytics', replacement: path.join(srcRoot, 'lib/analytics-stub.ts') },
+      { find: '@/lib/voice-settings', replacement: path.join(webRoot, 'lib/voice-settings.ts') },
+      {
+        find: '@/lib/participant-volumes',
+        replacement: path.join(webRoot, 'lib/participant-volumes.ts'),
+      },
+      {
+        find: '@/lib/nsfw-screen-guard',
+        replacement: path.join(webRoot, 'lib/nsfw-screen-guard.ts'),
+      },
       {
         find: '@/components/activities/games/WatchEmbedPlayer',
         replacement: path.join(webRoot, 'components/activities/games/WatchEmbedPlayer.tsx'),
+      },
+      {
+        find: '@/components/MusicPlayerBar',
+        replacement: path.join(webRoot, 'components/MusicPlayerBar.tsx'),
+      },
+      {
+        find: '@/components/AuthProvider',
+        replacement: path.join(srcRoot, 'shims/AuthProvider.ts'),
+      },
+      {
+        find: '@/components/VoiceSessionProvider',
+        replacement: path.join(srcRoot, 'shims/VoiceSessionProvider.ts'),
       },
       { find: '@', replacement: srcRoot },
     ],

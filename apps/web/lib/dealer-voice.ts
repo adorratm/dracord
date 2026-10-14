@@ -161,8 +161,62 @@ export function warmDealerVoices() {
   window.speechSynthesis.getVoices();
 }
 
-function ttsProxyUrl(text: string): string {
-  return `/api/dealer-tts?q=${encodeURIComponent(text)}`;
+const DEFAULT_API = 'https://api.dracord.com.tr';
+const DEFAULT_WEB = 'https://dracord.com.tr';
+
+function resolveApiBase(): string | null {
+  try {
+    const vite =
+      typeof import.meta !== 'undefined' &&
+      import.meta.env &&
+      typeof (import.meta.env as { VITE_API_URL?: string }).VITE_API_URL === 'string'
+        ? (import.meta.env as { VITE_API_URL?: string }).VITE_API_URL!.replace(/\/$/, '')
+        : '';
+    if (vite) return vite;
+  } catch {
+    /* ignore */
+  }
+  if (typeof window !== 'undefined') {
+    const w = window as Window & { __DRACORD_API_URL__?: string };
+    if (w.__DRACORD_API_URL__) return w.__DRACORD_API_URL__.replace(/\/$/, '');
+    // Electron file:// veya Vite desktop — Next /api yok
+    if (location.protocol === 'file:' || location.port === '5173') {
+      return DEFAULT_API;
+    }
+  }
+  return null;
+}
+
+function isDesktopClient(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as Window & {
+    dracordDesktop?: { isElectron?: boolean; synthesizeDealerTts?: unknown };
+  };
+  if (w.dracordDesktop?.isElectron) return true;
+  return location.protocol === 'file:' || location.port === '5173';
+}
+
+/** Proxy adayları — desktop’ta Nest + Next web */
+function ttsProxyUrls(text: string): string[] {
+  const q = encodeURIComponent(text);
+  const urls: string[] = [];
+  const api = resolveApiBase();
+  if (api) urls.push(`${api}/dealer-tts?q=${q}`);
+  if (isDesktopClient()) {
+    urls.push(`${DEFAULT_WEB}/api/dealer-tts?q=${q}`);
+    if (api !== DEFAULT_API) urls.push(`${DEFAULT_API}/dealer-tts?q=${q}`);
+  } else if (!api) {
+    urls.push(`/api/dealer-tts?q=${q}`);
+  }
+  return [...new Set(urls)];
+}
+
+function pickAnyVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const female = voices.find((v) => /female|zira|hazel|samantha|karen|moira/i.test(v.name));
+  return female || voices[0] || null;
 }
 
 function stopAudio() {
@@ -219,49 +273,35 @@ function speakWebSpeech(
   return true;
 }
 
-/** Microsoft Azure Emel Neural (sunucu proxy) */
-async function playEmelNeural(text: string, token: number): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  let src = audioCache.get(text);
-  if (!src) {
-    try {
-      const res = await fetch(ttsProxyUrl(text), {
-        credentials: 'same-origin',
-        cache: 'force-cache',
-      });
-      if (!res.ok) return false;
-      const blob = await res.blob();
-      if (!blob.size || (blob.type && blob.type.includes('json'))) return false;
-      src = URL.createObjectURL(blob);
-      audioCache.set(text, src);
-      if (audioCache.size > 48) {
-        const first = audioCache.keys().next().value;
-        if (first) {
-          const old = audioCache.get(first);
-          if (old) URL.revokeObjectURL(old);
-          audioCache.delete(first);
-        }
-      }
-    } catch {
-      return false;
+function rememberAudioSrc(text: string, src: string) {
+  audioCache.set(text, src);
+  if (audioCache.size > 48) {
+    const first = audioCache.keys().next().value;
+    if (first) {
+      const old = audioCache.get(first);
+      if (old?.startsWith('blob:')) URL.revokeObjectURL(old);
+      audioCache.delete(first);
     }
   }
-  if (token !== speakToken) return false;
+}
 
-  return await new Promise<boolean>((resolve) => {
+function playAudioSrc(src: string, token: number): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (token !== speakToken) return Promise.resolve(false);
+
+  return new Promise<boolean>((resolve) => {
     stopAudio();
     const audio = new Audio();
     currentAudio = audio;
     audio.preload = 'auto';
     audio.volume = volume;
-    // Emel Neural zaten doğal tempo
     audio.playbackRate = 1;
     try {
       (audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     } catch {
       /* ignore */
     }
-    audio.src = src!;
+    audio.src = src;
     let settled = false;
     const done = (ok: boolean) => {
       if (settled) return;
@@ -282,6 +322,71 @@ async function playEmelNeural(text: string, token: number): Promise<boolean> {
   });
 }
 
+/** Electron main-process TTS (Edge Emel → Google TR) */
+async function playDesktopIpc(text: string, token: number): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const synthesize = (
+    window as Window & {
+      dracordDesktop?: {
+        synthesizeDealerTts?: (
+          t: string,
+        ) => Promise<
+          | { ok: true; base64: string; mime: string }
+          | { ok: false; error: string }
+        >;
+      };
+    }
+  ).dracordDesktop?.synthesizeDealerTts;
+  if (typeof synthesize !== 'function') return false;
+
+  let src = audioCache.get(`ipc:${text}`);
+  if (!src) {
+    try {
+      const result = await synthesize(text);
+      if (!result?.ok || !result.base64) return false;
+      const mime = result.mime || 'audio/mpeg';
+      const bin = atob(result.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      if (!blob.size) return false;
+      src = URL.createObjectURL(blob);
+      rememberAudioSrc(`ipc:${text}`, src);
+    } catch {
+      return false;
+    }
+  }
+  return playAudioSrc(src, token);
+}
+
+/** Sunucu / Next proxy */
+async function playEmelNeural(text: string, token: number): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  let src = audioCache.get(text);
+  if (!src) {
+    for (const url of ttsProxyUrls(text)) {
+      try {
+        const crossOrigin = /^https?:\/\//i.test(url);
+        const res = await fetch(url, {
+          credentials: crossOrigin ? 'omit' : 'same-origin',
+          cache: crossOrigin ? 'default' : 'force-cache',
+          mode: 'cors',
+        });
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        if (!blob.size || (blob.type && blob.type.includes('json'))) continue;
+        src = URL.createObjectURL(blob);
+        rememberAudioSrc(text, src);
+        break;
+      } catch {
+        /* sıradaki URL */
+      }
+    }
+  }
+  if (!src) return false;
+  return playAudioSrc(src, token);
+}
+
 export function speakDealer(text: string, opts?: { interrupt?: boolean; rate?: number }) {
   if (muted || typeof window === 'undefined') return;
   const prepared = prepareDealerText(text);
@@ -299,22 +404,33 @@ export function speakDealer(text: string, opts?: { interrupt?: boolean; rate?: n
     await ensureVoices();
     if (token !== speakToken || muted) return;
 
-    // 1) Microsoft Azure Emel Neural (sunucu)
     setSpeaking(true);
-    const ok = await playEmelNeural(prepared, token);
-    if (token !== speakToken) return;
-    if (ok) {
-      setSpeaking(false);
+
+    // 1) Electron main-process (Edge Emel → Google TR)
+    if (await playDesktopIpc(prepared, token)) {
+      if (token === speakToken) setSpeaking(false);
       return;
     }
+    if (token !== speakToken) return;
 
-    // 2) Tarayıcıda Emel Web Speech
+    // 2) Nest / Next proxy
+    if (await playEmelNeural(prepared, token)) {
+      if (token === speakToken) setSpeaking(false);
+      return;
+    }
+    if (token !== speakToken) return;
+
+    // 3) Tarayıcıda Emel Web Speech
     const emel = pickEmelVoice();
     if (emel && speakWebSpeech(prepared, emel, opts?.rate)) return;
 
-    // 3) Son çare: diğer TR ses
+    // 4) Diğer TR ses
     const fallback = pickFallbackVoice();
     if (fallback && speakWebSpeech(prepared, fallback, opts?.rate)) return;
+
+    // 5) Son çare: herhangi bir sistem sesi (Electron’da TR paketi olmayabilir)
+    const any = pickAnyVoice();
+    if (any && speakWebSpeech(prepared, any, opts?.rate)) return;
 
     setSpeaking(false);
   })();

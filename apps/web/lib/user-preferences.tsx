@@ -10,6 +10,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import {
+  applyStickerCloudState,
+  pullStickersFromCloud,
+  setStickerCloudBridge,
+} from '@dracord/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { DEFAULT_CLIENT_SETTINGS, mergeClientSettings } from '@/lib/client-settings-defaults';
 
@@ -103,7 +108,20 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!authReady || !user) return;
+    if (!authReady || !user) {
+      setStickerCloudBridge(null);
+      return;
+    }
+    setStickerCloudBridge({
+      get: async () => {
+        const remote = await client.getClientSettings();
+        const merged = mergeClientSettings(remote as unknown as Record<string, unknown>);
+        return merged.stickers ?? null;
+      },
+      set: async (state) => {
+        await client.updateClientSettings({ stickers: state });
+      },
+    });
     let cancelled = false;
     void client
       .getClientSettings()
@@ -113,10 +131,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         setPrefs(next);
         saveLocal(next);
         applyDomClasses(next);
+        applyStickerCloudState(next.stickers);
+        void pullStickersFromCloud();
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
+      setStickerCloudBridge(null);
     };
   }, [authReady, user?.id, client]);
 
