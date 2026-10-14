@@ -465,7 +465,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
 
   const pinMessage = useCallback(
     async (messageId: string, pin: boolean) => {
-      if (!channelId) return;
+      if (!channelId) return undefined;
       const message = pin
         ? await client.pinMessage(messageId)
         : await client.unpinMessage(messageId);
@@ -474,13 +474,14 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         remember(channelId, { items: next, hasMore });
         return next;
       });
+      return message;
     },
     [channelId, client, hasMore],
   );
 
   const bookmarkMessage = useCallback(
     async (messageId: string, bookmark: boolean) => {
-      if (!channelId) return;
+      if (!channelId) return undefined;
       const message = bookmark
         ? await client.bookmarkMessage(messageId)
         : await client.unbookmarkMessage(messageId);
@@ -489,6 +490,7 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         remember(channelId, { items: next, hasMore });
         return next;
       });
+      return message;
     },
     [channelId, client, hasMore],
   );
