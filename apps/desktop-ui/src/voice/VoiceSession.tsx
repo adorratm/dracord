@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  LocalTrack,
   Room,
   RoomEvent,
   Track,
@@ -18,6 +19,7 @@ import {
 } from 'livekit-client';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import type { VoiceParticipant } from '@dracord/ui';
+import { API_URL } from '../config';
 import {
   loadVoiceAudioSettings,
   normalizeBitrateKbps,
@@ -108,11 +110,84 @@ function cameraErrorMessage(err: unknown): string {
   return msg || 'Kamera açılamadı';
 }
 
+/** Publisher PeerConnection üzerinden anlık RTT (ms) — medya yolu öncelikli. */
+async function readPublisherRttMs(room: Room): Promise<number | null> {
+  const samples: number[] = [];
+  const push = (ms: number | undefined) => {
+    if (ms != null && Number.isFinite(ms) && ms >= 0 && ms < 5000) {
+      samples.push(ms);
+    }
+  };
+  try {
+    for (const pub of room.localParticipant.trackPublications.values()) {
+      const track = pub.track;
+      if (!(track instanceof LocalTrack) || !track.sender) continue;
+      const report = await track.sender.getStats();
+      report.forEach((stat) => {
+        if (stat.type === 'remote-inbound-rtp') {
+          const rtt = (stat as { roundTripTime?: number }).roundTripTime;
+          if (typeof rtt === 'number') push(rtt * 1000);
+        }
+        if (stat.type === 'candidate-pair') {
+          const pair = stat as RTCIceCandidatePairStats & {
+            selected?: boolean;
+            state?: string;
+          };
+          const active =
+            pair.state === 'succeeded' && (pair.nominated || pair.selected);
+          if (active && typeof pair.currentRoundTripTime === 'number') {
+            push(pair.currentRoundTripTime * 1000);
+          }
+        }
+      });
+    }
+    if (samples.length === 0) {
+      const engine = (
+        room as unknown as {
+          engine?: {
+            pcManager?: {
+              publisher?: { getStats?: () => Promise<RTCStatsReport> };
+            };
+          };
+        }
+      ).engine;
+      const pcStats = await engine?.pcManager?.publisher?.getStats?.();
+      pcStats?.forEach((stat) => {
+        if (stat.type === 'remote-inbound-rtp') {
+          const rtt = (stat as { roundTripTime?: number }).roundTripTime;
+          if (typeof rtt === 'number') push(rtt * 1000);
+        }
+        if (stat.type === 'candidate-pair') {
+          const pair = stat as RTCIceCandidatePairStats & {
+            selected?: boolean;
+            state?: string;
+          };
+          if (
+            pair.state === 'succeeded' &&
+            (pair.nominated || pair.selected) &&
+            typeof pair.currentRoundTripTime === 'number'
+          ) {
+            push(pair.currentRoundTripTime * 1000);
+          }
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
+  if (!samples.length) return null;
+  return Math.max(1, Math.round(Math.min(...samples)));
+}
+
 type VoiceSessionApi = {
   voiceChannelId: string | null;
   voiceGuildId: string | null;
   voiceChannelName: string | null;
   connected: boolean;
+  /** WebRTC RTT (ping), ms */
+  latencyMs: number | null;
+  /** API/sunucu HTTP RTT, ms */
+  serverLatencyMs: number | null;
   status: string | null;
   muted: boolean;
   deafened: boolean;
@@ -154,6 +229,8 @@ type VoiceSessionApi = {
   setScreenShareVolume: (identity: string, volume: number) => void;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
+  isLocalMutedParticipant: (identity: string) => boolean;
+  toggleLocalMuteParticipant: (identity: string) => void;
   setMicVolume: (v: number) => void;
   setOutputVolume: (v: number) => void;
   setInputDevice: (deviceId: string) => Promise<void>;
@@ -187,6 +264,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const audioSettingsRef = useRef(loadVoiceAudioSettings());
   const screenShareVolumesRef = useRef(loadScreenShareVolumes());
   const participantVolumesRef = useRef(loadParticipantVolumes());
+  const preMuteVolumesRef = useRef(new Map<string, number>());
   const nsfwShareMonitorRef = useRef<NsfwMonitorHandle | null>(null);
   const nsfwCooldownUntilRef = useRef(0);
   const boundShareTrackRef = useRef<Track | null>(null);
@@ -207,6 +285,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerSources, setPickerSources] = useState<DesktopCaptureSource[]>([]);
   const [connected, setConnected] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [serverLatencyMs, setServerLatencyMs] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [muted, setMutedState] = useState(false);
   const [deafened, setDeafenedState] = useState(false);
@@ -809,6 +889,25 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const isLocalMutedParticipant = useCallback((identity: string) => {
+    return (participantVolumesRef.current[identity] ?? 100) === 0;
+  }, []);
+
+  const toggleLocalMuteParticipant = useCallback(
+    (identity: string) => {
+      const cur = participantVolumesRef.current[identity] ?? 100;
+      if (cur === 0) {
+        const restore = preMuteVolumesRef.current.get(identity) ?? 100;
+        preMuteVolumesRef.current.delete(identity);
+        setParticipantVolume(identity, restore);
+      } else {
+        preMuteVolumesRef.current.set(identity, cur);
+        setParticipantVolume(identity, 0);
+      }
+    },
+    [setParticipantVolume],
+  );
+
   const setMicVolume = useCallback(
     (v: number) => {
       patchAudioSettings({ micVolume: Math.min(2, Math.max(0, v)) });
@@ -1330,6 +1429,71 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, [refreshAudioDevices]);
 
   useEffect(() => {
+    if (!connected) {
+      setLatencyMs(null);
+      return;
+    }
+    let cancelled = false;
+    let ema: number | null = null;
+    const tick = async () => {
+      const room = roomRef.current;
+      if (!room || cancelled) return;
+      const ms = await readPublisherRttMs(room);
+      if (cancelled || ms == null || !Number.isFinite(ms)) return;
+      if (ema == null) ema = ms;
+      else if (ms < ema) ema = ema * 0.45 + ms * 0.55;
+      else ema = ema * 0.82 + ms * 0.18;
+      setLatencyMs(Math.max(1, Math.round(ema)));
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 1200);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [connected, voiceChannelId]);
+
+  useEffect(() => {
+    if (!connected) {
+      setServerLatencyMs(null);
+      return;
+    }
+    let cancelled = false;
+    let ema: number | null = null;
+    const base = API_URL.replace(/\/$/, '');
+    const tick = async () => {
+      if (cancelled || !base) return;
+      const once = async () => {
+        const t0 = performance.now();
+        await fetch(`${base}/health`, {
+          method: 'GET',
+          cache: 'no-store',
+          keepalive: true,
+        });
+        return performance.now() - t0;
+      };
+      try {
+        const a = await once();
+        const b = await once();
+        if (cancelled) return;
+        const ms = Math.max(1, Math.round(Math.min(a, b)));
+        if (ema == null) ema = ms;
+        else if (ms < ema) ema = ema * 0.4 + ms * 0.6;
+        else ema = ema * 0.85 + ms * 0.15;
+        setServerLatencyMs(Math.max(1, Math.round(ema)));
+      } catch {
+        if (!cancelled) setServerLatencyMs(null);
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [connected, voiceChannelId]);
+
+  useEffect(() => {
     return () => {
       joinGen.current += 1;
       const id = voiceChannelIdRef.current;
@@ -1346,6 +1510,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceGuildId,
       voiceChannelName,
       connected,
+      latencyMs,
+      serverLatencyMs,
       status,
       muted,
       deafened,
@@ -1380,6 +1546,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareVolume,
       setParticipantVolume,
       getParticipantVolume,
+      isLocalMutedParticipant,
+      toggleLocalMuteParticipant,
       setMicVolume,
       setOutputVolume,
       setInputDevice,
@@ -1404,9 +1572,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       deafened,
       focusScreenShare,
       getParticipantVolume,
+      isLocalMutedParticipant,
       join,
+      latencyMs,
       leave,
       muted,
+      serverLatencyMs,
+      toggleLocalMuteParticipant,
       noiseCancellation,
       pauseScreenShareView,
       participantVolumes,

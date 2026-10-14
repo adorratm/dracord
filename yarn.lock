@@ -1349,6 +1349,7 @@ __metadata:
     "@types/three": "npm:^0.186.0"
     "@vitejs/plugin-react": "npm:^6.1.2"
     autoprefixer: "npm:10.6.1"
+    framer-motion: "npm:14.2.0"
     livekit-client: "npm:^2.22.4"
     nsfwjs: "npm:4.4.0"
     postcss: "npm:8.5.30"
@@ -8984,7 +8985,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"framer-motion@npm:^14.2.0":
+"framer-motion@npm:14.2.0, framer-motion@npm:^14.2.0":
   version: 14.2.0
   resolution: "framer-motion@npm:14.2.0"
   dependencies:

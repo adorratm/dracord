@@ -1,14 +1,40 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { ChannelSummary, PublicUser } from '@dracord/types';
-import { MemberList, VoiceStage, type MemberListGroup } from '@dracord/ui';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DRACORD_BOT_USER_ID, type ChannelSummary, type PublicUser } from '@dracord/types';
+import {
+  MemberList,
+  VoiceStage,
+  presenceLabelTr,
+  type MemberListAction,
+  type MemberListGroup,
+} from '@dracord/ui';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import {
   SCREEN_SHARE_VIEW_QUALITY_PRESETS,
   SCREEN_SHARE_VIEW_QUALITY_SPECS,
 } from '@/lib/voice-settings';
 import { useAuth } from '../auth';
+import { loadLocalPrefs } from '../lib/client-settings';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
+
+function memberRoleExtras(m: PublicUser | undefined, roleColors: boolean) {
+  const roles = m?.roles;
+  const topRole = (roles ?? [])
+    .filter((r) => r.name !== '@everyone')
+    .sort((a, b) => b.position - a.position)[0];
+  return {
+    roles,
+    roleColor: roleColors ? topRole?.color : undefined,
+    badges: (roles ?? [])
+      .filter((r) => r.badgeKey && r.badgeKey !== 'none')
+      .map((r) => ({
+        id: r.id,
+        badgeKey: r.badgeKey,
+        color: r.color,
+        label: r.name,
+      })),
+  };
+}
 
 export function VoicePanel({
   guildId,
@@ -17,6 +43,7 @@ export function VoicePanel({
   textChannels = [],
   onLeaveNavigate,
   onOpenChannels,
+  buildActions,
 }: {
   guildId: string;
   channel: ChannelSummary;
@@ -28,9 +55,12 @@ export function VoicePanel({
   onDeafenedChange?: (v: boolean) => void;
   onLeaveNavigate?: () => void;
   onOpenChannels?: () => void;
+  /** Web parity — sağ tık menüsü (DM, mod, yerel sustur…) */
+  buildActions?: (user: PublicUser) => MemberListAction[];
 }) {
   const { client, user } = useAuth();
   const voice = useVoiceSession();
+  const roleColors = loadLocalPrefs().accessibility.roleColors !== false;
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(340);
   const [partsWidth, setPartsWidth] = useState(288);
@@ -66,7 +96,14 @@ export function VoicePanel({
       ? `#${chatChannel.name}`
       : 'Kanal seç';
 
+  const canDmUser = (m?: Pick<PublicUser, 'id' | 'isBot'> | null) =>
+    Boolean(m) && m!.id !== userId && !m!.isBot && m!.id !== DRACORD_BOT_USER_ID;
+
   const openDmWith = (targetUserId: string) => {
+    const m = members.find((x) => x.id === targetUserId);
+    if (!canDmUser(m ?? { id: targetUserId, isBot: targetUserId === DRACORD_BOT_USER_ID })) {
+      return;
+    }
     void client.openDm(targetUserId).then((ch) => {
       setDmChannel(ch);
       setChatChannelId(ch.id);
@@ -75,29 +112,65 @@ export function VoicePanel({
     });
   };
 
+  const dmTargets = useMemo(
+    () => members.filter((m) => canDmUser(m)).slice(0, 24),
+    [members, userId],
+  );
+
+  const actionsFor = useCallback(
+    (m: PublicUser | undefined, fallback: { id: string; displayName: string; isBot?: boolean }) => {
+      const target: PublicUser = m ?? ({
+        id: fallback.id,
+        username: fallback.id.slice(0, 8),
+        displayName: fallback.displayName,
+        isBot: Boolean(fallback.isBot),
+        status: 'ONLINE',
+      } as PublicUser);
+      if (buildActions) {
+        const list = buildActions(target);
+        return list.length ? list : undefined;
+      }
+      return canDmUser(target)
+        ? [{ id: 'dm', label: 'Mesaj gönder', onSelect: () => openDmWith(target.id) }]
+        : undefined;
+    },
+    [buildActions, userId],
+  );
+
   const participantGroups: MemberListGroup[] = useMemo(() => {
+    const liveStatus = (
+      raw?: 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE' | null,
+    ): 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE' => {
+      if (raw === 'IDLE' || raw === 'DND' || raw === 'ONLINE') return raw;
+      // Seste görünen biri OFFLINE/eksik ise çevrimiçi tut (web parity)
+      return 'ONLINE';
+    };
     const voiceList = voice.peers.map((p) => {
       const m = members.find((x) => x.id === p.id);
+      const status = liveStatus(m?.status);
+      const contextActions = actionsFor(m, {
+        id: p.id,
+        displayName: p.displayName,
+        isBot: Boolean(m?.isBot),
+      });
       return {
         id: p.id,
         displayName: p.displayName,
         username: m?.username,
         avatarUrl: p.avatarUrl ?? m?.avatarUrl,
-        status: (m?.status ?? 'ONLINE') as 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE',
+        bannerUrl: m?.bannerUrl,
+        bannerColor: m?.bannerColor,
+        bio: m?.bio,
+        socialLinks: m?.socialLinks,
+        status,
         customStatus: m?.customStatus,
         isBot: Boolean(m?.isBot),
-        subtitle: p.speaking ? 'Konuşuyor' : p.muted ? 'Sessiz' : 'Seste',
-        onClick: p.id !== userId ? () => openDmWith(p.id) : undefined,
-        contextActions:
-          p.id !== userId
-            ? [
-                {
-                  id: 'dm',
-                  label: 'Mesaj gönder',
-                  onSelect: () => openDmWith(p.id),
-                },
-              ]
-            : undefined,
+        ...memberRoleExtras(m, roleColors),
+        subtitle: presenceLabelTr(status, m?.customStatus),
+        onClick: canDmUser(m ?? { id: p.id, isBot: Boolean(m?.isBot) })
+          ? () => openDmWith(p.id)
+          : undefined,
+        contextActions,
       };
     });
     return [
@@ -109,23 +182,29 @@ export function VoicePanel({
       {
         id: 'members',
         label: 'Üyeler',
-        members: members.map((m) => ({
-          id: m.id,
-          displayName: m.displayName,
-          username: m.username,
-          avatarUrl: m.avatarUrl,
-          status: (m.status ?? 'OFFLINE') as 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE',
-          customStatus: m.customStatus,
-          isBot: Boolean(m.isBot),
-          onClick: m.id !== userId ? () => openDmWith(m.id) : undefined,
-          contextActions:
-            m.id !== userId
-              ? [{ id: 'dm', label: 'Mesaj gönder', onSelect: () => openDmWith(m.id) }]
-              : undefined,
-        })),
+        members: members.map((m) => {
+          const contextActions = actionsFor(m, m);
+          return {
+            id: m.id,
+            displayName: m.displayName,
+            username: m.username,
+            avatarUrl: m.avatarUrl,
+            bannerUrl: m.bannerUrl,
+            bannerColor: m.bannerColor,
+            bio: m.bio,
+            socialLinks: m.socialLinks,
+            status: (m.status ?? 'OFFLINE') as 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE',
+            customStatus: m.customStatus,
+            isBot: Boolean(m.isBot),
+            ...memberRoleExtras(m, roleColors),
+            subtitle: presenceLabelTr(m.status ?? 'OFFLINE', m.customStatus),
+            onClick: canDmUser(m) ? () => openDmWith(m.id) : undefined,
+            contextActions,
+          };
+        }),
       },
     ];
-  }, [voice.peers, members, userId]);
+  }, [voice.peers, members, userId, roleColors, actionsFor]);
 
   const focused = voice.activeScreenShare;
 
@@ -246,14 +325,12 @@ export function VoicePanel({
                         #{c.name}
                       </button>
                     ))}
-                    <div className="border-t border-surface-container-high py-1">
-                      <p className="px-2 py-1 font-label-sm text-outline uppercase tracking-wide">
-                        Direkt mesaj
-                      </p>
-                      {members
-                        .filter((m) => m.id !== userId)
-                        .slice(0, 12)
-                        .map((m) => (
+                    {dmTargets.length > 0 && (
+                      <div className="border-t border-surface-container-high py-1">
+                        <p className="px-2 py-1 font-label-sm text-outline uppercase tracking-wide">
+                          DM aç
+                        </p>
+                        {dmTargets.map((m) => (
                           <button
                             key={m.id}
                             type="button"
@@ -264,7 +341,8 @@ export function VoicePanel({
                             {m.displayName}
                           </button>
                         ))}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

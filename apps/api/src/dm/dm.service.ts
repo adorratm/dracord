@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { ChannelSummary, PresenceStatus } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { EntityManager, In } from 'typeorm';
 import { ChannelsService } from '@/channels/channels.service';
 import { Channel } from '@/database/entities/channel.entity';
@@ -28,7 +29,7 @@ export class DmService {
   async openOrCreate(userId: string, otherUserId: string): Promise<ChannelSummary> {
     const other = await this.em.findOne(User, { where: { id: otherUserId } });
     if (!other) throw new NotFoundException('Kullanıcı bulunamadı');
-    if (other.isBot) {
+    if (other.isBot || other.id === DRACORD_BOT_USER_ID) {
       throw new BadRequestException('Bot’a DM açılamaz');
     }
 

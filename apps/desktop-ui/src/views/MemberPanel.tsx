@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { PublicUser } from '@dracord/types';
+import { DRACORD_BOT_USER_ID, type PublicUser } from '@dracord/types';
 import {
   MemberList,
   presenceLabelTr,
@@ -57,14 +57,16 @@ export function MemberPanel({
         : (m.status ?? 'OFFLINE');
 
       const defaultActions: MemberListAction[] = [];
-      if (!isSelf) {
+      const canDm =
+        !isSelf && !isBot && m.id !== DRACORD_BOT_USER_ID;
+      if (canDm) {
         defaultActions.push({
           id: 'dm',
           label: 'Mesaj gönder',
           onSelect: () => onOpenDm?.(m.id),
         });
       }
-      if (!isSelf && !isBot) {
+      if (!isSelf && !isBot && m.id !== DRACORD_BOT_USER_ID) {
         if (!friendIds?.has(m.id)) {
           defaultActions.push({
             id: 'friend',
@@ -110,7 +112,7 @@ export function MemberPanel({
           opts?.subtitle ?? presenceLabelTr(status, m.customStatus),
         draggable: Boolean(draggable) && m.id !== user?.id && !m.isPlatformAdmin,
         onClick: () => {
-          if (!isSelf) onOpenDm?.(m.id);
+          if (canDm) onOpenDm?.(m.id);
         },
         contextActions: buildActions ? buildActions(m) : defaultActions,
       };

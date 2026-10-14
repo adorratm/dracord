@@ -14,6 +14,7 @@ import {
 } from '@dracord/types';
 import Redis from 'ioredis';
 import { EntityManager } from 'typeorm';
+import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { Channel } from '@/database/entities/channel.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Friendship } from '@/database/entities/friendship.entity';
@@ -101,7 +102,9 @@ export class DmCallService implements OnModuleDestroy {
       throw new BadRequestException('Kendini ekleyemezsin');
     }
     const target = await this.em.findOne(User, { where: { id: targetUserId } });
-    if (!target || target.isBot) throw new NotFoundException('Kullanıcı bulunamadı');
+    if (!target || target.isBot || target.id === DRACORD_BOT_USER_ID) {
+      throw new BadRequestException('Bot’a DM açılamaz');
+    }
 
     const blocked = await this.em.findOne(Friendship, {
       where: [

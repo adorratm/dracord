@@ -326,6 +326,8 @@ export function DiscoverPage({
                 </div>
                 <Draco
                   size={140}
+                  mood="happy"
+                  glow
                   className="hidden sm:block shrink-0 drop-shadow-lg"
                 />
               </div>
@@ -401,19 +403,31 @@ export function DiscoverPage({
           </>
         ) : (
           <div className="flex flex-col lg:flex-row min-h-[calc(100%-3rem)]">
-            <div className="flex-1 min-w-0 px-3 md:px-6 py-6">
-              <div className="relative overflow-hidden rounded-2xl mb-6 px-6 py-10 bg-gradient-to-br from-secondary-container/70 via-surface-container-high to-surface">
-                <h1 className="font-headline-lg text-on-surface text-2xl md:text-3xl font-bold">
-                  Uygulama dizini
-                </h1>
-                <p className="mt-2 font-body-md text-on-surface-variant max-w-lg">
-                  Kürate demo katalog — oyun kanalları ve yardımcılar.
-                </p>
-                <Draco
-                  size={96}
-                  className="absolute right-4 bottom-2 opacity-90 hidden sm:block !overflow-visible"
-                />
+            <div className="flex-1 min-w-0">
+              <div className="relative mx-3 md:mx-6 mt-4 overflow-hidden rounded-2xl min-h-[200px] md:min-h-[260px]">
+                <div className="absolute inset-0 bg-gradient-to-br from-secondary-container/90 via-primary-container/50 to-surface-container-lowest" />
+                <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_30%_20%,rgba(255,255,255,0.25),transparent_55%)]" />
+                <div className="relative flex items-end md:items-center justify-between gap-4 px-6 py-10 md:py-14">
+                  <div className="min-w-0 max-w-xl">
+                    <p className="font-label-sm uppercase tracking-wider text-on-primary-container/80 mb-2">
+                      Dracord
+                    </p>
+                    <h1 className="font-headline-lg text-on-primary-container text-2xl md:text-4xl font-bold">
+                      Uygulama dizini
+                    </h1>
+                    <p className="mt-2 font-body-md text-on-primary-container/90">
+                      Kürate demo katalog — oyun kanalları ve yardımcılar.
+                    </p>
+                  </div>
+                  <Draco
+                    size={140}
+                    mood="wave"
+                    glow
+                    className="hidden sm:block shrink-0 drop-shadow-lg"
+                  />
+                </div>
               </div>
+              <div className="px-3 md:px-6 py-6">
               {error && <p className="mb-3 font-body-sm text-error">{error}</p>}
               {filteredApps.length === 0 ? (
                 <DracoEmpty
@@ -456,6 +470,7 @@ export function DiscoverPage({
                   ))}
                 </div>
               )}
+              </div>
             </div>
             {selectedApp && (
               <aside className="lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-surface-container-highest bg-surface-container-low p-4 md:p-6">

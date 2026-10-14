@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { AppTour } from '@/components/AppTour';
+import { openQuickSearch } from '@/components/GlobalSearch';
 import { NotificationBell } from '@/components/NotificationBell';
 import {
   invalidateGuildNavCache,
@@ -445,7 +446,17 @@ export function AppShell({
             ) : undefined
           }
           trailing={
-            <div data-tour="notifications">
+            <div className="flex items-center gap-1" data-tour="notifications">
+              <button
+                type="button"
+                title="Ara (Ctrl+K)"
+                data-tour="search"
+                onClick={() => openQuickSearch()}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                aria-label="Ara"
+              >
+                <span className="material-symbols-outlined text-[20px]">search</span>
+              </button>
               <NotificationBell />
             </div>
           }

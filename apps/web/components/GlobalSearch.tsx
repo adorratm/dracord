@@ -1,15 +1,22 @@
 'use client';
 
 import type { SearchHit, SearchHitMessage } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { QuickSwitcher, SearchPanel, type SearchScope } from '@dracord/ui';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 
 const OPEN_MESSAGE_SEARCH = 'dracord:open-message-search';
+const OPEN_QUICK_SEARCH = 'dracord:open-quick-search';
 
 export function openMessageSearch() {
   window.dispatchEvent(new Event(OPEN_MESSAGE_SEARCH));
+}
+
+/** TitleBar arama butonu / Ctrl+K */
+export function openQuickSearch() {
+  window.dispatchEvent(new Event(OPEN_QUICK_SEARCH));
 }
 
 export function GlobalSearch() {
@@ -39,9 +46,20 @@ export function GlobalSearch() {
   const [loadingPanel, setLoadingPanel] = useState(false);
 
   useEffect(() => {
-    const onOpen = () => setPanelOpen(true);
-    window.addEventListener(OPEN_MESSAGE_SEARCH, onOpen);
-    return () => window.removeEventListener(OPEN_MESSAGE_SEARCH, onOpen);
+    const onOpenPanel = () => {
+      setPanelOpen(true);
+      setQuickOpen(false);
+    };
+    const onOpenQuick = () => {
+      setQuickOpen(true);
+      setPanelOpen(false);
+    };
+    window.addEventListener(OPEN_MESSAGE_SEARCH, onOpenPanel);
+    window.addEventListener(OPEN_QUICK_SEARCH, onOpenQuick);
+    return () => {
+      window.removeEventListener(OPEN_MESSAGE_SEARCH, onOpenPanel);
+      window.removeEventListener(OPEN_QUICK_SEARCH, onOpenQuick);
+    };
   }, []);
 
   useEffect(() => {
@@ -126,6 +144,7 @@ export function GlobalSearch() {
         return;
       }
       if (hit.type === 'user') {
+        if (hit.id === DRACORD_BOT_USER_ID) return;
         try {
           const ch = await client.openDm(hit.id);
           router.push(`/channels/me/${ch.id}`);

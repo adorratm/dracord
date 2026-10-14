@@ -6,6 +6,7 @@ import type {
   GuildSummary,
   PublicUser,
 } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { useVoiceMembersByChannel } from '../hooks/useVoiceMembersByChannel';
 import {
@@ -530,12 +531,44 @@ export function Shell() {
   const buildMemberActions = useCallback(
     (target: PublicUser, voiceChId?: string | null): MemberListAction[] => {
       const isSelf = target.id === user?.id;
-      if (!isSelf && target.isPlatformAdmin) return [];
+      if (!isSelf && (target.isPlatformAdmin || platformAdminIds.has(target.id))) {
+        return [];
+      }
 
       const actions: MemberListAction[] = [];
+      const chId = voiceChId ?? voice.voiceChannelId;
+      const inLocalVoice =
+        Boolean(chId) &&
+        voice.voiceChannelId === chId &&
+        voice.peers.some((p) => p.id === target.id);
+
+      if (inLocalVoice && !isSelf) {
+        actions.push({
+          id: 'local-mute',
+          label: voice.isLocalMutedParticipant(target.id)
+            ? 'Yerel susturmayı kaldır'
+            : 'Yerel sustur',
+          onSelect: () => voice.toggleLocalMuteParticipant(target.id),
+        });
+      }
+
       if (isSelf) {
         actions.push(
-          { id: 'profile', label: 'Profil', onSelect: () => setView({ kind: 'settings' }) },
+          {
+            id: 'profile',
+            label: 'Profil',
+            onSelect: () => setView({ kind: 'settings', tab: 'profile' }),
+          },
+          {
+            id: 'settings',
+            label: 'Kullanıcı ayarları',
+            onSelect: () => setView({ kind: 'settings' }),
+          },
+          {
+            id: 'voice-settings',
+            label: 'Ses ve görüntü ayarları',
+            onSelect: () => setView({ kind: 'settings', tab: 'voice' }),
+          },
           {
             id: 'copy-id',
             label: 'Kullanıcı ID’sini kopyala',
@@ -547,20 +580,20 @@ export function Shell() {
         return actions;
       }
 
-      actions.push({
-        id: 'dm',
-        label: 'Mesaj gönder',
-        onSelect: () => {
-          void client.openDm(target.id).then((ch) =>
-            setView({ kind: 'dms', channelId: ch.id }),
-          );
-        },
-      });
-      if (!target.isBot) {
+      if (!target.isBot && target.id !== DRACORD_BOT_USER_ID) {
+        actions.push({
+          id: 'dm',
+          label: 'Mesaj gönder',
+          onSelect: () => {
+            void client.openDm(target.id).then((ch) =>
+              setView({ kind: 'dms', channelId: ch.id }),
+            );
+          },
+        });
         if (!friendIds.has(target.id)) {
           actions.push({
             id: 'friend',
-            label: 'Arkadaş ekle',
+            label: 'Arkadaşlık isteği gönder',
             onSelect: () => {
               void client.sendFriendRequest(target.id).then(() => {
                 setFriendIds((prev) => new Set([...prev, target.id]));
@@ -577,7 +610,7 @@ export function Shell() {
           },
         });
       }
-      if (canManageRoles && activeGuildId) {
+      if (canManageRoles && activeGuildId && !target.isBot) {
         actions.push({
           id: 'roles',
           label: 'Rolleri düzenle…',
@@ -589,23 +622,36 @@ export function Shell() {
           },
         });
       }
-      const chId = voiceChId ?? voice.voiceChannelId;
       if (canManageChannels && chId) {
-        actions.push({
-          id: 'deny-voice',
-          label: 'Ses odasından engelle',
-          danger: true,
-          onSelect: () => {
-            void client.denyVoiceUser(chId, target.id);
-          },
-        });
-        actions.push({
-          id: 'allow-voice',
-          label: 'Ses odası engelini kaldır',
-          onSelect: () => {
-            void client.allowVoiceUser(chId, target.id);
-          },
-        });
+        const denied = (channels.find((c) => c.id === chId)?.deniedUserIds ?? []).includes(
+          target.id,
+        );
+        if (denied) {
+          actions.push({
+            id: 'allow-voice',
+            label: 'Ses odası engelini kaldır',
+            onSelect: () => {
+              void client.allowVoiceUser(chId, target.id).then((updated) => {
+                setChannels((prev) =>
+                  prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)),
+                );
+              });
+            },
+          });
+        } else {
+          actions.push({
+            id: 'deny-voice',
+            label: 'Ses odasından engelle',
+            danger: true,
+            onSelect: () => {
+              void client.denyVoiceUser(chId, target.id).then((updated) => {
+                setChannels((prev) =>
+                  prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)),
+                );
+              });
+            },
+          });
+        }
       }
       if (canMoveMembers && chId) {
         actions.push({
@@ -665,11 +711,12 @@ export function Shell() {
       canManageRoles,
       canModerateMembers,
       canMoveMembers,
+      channels,
       client,
       friendIds,
+      platformAdminIds,
       user?.id,
-      user?.isPlatformAdmin,
-      voice.voiceChannelId,
+      voice,
     ],
   );
 
@@ -1080,6 +1127,8 @@ export function Shell() {
                   ? voice.voiceChannelName ?? undefined
                   : undefined,
                 voiceServerName: inVoiceInThisGuild ? activeGuild.name : undefined,
+                voiceLatencyMs: inVoiceInThisGuild ? voice.latencyMs : null,
+                serverLatencyMs: inVoiceInThisGuild ? voice.serverLatencyMs : null,
                 cameraOn: inVoiceInThisGuild ? voice.cameraEnabled : false,
                 screenSharing: inVoiceInThisGuild ? voice.screenSharing : false,
                 noiseCancellation: voice.noiseCancellation,
@@ -1252,6 +1301,7 @@ export function Shell() {
               channel={activeChannel}
               members={members}
               textChannels={channels.filter((c) => c.type === 'TEXT')}
+              buildActions={(m) => buildMemberActions(m, activeChannel.id)}
               onLeaveNavigate={() => {
                 const text = channels.find((c) => c.type === 'TEXT');
                 if (text) openChannel(view.guildId, text.id);
@@ -1385,6 +1435,8 @@ export function Shell() {
               buildActions={(m) => buildMemberActions(m, voice.voiceChannelId)}
               draggable={canMoveMembers || Boolean(voice.voiceChannelId)}
               onOpenDm={(userId) => {
+                const m = members.find((x) => x.id === userId);
+                if (m?.isBot || userId === DRACORD_BOT_USER_ID) return;
                 void client.openDm(userId).then((ch) =>
                   setView({ kind: 'dms', channelId: ch.id }),
                 );
@@ -1941,7 +1993,14 @@ export function Shell() {
       <SearchOverlay
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-        onOpenChannel={openChannel}
+        guildId={activeGuildId}
+        channelId={activeChannelId}
+        onOpenChannel={(guildId, channelId) => {
+          openChannel(guildId, channelId);
+        }}
+        onOpenDm={(channelId) => {
+          setView({ kind: 'dms', channelId });
+        }}
       />
 
       <AppTour />

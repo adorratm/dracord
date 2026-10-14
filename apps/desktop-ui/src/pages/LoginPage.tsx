@@ -25,7 +25,7 @@ export function LoginPage() {
           textAlign: 'center',
         }}
       >
-        <Draco size={168} />
+        <Draco size={168} mood="wave" glow />
         <div>
           <h1
             style={{

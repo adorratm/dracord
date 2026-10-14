@@ -8,20 +8,29 @@ import { useChatChannel } from '@/hooks/useChatChannel';
 import { useUserPreferences } from '@/lib/user-preferences';
 import { useImageModeration } from '@/lib/use-image-moderation';
 
+export type VoiceSideChatDmTarget = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+};
+
 export function VoiceSideChat({
   guildId,
   textChannels,
   channelId,
   onChannelIdChange,
   onClose,
-  onOpenDm,
+  dmTargets = [],
+  onSelectDm,
 }: {
   guildId: string;
   textChannels: ChannelSummary[];
   channelId: string | null;
   onChannelIdChange: (id: string) => void;
   onClose: () => void;
-  onOpenDm?: () => void;
+  /** Bot olmayan üyeler — picker’da “DM aç” listesi */
+  dmTargets?: VoiceSideChatDmTarget[];
+  onSelectDm?: (userId: string) => void;
 }) {
   const { user, client } = useAuth();
   const { prefs } = useUserPreferences();
@@ -54,7 +63,14 @@ export function VoiceSideChat({
   const [headingText, setHeadingText] = useState('');
   const [busy, setBusy] = useState(false);
   const active = textChannels.find((c) => c.id === effectiveId);
-  const titleLabel = active ? `#${active.name}` : effectiveId ? 'Direkt mesaj' : 'Kanal seç';
+  const isDmChannel = Boolean(effectiveId && !textChannels.some((c) => c.id === effectiveId));
+  const titleLabel = active
+    ? `#${active.name}`
+    : isDmChannel
+      ? 'Direkt mesaj'
+      : effectiveId
+        ? 'Direkt mesaj'
+        : 'Kanal seç';
 
   useEffect(() => {
     if (!channelId && textChannels[0]) {
@@ -87,7 +103,7 @@ export function VoiceSideChat({
             </span>
           </button>
           {pickerOpen && (
-            <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-surface-container-highest bg-surface-container-low shadow-float max-h-48 overflow-y-auto">
+            <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-surface-container-highest bg-surface-container-low shadow-float max-h-56 overflow-y-auto">
               {textChannels.map((c) => (
                 <button
                   key={c.id}
@@ -101,18 +117,26 @@ export function VoiceSideChat({
                   #{c.name}
                 </button>
               ))}
-              {onOpenDm && (
-                <button
-                  type="button"
-                  className="w-full h-9 px-space-sm text-left font-body-sm hover:bg-surface-container border-t border-surface-container-high flex items-center gap-1"
-                  onClick={() => {
-                    setPickerOpen(false);
-                    onOpenDm();
-                  }}
-                >
-                  <span className="material-symbols-outlined text-[16px]">mail</span>
-                  DM aç…
-                </button>
+              {onSelectDm && dmTargets.length > 0 && (
+                <div className="border-t border-surface-container-high py-1">
+                  <p className="px-space-sm py-1 font-label-sm text-outline uppercase tracking-wide">
+                    DM aç
+                  </p>
+                  {dmTargets.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className="w-full h-9 px-space-sm text-left font-body-sm hover:bg-surface-container truncate flex items-center gap-1.5"
+                      onClick={() => {
+                        setPickerOpen(false);
+                        onSelectDm(m.id);
+                      }}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">mail</span>
+                      <span className="truncate">{m.displayName}</span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           )}
@@ -138,7 +162,7 @@ export function VoiceSideChat({
           </div>
         ) : !effectiveId ? (
           <div className="flex-1 flex items-center justify-center text-outline font-body-sm px-space-md text-center">
-            Metin kanalı yok. Üye listesinden DM açabilirsin.
+            Metin kanalı yok. Yukarıdan DM açabilirsin.
           </div>
         ) : (
           <MessageList

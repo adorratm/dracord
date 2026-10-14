@@ -7,7 +7,7 @@ import type {
   SearchHit,
   SearchHitMessage,
 } from '@dracord/types';
-import { SocketEvents } from '@dracord/types';
+import { DRACORD_BOT_USER_ID, SocketEvents } from '@dracord/types';
 import {
   ChatInput,
   MessageList,
@@ -471,6 +471,7 @@ export function ChatPanel({
                   void client.votePoll(m.id, optionId).then(patchThreadMsg);
                 },
                 onAuthorClick: (author) => {
+                  if (author.isBot || author.id === DRACORD_BOT_USER_ID) return;
                   void client.openDm(author.id);
                 },
               }}
@@ -566,6 +567,7 @@ export function ChatPanel({
                   onOpenThread: (m) => openThread(m),
                   onVotePoll: (m, optionId) => void client.votePoll(m.id, optionId),
                   onAuthorClick: (author) => {
+                    if (author.isBot || author.id === DRACORD_BOT_USER_ID) return;
                     void client.openDm(author.id);
                   },
                 }}

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager, ILike, In, Not } from 'typeorm';
 import type { ClientSettings, PublicUser, SocialLinks } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { toPublicUser } from '@/common/user.mapper';
 import { Friendship } from '@/database/entities/friendship.entity';
 import { Guild } from '@/database/entities/guild.entity';
@@ -448,6 +449,9 @@ export class UsersService {
   async assertCanOpenDm(fromUserId: string, toUserId: string): Promise<void> {
     const target = await this.em.findOne(User, { where: { id: toUserId } });
     if (!target) throw new NotFoundException('Kullanıcı bulunamadı');
+    if (target.isBot || target.id === DRACORD_BOT_USER_ID) {
+      throw new ForbiddenException('Bot’a DM açılamaz');
+    }
     if (target.disabledAt) {
       throw new ForbiddenException('Bu hesap kullanılamıyor');
     }

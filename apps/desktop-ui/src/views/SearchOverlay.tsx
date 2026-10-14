@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { SearchHit, SearchHitMessage, SearchResponse } from '@dracord/types';
+import type { SearchHit, SearchHitMessage } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { QuickSwitcher, SearchPanel, type SearchScope } from '@dracord/ui';
 import { useAuth } from '../auth';
 
@@ -7,47 +8,79 @@ export function SearchOverlay({
   open,
   onClose,
   onOpenChannel,
+  onOpenDm,
+  guildId,
+  channelId,
+  initialMode = 'quick',
 }: {
   open: boolean;
   onClose: () => void;
-  onOpenChannel: (guildId: string, channelId: string) => void;
+  onOpenChannel: (guildId: string, channelId: string, opts?: { around?: string }) => void;
+  onOpenDm: (channelId: string, opts?: { around?: string }) => void;
+  guildId?: string | null;
+  channelId?: string | null;
+  initialMode?: 'quick' | 'full';
 }) {
-  const { client } = useAuth();
-  const [mode, setMode] = useState<'quick' | 'full'>('quick');
+  const { client, user } = useAuth();
+  const [mode, setMode] = useState<'quick' | 'full'>(initialMode);
   const [q, setQ] = useState('');
-  const [result, setResult] = useState<SearchResponse | null>(null);
+  const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [scope, setScope] = useState<SearchScope>('everywhere');
 
   useEffect(() => {
     if (!open) {
       setQ('');
-      setResult(null);
-      setMode('quick');
+      setHits([]);
+      setMode(initialMode);
       setScope('everywhere');
-    }
-  }, [open]);
-
-  const runSearch = (query: string) => {
-    if (!query.trim()) {
-      setResult(null);
+      setBusy(false);
       return;
     }
-    setBusy(true);
-    void client
-      .search({ q: query.trim(), limit: 24 })
-      .then(setResult)
-      .finally(() => setBusy(false));
-  };
+    setMode(initialMode);
+  }, [open, initialMode]);
 
-  const selectHit = (hit: SearchHit) => {
-    if (hit.type === 'channel' && hit.guildId) {
-      onOpenChannel(hit.guildId, hit.id);
-      onClose();
-    } else if (hit.type === 'message' && hit.guildId) {
-      onOpenChannel(hit.guildId, hit.channelId);
-      onClose();
-    } else if (hit.type === 'guild') {
+  useEffect(() => {
+    if (!open || !user || q.trim().length < 1) {
+      setHits([]);
+      return;
+    }
+    const query = q.trim();
+    const t = window.setTimeout(() => {
+      setBusy(true);
+      if (mode === 'quick') {
+        void client
+          .search({ q: query, types: ['guilds', 'channels', 'users'], limit: 20 })
+          .then((r) => setHits(r.hits ?? []))
+          .catch(() => setHits([]))
+          .finally(() => setBusy(false));
+        return;
+      }
+      const opts: Parameters<typeof client.search>[0] = {
+        q: query,
+        types: ['messages'],
+        limit: 30,
+      };
+      if (scope === 'guild' && guildId) opts.guildId = guildId;
+      if (scope === 'channel' && channelId) opts.channelId = channelId;
+      void client
+        .search(opts)
+        .then((r) => {
+          const list = r.hits ?? [];
+          if (scope === 'dms') {
+            setHits(list.filter((h) => h.type === 'message' && h.dmChannelId));
+          } else {
+            setHits(list);
+          }
+        })
+        .catch(() => setHits([]))
+        .finally(() => setBusy(false));
+    }, mode === 'quick' ? 200 : 250);
+    return () => window.clearTimeout(t);
+  }, [open, q, mode, scope, client, user, guildId, channelId]);
+
+  const selectQuick = (hit: SearchHit) => {
+    if (hit.type === 'guild') {
       void client.getGuildChannels(hit.id).then((chs) => {
         const first = chs.find((c) => c.type === 'TEXT') ?? chs[0];
         if (first) {
@@ -55,7 +88,33 @@ export function SearchOverlay({
           onClose();
         }
       });
+      return;
     }
+    if (hit.type === 'channel' && hit.guildId) {
+      onOpenChannel(hit.guildId, hit.id);
+      onClose();
+      return;
+    }
+    if (hit.type === 'user') {
+      if (hit.id === DRACORD_BOT_USER_ID) return;
+      void client
+        .openDm(hit.id)
+        .then((ch) => {
+          onOpenDm(ch.id);
+          onClose();
+        })
+        .catch(() => onClose());
+    }
+  };
+
+  const selectMessage = (hit: SearchHitMessage) => {
+    const around = hit.threadRootId || hit.id;
+    if (hit.guildId) {
+      onOpenChannel(hit.guildId, hit.channelId, { around });
+    } else {
+      onOpenDm(hit.channelId, { around });
+    }
+    onClose();
   };
 
   if (!open) return null;
@@ -66,15 +125,12 @@ export function SearchOverlay({
         open
         onClose={onClose}
         query={q}
-        onQueryChange={(query) => {
-          setQ(query);
-          runSearch(query);
-        }}
+        onQueryChange={setQ}
         scope={scope}
         onScopeChange={setScope}
-        hits={result?.hits ?? []}
+        hits={hits}
         loading={busy}
-        onSelectMessage={(hit: SearchHitMessage) => selectHit(hit)}
+        onSelectMessage={selectMessage}
       />
     );
   }
@@ -84,20 +140,10 @@ export function SearchOverlay({
       open
       onClose={onClose}
       query={q}
-      onQueryChange={(query) => {
-        setQ(query);
-        if (query.trim().length >= 2) runSearch(query);
-        else setResult(null);
-      }}
-      hits={result?.hits ?? []}
+      onQueryChange={setQ}
+      hits={hits}
       loading={busy}
-      onSelect={(hit) => {
-        if (hit.type === 'user') {
-          setMode('full');
-          return;
-        }
-        selectHit(hit);
-      }}
+      onSelect={selectQuick}
     />
   );
 }

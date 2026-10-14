@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityKind, ActivitySessionDto, ChannelSummary, PublicUser } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { MemberList, type MemberListGroup } from '@dracord/ui';
 import { BilliardsGame } from '../../../web/components/activities/games/BilliardsGame';
@@ -259,7 +260,12 @@ export function ActivityPanel({
       ? `#${chatChannel.name}`
       : 'Kanal seç';
 
+  const canDm = (id: string, isBot?: boolean) =>
+    id !== me && !isBot && id !== DRACORD_BOT_USER_ID;
+
   const openDmWith = (targetUserId: string) => {
+    const m = members.find((x) => x.id === targetUserId);
+    if (!canDm(targetUserId, m?.isBot)) return;
     void client.openDm(targetUserId).then((ch) => {
       setDmChannel(ch);
       setChatChannelId(ch.id);
@@ -280,7 +286,7 @@ export function ActivityPanel({
         status: (m?.status ?? 'ONLINE') as 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE',
         subtitle: role,
         isBot: Boolean(m?.isBot),
-        onClick: id !== me ? () => openDmWith(id) : undefined,
+        onClick: canDm(id, m?.isBot) ? () => openDmWith(id) : undefined,
       };
     };
     const groups: MemberListGroup[] = [];
@@ -418,10 +424,10 @@ export function ActivityPanel({
                       </button>
                     ))}
                     <div className="border-t border-surface-container-high py-1">
-                      <p className="px-2 py-1 font-label-sm text-outline uppercase">DM</p>
+                      <p className="px-2 py-1 font-label-sm text-outline uppercase">DM aç</p>
                       {members
-                        .filter((m) => m.id !== me)
-                        .slice(0, 12)
+                        .filter((m) => canDm(m.id, m.isBot))
+                        .slice(0, 24)
                         .map((m) => (
                           <button
                             key={m.id}

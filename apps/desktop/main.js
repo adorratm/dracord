@@ -31,26 +31,58 @@ app.commandLine.appendSwitch('disable-ipv6');
 // Peer join/leave UI tonları jest olmadan da çalsın
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+/** Web istemcisi origin’i — API CORS + YouTube embed Referer için */
+const DESKTOP_WEB_ORIGIN = 'https://dracord.com.tr';
+
 /**
  * Renderer origin (localhost:5173 / file://) prod CORS allowlist'te değil → Failed to fetch.
  * API isteklerinde Origin'i web istemcisi gibi gönder.
+ *
+ * Paketli app file:// yükler; YouTube embed Referer olmadan Error 153 verir.
+ * YouTube/Vimeo isteklerine geçerli https Referer enjekte et.
  */
 function registerApiOriginBridge() {
-  const filter = {
-    urls: [
-      'https://api.dracord.com.tr/*',
-      'http://localhost:4000/*',
-      'http://127.0.0.1:4000/*',
-    ],
-  };
-  session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-    callback({
-      requestHeaders: {
-        ...details.requestHeaders,
-        Origin: 'https://dracord.com.tr',
-      },
-    });
-  });
+  const ses = session.defaultSession;
+
+  ses.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        'https://api.dracord.com.tr/*',
+        'http://localhost:4000/*',
+        'http://127.0.0.1:4000/*',
+      ],
+    },
+    (details, callback) => {
+      callback({
+        requestHeaders: {
+          ...details.requestHeaders,
+          Origin: DESKTOP_WEB_ORIGIN,
+        },
+      });
+    },
+  );
+
+  ses.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        '*://*.youtube.com/*',
+        '*://*.youtube-nocookie.com/*',
+        '*://*.googlevideo.com/*',
+        '*://*.ytimg.com/*',
+        '*://*.vimeo.com/*',
+        '*://*.vimeocdn.com/*',
+      ],
+    },
+    (details, callback) => {
+      const headers = { ...details.requestHeaders };
+      for (const name of Object.keys(headers)) {
+        if (name.toLowerCase() === 'referer') delete headers[name];
+      }
+      // file:// / null origin’den gelen isteklerde Referer düşer → Error 153
+      headers.Referer = `${DESKTOP_WEB_ORIGIN}/`;
+      callback({ requestHeaders: headers });
+    },
+  );
 }
 
 /** Renderer'dan gelen ekran/pencere seçimi (getDisplayMedia öncesi) */

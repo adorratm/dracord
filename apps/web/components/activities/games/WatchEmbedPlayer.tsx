@@ -26,6 +26,8 @@ declare global {
           videoId: string;
           width?: number | string;
           height?: number | string;
+          /** youtube.com veya youtube-nocookie.com */
+          host?: string;
           playerVars?: Record<string, string | number>;
           events?: {
             onReady?: (e: { target: YTPlayer }) => void;
@@ -40,6 +42,14 @@ declare global {
 }
 
 let ytApiPromise: Promise<void> | null = null;
+
+/** Electron file:// veya geçersiz origin’de YouTube Error 153 önlemek için */
+function youtubeEmbedOrigin(): string {
+  if (typeof window === 'undefined') return 'https://dracord.com.tr';
+  const o = window.location.origin;
+  if (o && /^https?:\/\//i.test(o)) return o;
+  return 'https://dracord.com.tr';
+}
 
 function loadYtApi(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -236,15 +246,18 @@ export function WatchEmbedPlayer({
       if (cancelled || !window.YT?.Player) return;
       const w = Math.max(1, Math.round(mount.clientWidth)) || 640;
       const h = Math.max(1, Math.round(mount.clientHeight)) || 360;
+      const embedOrigin = youtubeEmbedOrigin();
       const player = new window.YT.Player(el, {
         width: w,
         height: h,
         videoId: media.id!,
+        host: 'https://www.youtube-nocookie.com',
         playerVars: {
           enablejsapi: 1,
           playsinline: 1,
           rel: 0,
-          origin: window.location.origin,
+          origin: embedOrigin,
+          widget_referrer: embedOrigin,
           start: Math.max(0, Math.floor(atRef.current)),
         },
         events: {

@@ -7,6 +7,7 @@ import type {
   VoiceMemberSummary,
   VoiceStatePayload,
 } from '@dracord/types';
+import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import {
   Avatar,
@@ -1024,9 +1025,28 @@ export function GuildChannelView({
     [],
   );
 
+  const isNonDmUser = useCallback(
+    (memberId: string, isBot?: boolean) =>
+      Boolean(isBot) || memberId === DRACORD_BOT_USER_ID,
+    [],
+  );
+
+  const voiceDmTargets = useMemo(
+    () =>
+      guildMembers
+        .filter((m) => m.id !== user?.id && !isNonDmUser(m.id, m.isBot))
+        .slice(0, 24)
+        .map((m) => ({
+          id: m.id,
+          displayName: m.displayName,
+          avatarUrl: m.avatarUrl,
+        })),
+    [guildMembers, user?.id, isNonDmUser],
+  );
+
   const openMemberDm = useCallback(
     async (memberId: string, isBot?: boolean) => {
-      if (isBot) {
+      if (isNonDmUser(memberId, isBot)) {
         setDmError('Bot’a DM açılamaz');
         return;
       }
@@ -1044,7 +1064,7 @@ export function GuildChannelView({
         setDmError(err instanceof Error ? err.message : 'DM açılamadı');
       }
     },
-    [client, router, isVoiceView, voice.voiceChannelId, channelId],
+    [client, router, isVoiceView, voice.voiceChannelId, channelId, isNonDmUser],
   );
 
   const joinVoiceChannel = useCallback(
@@ -1510,14 +1530,12 @@ export function GuildChannelView({
         return actions;
       }
 
-      if (!isSelf) {
+      if (!isSelf && !isBot && target.id !== DRACORD_BOT_USER_ID) {
         actions.push({
           id: 'dm',
           label: 'Mesaj gönder',
           onSelect: () => void openMemberDm(target.id, isBot),
         });
-      }
-      if (!isSelf && !isBot) {
         actions.push({
           id: 'block',
           label: 'Kullanıcıyı engelle',
@@ -1799,7 +1817,10 @@ export function GuildChannelView({
               liveMemberStatus(p.id, guildMembers.find((g) => g.id === p.id)?.status),
               guildMembers.find((g) => g.id === p.id)?.customStatus,
             ),
-            onClick: () => void openMemberDm(p.id, isBot),
+            onClick:
+              isBot || p.id === DRACORD_BOT_USER_ID
+                ? undefined
+                : () => void openMemberDm(p.id, isBot),
             contextActions: actions.length ? actions : undefined,
           };
         })
@@ -1891,14 +1912,12 @@ export function GuildChannelView({
             label: 'Profili gör',
             onSelect: () => setProfileUser(m),
           });
-          if (!isSelf) {
+          if (!isSelf && !isBot && m.id !== DRACORD_BOT_USER_ID) {
             actions.push({
               id: 'dm',
               label: 'Mesaj gönder',
               onSelect: () => void openMemberDm(m.id, isBot),
             });
-          }
-          if (!isSelf && !isBot) {
             actions.push({
               id: 'friend',
               label: 'Arkadaşlık isteği gönder',
@@ -2658,9 +2677,10 @@ export function GuildChannelView({
                 channelId={voiceChatChannelId}
                 onChannelIdChange={setVoiceChatChannelId}
                 onClose={() => setChatOpen(false)}
-                onOpenDm={() => {
-                  setParticipantsOpen(true);
-                  setDmError('Üye listesinden birine tıklayarak DM aç');
+                dmTargets={voiceDmTargets}
+                onSelectDm={(userId) => {
+                  const m = guildMembers.find((g) => g.id === userId);
+                  void openMemberDm(userId, m?.isBot);
                 }}
               />
             ) : undefined
@@ -2925,9 +2945,10 @@ export function GuildChannelView({
                 channelId={voiceChatChannelId}
                 onChannelIdChange={setVoiceChatChannelId}
                 onClose={() => setChatOpen(false)}
-                onOpenDm={() => {
-                  setParticipantsOpen(true);
-                  setDmError('Üye listesinden birine tıklayarak DM aç');
+                dmTargets={voiceDmTargets}
+                onSelectDm={(userId) => {
+                  const m = guildMembers.find((g) => g.id === userId);
+                  void openMemberDm(userId, m?.isBot);
                 }}
               />
             ) : undefined
@@ -4428,14 +4449,15 @@ export function GuildChannelView({
         actions={
           profileUser && profileUser.id !== user?.id
             ? [
-                {
-                  id: 'dm',
-                  label: 'Mesaj gönder',
-                  onClick: () => void openMemberDm(profileUser.id, Boolean(profileUser.isBot)),
-                },
-                ...(profileUser.isBot
+                ...(profileUser.isBot || profileUser.id === DRACORD_BOT_USER_ID
                   ? []
                   : [
+                      {
+                        id: 'dm',
+                        label: 'Mesaj gönder',
+                        onClick: () =>
+                          void openMemberDm(profileUser.id, Boolean(profileUser.isBot)),
+                      },
                       {
                         id: 'friend',
                         label: 'Arkadaşlık isteği gönder',
