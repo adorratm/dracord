@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Headers,
   Param,
   Patch,
   Post,
@@ -47,6 +48,17 @@ export class VoiceController {
     return null;
   }
 
+  private resolveVoiceClient(
+    bodyClientId?: string | null,
+    bodyPlatform?: string | null,
+    headerClientId?: string,
+    headerPlatform?: string,
+  ) {
+    const clientId = (bodyClientId ?? headerClientId)?.trim() || null;
+    const platform = (bodyPlatform ?? headerPlatform)?.trim() || null;
+    return { clientId, platform };
+  }
+
   private async claimClientAndNotify(
     userId: string,
     guildId: string,
@@ -73,20 +85,31 @@ export class VoiceController {
   }
 
   @Post('token')
-  async token(@CurrentUser() user: JwtPayloadUser, @Body() dto: VoiceTokenDto) {
+  async token(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() dto: VoiceTokenDto,
+    @Headers('x-dracord-voice-client') headerClientId?: string,
+    @Headers('x-dracord-voice-platform') headerPlatform?: string,
+  ) {
     const result = await this.voiceService.createToken(
       user.sub,
       dto.channelId,
       dto.password,
     );
     const guildId = await this.resolvePresenceGuildId(dto.channelId);
-    if (guildId && dto.clientId) {
+    const { clientId, platform } = this.resolveVoiceClient(
+      dto.clientId,
+      dto.platform,
+      headerClientId,
+      headerPlatform,
+    );
+    if (guildId && clientId) {
       await this.claimClientAndNotify(
         user.sub,
         guildId,
         dto.channelId,
-        dto.clientId,
-        dto.platform,
+        clientId,
+        platform,
       );
     }
     return result;
@@ -104,6 +127,8 @@ export class VoiceController {
       clientId?: string;
       platform?: string;
     },
+    @Headers('x-dracord-voice-client') headerClientId?: string,
+    @Headers('x-dracord-voice-platform') headerPlatform?: string,
   ) {
     await this.channels.assertVoiceAccess(body.channelId, user.sub, body.password);
     const guildId = await this.resolvePresenceGuildId(body.channelId);
@@ -119,12 +144,18 @@ export class VoiceController {
       }
     }
     this.broadcast.broadcastVoiceState(joined);
+    const { clientId, platform } = this.resolveVoiceClient(
+      body.clientId,
+      body.platform,
+      headerClientId,
+      headerPlatform,
+    );
     await this.claimClientAndNotify(
       user.sub,
       guildId,
       body.channelId,
-      body.clientId,
-      body.platform,
+      clientId,
+      platform,
     );
     return joined;
   }
@@ -173,12 +204,14 @@ export class VoiceController {
   async heartbeat(
     @CurrentUser() user: JwtPayloadUser,
     @Body() body: { channelId: string; clientId?: string },
+    @Headers('x-dracord-voice-client') headerClientId?: string,
   ) {
     const guildId = await this.resolvePresenceGuildId(body.channelId);
     if (!guildId) return { ok: false };
     const ok = await this.presence.heartbeat(guildId, body.channelId, user.sub);
-    if (ok && body.clientId) {
-      const stillMine = await this.presence.refreshActiveClient(user.sub, body.clientId);
+    const clientId = (body.clientId ?? headerClientId)?.trim();
+    if (ok && clientId) {
+      const stillMine = await this.presence.refreshActiveClient(user.sub, clientId);
       if (!stillMine) {
         // Başka istemci aldı — bu istemci LiveKit’i bırakmalı
         return { ok: true, active: false as const };
@@ -191,16 +224,24 @@ export class VoiceController {
   @Post('claim')
   async claim(
     @CurrentUser() user: JwtPayloadUser,
-    @Body() body: { channelId: string; clientId: string; platform?: string },
+    @Body() body: { channelId: string; clientId?: string; platform?: string },
+    @Headers('x-dracord-voice-client') headerClientId?: string,
+    @Headers('x-dracord-voice-platform') headerPlatform?: string,
   ) {
     const guildId = await this.resolvePresenceGuildId(body.channelId);
-    if (!guildId || !body.clientId?.trim()) return { ok: false };
+    const { clientId, platform } = this.resolveVoiceClient(
+      body.clientId,
+      body.platform,
+      headerClientId,
+      headerPlatform,
+    );
+    if (!guildId || !clientId) return { ok: false };
     await this.claimClientAndNotify(
       user.sub,
       guildId,
       body.channelId,
-      body.clientId,
-      body.platform,
+      clientId,
+      platform,
     );
     return { ok: true };
   }

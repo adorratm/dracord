@@ -112,12 +112,15 @@ export class DracordClient {
     return this.voiceClientId;
   }
 
-  private voiceClientPayload(extra?: Record<string, unknown>) {
-    return {
-      clientId: this.getVoiceClientId(),
-      platform: this.voicePlatform ?? undefined,
-      ...extra,
+  /** Body DTO’ya eklenmez — eski API forbidNonWhitelisted kırılmaz */
+  private voiceClientHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'X-Dracord-Voice-Client': this.getVoiceClientId(),
     };
+    if (this.voicePlatform) {
+      headers['X-Dracord-Voice-Platform'] = this.voicePlatform;
+    }
+    return headers;
   }
 
   configureAuth(options: {
@@ -1034,9 +1037,8 @@ export class DracordClient {
   ): Promise<VoiceTokenResponse> {
     return this.request('/voice/token', {
       method: 'POST',
-      body: JSON.stringify(
-        this.voiceClientPayload({ channelId, password }),
-      ),
+      headers: this.voiceClientHeaders(),
+      body: JSON.stringify({ channelId, password }),
     });
   }
 
@@ -1046,7 +1048,8 @@ export class DracordClient {
   ): Promise<VoiceStatePayload> {
     return this.request('/voice/state', {
       method: 'POST',
-      body: JSON.stringify(this.voiceClientPayload({ channelId, ...flags })),
+      headers: this.voiceClientHeaders(),
+      body: JSON.stringify({ channelId, ...flags }),
     });
   }
 
@@ -1054,7 +1057,8 @@ export class DracordClient {
   async claimVoiceClient(channelId: string): Promise<{ ok: boolean }> {
     return this.request('/voice/claim', {
       method: 'POST',
-      body: JSON.stringify(this.voiceClientPayload({ channelId })),
+      headers: this.voiceClientHeaders(),
+      body: JSON.stringify({ channelId }),
     });
   }
 
@@ -1111,7 +1115,8 @@ export class DracordClient {
   ): Promise<{ ok: boolean; active?: boolean }> {
     return this.request('/voice/heartbeat', {
       method: 'POST',
-      body: JSON.stringify(this.voiceClientPayload({ channelId })),
+      headers: this.voiceClientHeaders(),
+      body: JSON.stringify({ channelId }),
     });
   }
 
