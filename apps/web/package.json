@@ -30,7 +30,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-toastify": "^11.1.0",
-    "tailwindcss": "~4.3.3",
+    "tailwindcss": "3.4.19",
     "three": "^0.186.1",
     "tslib": "^2.8.1"
   },
