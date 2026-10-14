@@ -11,6 +11,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DracordClient } from '@dracord/sdk';
 import type { AuthTokens, PublicUser } from '@dracord/types';
 import { API_URL } from './config';
@@ -20,6 +21,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const ACCESS_KEY = 'dracord.mobile.access';
 const REFRESH_KEY = 'dracord.mobile.refresh';
+const VOICE_CLIENT_KEY = 'dracord.voiceClientId';
 const OAUTH_REDIRECT = 'dracord://oauth';
 
 type AuthCtx = {
@@ -88,6 +90,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     void (async () => {
+      try {
+        let voiceId = await AsyncStorage.getItem(VOICE_CLIENT_KEY);
+        if (!voiceId) {
+          voiceId =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+              ? crypto.randomUUID()
+              : `vc-m-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          await AsyncStorage.setItem(VOICE_CLIENT_KEY, voiceId);
+        }
+        client.setVoiceClient(voiceId, 'mobile');
+      } catch {
+        client.setVoiceClient(`vc-m-${Date.now()}`, 'mobile');
+      }
       const access = await SecureStore.getItemAsync(ACCESS_KEY);
       const refresh = await SecureStore.getItemAsync(REFRESH_KEY);
       refreshMem.current = refresh;

@@ -65,6 +65,8 @@ import {
   type ScreenShareSelection,
 } from '../components/ScreenSharePicker';
 import { playUiTone } from '@/lib/sounds';
+import { SocketEvents } from '@dracord/sdk';
+import type { VoiceTakeoverPayload } from '@dracord/types';
 import { useAuth } from '../auth';
 
 type AudioDevice = { deviceId: string; label: string };
@@ -207,6 +209,10 @@ type VoiceSessionApi = {
   audioOutputDevices: AudioDevice[];
   videoDevices: AudioDevice[];
   room: Room | null;
+  /** Ses web/mobilde; bu istemci LiveKit dinlemiyor */
+  voiceOnOtherClient: boolean;
+  voiceElsewherePlatform: string | null;
+  reclaimVoice: () => Promise<void>;
   join: (
     guildId: string,
     channel: { id: string; name: string; type?: string },
@@ -285,8 +291,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerSources, setPickerSources] = useState<DesktopCaptureSource[]>([]);
   const [connected, setConnected] = useState(false);
+  const [voiceOnOtherClient, setVoiceOnOtherClient] = useState(false);
+  const [voiceElsewherePlatform, setVoiceElsewherePlatform] = useState<string | null>(
+    null,
+  );
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [serverLatencyMs, setServerLatencyMs] = useState<number | null>(null);
+  const yieldingRef = useRef(false);
+
+  useEffect(() => {
+    client.setVoiceClient(client.getVoiceClientId(), 'desktop');
+  }, [client]);
   const [status, setStatus] = useState<string | null>(null);
   const [muted, setMutedState] = useState(false);
   const [deafened, setDeafenedState] = useState(false);
@@ -630,8 +645,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     async (
       channelId: string | null,
       guildId?: string | null,
-      opts?: { playLeaveTone?: boolean },
+      opts?: { playLeaveTone?: boolean; leavePresence?: boolean },
     ) => {
+      const leavePresence = opts?.leavePresence !== false;
       intentionalLeaveRef.current = true;
       stopNsfwMonitor();
       clearScreenShareView();
@@ -652,7 +668,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           /* ignore */
         }
       }
-      if (channelId) {
+      if (channelId && leavePresence) {
         try {
           await client.leaveVoiceState(channelId);
         } catch {
@@ -672,9 +688,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       knownPeersRef.current.clear();
       intentionalLeaveRef.current = false;
-      afkSilenceRef.current = false;
-      voiceChannelTypeRef.current = null;
-      setVoiceChannelType(null);
+      if (leavePresence) {
+        afkSilenceRef.current = false;
+        voiceChannelTypeRef.current = null;
+        setVoiceChannelType(null);
+      }
       setConnected(false);
       setCameraEnabled(false);
       setScreenSharing(false);
@@ -689,6 +707,25 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [client, clearScreenShareView, stopNsfwMonitor],
   );
 
+  const yieldToOtherClient = useCallback(
+    async (platform?: string | null) => {
+      if (yieldingRef.current) return;
+      yieldingRef.current = true;
+      const ch = voiceChannelIdRef.current;
+      try {
+        await teardownRoom(ch, voiceGuildIdRef.current, {
+          leavePresence: false,
+          playLeaveTone: false,
+        });
+        setVoiceOnOtherClient(true);
+        setVoiceElsewherePlatform(platform ?? null);
+      } finally {
+        yieldingRef.current = false;
+      }
+    },
+    [teardownRoom],
+  );
+
   const join = useCallback(
     async (
       guildId: string,
@@ -699,6 +736,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         setVoiceGuildId(guildId);
         voiceGuildIdRef.current = guildId;
         setVoiceChannelName(channel.name);
+        setVoiceOnOtherClient(false);
+        setVoiceElsewherePlatform(null);
         if (channel.type) {
           voiceChannelTypeRef.current = channel.type;
           setVoiceChannelType(channel.type);
@@ -708,9 +747,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const gen = ++joinGen.current;
       const prevId = voiceChannelIdRef.current;
       const prevGuild = voiceGuildIdRef.current;
+      const sameChannelReclaim = prevId === channel.id && !roomRef.current;
       // Kanal değişimi / yeniden giriş: çıkış tonu (web parity)
-      await teardownRoom(prevId, prevGuild, { playLeaveTone: Boolean(prevId) });
+      if (!sameChannelReclaim) {
+        await teardownRoom(prevId, prevGuild, { playLeaveTone: Boolean(prevId) });
+      } else {
+        await teardownRoom(prevId, prevGuild, {
+          leavePresence: false,
+          playLeaveTone: false,
+        });
+      }
       afkSilenceRef.current = false;
+      setVoiceOnOtherClient(false);
+      setVoiceElsewherePlatform(null);
 
       const room = new Room({ adaptiveStream: true, dynacast: true });
       roomRef.current = room;
@@ -773,11 +822,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       room.on(RoomEvent.LocalTrackUnpublished, refresh);
 
       try {
-        await client.joinVoiceState(channel.id, {
-          muted: mutedRef.current || afkSilenceRef.current,
-          deafened: deafenedRef.current || afkSilenceRef.current,
-          password: opts?.password,
-        });
+        if (!sameChannelReclaim) {
+          await client.joinVoiceState(channel.id, {
+            muted: mutedRef.current || afkSilenceRef.current,
+            deafened: deafenedRef.current || afkSilenceRef.current,
+            password: opts?.password,
+          });
+        } else {
+          await client.claimVoiceClient(channel.id).catch(() => undefined);
+        }
         const tok = await client.getVoiceToken(channel.id, opts?.password);
         if (gen !== joinGen.current) return;
         await room.connect(tok.url, tok.token);
@@ -816,10 +869,38 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     setVoiceChannelId(null);
     setVoiceGuildId(null);
     setVoiceChannelName(null);
+    setVoiceOnOtherClient(false);
+    setVoiceElsewherePlatform(null);
     setStatus(null);
     await teardownRoom(id, gid, { playLeaveTone: Boolean(id) });
     return id;
   }, [teardownRoom]);
+
+  const reclaimVoice = useCallback(async () => {
+    const channelId = voiceChannelIdRef.current;
+    const guildId = voiceGuildIdRef.current;
+    const name = voiceChannelName;
+    if (!channelId || !guildId) return;
+    await join(guildId, {
+      id: channelId,
+      name: name ?? 'Ses',
+      type: voiceChannelTypeRef.current ?? 'VOICE',
+    });
+  }, [join, voiceChannelName]);
+
+  useEffect(() => {
+    if (!user) return;
+    const sock = client.connectSocket();
+    const onTakeover = (payload: VoiceTakeoverPayload) => {
+      if (!voiceChannelIdRef.current) return;
+      if (payload.clientId === client.getVoiceClientId()) return;
+      void yieldToOtherClient(payload.platform ?? null);
+    };
+    sock.on(SocketEvents.VOICE_TAKEOVER, onTakeover);
+    return () => {
+      sock.off(SocketEvents.VOICE_TAKEOVER, onTakeover);
+    };
+  }, [user, client, yieldToOtherClient]);
 
   const patchAudioSettings = useCallback((patch: Partial<VoiceAudioSettings>) => {
     const next = { ...audioSettingsRef.current, ...patch };
@@ -1530,6 +1611,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       audioOutputDevices,
       videoDevices,
       room: roomRef.current,
+      voiceOnOtherClient,
+      voiceElsewherePlatform,
+      reclaimVoice,
       join,
       leave,
       setMuted,
@@ -1577,7 +1661,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       latencyMs,
       leave,
       muted,
+      reclaimVoice,
       serverLatencyMs,
+      voiceElsewherePlatform,
+      voiceOnOtherClient,
       toggleLocalMuteParticipant,
       noiseCancellation,
       pauseScreenShareView,

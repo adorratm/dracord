@@ -490,6 +490,11 @@ export const SocketEvents = {
   CHANNEL_JOIN: 'channel:join',
   CHANNEL_LEAVE: 'channel:leave',
   VOICE_STATE: 'voice:state',
+  /**
+   * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
+   * Eski istemci LiveKit’i bırakır; presence kanalda kalır.
+   */
+  VOICE_TAKEOVER: 'voice:takeover',
   /** DM / grup DM ses-görüntü araması */
   DM_CALL: 'dm:call',
   NOTIFICATION_CREATE: 'notification:create',
@@ -498,6 +503,15 @@ export const SocketEvents = {
   ACTIVITY_STATE: 'activity:state',
   ACTIVITY_LEAVE: 'activity:leave',
 } as const;
+
+/** Aktif ses istemcisi değişimi — yalnızca hedef kullanıcının soketlerine gider */
+export interface VoiceTakeoverPayload {
+  /** Yeni lider istemci kimliği */
+  clientId: string;
+  channelId: string;
+  guildId: string;
+  platform?: string | null;
+}
 
 export type ActivityKind =
   | 'billiards'

@@ -45,6 +45,15 @@ function formatApiError(status: number, text: string): string {
   return text || `HTTP ${status}`;
 }
 
+const VOICE_CLIENT_STORAGE_KEY = 'dracord.voiceClientId';
+
+function createVoiceClientId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `vc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export class DracordClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -53,6 +62,9 @@ export class DracordClient {
     | ((tokens: AuthTokens) => void)
     | null = null;
   private getRefreshToken: (() => string | null) | null = null;
+  /** Tek aktif ses oturumu — web/desktop/mobil */
+  private voiceClientId: string | null = null;
+  private voicePlatform: string | null = null;
   public socket: Socket | null = null;
 
   constructor(baseUrl = resolveDefaultBaseUrl()) {
@@ -61,6 +73,51 @@ export class DracordClient {
 
   setToken(token: string | null) {
     this.accessToken = token;
+  }
+
+  /**
+   * Ses istemci kimliği (kalıcı). Platform: 'web' | 'desktop' | 'mobile'
+   * Aynı kullanıcıda yalnızca bir istemci LiveKit yayınlar.
+   */
+  setVoiceClient(clientId: string, platform?: string) {
+    this.voiceClientId = clientId;
+    this.voicePlatform = platform ?? this.voicePlatform;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(VOICE_CLIENT_STORAGE_KEY, clientId);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  getVoiceClientId(): string {
+    if (this.voiceClientId) return this.voiceClientId;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const existing = localStorage.getItem(VOICE_CLIENT_STORAGE_KEY);
+        if (existing) {
+          this.voiceClientId = existing;
+          return existing;
+        }
+        const created = createVoiceClientId();
+        localStorage.setItem(VOICE_CLIENT_STORAGE_KEY, created);
+        this.voiceClientId = created;
+        return created;
+      }
+    } catch {
+      /* ignore */
+    }
+    this.voiceClientId = createVoiceClientId();
+    return this.voiceClientId;
+  }
+
+  private voiceClientPayload(extra?: Record<string, unknown>) {
+    return {
+      clientId: this.getVoiceClientId(),
+      platform: this.voicePlatform ?? undefined,
+      ...extra,
+    };
   }
 
   configureAuth(options: {
@@ -977,7 +1034,9 @@ export class DracordClient {
   ): Promise<VoiceTokenResponse> {
     return this.request('/voice/token', {
       method: 'POST',
-      body: JSON.stringify({ channelId, password }),
+      body: JSON.stringify(
+        this.voiceClientPayload({ channelId, password }),
+      ),
     });
   }
 
@@ -987,7 +1046,15 @@ export class DracordClient {
   ): Promise<VoiceStatePayload> {
     return this.request('/voice/state', {
       method: 'POST',
-      body: JSON.stringify({ channelId, ...flags }),
+      body: JSON.stringify(this.voiceClientPayload({ channelId, ...flags })),
+    });
+  }
+
+  /** Presence bozmadan LiveKit liderliğini bu istemciye alır */
+  async claimVoiceClient(channelId: string): Promise<{ ok: boolean }> {
+    return this.request('/voice/claim', {
+      method: 'POST',
+      body: JSON.stringify(this.voiceClientPayload({ channelId })),
     });
   }
 
@@ -1002,7 +1069,10 @@ export class DracordClient {
   }
 
   async leaveVoiceState(channelId: string): Promise<VoiceStatePayload | null> {
-    return this.request(`/voice/state/${channelId}`, { method: 'DELETE' });
+    const q = new URLSearchParams({ clientId: this.getVoiceClientId() });
+    return this.request(`/voice/state/${channelId}?${q.toString()}`, {
+      method: 'DELETE',
+    });
   }
 
   async denyVoiceUser(channelId: string, userId: string): Promise<ChannelSummary> {
@@ -1036,10 +1106,12 @@ export class DracordClient {
     });
   }
 
-  async voiceHeartbeat(channelId: string): Promise<{ ok: boolean }> {
+  async voiceHeartbeat(
+    channelId: string,
+  ): Promise<{ ok: boolean; active?: boolean }> {
     return this.request('/voice/heartbeat', {
       method: 'POST',
-      body: JSON.stringify({ channelId }),
+      body: JSON.stringify(this.voiceClientPayload({ channelId })),
     });
   }
 

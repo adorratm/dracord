@@ -3,6 +3,7 @@ import {
   SocketEvents,
   type DmCallPayload,
   type VoiceStatePayload,
+  type VoiceTakeoverPayload,
 } from '@dracord/types';
 import type { Server } from 'socket.io';
 
@@ -20,6 +21,10 @@ export class SocketBroadcastService {
 
   broadcastVoiceState(payload: VoiceStatePayload) {
     this.server?.emit(SocketEvents.VOICE_STATE, payload);
+  }
+
+  emitVoiceTakeover(userId: string, payload: VoiceTakeoverPayload) {
+    this.server?.to(`user:${userId}`).emit(SocketEvents.VOICE_TAKEOVER, payload);
   }
 
   emitDmCallToUser(userId: string, payload: DmCallPayload) {

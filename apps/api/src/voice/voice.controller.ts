@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { PlatformAdminService } from '@/auth/platform-admin.service';
 import {
   CurrentUser,
@@ -38,16 +47,63 @@ export class VoiceController {
     return null;
   }
 
+  private async claimClientAndNotify(
+    userId: string,
+    guildId: string,
+    channelId: string,
+    clientId?: string | null,
+    platform?: string | null,
+  ) {
+    if (!clientId?.trim()) return;
+    const { previousClientId } = await this.presence.claimActiveClient(
+      userId,
+      clientId.trim(),
+      guildId,
+      channelId,
+      platform,
+    );
+    if (previousClientId && previousClientId !== clientId.trim()) {
+      this.broadcast.emitVoiceTakeover(userId, {
+        clientId: clientId.trim(),
+        channelId,
+        guildId,
+        platform: platform ?? null,
+      });
+    }
+  }
+
   @Post('token')
-  token(@CurrentUser() user: JwtPayloadUser, @Body() dto: VoiceTokenDto) {
-    return this.voiceService.createToken(user.sub, dto.channelId, dto.password);
+  async token(@CurrentUser() user: JwtPayloadUser, @Body() dto: VoiceTokenDto) {
+    const result = await this.voiceService.createToken(
+      user.sub,
+      dto.channelId,
+      dto.password,
+    );
+    const guildId = await this.resolvePresenceGuildId(dto.channelId);
+    if (guildId && dto.clientId) {
+      await this.claimClientAndNotify(
+        user.sub,
+        guildId,
+        dto.channelId,
+        dto.clientId,
+        dto.platform,
+      );
+    }
+    return result;
   }
 
   @Post('state')
   async join(
     @CurrentUser() user: JwtPayloadUser,
     @Body()
-    body: { channelId: string; muted?: boolean; deafened?: boolean; password?: string },
+    body: {
+      channelId: string;
+      muted?: boolean;
+      deafened?: boolean;
+      password?: string;
+      clientId?: string;
+      platform?: string;
+    },
   ) {
     await this.channels.assertVoiceAccess(body.channelId, user.sub, body.password);
     const guildId = await this.resolvePresenceGuildId(body.channelId);
@@ -63,6 +119,13 @@ export class VoiceController {
       }
     }
     this.broadcast.broadcastVoiceState(joined);
+    await this.claimClientAndNotify(
+      user.sub,
+      guildId,
+      body.channelId,
+      body.clientId,
+      body.platform,
+    );
     return joined;
   }
 
@@ -92,11 +155,13 @@ export class VoiceController {
   async leave(
     @CurrentUser() user: JwtPayloadUser,
     @Param('channelId') channelId: string,
+    @Query('clientId') clientId?: string,
   ) {
     const guildId = await this.resolvePresenceGuildId(channelId);
     if (!guildId) return null;
     const payload = await this.presence.leave(guildId, channelId, user.sub);
     if (payload) this.broadcast.broadcastVoiceState(payload);
+    await this.presence.clearActiveClient(user.sub, clientId);
     await this.activities.leaveUserFromActivities(user.sub);
     if (guildId === DM_CALL_GUILD_ID) {
       await this.dmCalls.endCallIfEmpty(channelId);
@@ -107,12 +172,37 @@ export class VoiceController {
   @Post('heartbeat')
   async heartbeat(
     @CurrentUser() user: JwtPayloadUser,
-    @Body() body: { channelId: string },
+    @Body() body: { channelId: string; clientId?: string },
   ) {
     const guildId = await this.resolvePresenceGuildId(body.channelId);
     if (!guildId) return { ok: false };
     const ok = await this.presence.heartbeat(guildId, body.channelId, user.sub);
-    return { ok };
+    if (ok && body.clientId) {
+      const stillMine = await this.presence.refreshActiveClient(user.sub, body.clientId);
+      if (!stillMine) {
+        // Başka istemci aldı — bu istemci LiveKit’i bırakmalı
+        return { ok: true, active: false as const };
+      }
+    }
+    return { ok, active: true as const };
+  }
+
+  /** Odak / “buraya al” — presence’ı bozmadan LiveKit liderliğini bu istemciye verir */
+  @Post('claim')
+  async claim(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { channelId: string; clientId: string; platform?: string },
+  ) {
+    const guildId = await this.resolvePresenceGuildId(body.channelId);
+    if (!guildId || !body.clientId?.trim()) return { ok: false };
+    await this.claimClientAndNotify(
+      user.sub,
+      guildId,
+      body.channelId,
+      body.clientId,
+      body.platform,
+    );
+    return { ok: true };
   }
 
   @Post('channels/:channelId/deny')

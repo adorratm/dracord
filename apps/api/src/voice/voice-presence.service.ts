@@ -58,6 +58,16 @@ export class VoicePresenceService implements OnModuleDestroy {
     return `voice:guild:${guildId}:channels`;
   }
 
+  private activeClientKey(userId: string) {
+    return `voice:client:${userId}`;
+  }
+
+  /** memory: userId -> aktif ses istemcisi */
+  private readonly memoryActiveClient = new Map<
+    string,
+    { clientId: string; channelId: string; guildId: string; platform?: string | null }
+  >();
+
   async join(
     guildId: string,
     channelId: string,
@@ -116,6 +126,7 @@ export class VoicePresenceService implements OnModuleDestroy {
       const payload = await this.leave(loc.guildId, loc.channelId, userId);
       if (payload) payloads.push(payload);
     }
+    await this.clearActiveClient(userId);
     return payloads;
   }
 
@@ -267,6 +278,91 @@ export class VoicePresenceService implements OnModuleDestroy {
     userId: string,
   ): Promise<Array<{ guildId: string; channelId: string }>> {
     return this.findUserChannels(userId);
+  }
+
+  /**
+   * Tek aktif LiveKit istemcisi — web/desktop/mobil arasında ses tek kaynaktan gelsin.
+   * Önceki clientId farklıysa dönülür; istemci VOICE_TAKEOVER ile LiveKit’i bırakır.
+   */
+  async claimActiveClient(
+    userId: string,
+    clientId: string,
+    guildId: string,
+    channelId: string,
+    platform?: string | null,
+  ): Promise<{ previousClientId: string | null }> {
+    const payload = {
+      clientId,
+      channelId,
+      guildId,
+      platform: platform ?? null,
+    };
+    if (this.redis?.status === 'ready') {
+      const key = this.activeClientKey(userId);
+      const prevRaw = await this.redis.get(key);
+      let previousClientId: string | null = null;
+      if (prevRaw) {
+        try {
+          const prev = JSON.parse(prevRaw) as { clientId?: string };
+          if (prev.clientId && prev.clientId !== clientId) {
+            previousClientId = prev.clientId;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      await this.redis.set(key, JSON.stringify(payload), 'EX', MEMBER_TTL_SEC + 60);
+      return { previousClientId };
+    }
+
+    const prev = this.memoryActiveClient.get(userId);
+    const previousClientId =
+      prev && prev.clientId !== clientId ? prev.clientId : null;
+    this.memoryActiveClient.set(userId, payload);
+    return { previousClientId };
+  }
+
+  async clearActiveClient(userId: string, clientId?: string): Promise<void> {
+    if (this.redis?.status === 'ready') {
+      const key = this.activeClientKey(userId);
+      if (clientId) {
+        const raw = await this.redis.get(key);
+        if (raw) {
+          try {
+            const cur = JSON.parse(raw) as { clientId?: string };
+            if (cur.clientId && cur.clientId !== clientId) return;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      await this.redis.del(key);
+      return;
+    }
+    if (clientId) {
+      const cur = this.memoryActiveClient.get(userId);
+      if (cur && cur.clientId !== clientId) return;
+    }
+    this.memoryActiveClient.delete(userId);
+  }
+
+  async refreshActiveClient(userId: string, clientId: string): Promise<boolean> {
+    if (this.redis?.status === 'ready') {
+      const key = this.activeClientKey(userId);
+      const raw = await this.redis.get(key);
+      if (!raw) return false;
+      try {
+        const cur = JSON.parse(raw) as { clientId?: string };
+        if (cur.clientId !== clientId) return false;
+      } catch {
+        return false;
+      }
+      await this.redis.expire(key, MEMBER_TTL_SEC + 60);
+      return true;
+    }
+    const cur = this.memoryActiveClient.get(userId);
+    if (!cur || cur.clientId !== clientId) return false;
+    return true;
   }
 
   private async findUserChannels(

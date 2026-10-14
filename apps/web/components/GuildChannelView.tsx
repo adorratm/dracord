@@ -2581,20 +2581,31 @@ export function GuildChannelView({
       )}
       {voice.voiceOnOtherTab && voice.voiceChannelId && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
-          <span className="material-symbols-outlined text-primary-container text-[20px]">tab</span>
+          <span className="material-symbols-outlined text-primary-container text-[20px]">
+            {voice.voiceElsewherePlatform === 'desktop'
+              ? 'desktop_windows'
+              : voice.voiceElsewherePlatform === 'mobile'
+                ? 'smartphone'
+                : 'tab'}
+          </span>
           <p className="font-body-sm flex-1 min-w-0">
-            Ses başka sekmede açık. Bu sekmeye almak için tıkla.
+            {voice.voiceElsewherePlatform === 'desktop'
+              ? 'Ses masaüstü uygulamasında açık.'
+              : voice.voiceElsewherePlatform === 'mobile'
+                ? 'Ses mobil uygulamada açık.'
+                : voice.voiceElsewherePlatform === 'web'
+                  ? 'Ses başka sekmede açık.'
+                  : 'Ses başka bir cihazda açık.'}{' '}
+            Buraya almak için tıkla.
           </p>
           <button
             type="button"
             className="h-8 px-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm shrink-0"
             onClick={() => {
-              if (voice.voiceChannelId && voice.voiceGuildId) {
-                void voice.join(voice.voiceChannelId, voice.voiceGuildId);
-              }
+              void voice.reclaimVoice();
             }}
           >
-            Bu sekmeye al
+            Buraya al
           </button>
         </div>
       )}

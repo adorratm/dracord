@@ -978,6 +978,30 @@ export function Shell() {
 
   return (
     <div className="flex flex-col h-dvh max-h-dvh w-screen overflow-hidden bg-surface">
+      {voice.voiceOnOtherClient && voice.voiceChannelId && (
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[90] max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
+          <span className="material-symbols-outlined text-primary-container text-[20px]">
+            {voice.voiceElsewherePlatform === 'mobile' ? 'smartphone' : 'language'}
+          </span>
+          <p className="font-body-sm flex-1 min-w-0">
+            {voice.voiceElsewherePlatform === 'mobile'
+              ? 'Ses mobil uygulamada açık.'
+              : voice.voiceElsewherePlatform === 'web'
+                ? 'Ses web istemcisinde açık.'
+                : 'Ses başka bir cihazda açık.'}{' '}
+            Masaüstüne almak için tıkla.
+          </p>
+          <button
+            type="button"
+            className="h-8 px-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm shrink-0"
+            onClick={() => {
+              void voice.reclaimVoice();
+            }}
+          >
+            Buraya al
+          </button>
+        </div>
+      )}
       <TitleBar
         activeNav={titleNav}
         subtitle="Dracord"

@@ -2,6 +2,7 @@
 
 import type { VoiceParticipant } from '@dracord/ui';
 import { SocketEvents } from '@dracord/sdk';
+import type { VoiceTakeoverPayload } from '@dracord/types';
 import {
   LocalTrack,
   Room,
@@ -84,10 +85,14 @@ interface VoiceSessionValue {
   voiceChannelId: string | null;
   voiceGuildId: string | null;
   connected: boolean;
-  /** Bu sekme LiveKit lideri mi (çoklu sekmede yalnızca biri true) */
+  /** Bu sekme LiveKit lideri mi (çoklu sekmede / cihazda yalnızca biri true) */
   isVoiceLeader: boolean;
-  /** Ses başka sekmede; bu sekme dinlemiyor */
+  /** Ses başka sekme veya cihazda; bu istemci dinlemiyor */
   voiceOnOtherTab: boolean;
+  /** voiceOnOtherTab iken aktif platform: web | desktop | mobile */
+  voiceElsewherePlatform: string | null;
+  /** LiveKit’i bu sekme/cihaza geri al (presence kalır) */
+  reclaimVoice: () => Promise<void>;
   /** WebRTC RTT (ping), ms */
   latencyMs: number | null;
   /** API/sunucu HTTP RTT, ms */
@@ -689,6 +694,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [isVoiceLeader, setIsVoiceLeader] = useState(true);
   const [voiceOnOtherTab, setVoiceOnOtherTab] = useState(false);
+  const [voiceElsewherePlatform, setVoiceElsewherePlatform] = useState<string | null>(
+    null,
+  );
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [serverLatencyMs, setServerLatencyMs] = useState<number | null>(null);
   const [muted, setMuted] = useState(false);
@@ -720,9 +728,24 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   isLeaderRef.current = isVoiceLeader;
   audioSettingsRef.current = audioSettings;
 
+  useEffect(() => {
+    client.setVoiceClient(client.getVoiceClientId(), 'web');
+  }, [client]);
+
+  const yieldLiveKitLeadership = useCallback((platform?: string | null) => {
+    transferringLeadershipRef.current = true;
+    setIsVoiceLeader(false);
+    setVoiceOnOtherTab(true);
+    setVoiceElsewherePlatform(platform ?? 'web');
+    window.setTimeout(() => {
+      transferringLeadershipRef.current = false;
+    }, 800);
+  }, []);
+
   const claimVoiceLeadership = useCallback((channelId: string, guildId: string) => {
     setIsVoiceLeader(true);
     setVoiceOnOtherTab(false);
+    setVoiceElsewherePlatform(null);
     postVoiceTabMessage(voiceBcRef.current, {
       type: 'claim',
       tabId: tabIdRef.current,
@@ -732,18 +755,26 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const reclaimVoice = useCallback(async () => {
+    const ch = channelIdRef.current;
+    const g = guildIdRef.current;
+    if (!ch || !g) return;
+    transferringLeadershipRef.current = false;
+    claimVoiceLeadership(ch, g);
+    try {
+      await client.claimVoiceClient(ch);
+    } catch {
+      /* token/join yine claim eder */
+    }
+  }, [claimVoiceLeadership, client]);
+
   /** Çoklu sekme: yalnızca odaklanan sekme LiveKit lideri olur */
   useEffect(() => {
     const bc = openVoiceTabChannel((msg: VoiceTabMessage) => {
       if (msg.type === 'claim') {
         if (msg.tabId === tabIdRef.current) return;
         if (channelIdRef.current && msg.channelId === channelIdRef.current) {
-          transferringLeadershipRef.current = true;
-          setIsVoiceLeader(false);
-          setVoiceOnOtherTab(true);
-          window.setTimeout(() => {
-            transferringLeadershipRef.current = false;
-          }, 800);
+          yieldLiveKitLeadership('web');
         }
         return;
       }
@@ -757,6 +788,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         setVoiceChannelId(null);
         setVoiceGuildId(null);
         setVoiceOnOtherTab(false);
+        setVoiceElsewherePlatform(null);
         setIsVoiceLeader(true);
         if (wasLeader && ch) {
           void client.leaveVoiceState(ch).catch(() => undefined);
@@ -769,15 +801,22 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       bc?.close();
       voiceBcRef.current = null;
     };
-  }, [client]);
+  }, [client, yieldLiveKitLeadership]);
 
+  /** Sekme odağı: yalnızca bu tarayıcıda (başka cihaz aldıysa otomatik çalma) */
   useEffect(() => {
     const onFocus = () => {
       const ch = channelIdRef.current;
       const g = guildIdRef.current;
       if (!ch || !g) return;
       if (document.visibilityState !== 'visible') return;
+      if (!isLeaderRef.current && voiceElsewherePlatform && voiceElsewherePlatform !== 'web') {
+        return;
+      }
       claimVoiceLeadership(ch, g);
+      if (!isLeaderRef.current) {
+        void client.claimVoiceClient(ch).catch(() => undefined);
+      }
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
@@ -785,7 +824,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [claimVoiceLeadership]);
+  }, [claimVoiceLeadership, client, voiceElsewherePlatform]);
 
   useEffect(() => {
     if (!voiceChannelId || !voiceGuildId) return;
@@ -1549,7 +1588,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     })();
 
     const heartbeat = window.setInterval(() => {
-      void client.voiceHeartbeat(channelId).catch(() => undefined);
+      void client
+        .voiceHeartbeat(channelId)
+        .then((r) => {
+          if (disposed) return;
+          if (r && 'active' in r && r.active === false) {
+            yieldLiveKitLeadership(null);
+          }
+        })
+        .catch(() => undefined);
     }, 30_000);
 
     // Hayalet sessizlik + robotik ses onarımı (çift audio element / askıda AudioContext)
@@ -1659,6 +1706,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     applyRoomAudioSettings,
     refreshAudioDevices,
     applyMicGainToTrack,
+    yieldLiveKitLeadership,
   ]);
 
   useEffect(() => {
@@ -1821,6 +1869,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     setVoiceGuildId(null);
     setConnected(false);
     setVoiceOnOtherTab(false);
+    setVoiceElsewherePlatform(null);
     setIsVoiceLeader(true);
     setAudioPlaybackBlocked(false);
     setParticipants([]);
@@ -1888,11 +1937,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       leave();
       setError('Bu odadan çıkarıldın veya girişin engellendi.');
     };
+    const onTakeover = (payload: VoiceTakeoverPayload) => {
+      if (!channelIdRef.current) return;
+      if (payload.clientId === client.getVoiceClientId()) return;
+      yieldLiveKitLeadership(payload.platform ?? null);
+    };
     sock.on(SocketEvents.VOICE_STATE, onVoice);
+    sock.on(SocketEvents.VOICE_TAKEOVER, onTakeover);
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
+      sock.off(SocketEvents.VOICE_TAKEOVER, onTakeover);
     };
-  }, [user, client, leave, join]);
+  }, [user, client, leave, join, yieldLiveKitLeadership]);
 
   const applyParticipantVolume = useCallback((identity: string, volume: number) => {
     const room = roomRef.current;
@@ -2758,6 +2814,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       connected,
       isVoiceLeader,
       voiceOnOtherTab,
+      voiceElsewherePlatform,
+      reclaimVoice,
       latencyMs,
       serverLatencyMs,
       muted,
@@ -2819,6 +2877,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       connected,
       isVoiceLeader,
       voiceOnOtherTab,
+      voiceElsewherePlatform,
+      reclaimVoice,
       latencyMs,
       serverLatencyMs,
       muted,
