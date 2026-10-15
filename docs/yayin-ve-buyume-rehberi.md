@@ -37,18 +37,13 @@ Yerel: `yarn workspace @dracord/desktop build:win` / `build:linux`
 
 ### macOS (Apple Developer ile — ekstra para yok)
 
-- [ ] Mac’te Keychain’de **Developer ID Application** sertifikası
-- [ ] GitHub Secrets (CI notarize için):
+Şu an CI **imzasız** DMG üretir (`apps/desktop` → `build.mac.identity: null`). Gatekeeper uyarısı normal.
 
-  - `APPLE_ID`
-  - `APPLE_APP_SPECIFIC_PASSWORD` (appleid.apple.com → uygulama şifresi)
-  - `APPLE_TEAM_ID`
-  - İsteğe bağlı: `CSC_LINK` / kimlik (CI Mac runner)
+İmzalı + notarize için:
 
-- [ ] `build:mac` veya workflow macOS job → DMG
-- [ ] `NEXT_PUBLIC_DOWNLOAD_MACOS=...`
-
-Yerelde Xcode / `electron-builder` notarize: secrets doluysa otomatik.
+- [ ] `package.json` içinden `"identity": null` satırını kaldır
+- [ ] GitHub Secrets: `CSC_LINK` (p12/base64), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`
+- [ ] Workflow yeniden çalıştır → `NEXT_PUBLIC_DOWNLOAD_MACOS=...`
 
 ### Windows imza (sonra, ücretli)
 

@@ -94,7 +94,8 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "artifactName": "Dracord-${version}-mac.${ext}"
+      "artifactName": "Dracord-${version}-mac.${ext}",
+      "identity": null
     },
     "dmg": {
       "contents": [
