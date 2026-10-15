@@ -60,6 +60,8 @@ export function ActivityChannelView({
   onChatPanelWidthChange,
   participantsPanelWidth,
   onParticipantsPanelWidthChange,
+  /** Mobil WebView — site kabuğu yok, yalnızca oyun sahnesi */
+  embedMode = false,
 }: {
   guildId: string;
   channel: ChannelSummary;
@@ -75,6 +77,7 @@ export function ActivityChannelView({
   onChatPanelWidthChange?: (w: number) => void;
   participantsPanelWidth?: number;
   onParticipantsPanelWidthChange?: (w: number) => void;
+  embedMode?: boolean;
 }) {
   const { client, user } = useAuth();
   const voice = useVoiceSession();
@@ -413,21 +416,8 @@ export function ActivityChannelView({
     </div>
   );
 
-  return (
-    <ActivityStageShell
-      className={className}
-      header={header}
-      chatPanel={chatPanel}
-      participantsPanel={participantsPanel}
-      chatOpen={chatOpen}
-      participantsOpen={participantsOpen}
-      onToggleChat={onToggleChat}
-      onToggleParticipants={onToggleParticipants}
-      chatPanelWidth={chatPanelWidth}
-      onChatPanelWidthChange={onChatPanelWidthChange}
-      participantsPanelWidth={participantsPanelWidth}
-      onParticipantsPanelWidthChange={onParticipantsPanelWidthChange}
-    >
+  const stage = (
+    <>
       {error ? (
         <p className="shrink-0 bg-error/10 px-space-md py-1 font-body-sm text-error">{error}</p>
       ) : null}
@@ -551,6 +541,61 @@ export function ActivityChannelView({
           </>
         )}
       </div>
+    </>
+  );
+
+  if (embedMode) {
+    return (
+      <div
+        className={
+          className ??
+          'flex h-[100dvh] w-full flex-col overflow-hidden bg-[#11131e]'
+        }
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b border-[#44307a]/50 px-3 py-2">
+          <span className="material-symbols-outlined text-[18px] text-[#bd93f9]">
+            {kind ? KIND_ICON[kind] : 'sports_esports'}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f8f8f2]">
+            {channel.name}
+          </span>
+          {session ? (
+            <span className="shrink-0 text-[11px] text-[#ccc3d3]">
+              {session.playerIds.length}/{session.maxPlayers}
+            </span>
+          ) : null}
+          {session && isMember ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void leave()}
+              className="h-7 shrink-0 rounded-md px-2 text-xs text-[#ff5555] hover:bg-[#ff5555]/10 disabled:opacity-50"
+            >
+              Ayrıl
+            </button>
+          ) : null}
+        </div>
+        {stage}
+      </div>
+    );
+  }
+
+  return (
+    <ActivityStageShell
+      className={className}
+      header={header}
+      chatPanel={chatPanel}
+      participantsPanel={participantsPanel}
+      chatOpen={chatOpen}
+      participantsOpen={participantsOpen}
+      onToggleChat={onToggleChat}
+      onToggleParticipants={onToggleParticipants}
+      chatPanelWidth={chatPanelWidth}
+      onChatPanelWidthChange={onChatPanelWidthChange}
+      participantsPanelWidth={participantsPanelWidth}
+      onParticipantsPanelWidthChange={onParticipantsPanelWidthChange}
+    >
+      {stage}
     </ActivityStageShell>
   );
 }

@@ -23,6 +23,7 @@ export function GlobalSearch() {
   const { client, user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const isEmbed = Boolean(pathname?.startsWith('/embed'));
 
   const { guildId, channelId } = useMemo(() => {
     const parts = pathname?.split('/') ?? [];
@@ -172,6 +173,9 @@ export function GlobalSearch() {
       : `/channels/@me/${hit.channelId}`;
     router.push(`${path}?${qs.toString()}`);
   };
+
+  // Mobil oyun gömme — site araması gösterme
+  if (isEmbed) return null;
 
   return (
     <>
