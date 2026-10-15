@@ -32,6 +32,8 @@ type AuthCtx = {
   logout: () => Promise<void>;
   setSession: (tokens: AuthTokens, user: PublicUser) => Promise<void>;
   refreshUser: () => Promise<PublicUser | null>;
+  /** WebView oyun gömme için */
+  getSessionTokens: () => Promise<AuthTokens | null>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -171,14 +173,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, [client]);
 
+  const getSessionTokens = useCallback(async (): Promise<AuthTokens | null> => {
+    const accessToken = await SecureStore.getItemAsync(ACCESS_KEY);
+    const refreshToken =
+      refreshMem.current ?? (await SecureStore.getItemAsync(REFRESH_KEY));
+    if (!accessToken || !refreshToken) return null;
+    return { accessToken, refreshToken };
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     void syncStickersWithCloud(client);
   }, [client, user?.id]);
 
   const value = useMemo(
-    () => ({ client, user, ready, loginGoogle, logout, setSession, refreshUser }),
-    [client, user, ready, loginGoogle, logout, setSession, refreshUser],
+    () => ({
+      client,
+      user,
+      ready,
+      loginGoogle,
+      logout,
+      setSession,
+      refreshUser,
+      getSessionTokens,
+    }),
+    [
+      client,
+      user,
+      ready,
+      loginGoogle,
+      logout,
+      setSession,
+      refreshUser,
+      getSessionTokens,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

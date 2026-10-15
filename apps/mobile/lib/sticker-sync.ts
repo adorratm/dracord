@@ -46,6 +46,14 @@ async function saveLocal(state: StickerState) {
   await AsyncStorage.setItem(KEY, JSON.stringify(memory));
 }
 
+async function pushCloud(client: DracordClient) {
+  try {
+    await client.updateClientSettings({ stickers: memory });
+  } catch {
+    /* offline */
+  }
+}
+
 function mergeStates(local: StickerState, remote: StickerState | null | undefined): StickerState {
   if (!remote) return local;
   const byId = new Map<string, MobileSticker>();
@@ -82,4 +90,49 @@ export async function syncStickersWithCloud(client: DracordClient): Promise<Mobi
     /* çevrimdışı / hata — yerel yeterli */
   }
   return memory.custom;
+}
+
+export async function addCustomSticker(
+  client: DracordClient,
+  sticker: Omit<MobileSticker, 'id' | 'createdAt'> & { id?: string },
+): Promise<MobileSticker[]> {
+  await loadStickersFromDisk();
+  const next: MobileSticker = {
+    id: sticker.id ?? `st-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: sticker.kind,
+    value: sticker.value,
+    label: sticker.label,
+    contentType: sticker.contentType,
+    createdAt: Date.now(),
+  };
+  await saveLocal({
+    ...memory,
+    custom: [next, ...memory.custom.filter((s) => s.id !== next.id)],
+  });
+  await pushCloud(client);
+  return memory.custom;
+}
+
+export async function removeCustomSticker(
+  client: DracordClient,
+  id: string,
+): Promise<MobileSticker[]> {
+  await loadStickersFromDisk();
+  await saveLocal({
+    ...memory,
+    custom: memory.custom.filter((s) => s.id !== id),
+    favoriteIds: memory.favoriteIds.filter((x) => x !== id),
+    recentIds: memory.recentIds.filter((x) => x !== id),
+  });
+  await pushCloud(client);
+  return memory.custom;
+}
+
+export async function touchRecentSticker(client: DracordClient, id: string) {
+  await loadStickersFromDisk();
+  await saveLocal({
+    ...memory,
+    recentIds: [id, ...memory.recentIds.filter((x) => x !== id)].slice(0, 24),
+  });
+  void pushCloud(client);
 }

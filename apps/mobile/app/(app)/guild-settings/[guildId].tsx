@@ -5,6 +5,15 @@ import type { ChannelSummary, GuildInviteDto, PublicUser, RoleDto } from '@draco
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../../lib/auth';
 import { inputStyle, primaryBtn, primaryBtnText } from '../../../lib/ui';
+import { ShellHeader } from '../../../components/shell/AppShell';
+import { Icon } from '../../../components/Icon';
+
+function channelIconName(type: ChannelSummary['type']) {
+  if (type === 'VOICE') return 'volume_up';
+  if (type === 'GAME' || type === 'WATCH_PARTY') return 'sports_esports';
+  if (type === 'FORUM') return 'forum';
+  return 'tag';
+}
 
 type Tab = 'general' | 'channels' | 'roles' | 'members' | 'invite';
 
@@ -41,8 +50,9 @@ export default function GuildSettingsScreen() {
   ];
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: 'Sunucu ayarları' }} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ShellHeader title="Sunucu ayarları" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 48, borderBottomWidth: 1, borderBottomColor: colors.surfaceHigh }}>
         {tabs.map(([k, label]) => (
           <Pressable
@@ -121,9 +131,12 @@ export default function GuildSettingsScreen() {
                     borderBottomColor: colors.surfaceHigh,
                   }}
                 >
-                  <Text style={{ color: colors.text }}>
-                    {c.type === 'VOICE' ? '🔊' : c.type === 'GAME' || c.type === 'WATCH_PARTY' ? '🎮' : '#'} {c.name}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
+                    <Icon name={channelIconName(c.type)} size={18} color={colors.textMuted} />
+                    <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                  </View>
                   <Pressable
                     onPress={() => {
                       Alert.alert('Kanal sil', `#${c.name} silinsin mi?`, [
@@ -254,8 +267,12 @@ export default function GuildSettingsScreen() {
           </>
         )}
 
-        <Pressable onPress={() => router.back()} style={{ marginTop: 32 }}>
-          <Text style={{ color: colors.textMuted }}>← Geri</Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={{ marginTop: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+        >
+          <Icon name="arrow_back" size={18} color={colors.textMuted} />
+          <Text style={{ color: colors.textMuted }}>Geri</Text>
         </Pressable>
       </ScrollView>
     </View>

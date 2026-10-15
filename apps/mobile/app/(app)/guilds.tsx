@@ -1,306 +1,201 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
-import { Link, Stack, useRouter } from 'expo-router';
-import type { ChannelSummary, GuildSummary, PublicUser } from '@dracord/types';
+import { useEffect, useState } from 'react';
+import { FlatList, Pressable, Text, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import type { ChannelSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
-import { GAME_KIND_LABEL } from '@dracord/game-core';
 import { useAuth } from '../../lib/auth';
-import { rememberChannel, readGuildLastChannel, readLastChannel } from '../../lib/lastChannel';
-import { CreateGuildModal, JoinInviteModal } from '../../components/GuildModals';
-import { MemberSheet } from '../../components/MemberSheet';
+import { FriendsHub } from '../../components/FriendsHub';
+import { ChatView } from '../../components/ChatView';
+import {
+  ShellHeader,
+  useAppShell,
+} from '../../components/shell/AppShell';
+import { ChannelList } from '../../components/shell/ChannelList';
+import { UserPanel } from '../../components/shell/UserPanel';
+import { UserAvatar } from '../../components/UserAvatar';
+import { useVoiceSessionOptional } from '../../components/voice/VoiceSession';
+import { useActivitySessionOptional } from '../../components/activity/ActivitySession';
 
-function channelIcon(c: ChannelSummary) {
-  if (c.type === 'VOICE') return '🔊 ';
-  if (c.type === 'GAME' || c.type === 'WATCH_PARTY') return '🎮 ';
-  return '# ';
-}
-
+/**
+ * Home (arkadaş/DM) veya sunucu kanal listesi.
+ * Sunucu rayı TitleBar hamburger ile açılır (AppShell drawer).
+ */
 export default function GuildsScreen() {
-  const { client, user } = useAuth();
+  const { client, user, refreshUser } = useAuth();
   const router = useRouter();
-  const [guilds, setGuilds] = useState<GuildSummary[]>([]);
-  const [guildId, setGuildId] = useState<string | null>(null);
-  const [channels, setChannels] = useState<ChannelSummary[]>([]);
-  const [members, setMembers] = useState<PublicUser[]>([]);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [membersOpen, setMembersOpen] = useState(false);
+  const shell = useAppShell();
+  const voice = useVoiceSessionOptional();
+  const activity = useActivitySessionOptional();
+  const [dms, setDms] = useState<ChannelSummary[]>([]);
+  const [activeDm, setActiveDm] = useState<ChannelSummary | null>(null);
+  const [homeTab, setHomeTab] = useState<'friends' | 'dms'>('friends');
 
-  const reloadGuilds = () =>
-    client.listGuilds().then((g) => {
-      setGuilds(g);
-      return g;
+  useEffect(() => {
+    if (shell.mode !== 'home') return;
+    void client.listDms().then((list) => {
+      setDms(list);
+      setActiveDm((cur) => cur ?? list[0] ?? null);
     });
+  }, [client, shell.mode]);
 
-  useEffect(() => {
-    void (async () => {
-      const g = await reloadGuilds();
-      if (!g.length) return;
-      const last = await readLastChannel();
-      if (last && g.some((x) => x.id === last.guildId)) {
-        setGuildId(last.guildId);
-        return;
-      }
-      setGuildId(g[0]!.id);
-    })();
-  }, [client]);
-
-  useEffect(() => {
-    if (!guildId) return;
-    void client.getGuildChannels(guildId).then(setChannels);
-    void client.getGuildMembers(guildId).then(setMembers).catch(() => setMembers([]));
-  }, [client, guildId]);
-
-  const channelTree = useMemo(() => {
-    const cats = channels
-      .filter((c) => c.type === 'CATEGORY')
-      .sort((a, b) => a.position - b.position);
-    const rest = channels
-      .filter((c) => c.type !== 'CATEGORY')
-      .sort((a, b) => a.position - b.position);
-    const byParent = new Map<string | null, ChannelSummary[]>();
-    for (const c of rest) {
-      const key = c.categoryId ?? null;
-      const arr = byParent.get(key) ?? [];
-      arr.push(c);
-      byParent.set(key, arr);
-    }
-    return { cats, byParent, uncategorized: byParent.get(null) ?? [] };
-  }, [channels]);
-
-  const openChannel = async (c: ChannelSummary) => {
-    if (!guildId) return;
-    await rememberChannel(guildId, c.id);
-    if (c.type === 'VOICE') {
-      router.push(`/(app)/voice/${guildId}/${c.id}`);
-    } else if (c.type === 'GAME' || c.type === 'WATCH_PARTY') {
-      router.push(`/(app)/activity/${guildId}/${c.id}`);
-    } else {
-      router.push(`/(app)/channels/${guildId}/${c.id}`);
-    }
-  };
-
-  const pickGuild = async (id: string) => {
-    setGuildId(id);
-    const preferId = await readGuildLastChannel(id);
-    const chs = await client.getGuildChannels(id);
-    setChannels(chs);
-    const prefer = preferId ? chs.find((c) => c.id === preferId) : undefined;
-    const first = prefer ?? chs.find((c) => c.type === 'TEXT') ?? chs.find((c) => c.type !== 'CATEGORY');
-    if (first && first.type !== 'CATEGORY') void openChannel(first);
-  };
-
-  const leaveGuild = () => {
-    if (!guildId) return;
-    Alert.alert('Sunucudan ayrıl', 'Bu sunucudan ayrılmak istiyor musun?', [
-      { text: 'İptal', style: 'cancel' },
-      {
-        text: 'Ayrıl',
-        style: 'destructive',
-        onPress: () => {
-          void client.leaveGuild(guildId).then(async () => {
-            const g = await reloadGuilds();
-            setGuildId(g[0]?.id ?? null);
-          });
-        },
-      },
-    ]);
-  };
-
-  const renderChannel = (c: ChannelSummary) => {
-    const unread = (c.unreadCount ?? 0) > 0 || c.unread;
-    return (
-      <Pressable
-        key={c.id}
-        onPress={() => void openChannel(c)}
-        style={{ paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center' }}
-      >
-        <Text style={{ color: unread ? colors.text : colors.textMuted, flex: 1 }}>
-          {channelIcon(c)}
-          {c.name}
-          {c.gameKind ? ` · ${GAME_KIND_LABEL[c.gameKind]}` : ''}
-        </Text>
-        {unread ? (
-          <View
-            style={{
-              minWidth: 20,
-              height: 20,
-              borderRadius: 10,
-              backgroundColor: colors.danger,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 6,
-            }}
-          >
-            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
-              {c.unreadCount && c.unreadCount > 0 ? (c.unreadCount > 99 ? '99+' : c.unreadCount) : '•'}
-            </Text>
-          </View>
-        ) : null}
-      </Pressable>
-    );
-  };
-
-  const listData = useMemo(() => {
-    const rows: Array<{ type: 'cat' | 'ch'; cat?: ChannelSummary; ch?: ChannelSummary }> = [];
-    for (const ch of channelTree.uncategorized) rows.push({ type: 'ch', ch });
-    for (const cat of channelTree.cats) {
-      rows.push({ type: 'cat', cat });
-      const kids = channelTree.byParent.get(cat.id) ?? [];
-      for (const ch of kids) rows.push({ type: 'ch', ch });
-    }
-    return rows;
-  }, [channelTree]);
-
-  const headerLinks = (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, maxWidth: 220, justifyContent: 'flex-end' }}>
-      <Link href="/(app)/friends" asChild>
-        <Pressable><Text style={{ color: colors.primary, fontSize: 13 }}>Arkadaş</Text></Pressable>
-      </Link>
-      <Link href="/(app)/notifications" asChild>
-        <Pressable><Text style={{ color: colors.primary, fontSize: 13 }}>Bildirim</Text></Pressable>
-      </Link>
-      <Link href="/(app)/search" asChild>
-        <Pressable><Text style={{ color: colors.primary, fontSize: 13 }}>Ara</Text></Pressable>
-      </Link>
-      <Link href="/(app)/dms" asChild>
-        <Pressable><Text style={{ color: colors.primary, fontSize: 13 }}>DM</Text></Pressable>
-      </Link>
-      <Link href="/(app)/discover" asChild>
-        <Pressable><Text style={{ color: colors.textMuted, fontSize: 13 }}>Keşfet</Text></Pressable>
-      </Link>
-      <Link href="/(app)/settings" asChild>
-        <Pressable><Text style={{ color: colors.textMuted, fontSize: 13 }}>Ayarlar</Text></Pressable>
-      </Link>
-    </View>
-  );
+  const activeGuild = shell.guilds.find((g) => g.id === shell.guildId);
 
   return (
-    <View style={{ flex: 1, flexDirection: 'row' }}>
-      <Stack.Screen options={{ title: 'Dracord', headerRight: () => headerLinks }} />
-      <View style={{ width: 64, backgroundColor: '#0c0d14', paddingVertical: 8 }}>
-        <Pressable
-          onPress={() => setCreateOpen(true)}
-          style={{
-            marginHorizontal: 8,
-            marginBottom: 8,
-            height: 48,
-            borderRadius: 24,
-            backgroundColor: colors.success,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ color: '#fff', fontSize: 22, fontWeight: '700' }}>+</Text>
-        </Pressable>
-        {guilds.map((g) => (
-          <Pressable
-            key={g.id}
-            onPress={() => void pickGuild(g.id)}
-            style={{
-              marginHorizontal: 8,
-              marginBottom: 8,
-              height: 48,
-              borderRadius: guildId === g.id ? 14 : 24,
-              backgroundColor: guildId === g.id ? colors.primary : colors.surfaceHigh,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text
-              style={{
-                color: guildId === g.id ? colors.primaryOn : colors.text,
-                fontWeight: '700',
-                fontSize: 12,
-              }}
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ShellHeader
+        title={shell.mode === 'home' ? 'Ana sayfa' : activeGuild?.name ?? 'Dracord'}
+        subtitle={shell.mode === 'home' ? 'Arkadaşlar & DM' : user?.displayName}
+        showMembers={shell.mode === 'guild'}
+      />
+
+      {shell.mode === 'home' ? (
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', gap: 8, padding: 12 }}>
+            <Chip
+              label="Arkadaşlar"
+              active={homeTab === 'friends'}
+              onPress={() => setHomeTab('friends')}
+            />
+            <Chip label="Mesajlar" active={homeTab === 'dms'} onPress={() => setHomeTab('dms')} />
+            <Pressable
+              onPress={() => router.push('/(app)/dms')}
+              style={{ marginLeft: 'auto', paddingVertical: 8, paddingHorizontal: 10 }}
             >
-              {g.name.slice(0, 2).toUpperCase()}
-            </Text>
-          </Pressable>
-        ))}
-        <Pressable
-          onPress={() => setJoinOpen(true)}
-          style={{
-            marginHorizontal: 8,
-            height: 48,
-            borderRadius: 24,
-            borderWidth: 2,
-            borderColor: colors.surfaceHigh,
-            borderStyle: 'dashed',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ color: colors.textMuted, fontSize: 18 }}>⤵</Text>
-        </Pressable>
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12 }}>
-          <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }}>
-            {guilds.find((g) => g.id === guildId)?.name ?? 'Sunucu'}
-          </Text>
-          {guildId ? (
-            <>
-              <Pressable onPress={() => setMembersOpen(true)} style={{ padding: 8 }}>
-                <Text style={{ color: colors.primary }}>👥</Text>
-              </Pressable>
-              <Link href={`/(app)/guild-settings/${guildId}`} asChild>
-                <Pressable style={{ padding: 8 }}>
-                  <Text style={{ color: colors.textMuted }}>⚙</Text>
-                </Pressable>
-              </Link>
-            </>
-          ) : null}
-        </View>
-        <Text style={{ color: colors.textMuted, paddingHorizontal: 12, marginBottom: 8 }}>{user?.displayName}</Text>
-        <FlatList
-          data={listData}
-          keyExtractor={(row) => (row.type === 'cat' ? `cat-${row.cat!.id}` : `ch-${row.ch!.id}`)}
-          renderItem={({ item: row }) =>
-            row.type === 'cat' ? (
-              <Text
-                style={{
-                  color: colors.textMuted,
-                  fontSize: 11,
-                  fontWeight: '700',
-                  paddingHorizontal: 12,
-                  paddingTop: 14,
-                  paddingBottom: 4,
-                }}
-              >
-                {row.cat!.name.toUpperCase()}
-              </Text>
-            ) : (
-              renderChannel(row.ch!)
-            )
-          }
-        />
-        {guildId ? (
-          <View style={{ flexDirection: 'row', gap: 12, padding: 16 }}>
-            <Pressable onPress={leaveGuild}>
-              <Text style={{ color: colors.danger }}>Sunucudan ayrıl</Text>
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Tümü →</Text>
             </Pressable>
           </View>
-        ) : null}
-      </View>
-
-      <CreateGuildModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(id) => void pickGuild(id)}
-      />
-      <JoinInviteModal
-        open={joinOpen}
-        onClose={() => setJoinOpen(false)}
-        onJoined={(id) => void pickGuild(id)}
-      />
-      <MemberSheet open={membersOpen} onClose={() => setMembersOpen(false)} members={members} />
+          {homeTab === 'friends' ? (
+            <FriendsHub
+              onOpenDm={(userId) => {
+                void client.openDm(userId).then((dm) => {
+                  setHomeTab('dms');
+                  setActiveDm(dm);
+                  void client.listDms().then(setDms);
+                });
+              }}
+            />
+          ) : (
+            <View style={{ flex: 1 }}>
+              <FlatList
+                horizontal
+                data={dms}
+                keyExtractor={(c) => c.id}
+                style={{ maxHeight: 56, borderBottomWidth: 1, borderBottomColor: colors.surfaceHigh }}
+                contentContainerStyle={{ paddingHorizontal: 8, gap: 6, alignItems: 'center' }}
+                ListEmptyComponent={
+                  <Text style={{ color: colors.textMuted, padding: 12 }}>Henüz DM yok</Text>
+                }
+                renderItem={({ item }) => {
+                  const selected = activeDm?.id === item.id;
+                  return (
+                    <Pressable
+                      onPress={() => setActiveDm(item)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: selected ? colors.primary : colors.surfaceHigh,
+                      }}
+                    >
+                      <UserAvatar
+                        displayName={item.name}
+                        imageUrl={item.peerAvatarUrl}
+                        size={28}
+                        status={item.peerStatus}
+                        statusRing={Boolean(item.peerStatus)}
+                      />
+                      <Text
+                        style={{
+                          color: selected ? colors.primaryOn : colors.text,
+                          fontWeight: '700',
+                          fontSize: 13,
+                          maxWidth: 120,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                    </Pressable>
+                  );
+                }}
+              />
+              {activeDm ? (
+                <ChatView channel={activeDm} />
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                  <Text style={{ color: colors.textMuted, textAlign: 'center' }}>
+                    Bir sohbet seç veya Arkadaşlar’dan mesaj başlat.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      ) : (
+        <View style={{ flex: 1, minHeight: 0 }}>
+          {/* Ray hamburger menüde — burada tam genişlik kanal listesi */}
+          <ChannelList
+            channels={shell.channels}
+            categories={shell.categories}
+            activeChannelId={shell.activeChannelId}
+            onOpenChannel={(c) => void shell.openChannel(c)}
+            serverName={activeGuild?.name}
+            onOpenServerMenu={shell.openServerMenu}
+            onOpenMembers={() => {
+              void shell.refreshMembers();
+              shell.setMembersOpen(true);
+            }}
+            selfUserId={user?.id}
+            activeVoiceChannelId={voice?.voiceChannelId}
+            activeActivityChannelId={activity?.activityChannelId}
+            onVoiceMemberPress={(m, ch) => shell.openVoiceMember(m, ch)}
+            onVoiceMemberLongPress={(m, ch) => shell.openVoiceMemberMenu(m, ch)}
+          />
+          <UserPanel
+            user={user}
+            onStatusChange={(status, customStatus) => {
+              void client
+                .updatePresence({ status, customStatus })
+                .then(() => refreshUser())
+                .catch(() => undefined);
+            }}
+            onOpenSettings={() => router.push('/(app)/settings')}
+            onOpenProfile={() => {
+              if (user) shell.openProfile(user);
+            }}
+          />
+        </View>
+      )}
     </View>
+  );
+}
+
+function Chip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: active ? colors.primary : colors.surfaceHigh,
+      }}
+    >
+      <Text style={{ color: active ? colors.primaryOn : colors.text, fontWeight: '700', fontSize: 13 }}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }

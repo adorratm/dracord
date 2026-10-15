@@ -4,6 +4,8 @@ import { Stack, useRouter } from 'expo-router';
 import type { GuildSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { guildBannerUrl, resolveMediaUrl } from '../../lib/mediaUrl';
+import { ShellHeader } from '../../components/shell/AppShell';
 
 export default function DiscoverScreen() {
   const { client } = useAuth();
@@ -19,8 +21,9 @@ export default function DiscoverScreen() {
   }, [client]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: 'Keşfet' }} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ShellHeader title="Keşfet" />
       {error ? <Text style={{ color: colors.danger, padding: 16 }}>{error}</Text> : null}
       <FlatList
         data={list}
@@ -38,11 +41,27 @@ export default function DiscoverScreen() {
               backgroundColor: colors.surface,
             }}
           >
-            {g.bannerUrl ? (
-              <Image source={{ uri: g.bannerUrl }} style={{ height: 88, width: '100%' }} />
-            ) : (
-              <View style={{ height: 88, backgroundColor: colors.surfaceHigh }} />
-            )}
+            <View style={{ height: 88, backgroundColor: colors.surfaceHigh }}>
+              <Image
+                source={{ uri: guildBannerUrl(g.bannerUrl) }}
+                style={{ height: 88, width: '100%' }}
+                resizeMode="cover"
+              />
+              {g.iconUrl ? (
+                <Image
+                  source={{ uri: resolveMediaUrl(g.iconUrl) ?? undefined }}
+                  style={{
+                    position: 'absolute',
+                    left: 12,
+                    bottom: 10,
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+              ) : null}
+            </View>
             <Text style={{ color: colors.text, fontWeight: '700', padding: 12 }}>{g.name}</Text>
           </Pressable>
         )}

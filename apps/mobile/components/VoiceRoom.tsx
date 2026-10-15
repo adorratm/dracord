@@ -1,21 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Room, RoomEvent, Track, type RemoteTrack } from 'livekit-client';
-import { registerGlobals } from '@livekit/react-native';
-import type { ChannelSummary, VoiceTakeoverPayload } from '@dracord/types';
-import { SocketEvents } from '@dracord/sdk';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
 import { ChatView } from './ChatView';
+import { Icon } from './Icon';
+import { UserAvatar } from './UserAvatar';
+import { useVoiceSession } from './voice/VoiceSession';
+import { useAppShellOptional } from './shell/AppShell';
+import { useElapsedLabel } from '../lib/formatElapsed';
+import { primaryBtn, primaryBtnText } from '../lib/ui';
 
-let globalsReady = false;
-function ensureLiveKit() {
-  if (!globalsReady) {
-    registerGlobals();
-    globalsReady = true;
-  }
-}
-
+/** Ses odası — kontroller alt VoiceConnectionBar’da */
 export function VoiceRoom({
   channel,
   guildId,
@@ -23,320 +19,252 @@ export function VoiceRoom({
   channel: ChannelSummary;
   guildId?: string;
 }) {
-  const { client, user } = useAuth();
-  const roomRef = useRef<Room | null>(null);
-  const connectGen = useRef(0);
-  const [status, setStatus] = useState('Bağlanıyor…');
-  const [muted, setMuted] = useState(false);
-  const [deafened, setDeafened] = useState(false);
-  const [camOn, setCamOn] = useState(false);
+  const { user } = useAuth();
+  const voice = useVoiceSession();
+  const shell = useAppShellOptional();
   const [showChat, setShowChat] = useState(false);
-  const [voiceOnOtherClient, setVoiceOnOtherClient] = useState(false);
-  const [elsewherePlatform, setElsewherePlatform] = useState<string | null>(null);
-  const [peers, setPeers] = useState<Array<{ id: string; name: string; speaking?: boolean }>>([]);
-  const attachedAudio = useRef<ReturnType<RemoteTrack['attach']>[]>([]);
-  const userId = user?.id;
-  const displayName = user?.displayName;
-
-  const clearAttached = () => {
-    for (const el of attachedAudio.current) {
-      if (typeof el === 'object' && el && 'pause' in el) {
-        (el as HTMLAudioElement).pause?.();
-      }
-    }
-    attachedAudio.current = [];
-  };
-
-  const disconnectLiveKit = useCallback(async () => {
-    const room = roomRef.current;
-    roomRef.current = null;
-    clearAttached();
-    if (room) {
-      try {
-        await room.disconnect();
-      } catch {
-        /* ignore */
-      }
-    }
-    setPeers([]);
-    setCamOn(false);
-  }, []);
-
-  const connectLiveKit = useCallback(
-    async (opts?: { reclaim?: boolean }) => {
-      ensureLiveKit();
-      const gen = ++connectGen.current;
-      await disconnectLiveKit();
-      const room = new Room();
-      roomRef.current = room;
-
-      const refreshPeers = () => {
-        const list = Array.from(room.remoteParticipants.values()).map((p) => ({
-          id: p.identity,
-          name: p.name || p.identity,
-          speaking: p.isSpeaking,
-        }));
-        if (displayName) {
-          list.unshift({
-            id: 'self',
-            name: `${displayName} (sen)`,
-            speaking: room.localParticipant.isSpeaking,
-          });
-        }
-        setPeers(list);
-      };
-
-      const onTrackSubscribed = (track: RemoteTrack, pub: { kind?: Track.Kind }) => {
-        if (pub.kind === Track.Kind.Audio) {
-          const el = track.attach();
-          attachedAudio.current.push(el);
-        }
-        refreshPeers();
-      };
-
-      room.on(RoomEvent.ParticipantConnected, refreshPeers);
-      room.on(RoomEvent.ParticipantDisconnected, refreshPeers);
-      room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
-      room.on(RoomEvent.ActiveSpeakersChanged, refreshPeers);
-
-      try {
-        setStatus('Bağlanıyor…');
-        setVoiceOnOtherClient(false);
-        setElsewherePlatform(null);
-        if (opts?.reclaim) {
-          await client.claimVoiceClient(channel.id).catch(() => undefined);
-        } else {
-          await client.joinVoiceState(channel.id, {});
-        }
-        const tok = await client.getVoiceToken(channel.id);
-        if (gen !== connectGen.current) return;
-        await room.connect(tok.url, tok.token);
-        await room.localParticipant.setMicrophoneEnabled(!muted);
-        setStatus('Bağlı');
-        refreshPeers();
-      } catch (e) {
-        if (gen !== connectGen.current) return;
-        setStatus(e instanceof Error ? e.message : 'Ses bağlantısı başarısız');
-        await disconnectLiveKit();
-      }
-    },
-    [channel.id, client, disconnectLiveKit, displayName, muted],
-  );
+  const [liveChannel, setLiveChannel] = useState(channel);
 
   useEffect(() => {
-    void connectLiveKit();
-    return () => {
-      connectGen.current += 1;
-      void (async () => {
-        await disconnectLiveKit();
-        void client.leaveVoiceState(channel.id);
-      })();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount / channel değişimi
-  }, [channel.id, userId]);
+    setLiveChannel(channel);
+  }, [channel]);
+
+  const browsingOther =
+    Boolean(voice.voiceChannelId) && voice.voiceChannelId !== channel.id;
 
   useEffect(() => {
-    if (!user) return;
-    const sock = client.connectSocket();
-    const onTakeover = (payload: VoiceTakeoverPayload) => {
-      if (payload.clientId === client.getVoiceClientId()) return;
-      void (async () => {
-        await disconnectLiveKit();
-        setVoiceOnOtherClient(true);
-        setElsewherePlatform(payload.platform ?? null);
-        setStatus(
-          payload.platform === 'desktop'
-            ? 'Ses masaüstünde'
-            : payload.platform === 'web'
-              ? 'Ses webde'
-              : 'Ses başka cihazda',
-        );
-      })();
-    };
-    sock.on(SocketEvents.VOICE_TAKEOVER, onTakeover);
-    return () => {
-      sock.off(SocketEvents.VOICE_TAKEOVER, onTakeover);
-    };
-  }, [user, client, disconnectLiveKit]);
+    if (!guildId) return;
+    // Başka sesteyken bu odayı sadece göz gezdir — otomatik katılma
+    if (browsingOther) return;
+    void voice.join(guildId, { id: channel.id, name: channel.name });
+  }, [guildId, channel.id, channel.name, browsingOther]); // eslint-disable-line react-hooks/exhaustive-deps -- join stable
 
+  // Sunucu kanal listesinden voiceMembers (avatar + joinedAt)
   useEffect(() => {
-    for (const el of attachedAudio.current) {
-      if (typeof el === 'object' && el && 'muted' in el) {
-        (el as HTMLAudioElement).muted = deafened;
-      }
-    }
-    if (deafened && !muted) {
-      void roomRef.current?.localParticipant.setMicrophoneEnabled(false);
-      setMuted(true);
-    }
-  }, [deafened, muted]);
+    const fromShell = shell?.channels.find((c) => c.id === channel.id);
+    if (fromShell) setLiveChannel(fromShell);
+  }, [shell?.channels, channel.id]);
 
-  const toggleMute = () => {
-    const next = !muted;
-    setMuted(next);
-    void roomRef.current?.localParticipant.setMicrophoneEnabled(!next);
-    void client.updateVoiceState(channel.id, { muted: next });
-  };
-
-  const toggleCam = async () => {
-    const next = !camOn;
-    setCamOn(next);
-    await roomRef.current?.localParticipant.setCameraEnabled(next);
-  };
+  const members = useMemo((): VoiceMemberSummary[] => {
+    let remote = liveChannel.voiceMembers ?? [];
+    if (browsingOther && user?.id) {
+      remote = remote.filter((m) => m.id !== user.id);
+    }
+    if (remote.length) return remote;
+    if (browsingOther) return [];
+    return voice.peers.map((p) => ({
+      id: p.id,
+      displayName: p.name,
+      avatarUrl: null,
+      speaking: p.speaking,
+    }));
+  }, [liveChannel.voiceMembers, voice.peers, browsingOther, user?.id]);
 
   if (showChat && guildId) {
     return (
       <View style={{ flex: 1 }}>
         <Pressable
           onPress={() => setShowChat(false)}
-          style={{ padding: 12, backgroundColor: colors.surface }}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: colors.surface,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.surfaceHigh,
+          }}
         >
-          <Text style={{ color: colors.primary, fontWeight: '700' }}>← Ses odası</Text>
+          <Icon name="arrow_back" size={20} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Ses odası</Text>
         </Pressable>
-        <ChatView channel={channel} />
+        <ChatView channel={channel} hideChannelChrome />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>🔊 {channel.name}</Text>
-          <Text style={{ color: colors.textMuted, marginVertical: 8 }}>{status}</Text>
+    <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          gap: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.surfaceHigh,
+        }}
+      >
+        <Icon name="volume_up" size={22} color={colors.primary} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }} numberOfLines={1}>
+            {channel.name}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+            {voice.status || (voice.connected ? 'Bağlı' : '…')}
+            {voice.screenSharing ? ' · Ekran paylaşılıyor' : ''}
+            {voice.camOn ? ' · Kamera açık' : ''}
+          </Text>
         </View>
         {guildId ? (
           <Pressable
             onPress={() => setShowChat(true)}
+            hitSlop={8}
             style={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 10,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
               backgroundColor: colors.surfaceHigh,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
+            accessibilityLabel="Sohbet"
           >
-            <Text style={{ color: colors.text, fontWeight: '600' }}>Sohbet</Text>
+            <Icon name="chat" size={18} color={colors.text} />
           </Pressable>
         ) : null}
       </View>
 
-      {voiceOnOtherClient ? (
+      {browsingOther ? (
         <View
           style={{
+            margin: 12,
             padding: 12,
-            marginBottom: 12,
             borderRadius: 12,
             backgroundColor: colors.surfaceHigh,
             gap: 10,
           }}
         >
-          <Text style={{ color: colors.text }}>
-            {elsewherePlatform === 'desktop'
-              ? 'Ses masaüstü uygulamasında açık.'
-              : elsewherePlatform === 'web'
-                ? 'Ses web istemcisinde açık.'
-                : 'Ses başka bir cihazda açık.'}{' '}
-            Yalnızca bir istemciden ses gelebilir.
+          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+            Şu an “{voice.voiceChannelName ?? 'başka bir kanal'}” odasındasın. Bu odayı
+            sadece göz gezdiriyorsun — katılınca mevcut sesten ayrılırsın.
           </Text>
-          <Pressable
-            onPress={() => void connectLiveKit({ reclaim: true })}
-            style={{
-              height: 44,
-              borderRadius: 12,
-              backgroundColor: colors.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: colors.primaryOn, fontWeight: '700' }}>Bu cihaza al</Text>
-          </Pressable>
+          {guildId ? (
+            <Pressable
+              style={primaryBtn}
+              onPress={() => void voice.join(guildId, { id: channel.id, name: channel.name })}
+            >
+              <Text style={primaryBtnText}>Bu kanala katıl</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
-      {peers.map((p) => (
+      {voice.voiceOnOtherClient ? (
         <View
-          key={p.id}
           style={{
+            margin: 12,
             padding: 12,
-            marginBottom: 8,
-            backgroundColor: p.speaking ? colors.surfaceHigh : colors.surface,
-            borderRadius: 10,
-            borderWidth: p.speaking ? 2 : 0,
-            borderColor: colors.primary,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceHigh,
+            gap: 10,
           }}
         >
-          <Text style={{ color: colors.text }}>
-            {p.name}
-            {p.speaking ? ' 🎙️' : ''}
+          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+            Ses başka bir istemcide açık. Alttan “Bu cihaza al” ile geçebilirsin.
           </Text>
         </View>
-      ))}
+      ) : null}
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 'auto' }}>
-        <VoiceBtn
-          label={muted ? 'Mic kapalı' : 'Mic açık'}
-          active={!muted}
-          onPress={toggleMute}
-          danger={muted}
-          disabled={voiceOnOtherClient}
-        />
-        <VoiceBtn
-          label={deafened ? 'Sağır' : 'Ses açık'}
-          active={!deafened}
-          onPress={() => {
-            const next = !deafened;
-            setDeafened(next);
-            void client.updateVoiceState(channel.id, { deafened: next });
-          }}
-          danger={deafened}
-          disabled={voiceOnOtherClient}
-        />
-        <VoiceBtn
-          label={camOn ? 'Kamera açık' : 'Kamera kapalı'}
-          active={camOn}
-          onPress={() => void toggleCam()}
-          disabled={voiceOnOtherClient}
-        />
-      </View>
-
-      <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 12 }}>
-        Ekran paylaşımı bu platformda desteklenmiyor (N/A). Masaüstü istemcisini kullanın.
-      </Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 12, paddingBottom: 8, gap: 6 }}
+      >
+        {members.length === 0 ? (
+          <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 24 }}>
+            Odada henüz kimse yok…
+          </Text>
+        ) : (
+          members.map((m) => {
+            const speaking =
+              m.speaking || voice.peers.find((p) => p.id === m.id || p.name === m.displayName)?.speaking;
+            return (
+              <VoicePeerCard
+                key={m.id}
+                displayName={m.displayName}
+                avatarUrl={m.avatarUrl}
+                speaking={speaking}
+                muted={m.muted}
+                deafened={m.deafened}
+                screenSharing={m.screenSharing}
+                isBot={m.isBot}
+                joinedAt={m.joinedAt}
+                onPress={() => shell?.openVoiceMember(m, liveChannel)}
+                onLongPress={() => shell?.openVoiceMemberMenu(m, liveChannel)}
+              />
+            );
+          })
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function VoiceBtn({
-  label,
+function VoicePeerCard({
+  displayName,
+  avatarUrl,
+  speaking,
+  muted,
+  deafened,
+  screenSharing,
+  isBot,
+  joinedAt,
   onPress,
-  active,
-  danger,
-  disabled,
+  onLongPress,
 }: {
-  label: string;
-  onPress: () => void;
-  active?: boolean;
-  danger?: boolean;
-  disabled?: boolean;
+  displayName: string;
+  avatarUrl?: string | null;
+  speaking?: boolean;
+  muted?: boolean;
+  deafened?: boolean;
+  screenSharing?: boolean;
+  isBot?: boolean;
+  joinedAt?: string;
+  onPress?: () => void;
+  onLongPress?: () => void;
 }) {
+  const elapsed = useElapsedLabel(joinedAt);
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
+      onLongPress={onLongPress}
+      delayLongPress={280}
       style={{
-        flex: 1,
-        minWidth: '45%',
-        height: 48,
-        borderRadius: 12,
-        opacity: disabled ? 0.45 : 1,
-        backgroundColor: danger ? colors.danger : active ? colors.primary : colors.surfaceHigh,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: speaking ? colors.surfaceHigh : colors.surface,
+        borderRadius: 10,
+        borderWidth: speaking ? 1.5 : 1,
+        borderColor: speaking ? colors.primary : colors.surfaceHigh,
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 10,
       }}
     >
-      <Text style={{ color: danger || active ? colors.primaryOn : colors.text, fontWeight: '700', fontSize: 13 }}>
-        {label}
-      </Text>
+      <UserAvatar
+        displayName={displayName}
+        imageUrl={avatarUrl}
+        size={40}
+        speaking={speaking}
+        statusRing={false}
+      />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ color: colors.text, fontWeight: '700' }} numberOfLines={1}>
+          {displayName}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+          {elapsed ? `Seste ${elapsed}` : speaking ? 'Konuşuyor' : 'Dinliyor'}
+        </Text>
+      </View>
+      {isBot ? (
+        <Text style={{ color: colors.primary, fontSize: 9, fontWeight: '800' }}>BOT</Text>
+      ) : null}
+      {screenSharing ? <Icon name="present_to_all" size={16} color={colors.primary} /> : null}
+      {speaking ? <Icon name="graphic_eq" size={18} color={colors.primary} /> : null}
+      {muted ? <Icon name="mic_off" size={16} color={colors.danger} /> : null}
+      {deafened ? <Icon name="headset_off" size={16} color={colors.danger} /> : null}
     </Pressable>
   );
 }

@@ -1,7 +1,14 @@
 import { Redirect, Stack, useSegments } from 'expo-router';
+import { View } from 'react-native';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
 import { AppTour } from '../../components/AppTour';
+import { AppShellProvider } from '../../components/shell/AppShell';
+import { VoiceSessionProvider } from '../../components/voice/VoiceSession';
+import { VoiceConnectionBar } from '../../components/voice/VoiceConnectionBar';
+import { MusicPlayerBar } from '../../components/voice/MusicPlayerBar';
+import { ActivitySessionProvider } from '../../components/activity/ActivitySession';
+import { ActivityConnectionBar } from '../../components/activity/ActivityConnectionBar';
 
 export default function AppLayout() {
   const { user, ready } = useAuth();
@@ -15,15 +22,25 @@ export default function AppLayout() {
   }
 
   return (
-    <>
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      />
-      {!onOnboarding ? <AppTour /> : null}
-    </>
+    <VoiceSessionProvider>
+      <ActivitySessionProvider>
+        <AppShellProvider>
+          <View style={{ flex: 1, backgroundColor: colors.bg }}>
+            <View style={{ flex: 1 }}>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.bg },
+                }}
+              />
+            </View>
+            <ActivityConnectionBar />
+            <MusicPlayerBar />
+            <VoiceConnectionBar />
+            {!onOnboarding ? <AppTour /> : null}
+          </View>
+        </AppShellProvider>
+      </ActivitySessionProvider>
+    </VoiceSessionProvider>
   );
 }

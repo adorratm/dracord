@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import type { ChannelSummary } from '@dracord/types';
-import { GAME_KIND_LABEL } from '@dracord/game-core';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../../../lib/auth';
 import { ActivityRoom } from '../../../../components/ActivityRoom';
+import { ShellHeader, useAppShell } from '../../../../components/shell/AppShell';
 
 export default function ActivityScreen() {
   const { guildId = '', channelId = '' } = useLocalSearchParams<{
@@ -13,32 +13,31 @@ export default function ActivityScreen() {
     channelId: string;
   }>();
   const { client } = useAuth();
+  const { setActiveChannelId } = useAppShell();
   const [channel, setChannel] = useState<ChannelSummary | null>(null);
 
   useEffect(() => {
+    setActiveChannelId(channelId);
     void client.getGuildChannels(guildId).then((list) => {
       setChannel(list.find((c) => c.id === channelId) ?? null);
     });
-  }, [client, guildId, channelId]);
+  }, [client, guildId, channelId, setActiveChannelId]);
 
   if (!channel) {
     return (
-      <View style={{ padding: 16 }}>
-        <Text style={{ color: colors.textMuted }}>Aktivite yükleniyor…</Text>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ShellHeader title="Aktivite" showChannels showMembers />
+        <Text style={{ color: colors.textMuted, padding: 16 }}>Aktivite yükleniyor…</Text>
       </View>
     );
   }
 
-  const title = channel.gameKind
-    ? GAME_KIND_LABEL[channel.gameKind]
-    : channel.type === 'WATCH_PARTY'
-      ? GAME_KIND_LABEL.watch_party
-      : channel.name;
-
   return (
-    <>
-      <Stack.Screen options={{ title }} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ShellHeader title={channel.name} showChannels showMembers />
       <ActivityRoom guildId={guildId} channel={channel} />
-    </>
+    </View>
   );
 }

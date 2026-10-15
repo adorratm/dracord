@@ -9,6 +9,7 @@ const ALLOWED_WITHOUT_USERNAME = [
   '/login',
   '/auth/callback',
   '/onboarding/username',
+  '/embed',
 ];
 
 /** Kullanıcı adı onaylanmadan uygulama alanına girişi engeller. */

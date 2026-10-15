@@ -10,6 +10,7 @@ import {
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
+import { Icon } from './Icon';
 
 function Sheet({
   title,
@@ -38,8 +39,8 @@ function Sheet({
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
             <Text style={{ color: colors.text, fontWeight: '700', fontSize: 18 }}>{title}</Text>
-            <Pressable onPress={onClose}>
-              <Text style={{ color: colors.textMuted, fontSize: 18 }}>✕</Text>
+            <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Kapat">
+              <Icon name="close" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
           {children}

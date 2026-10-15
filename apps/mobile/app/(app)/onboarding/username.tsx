@@ -32,7 +32,7 @@ export default function UsernameOnboardingScreen() {
 
   return (
     <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
-      <Stack.Screen options={{ title: 'Kullanıcı adı', headerBackVisible: false }} />
+      <Stack.Screen options={{ headerShown: false }} />
       <Text style={{ color: colors.text, fontSize: 22, fontWeight: '700', marginBottom: 8 }}>
         Kullanıcı adını seç
       </Text>

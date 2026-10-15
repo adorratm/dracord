@@ -7,17 +7,19 @@ export async function uploadImageFromUri(
   uri: string,
   filename: string,
   contentType: string,
+  folder: 'attachments' | 'stickers' | 'avatars' | 'banners' = 'attachments',
 ): Promise<MessageAttachment> {
   const res = await fetch(uri);
   const blob = await res.blob();
+  const type = contentType || blob.type || 'image/jpeg';
   const presign = await client.presignUpload({
     filename,
-    contentType: contentType || blob.type || 'image/jpeg',
-    folder: 'attachments',
+    contentType: type,
+    folder,
   });
   const put = await fetch(presign.uploadUrl, {
     method: 'PUT',
-    headers: { 'Content-Type': contentType || blob.type || 'image/jpeg' },
+    headers: { 'Content-Type': type },
     body: blob,
   });
   if (!put.ok) {
@@ -27,7 +29,7 @@ export async function uploadImageFromUri(
     id: presign.key,
     url: presign.publicUrl,
     filename,
-    contentType: contentType || blob.type || 'image/jpeg',
+    contentType: type,
     size: blob.size,
   };
 }

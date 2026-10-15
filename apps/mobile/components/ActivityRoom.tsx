@@ -1,34 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import type { ActivitySessionDto, ChannelSummary } from '@dracord/types';
-import {
-  BJ_BET_OPTIONS,
-  BJ_DEFAULT_BET,
-  bjCardLabel,
-  bjHandValue,
-  bjParseState,
-  GAME_KIND_LABEL,
-  watchPartyParseState,
-  tavlaReadBoard,
-  tavlaReadDice,
-  tavlaAllLegal,
-  tavlaApplyMove,
-  tavlaRemoveDie,
-  bowlingReadFrames,
-  bowlingScoreRolls,
-  bowlingNextShooter,
-  billiardsParseBalls,
-  billiardsParseGroups,
-  COLOR_NAME,
-  okeyFromIndicator,
-  asTile,
-  tilePoints,
-} from '@dracord/game-core';
+import { SocketEvents, type ActivitySessionDto, type ChannelSummary } from '@dracord/types';
+import { watchPartyParseState } from '@dracord/game-core';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
-import { GameGlHost } from './GameGlHost';
+import { resolveWatchMedia } from '../lib/watchPartyMedia';
+import { ChatView } from './ChatView';
+import { Icon } from './Icon';
+import { useActivitySessionOptional } from './activity/ActivitySession';
+import { SafeWebView, type SafeWebViewHandle } from './SafeWebView';
+import { GameWebEmbed } from './GameWebEmbed';
 import { primaryBtn, primaryBtnText } from '../lib/ui';
+
+const NOOP_ACTIVITY = {
+  activityChannelId: null as string | null,
+  activityChannelName: null as string | null,
+  activitySessionId: null as string | null,
+  setActiveActivity: (_opts: {
+    guildId: string;
+    channelId: string;
+    channelName: string;
+    kind: ActivitySessionDto['kind'];
+    sessionId: string;
+    participantIds?: string[];
+  }) => undefined,
+  setActivityParticipants: (_ids: string[]) => undefined,
+  clearActiveActivity: () => undefined,
+};
 
 export function ActivityRoom({
   guildId,
@@ -38,9 +37,76 @@ export function ActivityRoom({
   channel: ChannelSummary;
 }) {
   const { client, user } = useAuth();
+  const activityCtx = useActivitySessionOptional() ?? NOOP_ACTIVITY;
+  const {
+    activityChannelId,
+    activityChannelName,
+    activitySessionId,
+    setActiveActivity,
+    setActivityParticipants,
+    clearActiveActivity,
+  } = activityCtx;
   const [session, setSession] = useState<ActivitySessionDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [joining, setJoining] = useState(false);
+
+  const browsingOther =
+    Boolean(activityChannelId) && activityChannelId !== channel.id;
+
+  const remember = useCallback(
+    (s: ActivitySessionDto) => {
+      const participantIds = [...(s.playerIds ?? []), ...(s.spectatorIds ?? [])];
+      setActiveActivity({
+        guildId,
+        channelId: channel.id,
+        channelName: channel.name,
+        kind: s.kind,
+        sessionId: s.id,
+        participantIds,
+      });
+      setActivityParticipants(participantIds);
+    },
+    [setActiveActivity, setActivityParticipants, guildId, channel.id, channel.name],
+  );
+
+  // Oturum üyeleri değişince overlay listesini güncelle
+  useEffect(() => {
+    if (!session || browsingOther) return;
+    const ids = [...(session.playerIds ?? []), ...(session.spectatorIds ?? [])];
+    setActivityParticipants(ids);
+  }, [
+    session?.playerIds,
+    session?.spectatorIds,
+    session,
+    browsingOther,
+    setActivityParticipants,
+  ]);
+
+  // Aktivite socket — üye gir/çık canlı
+  useEffect(() => {
+    if (browsingOther) return;
+    client.connectSocket();
+    client.joinChannel(channel.id);
+    const sock = client.connectSocket();
+    const onUpsert = (payload: ActivitySessionDto) => {
+      if (payload.channelId !== channel.id) return;
+      if (payload.status === 'ended') {
+        setSession(null);
+        return;
+      }
+      setSession(payload);
+    };
+    sock.on(SocketEvents.ACTIVITY_UPSERT, onUpsert);
+    sock.on(SocketEvents.ACTIVITY_STATE, onUpsert);
+    sock.on(SocketEvents.ACTIVITY_LEAVE, onUpsert);
+    return () => {
+      sock.off(SocketEvents.ACTIVITY_UPSERT, onUpsert);
+      sock.off(SocketEvents.ACTIVITY_STATE, onUpsert);
+      sock.off(SocketEvents.ACTIVITY_LEAVE, onUpsert);
+    };
+  }, [client, channel.id, browsingOther]);
 
   const refresh = useCallback(async () => {
     const s = await client.getChannelActivity(guildId, channel.id);
@@ -48,25 +114,57 @@ export function ActivityRoom({
     return s;
   }, [client, guildId, channel.id]);
 
+  const enterRoom = useCallback(async () => {
+    let s = await refresh();
+    if (!s) s = await client.startActivity({ guildId, channelId: channel.id });
+    setSession(s);
+    if (user && s && !s.playerIds.includes(user.id) && !s.spectatorIds.includes(user.id)) {
+      s = await client.joinActivity(s.id, false);
+      setSession(s);
+    }
+    if (s) remember(s);
+    return s;
+  }, [client, guildId, channel.id, refresh, user, remember]);
+
   useEffect(() => {
+    if (browsingOther) {
+      setSession(null);
+      setError(null);
+      return;
+    }
     void (async () => {
       try {
-        let s = await refresh();
-        if (!s) s = await client.startActivity({ guildId, channelId: channel.id });
-        setSession(s);
-        if (user && s && !s.playerIds.includes(user.id) && !s.spectatorIds.includes(user.id)) {
-          setSession(await client.joinActivity(s.id, false));
-        }
+        setError(null);
+        await enterRoom();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Aktivite açılamadı');
       }
     })();
-  }, [client, guildId, channel.id, refresh, user]);
+    // enterRoom bilinçli dışarıda — ses odası ile aynı
+  }, [guildId, channel.id, browsingOther]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const kind =
-    session?.kind ??
-    (channel.type === 'WATCH_PARTY' ? 'watch_party' : channel.gameKind) ??
-    'blackjack';
+  const switchToThisChannel = useCallback(async () => {
+    setJoining(true);
+    setError(null);
+    try {
+      if (activitySessionId && activityChannelId !== channel.id) {
+        await client.leaveActivity(activitySessionId).catch(() => undefined);
+        clearActiveActivity();
+      }
+      await enterRoom();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Katılınamadı');
+    } finally {
+      setJoining(false);
+    }
+  }, [
+    activitySessionId,
+    activityChannelId,
+    clearActiveActivity,
+    client,
+    channel.id,
+    enterRoom,
+  ]);
 
   const patch = async (state: Record<string, unknown>) => {
     if (!session) return;
@@ -78,13 +176,73 @@ export function ActivityRoom({
     }
   };
 
-  if (error) {
+  if (showChat) {
+    return (
+      <View style={{ flex: 1 }}>
+        <Pressable
+          onPress={() => setShowChat(false)}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: colors.surface,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.surfaceHigh,
+          }}
+        >
+          <Icon name="arrow_back" size={20} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Aktiviteye dön</Text>
+        </Pressable>
+        <ChatView channel={channel} hideChannelChrome />
+      </View>
+    );
+  }
+
+  if (error && !browsingOther) {
     return (
       <View style={{ padding: 16 }}>
         <Text style={{ color: colors.danger }}>{error}</Text>
       </View>
     );
   }
+
+  if (browsingOther) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ActivityHeader
+          channelName={channel.name}
+          busy={busy || joining}
+          onRefresh={() => void refresh()}
+          onChat={() => setShowChat(true)}
+        />
+        <View
+          style={{
+            margin: 12,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceHigh,
+            gap: 10,
+          }}
+        >
+          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+            Şu an “{activityChannelName ?? 'başka bir aktivite'}” odasındasın. Bu odayı
+            sadece göz gezdiriyorsun — katılınca mevcut aktiviteden ayrılırsın.
+          </Text>
+          {error ? <Text style={{ color: colors.danger, fontSize: 12 }}>{error}</Text> : null}
+          <Pressable
+            style={{ ...primaryBtn, opacity: joining ? 0.6 : 1 }}
+            disabled={joining}
+            onPress={() => void switchToThisChannel()}
+          >
+            <Text style={primaryBtnText}>{joining ? 'Katılıyor…' : 'Bu kanala katıl'}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   if (!session || !user) {
     return (
       <View style={{ padding: 16 }}>
@@ -95,314 +253,148 @@ export function ActivityRoom({
 
   return (
     <View style={{ flex: 1 }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.surfaceHigh,
-        }}
-      >
-        <Text style={{ color: colors.text, fontWeight: '700' }}>{channel.name}</Text>
-        <Text style={{ color: colors.primary, fontSize: 12 }}>{GAME_KIND_LABEL[kind]}</Text>
-        <Pressable onPress={() => void refresh()} disabled={busy}>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>↻</Text>
-        </Pressable>
-      </View>
+      <ActivityHeader
+        channelName={channel.name}
+        busy={busy}
+        onRefresh={() => void refresh()}
+        onChat={() => setShowChat(true)}
+      />
 
       {session.kind === 'watch_party' ? (
-        <WatchPartyNative session={session} onPatch={patch} />
-      ) : session.kind === 'blackjack' ? (
-        <BlackjackNative session={session} userId={user.id} busy={busy} onPatch={patch} />
-      ) : session.kind === 'tavla' ? (
-        <TavlaNative session={session} userId={user.id} busy={busy} onPatch={patch} />
-      ) : session.kind === 'bowling' ? (
-        <BowlingNative session={session} userId={user.id} busy={busy} onPatch={patch} />
-      ) : session.kind === 'billiards' ? (
-        <BilliardsNative session={session} userId={user.id} busy={busy} onPatch={patch} />
-      ) : session.kind === 'okey' ? (
-        <OkeyNative session={session} userId={user.id} busy={busy} onPatch={patch} />
+        <WatchPartyNative session={session} userId={user.id} onPatch={patch} />
       ) : (
-        <View style={{ flex: 1 }}>
-          <GameGlHost kind={session.kind} />
-          <Text style={{ color: colors.textMuted, padding: 12, fontSize: 12 }}>
-            {GAME_KIND_LABEL[session.kind]} · game-core + expo-gl
-          </Text>
-        </View>
+        // Tavla / bilardo / bowling / okey / blackjack — web/desktop ile aynı Three.js
+        <GameWebEmbed guildId={guildId} channelId={channel.id} />
       )}
     </View>
   );
 }
 
-function BlackjackNative({
-  session,
-  userId,
+function ActivityHeader({
+  channelName,
   busy,
-  onPatch,
+  onRefresh,
+  onChat,
 }: {
-  session: ActivitySessionDto;
-  userId: string;
+  channelName: string;
   busy: boolean;
-  onPatch: (state: Record<string, unknown>) => Promise<void>;
+  onRefresh: () => void;
+  onChat: () => void;
 }) {
-  const st = useMemo(
-    () => bjParseState(session.state as Record<string, unknown>, session.playerIds),
-    [session],
-  );
-  const my = st.seats[userId];
-  const myVal = my ? bjHandValue(my.cards) : null;
-
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
-      <GameGlHost kind="blackjack" />
-      <Text style={{ color: colors.textMuted, marginTop: 12 }}>
-        Faz: {st.phase} · Chip: {st.bank[userId] ?? 0}
-      </Text>
-      <Text style={{ color: colors.text, fontWeight: '700', marginTop: 8 }}>Kurpiyer</Text>
-      <Text style={{ color: colors.text }}>
-        {st.dealer.map((c, i) => (st.holeHidden && i === 1 ? '🂠 ' : `${bjCardLabel(c)} `))}
-      </Text>
-      <Text style={{ color: colors.text, fontWeight: '700', marginTop: 8 }}>
-        Senin elin {myVal ? `(${myVal.total})` : ''}
-      </Text>
-      <Text style={{ color: colors.text }}>{my?.cards.map((c) => bjCardLabel(c)).join(' ') || '—'}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-        {BJ_BET_OPTIONS.map((b) => (
-          <Pressable
-            key={b}
-            disabled={busy}
-            onPress={() =>
-              void onPatch({
-                ...st,
-                pendingBets: { ...st.pendingBets, [userId]: b },
-              })
-            }
-            style={{ paddingHorizontal: 12, height: 36, borderRadius: 10, backgroundColor: colors.primary, justifyContent: 'center' }}
-          >
-            <Text style={{ color: colors.primaryOn, fontWeight: '700' }}>{b === BJ_DEFAULT_BET ? `${b}★` : b}</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          disabled={busy}
-          onPress={() => void onPatch({ ...st, phase: 'dealing', round: st.round + 1 })}
-          style={{ paddingHorizontal: 12, height: 36, borderRadius: 10, backgroundColor: colors.success, justifyContent: 'center' }}
-        >
-          <Text style={{ color: colors.primaryOn, fontWeight: '700' }}>Turu başlat</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
-  );
-}
-
-function TavlaNative({
-  session,
-  userId,
-  busy,
-  onPatch,
-}: {
-  session: ActivitySessionDto;
-  userId: string;
-  busy: boolean;
-  onPatch: (state: Record<string, unknown>) => Promise<void>;
-}) {
-  const board = tavlaReadBoard(session.state.board);
-  const dice = tavlaReadDice(session.state.dice);
-  const myIdx = session.playerIds.indexOf(userId);
-  const me: 0 | 1 | null = myIdx === 0 ? 0 : myIdx === 1 ? 1 : null;
-  const turn = Number(session.state.turn ?? 0);
-  const myTurn = me !== null && turn === myIdx;
-  const legal = me !== null && dice.length ? tavlaAllLegal(board, me, dice) : [];
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 12 }}>
-      <GameGlHost kind="tavla" />
-      <Text style={{ color: colors.textMuted, marginTop: 8 }}>
-        Sıra: {turn === 0 ? 'Beyaz' : 'Mor'} · Zar: {dice.join(', ') || '—'}
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.surfaceHigh,
+        gap: 8,
+      }}
+    >
+      <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+        {channelName}
       </Text>
       <Pressable
-        disabled={busy || !myTurn}
-        style={{ ...primaryBtn, marginTop: 12, opacity: busy || !myTurn ? 0.5 : 1 }}
-        onPress={() => {
-          const d1 = 1 + Math.floor(Math.random() * 6);
-          const d2 = 1 + Math.floor(Math.random() * 6);
-          const roll = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
-          void onPatch({ ...session.state, dice: roll });
+        onPress={onChat}
+        hitSlop={8}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: colors.surfaceHigh,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
+        accessibilityLabel="Sohbet"
       >
-        <Text style={primaryBtnText}>Zar at</Text>
+        <Icon name="chat" size={18} color={colors.text} />
       </Pressable>
-      {legal.slice(0, 8).map((mv, i) => (
-        <Pressable
-          key={`${mv.from}-${mv.to}-${i}`}
-          disabled={busy}
-          onPress={() => {
-            if (me === null) return;
-            const nb = tavlaApplyMove(board, me, mv);
-            const nd = tavlaRemoveDie(dice, mv.die);
-            void onPatch({ ...session.state, board: nb, dice: nd, turn: nd.length ? turn : 1 - turn });
-          }}
-          style={{ padding: 10, marginTop: 6, backgroundColor: colors.surfaceHigh, borderRadius: 8 }}
-        >
-          <Text style={{ color: colors.text }}>
-            {String(mv.from)} → {String(mv.to)} (zar {mv.die})
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
+      <Pressable onPress={onRefresh} disabled={busy} hitSlop={8}>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>↻</Text>
+      </Pressable>
+    </View>
   );
 }
 
-function BowlingNative({
-  session,
-  userId,
-  busy,
-  onPatch,
-}: {
-  session: ActivitySessionDto;
-  userId: string;
-  busy: boolean;
-  onPatch: (state: Record<string, unknown>) => Promise<void>;
-}) {
-  const frames = bowlingReadFrames(session.state.frames);
-  const rolls = frames[userId] ?? [];
-  const score = bowlingScoreRolls(rolls);
-  const shooter = bowlingNextShooter(session.playerIds, frames);
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 12 }}>
-      <GameGlHost kind="bowling" />
-      <Text style={{ color: colors.textMuted, marginTop: 8 }}>
-        Skor: {score} · Atış: {rolls.join(', ') || '—'}
-      </Text>
-      <Text style={{ color: colors.textMuted }}>Sıradaki: {shooter === userId ? 'Sen' : shooter}</Text>
-      <Pressable
-        disabled={busy || shooter !== userId}
-        style={{ ...primaryBtn, marginTop: 12, opacity: busy || shooter !== userId ? 0.5 : 1 }}
-        onPress={() => {
-          const pins = Math.floor(Math.random() * 11);
-          const next = [...rolls, pins];
-          void onPatch({
-            ...session.state,
-            frames: { ...frames, [userId]: next },
-          });
-        }}
-      >
-        <Text style={primaryBtnText}>Atış yap</Text>
-      </Pressable>
-    </ScrollView>
-  );
-}
-
-function BilliardsNative({
-  session,
-  userId,
-  busy,
-  onPatch,
-}: {
-  session: ActivitySessionDto;
-  userId: string;
-  busy: boolean;
-  onPatch: (state: Record<string, unknown>) => Promise<void>;
-}) {
-  const balls = billiardsParseBalls(session.state.balls);
-  const groups = billiardsParseGroups(session.state.groups);
-  const turn = String(session.state.turn ?? session.playerIds[0] ?? '');
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 12 }}>
-      <GameGlHost kind="billiards" />
-      <Text style={{ color: colors.textMuted, marginTop: 8 }}>
-        Toplar: {balls?.filter((b) => !b.sunk).length ?? 0} · Sıra: {turn === userId ? 'Sen' : turn}
-      </Text>
-      <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-        Gruplar: {Object.entries(groups).map(([id, g]) => `${id.slice(0, 4)}:${g}`).join(' ')}
-      </Text>
-      <Pressable
-        disabled={busy || turn !== userId}
-        style={{ ...primaryBtn, marginTop: 12, opacity: busy || turn !== userId ? 0.5 : 1 }}
-        onPress={() => {
-          void onPatch({
-            ...session.state,
-            shot: { dx: Math.random() - 0.5, dz: Math.random() - 0.5, power: 0.6 + Math.random() * 0.3, by: userId, id: Date.now() },
-            turn: session.playerIds[(session.playerIds.indexOf(userId) + 1) % session.playerIds.length],
-          });
-        }}
-      >
-        <Text style={primaryBtnText}>Vuruş</Text>
-      </Pressable>
-    </ScrollView>
-  );
-}
-
-function OkeyNative({
-  session,
-  userId,
-  busy,
-  onPatch,
-}: {
-  session: ActivitySessionDto;
-  userId: string;
-  busy: boolean;
-  onPatch: (state: Record<string, unknown>) => Promise<void>;
-}) {
-  const hands = (session.state.hands as Record<string, number[]>) ?? {};
-  const myHand = hands[userId] ?? [];
-  const indicator = Number(session.state.indicator ?? 0);
-  const okey = okeyFromIndicator(indicator);
-  const tiles = myHand.map((c) => asTile(c, okey));
-  const pts = tiles.reduce((s, t) => s + tilePoints(t.code, okey), 0);
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 12 }}>
-      <GameGlHost kind="okey" />
-      <Text style={{ color: colors.textMuted, marginTop: 8 }}>
-        El: {myHand.length} taş · Puan: {pts} · Okey: {okey ? `${COLOR_NAME[okey.c]} ${okey.n}` : '—'}
-      </Text>
-      <Text style={{ color: colors.text, marginTop: 8, flexWrap: 'wrap' }}>
-        {tiles.map((t, i) => (
-          <Text key={i}>
-            {t.wild ? '🃏' : `${COLOR_NAME[t.c]?.[0] ?? '?'}${t.n}`}{' '}
-          </Text>
-        ))}
-      </Text>
-      <Pressable
-        disabled={busy}
-        style={{ ...primaryBtn, marginTop: 12 }}
-        onPress={() => void onPatch({ ...session.state, phase: 'draw', by: userId })}
-      >
-        <Text style={primaryBtnText}>Taş çek / sıra</Text>
-      </Pressable>
-    </ScrollView>
-  );
+function fmtWatchTime(sec: number) {
+  if (!Number.isFinite(sec) || sec < 0) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function WatchPartyNative({
   session,
+  userId,
   onPatch,
 }: {
   session: ActivitySessionDto;
+  userId: string;
   onPatch: (state: Record<string, unknown>) => Promise<void>;
 }) {
   const st = watchPartyParseState(session.state as Record<string, unknown>);
+  const isHost = session.hostUserId === userId;
   const [url, setUrl] = useState(st.mediaUrl);
-  const player = useVideoPlayer(st.mediaUrl || null, (p) => {
+  const [busy, setBusy] = useState(false);
+  const webRef = useRef<SafeWebViewHandle | null>(null);
+  const ytReady = useRef(false);
+  const lastApplied = useRef({ at: -1, playing: false, url: '' });
+
+  const media = useMemo(
+    () => (st.mediaUrl ? resolveWatchMedia(st.mediaUrl) : null),
+    [st.mediaUrl],
+  );
+  const isYoutube = media?.provider === 'youtube' && Boolean(media.id);
+  const isEmbed = Boolean(media && !media.isDirectFile);
+  const directUri = media?.isDirectFile ? media.sourceUrl : null;
+
+  const player = useVideoPlayer(directUri || null, (p) => {
     p.loop = false;
   });
 
-  useEffect(() => {
-    if (!st.mediaUrl) return;
-    try {
-      player.replace(st.mediaUrl);
-    } catch {
-      /* ignore */
+  const broadcast = useCallback(
+    async (patch: Record<string, unknown>) => {
+      setBusy(true);
+      try {
+        await onPatch({
+          mediaUrl: st.mediaUrl,
+          playing: st.playing,
+          at: st.at,
+          ...patch,
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onPatch, st.mediaUrl, st.playing, st.at],
+  );
+
+  const localAt = () => {
+    if (directUri) {
+      try {
+        return Number(player.currentTime) || 0;
+      } catch {
+        return st.at;
+      }
     }
-  }, [st.mediaUrl, player]);
+    return st.at;
+  };
 
   useEffect(() => {
-    if (!st.mediaUrl) return;
+    setUrl(st.mediaUrl);
+  }, [st.mediaUrl]);
+
+  useEffect(() => {
+    if (!directUri) return;
+    void player.replaceAsync(directUri).catch(() => undefined);
+  }, [directUri, player]);
+
+  // Doğrudan dosya — oturum state’ine senkron
+  useEffect(() => {
+    if (!directUri) return;
     try {
       const target = Number(st.at) || 0;
       if (Math.abs(player.currentTime - target) > 1.5) {
@@ -410,56 +402,255 @@ function WatchPartyNative({
       }
       if (st.playing) player.play();
       else player.pause();
+      lastApplied.current = { at: target, playing: st.playing, url: st.mediaUrl };
     } catch {
       /* ignore */
     }
-  }, [st.playing, st.at, st.mediaUrl, player]);
+  }, [st.playing, st.at, st.mediaUrl, directUri, player]);
+
+  // YouTube — WebView IFrame API’ye komut
+  useEffect(() => {
+    if (!isYoutube) return;
+    const key = `${st.mediaUrl}|${st.at}|${st.playing}`;
+    const prev = lastApplied.current;
+    const same =
+      prev.url === st.mediaUrl &&
+      prev.playing === st.playing &&
+      Math.abs(prev.at - st.at) < 0.4;
+    if (same && ytReady.current) return;
+
+    const apply = () => {
+      webRef.current?.sendYoutubeCmd({
+        type: 'seek',
+        at: Number(st.at) || 0,
+        playing: st.playing,
+      });
+      lastApplied.current = {
+        at: Number(st.at) || 0,
+        playing: st.playing,
+        url: st.mediaUrl,
+      };
+    };
+
+    if (ytReady.current) apply();
+    else {
+      // ready gelene kadar son komutu sakla — onYoutubeMessage ready’de tekrarlar
+      lastApplied.current = {
+        at: Number(st.at) || 0,
+        playing: st.playing,
+        url: st.mediaUrl,
+      };
+    }
+    void key;
+  }, [isYoutube, st.playing, st.at, st.mediaUrl, session.updatedAt]);
+
+  const onYoutubeMessage = useCallback(
+    (msg: Record<string, unknown>) => {
+      if (msg.type === 'ready') {
+        ytReady.current = true;
+        webRef.current?.sendYoutubeCmd({
+          type: 'seek',
+          at: Number(st.at) || 0,
+          playing: st.playing,
+        });
+      }
+    },
+    [st.at, st.playing],
+  );
+
+  // URL değişince YT ready sıfırla
+  useEffect(() => {
+    ytReady.current = false;
+  }, [media?.id, st.mediaUrl]);
+
+  const togglePlay = () => {
+    const at = localAt();
+    void broadcast({ playing: !st.playing, at });
+  };
+
+  const seekBy = (delta: number) => {
+    const next = Math.max(0, localAt() + delta);
+    void broadcast({ at: next, playing: st.playing });
+  };
+
+  const resync = () => {
+    void broadcast({ at: localAt(), playing: st.playing });
+  };
+
+  const viewers = session.playerIds.length + session.spectatorIds.length;
 
   return (
-    <View style={{ flex: 1, padding: 12 }}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ padding: 12, paddingBottom: 24, gap: 10 }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}
+      >
+        <Text style={{ color: colors.textMuted, fontSize: 12, flex: 1 }} numberOfLines={2}>
+          {isHost ? 'Moderatörsün' : 'Senkron kontroller herkese yayınlanır'}
+          {st.mediaUrl
+            ? ` · ${st.playing ? 'Oynatılıyor' : 'Duraklatıldı'} · ${fmtWatchTime(st.at)} · ${viewers} kişi`
+            : ''}
+        </Text>
+      </View>
+
       <TextInput
         value={url}
         onChangeText={setUrl}
-        placeholder="Medya URL"
+        placeholder="YouTube / Vimeo / Twitch / mp4 URL"
         placeholderTextColor={colors.textMuted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!busy}
         style={{
           height: 44,
           borderRadius: 12,
           paddingHorizontal: 12,
           backgroundColor: colors.surface,
           color: colors.text,
-          marginBottom: 8,
         }}
       />
       <Pressable
-        onPress={() => void onPatch({ mediaUrl: url.trim(), playing: false, at: 0 })}
+        disabled={busy || !url.trim()}
+        onPress={() => {
+          ytReady.current = false;
+          void broadcast({ mediaUrl: url.trim(), playing: false, at: 0 });
+        }}
         style={{
           height: 40,
           borderRadius: 12,
           backgroundColor: colors.surfaceHigh,
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 12,
+          opacity: busy || !url.trim() ? 0.5 : 1,
         }}
       >
         <Text style={{ color: colors.text, fontWeight: '700' }}>URL ayarla</Text>
       </Pressable>
-      {st.mediaUrl ? (
+
+      {!st.mediaUrl ? (
+        <Text style={{ color: colors.textMuted }}>Host medya URL’i ayarlamadı</Text>
+      ) : isYoutube && media ? (
+        <View style={{ height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' }}>
+          <SafeWebView
+            ref={webRef}
+            uri={media.embedUrl}
+            label={media.label}
+            youtubeId={media.id}
+            youtubeStartAt={Number(st.at) || 0}
+            onYoutubeMessage={onYoutubeMessage}
+            style={{ flex: 1, backgroundColor: '#000' }}
+          />
+        </View>
+      ) : isEmbed && media ? (
+        <View>
+          <View
+            style={{
+              height: 220,
+              borderRadius: 12,
+              overflow: 'hidden',
+              backgroundColor: '#000',
+            }}
+          >
+            <SafeWebView
+              uri={media.embedUrl}
+              label={media.label}
+              style={{ flex: 1, backgroundColor: '#000' }}
+            />
+          </View>
+          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6 }}>
+            {media.label} · senkron butonları zamanı paylaşır; oynatıcıyı da elle eşitleyin
+          </Text>
+        </View>
+      ) : directUri ? (
         <VideoView
           player={player}
-          style={{ width: '100%', height: 220, backgroundColor: '#000' }}
+          style={{ width: '100%', height: 220, backgroundColor: '#000', borderRadius: 12 }}
           contentFit="contain"
-          nativeControls
+          nativeControls={false}
         />
       ) : (
-        <Text style={{ color: colors.textMuted }}>Host medya URL’i ayarlamadı</Text>
+        <Text style={{ color: colors.danger }}>
+          Bu bağlantı çözülemedi. Doğrudan video dosyası veya YouTube/Vimeo/Twitch URL’si
+          deneyin.
+        </Text>
       )}
-      <Pressable
-        onPress={() => void onPatch({ mediaUrl: st.mediaUrl, playing: !st.playing, at: st.at })}
-        style={{ ...primaryBtn, marginTop: 12 }}
-      >
-        <Text style={primaryBtnText}>{st.playing ? 'Duraklat' : 'Oynat'}</Text>
-      </Pressable>
-    </View>
+
+      {st.mediaUrl ? (
+        <View style={{ gap: 8, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              disabled={busy}
+              onPress={() => seekBy(-10)}
+              style={syncBtn}
+              accessibilityLabel="10 saniye geri"
+            >
+              <Text style={syncBtnText}>−10s</Text>
+            </Pressable>
+            <Pressable
+              disabled={busy}
+              onPress={togglePlay}
+              style={{ ...syncBtn, flex: 1.4, backgroundColor: colors.primary }}
+              accessibilityLabel={st.playing ? 'Duraklat' : 'Oynat'}
+            >
+              <Text style={{ ...syncBtnText, color: colors.primaryOn }}>
+                {st.playing ? 'Duraklat' : 'Oynat'}
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={busy}
+              onPress={() => seekBy(10)}
+              style={syncBtn}
+              accessibilityLabel="10 saniye ileri"
+            >
+              <Text style={syncBtnText}>+10s</Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              disabled={busy}
+              onPress={resync}
+              style={{ ...syncBtn, flex: 1 }}
+              accessibilityLabel="Herkesi eşitle"
+            >
+              <Text style={syncBtnText}>Herkesi eşitle</Text>
+            </Pressable>
+            <Pressable
+              disabled={busy}
+              onPress={() => void broadcast({ at: 0, playing: false })}
+              style={{ ...syncBtn, flex: 1 }}
+              accessibilityLabel="Başa sar"
+            >
+              <Text style={syncBtnText}>Başa sar</Text>
+            </Pressable>
+          </View>
+          <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center' }}>
+            Oynat / duraklat / seek tüm odadaki istemcilere senkronlanır
+          </Text>
+        </View>
+      ) : null}
+    </ScrollView>
   );
 }
+
+const syncBtn = {
+  flex: 1,
+  height: 44,
+  borderRadius: 12,
+  backgroundColor: colors.surfaceHigh,
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+};
+
+const syncBtnText = {
+  color: colors.text,
+  fontWeight: '700' as const,
+  fontSize: 14,
+};

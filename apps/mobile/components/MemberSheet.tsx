@@ -1,18 +1,23 @@
 import { FlatList, Modal, Pressable, Text, View } from 'react-native';
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
-import { statusColor } from '../lib/ui';
+import { UserAvatar } from './UserAvatar';
+import { Icon } from './Icon';
 
 export function MemberSheet({
   open,
   onClose,
   members,
   title,
+  onSelectMember,
+  onMemberLongPress,
 }: {
   open: boolean;
   onClose: () => void;
   members: PublicUser[];
   title?: string;
+  onSelectMember?: (user: PublicUser) => void;
+  onMemberLongPress?: (user: PublicUser) => void;
 }) {
   const online = members.filter((m) => m.status && m.status !== 'OFFLINE');
   const offline = members.filter((m) => !m.status || m.status === 'OFFLINE');
@@ -41,6 +46,7 @@ export function MemberSheet({
             style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
+              alignItems: 'center',
               padding: 16,
               borderBottomWidth: 1,
               borderBottomColor: colors.surfaceHigh,
@@ -49,8 +55,8 @@ export function MemberSheet({
             <Text style={{ color: colors.text, fontWeight: '700' }}>
               {title ?? `Üyeler (${members.length})`}
             </Text>
-            <Pressable onPress={onClose}>
-              <Text style={{ color: colors.textMuted }}>Kapat</Text>
+            <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Kapat">
+              <Icon name="close" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
           <FlatList
@@ -71,7 +77,12 @@ export function MemberSheet({
                   {section.label}
                 </Text>
                 {section.data.map((m) => (
-                  <MemberRow key={m.id} user={m} />
+                  <MemberRow
+                    key={m.id}
+                    user={m}
+                    onPress={onSelectMember ? () => onSelectMember(m) : undefined}
+                    onLongPress={onMemberLongPress ? () => onMemberLongPress(m) : undefined}
+                  />
                 ))}
               </View>
             )}
@@ -82,33 +93,31 @@ export function MemberSheet({
   );
 }
 
-function MemberRow({ user }: { user: PublicUser }) {
+function MemberRow({
+  user,
+  onPress,
+  onLongPress,
+}: {
+  user: PublicUser;
+  onPress?: () => void;
+  onLongPress?: () => void;
+}) {
   const st = user.status ?? 'OFFLINE';
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8 }}>
-      <View style={{ position: 'relative' }}>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: colors.surfaceHigh,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            right: -1,
-            bottom: -1,
-            width: 12,
-            height: 12,
-            borderRadius: 6,
-            backgroundColor: statusColor[st] ?? colors.offline,
-            borderWidth: 2,
-            borderColor: colors.surface,
-          }}
-        />
-      </View>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={280}
+      disabled={!onPress && !onLongPress}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+      }}
+    >
+      <UserAvatar displayName={user.displayName} imageUrl={user.avatarUrl} size={36} status={st} />
       <View style={{ flex: 1 }}>
         <Text style={{ color: colors.text, fontWeight: '600' }}>{user.displayName}</Text>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>@{user.username}</Text>
@@ -118,6 +127,22 @@ function MemberRow({ user }: { user: PublicUser }) {
           </Text>
         ) : null}
       </View>
-    </View>
+      {user.isBot ? (
+        <Text
+          style={{
+            color: colors.primaryOn,
+            backgroundColor: colors.primary,
+            fontSize: 9,
+            fontWeight: '800',
+            paddingHorizontal: 5,
+            paddingVertical: 2,
+            borderRadius: 4,
+            overflow: 'hidden',
+          }}
+        >
+          BOT
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }

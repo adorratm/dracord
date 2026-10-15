@@ -7,7 +7,9 @@ import type { ChannelSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
 import { ChatView } from '../../components/ChatView';
+import { UserAvatar } from '../../components/UserAvatar';
 import { primaryBtn, primaryBtnText } from '../../lib/ui';
+import { ShellHeader } from '../../components/shell/AppShell';
 
 let lkReady = false;
 function ensureLiveKit() {
@@ -76,50 +78,74 @@ export default function DmsScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          title: 'Direkt mesajlar',
-          headerRight: () => (
-            <Pressable onPress={() => router.push('/(app)/friends')} style={{ paddingHorizontal: 12 }}>
-              <Text style={{ color: colors.primary }}>Arkadaş</Text>
-            </Pressable>
-          ),
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ShellHeader title="Direkt mesajlar" />
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          paddingHorizontal: 12,
+          paddingTop: 8,
         }}
-      />
-      <View style={{ maxHeight: 120, borderBottomWidth: 1, borderBottomColor: colors.surfaceHigh }}>
+      >
+        <Pressable onPress={() => router.push('/(app)/friends')}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Arkadaşlar</Text>
+        </Pressable>
+      </View>
+      <View style={{ maxHeight: 280, borderBottomWidth: 1, borderBottomColor: colors.surfaceHigh }}>
         <FlatList
-          horizontal
           data={dms}
           keyExtractor={(c) => c.id}
-          contentContainerStyle={{ padding: 8 }}
+          contentContainerStyle={{ paddingVertical: 4 }}
           ListEmptyComponent={
-            <Text style={{ color: colors.textMuted, padding: 8 }}>Henüz DM yok — Arkadaşlar’dan mesaj aç</Text>
+            <Text style={{ color: colors.textMuted, padding: 12 }}>
+              Henüz DM yok — Arkadaşlar’dan mesaj aç
+            </Text>
           }
-          renderItem={({ item: c }) => (
-            <Pressable
-              onPress={() => {
-                void endCall();
-                setActive(c);
-              }}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                marginRight: 8,
-                borderRadius: 10,
-                backgroundColor: active?.id === c.id ? colors.primary : colors.surfaceHigh,
-              }}
-            >
-              <Text
+          renderItem={({ item: c }) => {
+            const selected = active?.id === c.id;
+            return (
+              <Pressable
+                onPress={() => {
+                  void endCall();
+                  setActive(c);
+                }}
                 style={{
-                  color: active?.id === c.id ? colors.primaryOn : colors.text,
-                  fontWeight: '600',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  backgroundColor: selected ? colors.surfaceHigh : 'transparent',
                 }}
               >
-                {c.name}
-              </Text>
-            </Pressable>
-          )}
+                <UserAvatar
+                  displayName={c.name}
+                  imageUrl={c.peerAvatarUrl}
+                  size={44}
+                  status={c.peerStatus}
+                />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: selected ? '800' : '600',
+                      fontSize: 15,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {c.name}
+                  </Text>
+                  {c.unread ? (
+                    <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
+                      Okunmamış
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          }}
         />
       </View>
 

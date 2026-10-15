@@ -19,7 +19,7 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Sesli odalarda konuşmak için mikrofon gerekir.",
         "NSCameraUsageDescription": "Kamera ile görüntülü katılım için kullanılır.",
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": ["audio", "voip"]
       }
     },
     "android": {
@@ -28,7 +28,14 @@
         "RECORD_AUDIO",
         "CAMERA",
         "MODIFY_AUDIO_SETTINGS",
-        "INTERNET"
+        "INTERNET",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MICROPHONE",
+        "FOREGROUND_SERVICE_CAMERA",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "FOREGROUND_SERVICE_MEDIA_PROJECTION",
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -40,7 +47,31 @@
       "expo-dev-client",
       "expo-secure-store",
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#bd93f9",
+          "defaultChannel": "voice"
+        }
+      ],
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication",
+            "androidAudioType": "communication",
+            "enableScreenShareService": true
+          },
+          "ios": {
+            "enableMultitaskingCameraAccess": true
+          }
+        }
+      ],
+      "@config-plugins/react-native-webrtc",
+      "./plugins/withVoiceForegroundService.js"
     ],
     "extra": {
       "apiUrl": "https://api.dracord.com.tr",

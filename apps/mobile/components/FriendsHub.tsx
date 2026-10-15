@@ -10,7 +10,8 @@ import {
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
-import { inputStyle, primaryBtn, primaryBtnText, statusColor } from '../lib/ui';
+import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
+import { UserAvatar } from './UserAvatar';
 
 type Tab = 'friends' | 'pending' | 'blocked' | 'add';
 
@@ -234,7 +235,6 @@ export function FriendsHub({
 }
 
 function UserRow({ user, actions }: { user: PublicUser; actions: ReactNode }) {
-  const st = user.status ?? 'OFFLINE';
   return (
     <View
       style={{
@@ -246,19 +246,19 @@ function UserRow({ user, actions }: { user: PublicUser; actions: ReactNode }) {
         borderBottomColor: colors.surfaceHigh,
       }}
     >
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: colors.surfaceHigh,
-          borderWidth: 2,
-          borderColor: statusColor[st] ?? colors.offline,
-        }}
+      <UserAvatar
+        displayName={user.displayName}
+        imageUrl={user.avatarUrl}
+        size={40}
+        status={user.status ?? 'OFFLINE'}
       />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ color: colors.text, fontWeight: '600' }}>{user.displayName}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>@{user.username}</Text>
+        <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+          {user.displayName}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+          @{user.username}
+        </Text>
       </View>
       {actions}
     </View>
