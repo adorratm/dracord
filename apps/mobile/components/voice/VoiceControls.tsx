@@ -9,9 +9,12 @@ const BTN = 36;
 export function VoiceControls({
   compact = false,
   showLeave = true,
+  onLeavePress,
 }: {
   compact?: boolean;
   showLeave?: boolean;
+  /** Varsayılan: voice.leave() — rota çıkışı için override */
+  onLeavePress?: () => void | Promise<void>;
 }) {
   const voice = useVoiceSessionOptional();
   if (!voice?.voiceChannelId) return null;
@@ -95,7 +98,7 @@ export function VoiceControls({
           iconSize={iconSz}
           icon="call_end"
           danger
-          onPress={() => void voice.leave()}
+          onPress={() => void (onLeavePress ? onLeavePress() : voice.leave())}
           accessibilityLabel="Ayrıl"
         />
       ) : null}

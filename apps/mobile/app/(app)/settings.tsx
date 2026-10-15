@@ -28,6 +28,7 @@ import { resolveMediaUrl } from '../../lib/mediaUrl';
 import { uploadImageFromUri } from '../../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../../lib/ui';
 import { resetMobileAppTour, startMobileAppTour } from '../../components/AppTour';
+import { confirmDialog } from '../../components/ConfirmModal';
 import { ShellHeader } from '../../components/shell/AppShell';
 import { Icon } from '../../components/Icon';
 import { UserAvatar } from '../../components/UserAvatar';
@@ -602,22 +603,21 @@ export default function SettingsScreen() {
             <Pressable
               style={{ ...primaryBtn, backgroundColor: colors.danger }}
               onPress={() => {
-                Alert.alert('Hesabı devre dışı bırak', 'Oturum kapanacak. Emin misin?', [
-                  { text: 'İptal', style: 'cancel' },
-                  {
-                    text: 'Onayla',
-                    style: 'destructive',
-                    onPress: () => {
-                      void client
-                        .deactivateAccount(deactivatePassword || undefined)
-                        .then(() => logout())
-                        .then(() => router.replace('/(auth)/login'))
-                        .catch((e) =>
-                          setError(e instanceof Error ? e.message : 'İşlem başarısız'),
-                        );
-                    },
-                  },
-                ]);
+                void confirmDialog({
+                  title: 'Hesabı devre dışı bırak',
+                  message: 'Oturum kapanacak. Emin misin?',
+                  confirmLabel: 'Onayla',
+                  destructive: true,
+                }).then((ok) => {
+                  if (!ok) return;
+                  void client
+                    .deactivateAccount(deactivatePassword || undefined)
+                    .then(() => logout())
+                    .then(() => router.replace('/(auth)/login'))
+                    .catch((e) =>
+                      setError(e instanceof Error ? e.message : 'İşlem başarısız'),
+                    );
+                });
               }}
             >
               <Text style={{ ...primaryBtnText, color: '#fff' }}>Hesabı devre dışı bırak</Text>

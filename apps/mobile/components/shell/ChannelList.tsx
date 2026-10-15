@@ -200,11 +200,12 @@ export function ChannelList({
         data={listData}
         keyExtractor={(row) => (row.type === 'cat' ? `cat-${row.id}` : `ch-${row.ch.id}`)}
         renderItem={renderItem}
-        initialNumToRender={24}
-        maxToRenderPerBatch={12}
-        windowSize={8}
-        updateCellsBatchingPeriod={50}
+        initialNumToRender={16}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        updateCellsBatchingPeriod={80}
         removeClippedSubviews
+        extraData={`${activeChannelId ?? ''}:${activeVoiceChannelId ?? ''}:${activeActivityChannelId ?? ''}`}
         contentContainerStyle={{ paddingBottom: 12, flexGrow: 1 }}
         ListEmptyComponent={
           <Text style={{ color: colors.textMuted, padding: 16, textAlign: 'center' }}>
@@ -237,8 +238,10 @@ const ChannelRow = memo(function ChannelRow({
   onVoiceMemberLongPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
 }) {
   const unread = (channel.unreadCount ?? 0) > 0 || channel.unread;
-  const selfLiveHere =
-    activeVoiceChannelId === channel.id || activeActivityChannelId === channel.id;
+  // Ses bağlıysa yalnızca o kanalda self göster (oyun sesi hayaleti kalmasın)
+  const selfLiveHere = activeVoiceChannelId
+    ? activeVoiceChannelId === channel.id
+    : activeActivityChannelId === channel.id;
   const voiceMembers = (channel.voiceMembers ?? []).filter((m) => {
     if (!selfUserId || m.id !== selfUserId) return true;
     // Başka sunucuda gezerken / başka kanaldaysa kendini listede gösterme

@@ -17,13 +17,18 @@ function bootstrapHtml(
   targetPath: string,
   accessToken: string,
   refreshToken: string,
+  voiceClientId?: string | null,
 ): string {
+  const voiceLine = voiceClientId
+    ? `localStorage.setItem('dracord.voiceClientId',${JSON.stringify(voiceClientId)});`
+    : '';
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/><title>Dracord</title>
 <style>html,body{margin:0;height:100%;background:#11131e;color:#ccc3d3;font-family:system-ui;display:flex;align-items:center;justify-content:center}</style>
 </head><body><p>Oyun yükleniyor…</p><script>
 try{
   localStorage.setItem('dracord_access_token',${JSON.stringify(accessToken)});
   localStorage.setItem('dracord_refresh_token',${JSON.stringify(refreshToken)});
+  ${voiceLine}
 }catch(e){}
 location.replace(${JSON.stringify(targetPath)});
 </script></body></html>`;
@@ -45,7 +50,7 @@ export function GameWebEmbed({
   /** Web embed içinden Ayrıl */
   onActivityLeave?: () => void;
 }) {
-  const { getSessionTokens } = useAuth();
+  const { client, getSessionTokens } = useAuth();
   const [html, setHtml] = useState<string | null>(null);
   const [openUri, setOpenUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +68,13 @@ export function GameWebEmbed({
           return;
         }
         const path = `${WEB_URL}/embed/activity/${guildId}/${channelId}`;
-        const page = bootstrapHtml(path, tokens.accessToken, tokens.refreshToken);
+        const voiceClientId = client.getVoiceClientId();
+        const page = bootstrapHtml(
+          path,
+          tokens.accessToken,
+          tokens.refreshToken,
+          voiceClientId,
+        );
         if (!cancelled) {
           setOpenUri(path);
           setHtml(page);
@@ -77,7 +88,7 @@ export function GameWebEmbed({
     return () => {
       cancelled = true;
     };
-  }, [getSessionTokens, guildId, channelId]);
+  }, [client, getSessionTokens, guildId, channelId]);
 
   const onBridgeMessage = useCallback(
     (msg: Record<string, unknown>) => {

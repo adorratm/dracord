@@ -6,10 +6,12 @@ import { SocketEvents, type ActivitySessionDto, type ChannelSummary } from '@dra
 import { watchPartyParseState } from '@dracord/game-core';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
+import { leaveActivityFully } from '../lib/leaveActivityFully';
 import { resolveWatchMedia } from '../lib/watchPartyMedia';
 import { ChatView } from './ChatView';
 import { Icon } from './Icon';
 import { useActivitySessionOptional } from './activity/ActivitySession';
+import { useVoiceSessionOptional } from './voice/VoiceSession';
 import { SafeWebView, type SafeWebViewHandle } from './SafeWebView';
 import { GameWebEmbed } from './GameWebEmbed';
 import { primaryBtn, primaryBtnText } from '../lib/ui';
@@ -40,6 +42,7 @@ export function ActivityRoom({
   const { client, user } = useAuth();
   const router = useRouter();
   const activityCtx = useActivitySessionOptional() ?? NOOP_ACTIVITY;
+  const voice = useVoiceSessionOptional();
   const {
     activityChannelId,
     activityChannelName,
@@ -54,8 +57,9 @@ export function ActivityRoom({
   const [showChat, setShowChat] = useState(false);
   const [joining, setJoining] = useState(false);
   const [gameLandscapeFs, setGameLandscapeFs] = useState(false);
-  /** Ayrıldıktan sonra enterRoom auto-join etmesin */
+  /** Ayrıldıktan sonra enterRoom / voice auto-join etmesin */
   const leftRef = useRef(false);
+  const voiceDeclinedRef = useRef(false);
 
   const browsingOther =
     Boolean(activityChannelId) && activityChannelId !== channel.id;
@@ -141,12 +145,21 @@ export function ActivityRoom({
 
   const leaveRoom = useCallback(async () => {
     leftRef.current = true;
+    voiceDeclinedRef.current = true;
     const sid = session?.id ?? activitySessionId;
-    clearActiveActivity();
+    const chId = session?.channelId ?? activityChannelId ?? channel.id;
     setSession(null);
-    if (sid) {
-      await client.leaveActivity(sid).catch(() => undefined);
+    // Watch party sesi: önce native leave (join yarışını connectGen ile öldürür)
+    if (voice) {
+      await Promise.resolve(voice.leave()).catch(() => undefined);
     }
+    await leaveActivityFully({
+      client,
+      sessionId: sid,
+      channelId: chId,
+      clearActiveActivity,
+      voice,
+    });
     try {
       const channels = await client.getGuildChannels(guildId);
       const text = channels.find((c) => c.type === 'TEXT');
@@ -160,12 +173,22 @@ export function ActivityRoom({
     router.replace('/(app)/guilds');
   }, [
     session?.id,
+    session?.channelId,
     activitySessionId,
+    activityChannelId,
+    channel.id,
     clearActiveActivity,
     client,
     guildId,
     router,
+    voice,
   ]);
+
+  // Yeni kanala girince ayrılma bayraklarını sıfırla
+  useEffect(() => {
+    leftRef.current = false;
+    voiceDeclinedRef.current = false;
+  }, [guildId, channel.id]);
 
   useEffect(() => {
     if (browsingOther) {
@@ -173,7 +196,7 @@ export function ActivityRoom({
       setError(null);
       return;
     }
-    leftRef.current = false;
+    if (leftRef.current) return;
     void (async () => {
       try {
         setError(null);
@@ -185,13 +208,38 @@ export function ActivityRoom({
     // enterRoom bilinçli dışarıda — ses odası ile aynı
   }, [guildId, channel.id, browsingOther]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Watch party: web/desktop gibi kanal sesine katıl (oyunlar WebView içinde join eder)
+  useEffect(() => {
+    if (browsingOther || leftRef.current || voiceDeclinedRef.current) return;
+    if (!session || session.kind !== 'watch_party') return;
+    if (!voice?.join) return;
+    if (voice.voiceChannelId === channel.id) return;
+    void voice
+      .join(guildId, { id: channel.id, name: channel.name })
+      .catch(() => undefined);
+  }, [
+    browsingOther,
+    session?.kind,
+    session?.id,
+    channel.id,
+    channel.name,
+    guildId,
+    voice?.voiceChannelId,
+    voice?.join,
+  ]);
+
   const switchToThisChannel = useCallback(async () => {
     setJoining(true);
     setError(null);
     try {
       if (activitySessionId && activityChannelId !== channel.id) {
-        await client.leaveActivity(activitySessionId).catch(() => undefined);
-        clearActiveActivity();
+        await leaveActivityFully({
+          client,
+          sessionId: activitySessionId,
+          channelId: activityChannelId,
+          clearActiveActivity,
+          voice,
+        });
       }
       await enterRoom();
     } catch (e) {
@@ -206,6 +254,7 @@ export function ActivityRoom({
     client,
     channel.id,
     enterRoom,
+    voice,
   ]);
 
   const patch = async (state: Record<string, unknown>) => {
@@ -258,6 +307,7 @@ export function ActivityRoom({
           busy={busy || joining}
           onRefresh={() => void refresh()}
           onChat={() => setShowChat(true)}
+          onLeave={() => void leaveRoom()}
         />
         <View
           style={{

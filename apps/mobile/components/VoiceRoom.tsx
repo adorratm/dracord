@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
@@ -6,7 +6,9 @@ import { useAuth } from '../lib/auth';
 import { ChatView } from './ChatView';
 import { Icon } from './Icon';
 import { UserAvatar } from './UserAvatar';
+import { leaveActivityFully } from '../lib/leaveActivityFully';
 import { useVoiceSession } from './voice/VoiceSession';
+import { useActivitySessionOptional } from './activity/ActivitySession';
 import { useAppShellOptional } from './shell/AppShell';
 import { useElapsedLabel } from '../lib/formatElapsed';
 import { primaryBtn, primaryBtnText } from '../lib/ui';
@@ -19,25 +21,59 @@ export function VoiceRoom({
   channel: ChannelSummary;
   guildId?: string;
 }) {
-  const { user } = useAuth();
+  const { client, user } = useAuth();
   const voice = useVoiceSession();
+  const activity = useActivitySessionOptional();
   const shell = useAppShellOptional();
   const [showChat, setShowChat] = useState(false);
   const [liveChannel, setLiveChannel] = useState(channel);
+  /** Bu odadan bilinçli ayrılınca otomatik tekrar join etme */
+  const declinedAutoJoinRef = useRef(false);
+  const wasInThisChannelRef = useRef(false);
 
   useEffect(() => {
     setLiveChannel(channel);
-  }, [channel]);
+    declinedAutoJoinRef.current = false;
+    wasInThisChannelRef.current = false;
+  }, [channel.id]);
 
+  const inThisChannel = voice.voiceChannelId === channel.id;
   const browsingOther =
     Boolean(voice.voiceChannelId) && voice.voiceChannelId !== channel.id;
+
+  useEffect(() => {
+    if (inThisChannel) {
+      wasInThisChannelRef.current = true;
+      declinedAutoJoinRef.current = false;
+      return;
+    }
+    // Bu odadayken ayrıldı → tekrar auto-join yapma
+    if (wasInThisChannelRef.current && !voice.voiceChannelId) {
+      declinedAutoJoinRef.current = true;
+    }
+  }, [inThisChannel, voice.voiceChannelId]);
 
   useEffect(() => {
     if (!guildId) return;
     // Başka sesteyken bu odayı sadece göz gezdir — otomatik katılma
     if (browsingOther) return;
-    void voice.join(guildId, { id: channel.id, name: channel.name });
-  }, [guildId, channel.id, channel.name, browsingOther]); // eslint-disable-line react-hooks/exhaustive-deps -- join stable
+    if (declinedAutoJoinRef.current) return;
+    if (inThisChannel) return;
+    void (async () => {
+      // Oyun sesi / aktivite hâlâ açıksa önce tamamen ayrıl
+      if (activity?.activityChannelId) {
+        await leaveActivityFully({
+          client,
+          sessionId: activity.activitySessionId,
+          channelId: activity.activityChannelId,
+          clearActiveActivity: activity.clearActiveActivity,
+          voice,
+        });
+      }
+      if (declinedAutoJoinRef.current) return;
+      await voice.join(guildId, { id: channel.id, name: channel.name });
+    })();
+  }, [guildId, channel.id, channel.name, browsingOther, inThisChannel]); // eslint-disable-line react-hooks/exhaustive-deps -- join stable
 
   // Sunucu kanal listesinden voiceMembers (avatar + joinedAt)
   useEffect(() => {
@@ -47,18 +83,66 @@ export function VoiceRoom({
 
   const members = useMemo((): VoiceMemberSummary[] => {
     let remote = liveChannel.voiceMembers ?? [];
-    if (browsingOther && user?.id) {
+    if (user?.id && !inThisChannel) {
       remote = remote.filter((m) => m.id !== user.id);
     }
-    if (remote.length) return remote;
-    if (browsingOther) return [];
-    return voice.peers.map((p) => ({
-      id: p.id,
-      displayName: p.name,
-      avatarUrl: null,
-      speaking: p.speaking,
-    }));
-  }, [liveChannel.voiceMembers, voice.peers, browsingOther, user?.id]);
+    if (!inThisChannel) return remote;
+    // API gecikse bile LiveKit peer’larını birleştir (sol liste / oda)
+    const byId = new Map(remote.map((m) => [m.id, m]));
+    for (const p of voice.peers) {
+      const peerId =
+        p.id === 'self' || (user && p.id === user.id) ? user!.id : p.id;
+      if (user && peerId === user.id) {
+        const existing = byId.get(user.id);
+        byId.set(user.id, {
+          id: user.id,
+          displayName: existing?.displayName ?? user.displayName,
+          avatarUrl: existing?.avatarUrl ?? user.avatarUrl,
+          muted: existing?.muted ?? voice.muted,
+          deafened: existing?.deafened ?? voice.deafened,
+          speaking: p.speaking,
+        });
+        continue;
+      }
+      const existing = byId.get(peerId);
+      if (existing) {
+        byId.set(peerId, { ...existing, speaking: p.speaking, displayName: p.name });
+      } else {
+        byId.set(peerId, {
+          id: peerId,
+          displayName: p.name,
+          avatarUrl: null,
+          speaking: p.speaking,
+          muted: false,
+          deafened: false,
+        });
+      }
+    }
+    if (user && !byId.has(user.id)) {
+      byId.set(user.id, {
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        muted: voice.muted,
+        deafened: voice.deafened,
+        speaking: false,
+      });
+    }
+    return [...byId.values()];
+  }, [
+    liveChannel.voiceMembers,
+    voice.peers,
+    voice.muted,
+    voice.deafened,
+    inThisChannel,
+    user,
+  ]);
+
+  const rejoin = async () => {
+    if (!guildId) return;
+    declinedAutoJoinRef.current = false;
+    await voice.join(guildId, { id: channel.id, name: channel.name });
+  };
 
   if (showChat && guildId) {
     return (
@@ -103,9 +187,13 @@ export function VoiceRoom({
             {channel.name}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-            {voice.status || (voice.connected ? 'Bağlı' : '…')}
-            {voice.screenSharing ? ' · Ekran paylaşılıyor' : ''}
-            {voice.camOn ? ' · Kamera açık' : ''}
+            {inThisChannel
+              ? voice.status || (voice.connected ? 'Bağlı' : '…')
+              : browsingOther
+                ? 'Göz atılıyor'
+                : 'Bağlı değilsin'}
+            {inThisChannel && voice.screenSharing ? ' · Ekran paylaşılıyor' : ''}
+            {inThisChannel && voice.camOn ? ' · Kamera açık' : ''}
           </Text>
         </View>
         {guildId ? (
@@ -126,6 +214,27 @@ export function VoiceRoom({
           </Pressable>
         ) : null}
       </View>
+
+      {!inThisChannel && !browsingOther ? (
+        <View
+          style={{
+            margin: 12,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: colors.surfaceHigh,
+            gap: 10,
+          }}
+        >
+          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+            Bu ses kanalında değilsin.
+          </Text>
+          {guildId ? (
+            <Pressable style={primaryBtn} onPress={() => void rejoin()}>
+              <Text style={primaryBtnText}>Katıl</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {browsingOther ? (
         <View

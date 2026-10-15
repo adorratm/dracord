@@ -4,11 +4,14 @@ import {
   useMemo,
   useRef,
   type ComponentType,
+  type ReactElement,
 } from 'react';
 import {
+  ActivityIndicator,
   Linking,
   NativeModules,
   Pressable,
+  StyleSheet,
   Text,
   TurboModuleRegistry,
   View,
@@ -36,6 +39,8 @@ type WebViewProps = {
   javaScriptEnabled?: boolean;
   domStorageEnabled?: boolean;
   startInLoadingState?: boolean;
+  renderLoading?: () => ReactElement;
+  containerStyle?: StyleProp<ViewStyle>;
   mixedContentMode?: 'never' | 'always' | 'compatibility';
   setSupportMultipleWindows?: boolean;
   originWhitelist?: string[];
@@ -43,6 +48,7 @@ type WebViewProps = {
   onMessage?: (event: { nativeEvent: { data: string } }) => void;
   sharedCookiesEnabled?: boolean;
   thirdPartyCookiesEnabled?: boolean;
+  injectedJavaScriptBeforeContentLoaded?: string;
 };
 
 type WebViewComponent = ComponentType<WebViewProps & { ref?: unknown }>;
@@ -195,18 +201,48 @@ export const SafeWebView = forwardRef<
     };
   }
 
+  const darkBg = colors.bg;
   return (
     <WebView
-      // @ts-expect-error native WebView ref
       ref={webRef}
       source={source}
-      style={style}
+      style={[{ backgroundColor: darkBg, flex: 1 }, style]}
+      containerStyle={{ backgroundColor: darkBg, flex: 1 }}
       allowsFullscreenVideo
       allowsInlineMediaPlayback
       mediaPlaybackRequiresUserAction={false}
       javaScriptEnabled
       domStorageEnabled
       startInLoadingState
+      renderLoading={() => (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: darkBg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          <ActivityIndicator color={colors.primary} />
+          <Text style={{ color: colors.textMuted, marginTop: 12, fontSize: 13 }}>
+            {label ? `${label} yükleniyor…` : 'Yükleniyor…'}
+          </Text>
+        </View>
+      )}
+      injectedJavaScriptBeforeContentLoaded={`
+        (function(){
+          try{
+            var s=document.createElement('style');
+            s.textContent='html,body{background:${darkBg}!important;color:#ccc3d3}';
+            document.documentElement.appendChild(s);
+            document.documentElement.style.background='${darkBg}';
+            if(document.body)document.body.style.background='${darkBg}';
+          }catch(e){}
+        })();
+        true;
+      `}
       mixedContentMode="always"
       setSupportMultipleWindows={false}
       sharedCookiesEnabled

@@ -14,7 +14,8 @@ export const colors = {
   online: '#50fa7b',
   idle: '#f1fa8c',
   dnd: '#ff5555',
-  offline: '#6272a4',
+  /** Web/desktop `bg-outline` (#968e9c) — Dracula comment mavisi değil */
+  offline: '#968e9c',
 } as const;
 
 export const space = {

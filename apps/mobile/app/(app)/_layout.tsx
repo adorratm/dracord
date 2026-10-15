@@ -9,6 +9,7 @@ import { VoiceConnectionBar } from '../../components/voice/VoiceConnectionBar';
 import { MusicPlayerBar } from '../../components/voice/MusicPlayerBar';
 import { ActivitySessionProvider } from '../../components/activity/ActivitySession';
 import { ActivityConnectionBar } from '../../components/activity/ActivityConnectionBar';
+import { ConfirmModalHost } from '../../components/ConfirmModal';
 
 export default function AppLayout() {
   const { user, ready } = useAuth();
@@ -38,6 +39,7 @@ export default function AppLayout() {
             <MusicPlayerBar />
             <VoiceConnectionBar />
             {!onOnboarding ? <AppTour /> : null}
+            <ConfirmModalHost />
           </View>
         </AppShellProvider>
       </ActivitySessionProvider>

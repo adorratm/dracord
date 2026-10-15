@@ -4,10 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { AppState, Pressable, Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import type {
   CategoryDto,
@@ -22,6 +23,7 @@ import type {
 import { DRACORD_BOT_USER_ID, SocketEvents } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { leaveActivityFully } from '../../lib/leaveActivityFully';
 import { rememberChannel, readGuildLastChannel, readLastChannel } from '../../lib/lastChannel';
 import { CreateGuildModal, JoinInviteModal } from '../GuildModals';
 import { MemberSheet } from '../MemberSheet';
@@ -40,6 +42,7 @@ import { GuildExtrasSheet } from './GuildExtrasSheet';
 import { TitleBar } from './TitleBar';
 import { useVoiceSessionOptional } from '../voice/VoiceSession';
 import { useActivitySessionOptional } from '../activity/ActivitySession';
+import { confirmDialog, noticeDialog } from '../ConfirmModal';
 
 type ShellMode = 'home' | 'guild';
 
@@ -215,14 +218,36 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         voice?.voiceChannelId &&
         voice.voiceChannelId !== c.id
       ) {
-        Alert.alert(
-          'Ses kanalı değiştir',
-          `"${voice.voiceChannelName ?? 'Mevcut kanal'}" odasından çıkıp bu kanala katılmak istiyor musun?`,
-          [
-            { text: 'İptal', style: 'cancel' },
-            { text: 'Katıl', style: 'destructive', onPress: () => void go() },
-          ],
-        );
+        const ok = await confirmDialog({
+          title: 'Ses kanalı değiştir',
+          message: `"${voice.voiceChannelName ?? 'Mevcut kanal'}" odasından çıkıp bu kanala katılmak istiyor musun?`,
+          confirmLabel: 'Katıl',
+          destructive: true,
+        });
+        if (!ok) return;
+        if (activity?.activityChannelId) {
+          await leaveActivityFully({
+            client,
+            sessionId: activity.activitySessionId,
+            channelId: activity.activityChannelId,
+            clearActiveActivity: activity.clearActiveActivity,
+            voice,
+          });
+        }
+        await go();
+        return;
+      }
+
+      // Aktivitedeyken ses kanalına gir — oyun sesinden de çık
+      if (c.type === 'VOICE' && activity?.activityChannelId) {
+        await leaveActivityFully({
+          client,
+          sessionId: activity.activitySessionId,
+          channelId: activity.activityChannelId,
+          clearActiveActivity: activity.clearActiveActivity,
+          voice,
+        });
+        await go();
         return;
       }
 
@@ -232,27 +257,21 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         activity?.activityChannelId &&
         activity.activityChannelId !== c.id
       ) {
-        Alert.alert(
-          'Aktivite değiştir',
-          `"${activity.activityChannelName ?? 'Mevcut aktivite'}" odasından çıkıp bu kanala katılmak istiyor musun?`,
-          [
-            { text: 'İptal', style: 'cancel' },
-            {
-              text: 'Katıl',
-              style: 'destructive',
-              onPress: () => {
-                void (async () => {
-                  const sid = activity.activitySessionId;
-                  if (sid) {
-                    await client.leaveActivity(sid).catch(() => undefined);
-                  }
-                  activity.clearActiveActivity();
-                  await go();
-                })();
-              },
-            },
-          ],
-        );
+        const ok = await confirmDialog({
+          title: 'Aktivite değiştir',
+          message: `"${activity.activityChannelName ?? 'Mevcut aktivite'}" odasından çıkıp bu kanala katılmak istiyor musun?`,
+          confirmLabel: 'Katıl',
+          destructive: true,
+        });
+        if (!ok) return;
+        await leaveActivityFully({
+          client,
+          sessionId: activity.activitySessionId,
+          channelId: activity.activityChannelId,
+          clearActiveActivity: activity.clearActiveActivity,
+          voice,
+        });
+        await go();
         return;
       }
 
@@ -263,6 +282,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       guildId,
       router,
       closeNav,
+      voice,
       voice?.voiceChannelId,
       voice?.voiceChannelName,
       activity?.activityChannelId,
@@ -433,9 +453,9 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           onSelect: () => {
             void client
               .sendFriendRequest(target.id)
-              .then(() => Alert.alert('İstek gönderildi', `@${target.username}`))
+              .then(() => noticeDialog('İstek gönderildi', `@${target.username}`))
               .catch((e) =>
-                Alert.alert('Hata', e instanceof Error ? e.message : 'İstek gönderilemedi'),
+                noticeDialog('Hata', e instanceof Error ? e.message : 'İstek gönderilemedi'),
               );
           },
         });
@@ -444,20 +464,20 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           label: 'Kullanıcıyı engelle',
           danger: true,
           onSelect: () => {
-            Alert.alert('Engelle', `@${target.username} engellensin mi?`, [
-              { text: 'İptal', style: 'cancel' },
-              {
-                text: 'Engelle',
-                style: 'destructive',
-                onPress: () =>
-                  void client
-                    .blockUser(target.id)
-                    .then(() => Alert.alert('Engellendi', `@${target.username}`))
-                    .catch((e) =>
-                      Alert.alert('Hata', e instanceof Error ? e.message : 'Engellenemedi'),
-                    ),
-              },
-            ]);
+            void confirmDialog({
+              title: 'Engelle',
+              message: `@${target.username} engellensin mi?`,
+              confirmLabel: 'Engelle',
+              destructive: true,
+            }).then((ok) => {
+              if (!ok) return;
+              void client
+                .blockUser(target.id)
+                .then(() => noticeDialog('Engellendi', `@${target.username}`))
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Engellenemedi'),
+                );
+            });
           },
         });
       }
@@ -468,20 +488,20 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           label: 'Sunucudan at',
           danger: true,
           onSelect: () => {
-            Alert.alert('At', `${target.displayName} sunucudan atılsın mı?`, [
-              { text: 'İptal', style: 'cancel' },
-              {
-                text: 'At',
-                style: 'destructive',
-                onPress: () =>
-                  void client
-                    .kickGuildMember(guildId, target.id)
-                    .then(() => void refreshMembers())
-                    .catch((e) =>
-                      Alert.alert('Hata', e instanceof Error ? e.message : 'Atılamadı'),
-                    ),
-              },
-            ]);
+            void confirmDialog({
+              title: 'At',
+              message: `${target.displayName} sunucudan atılsın mı?`,
+              confirmLabel: 'At',
+              destructive: true,
+            }).then((ok) => {
+              if (!ok) return;
+              void client
+                .kickGuildMember(guildId, target.id)
+                .then(() => void refreshMembers())
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Atılamadı'),
+                );
+            });
           },
         });
       }
@@ -491,20 +511,20 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           label: 'Yasakla',
           danger: true,
           onSelect: () => {
-            Alert.alert('Yasakla', `${target.displayName} yasaklansın mı?`, [
-              { text: 'İptal', style: 'cancel' },
-              {
-                text: 'Yasakla',
-                style: 'destructive',
-                onPress: () =>
-                  void client
-                    .banGuildMember(guildId, target.id)
-                    .then(() => void refreshMembers())
-                    .catch((e) =>
-                      Alert.alert('Hata', e instanceof Error ? e.message : 'Yasaklanamadı'),
-                    ),
-              },
-            ]);
+            void confirmDialog({
+              title: 'Yasakla',
+              message: `${target.displayName} yasaklansın mı?`,
+              confirmLabel: 'Yasakla',
+              destructive: true,
+            }).then((ok) => {
+              if (!ok) return;
+              void client
+                .banGuildMember(guildId, target.id)
+                .then(() => void refreshMembers())
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Yasaklanamadı'),
+                );
+            });
           },
         });
       }
@@ -516,9 +536,9 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           onSelect: () => {
             void client
               .timeoutGuildMember(guildId, target.id, 10)
-              .then(() => Alert.alert('Timeout', '10 dakika uygulandı'))
+              .then(() => noticeDialog('Timeout', '10 dakika uygulandı'))
               .catch((e) =>
-                Alert.alert('Hata', e instanceof Error ? e.message : 'Timeout uygulanamadı'),
+                noticeDialog('Hata', e instanceof Error ? e.message : 'Timeout uygulanamadı'),
               );
           },
         });
@@ -589,23 +609,120 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     [members, buildMemberActions, openVoiceMember],
   );
 
-  // Ses aktifliği — kanal listesinde voiceMembers güncelle
+  const reloadChannels = useCallback(() => {
+    if (!guildId) return;
+    void client
+      .getGuildChannels(guildId)
+      .then(setChannels)
+      .catch(() => undefined);
+  }, [client, guildId]);
+
+  const voiceReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReloadChannels = useCallback(() => {
+    if (voiceReloadTimer.current) clearTimeout(voiceReloadTimer.current);
+    voiceReloadTimer.current = setTimeout(() => {
+      voiceReloadTimer.current = null;
+      reloadChannels();
+    }, 280);
+  }, [reloadChannels]);
+
+  // Ses aktifliği — kanal listesinde voiceMembers güncelle (debounce + seyrek poll)
   useEffect(() => {
     if (!guildId) return;
     const sock = client.connectSocket();
     const onVoice = (payload: VoiceStatePayload) => {
       if (payload.guildId !== guildId) return;
-      void client.getGuildChannels(guildId).then(setChannels);
+      scheduleReloadChannels();
     };
     sock.on(SocketEvents.VOICE_STATE, onVoice);
-    const tick = setInterval(() => {
-      void client.getGuildChannels(guildId).then(setChannels).catch(() => undefined);
-    }, 15_000);
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
-      clearInterval(tick);
+      if (voiceReloadTimer.current) clearTimeout(voiceReloadTimer.current);
     };
-  }, [client, guildId]);
+  }, [client, guildId, scheduleReloadChannels]);
+
+  // Sesten çıkınca self’i anında listeden düş (API gecikse bile)
+  useEffect(() => {
+    if (!user?.id || !guildId) return;
+    if (voice?.voiceChannelId) return;
+    const aid = activity?.activityChannelId;
+    setChannels((prev) => {
+      let changed = false;
+      const next = prev.map((ch) => {
+        if (aid && ch.id === aid) return ch;
+        if (
+          (ch.type !== 'VOICE' &&
+            ch.type !== 'GAME' &&
+            ch.type !== 'WATCH_PARTY') ||
+          !ch.voiceMembers?.some((m) => m.id === user.id)
+        ) {
+          return ch;
+        }
+        changed = true;
+        return {
+          ...ch,
+          voiceMembers: ch.voiceMembers!.filter((m) => m.id !== user.id),
+        };
+      });
+      return changed ? next : prev;
+    });
+    reloadChannels();
+  }, [
+    user?.id,
+    guildId,
+    voice?.voiceChannelId,
+    activity?.activityChannelId,
+    reloadChannels,
+  ]);
+
+  // Ses kanalına katılınca hemen yenile (oyun→ses geçişinde liste boş kalmasın)
+  const lastVoiceRefreshKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!guildId) return;
+    if (!voice?.voiceChannelId || voice.voiceGuildId !== guildId) {
+      lastVoiceRefreshKey.current = null;
+      return;
+    }
+    const key = `${voice.voiceChannelId}:${voice.connected ? '1' : '0'}`;
+    if (lastVoiceRefreshKey.current === key) return;
+    lastVoiceRefreshKey.current = key;
+    reloadChannels();
+    if (voice.connected) {
+      const t = setTimeout(reloadChannels, 450);
+      return () => clearTimeout(t);
+    }
+  }, [
+    guildId,
+    voice?.voiceChannelId,
+    voice?.voiceGuildId,
+    voice?.connected,
+    reloadChannels,
+  ]);
+
+  // Nav açıkken veya seste/aktivitedeyken seyrek poll (simülatör yükünü düşür)
+  useEffect(() => {
+    if (!guildId) return;
+    const needPoll =
+      channelsOpen ||
+      serversOpen ||
+      Boolean(voice?.voiceChannelId && voice.voiceGuildId === guildId) ||
+      Boolean(activity?.activityChannelId && activity.activityGuildId === guildId);
+    if (!needPoll) return;
+    const tick = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      reloadChannels();
+    }, 45_000);
+    return () => clearInterval(tick);
+  }, [
+    guildId,
+    channelsOpen,
+    serversOpen,
+    voice?.voiceChannelId,
+    voice?.voiceGuildId,
+    activity?.activityChannelId,
+    activity?.activityGuildId,
+    reloadChannels,
+  ]);
 
   // Üye presence — çevrimiçi/çevrimdışı anlık
   useEffect(() => {
@@ -646,9 +763,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     client.joinChannel(aid);
     const sock = client.connectSocket();
     const refresh = () => {
-      void client.getGuildChannels(agid).then((chs) => {
-        if (guildId === agid) setChannels(chs);
-      }).catch(() => undefined);
+      if (guildId === agid) scheduleReloadChannels();
     };
     refresh();
     sock.on(SocketEvents.ACTIVITY_UPSERT, refresh);
@@ -663,67 +778,132 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     activity?.activityChannelId,
     activity?.activityGuildId,
     activity?.activitySessionId,
+    scheduleReloadChannels,
   ]);
 
-  /** Overlay kanal listesi: aktivite katılımcılarını voiceMembers’a birleştir */
+  /** Overlay: aktivite + bağlı ses kanalında self/üyeleri birleştir */
   const channelsForList = useMemo(() => {
     const aid = activity?.activityChannelId;
     const agid = activity?.activityGuildId;
-    if (!aid || !agid || agid !== guildId) return channels;
+    const vid = voice?.voiceChannelId;
+    const vgid = voice?.voiceGuildId;
+    const participantIds = activity?.activityParticipantIds ?? [];
 
-    const participantIds = activity.activityParticipantIds ?? [];
     return channels.map((ch) => {
-      if (ch.id !== aid) {
-        // Aktif aktivite dışındaki oyun/watch kanallarından self hayaletini temizle
-        if (
-          user &&
-          (ch.type === 'GAME' || ch.type === 'WATCH_PARTY') &&
-          (ch.voiceMembers ?? []).some((m) => m.id === user.id)
-        ) {
-          return {
-            ...ch,
-            voiceMembers: (ch.voiceMembers ?? []).filter((m) => m.id !== user.id),
-          };
+      let membersList = ch.voiceMembers ?? [];
+      let changed = false;
+
+      // Bağlı olmadığımız ses / oyun / watch’tan self hayaleti temizle
+      if (
+        user &&
+        (ch.type === 'VOICE' || ch.type === 'GAME' || ch.type === 'WATCH_PARTY') &&
+        membersList.some((m) => m.id === user.id)
+      ) {
+        const liveHere =
+          (vid != null && ch.id === vid) ||
+          (aid != null && ch.id === aid && (!vid || vid === aid));
+        if (!liveHere) {
+          membersList = membersList.filter((m) => m.id !== user.id);
+          changed = true;
         }
-        return ch;
       }
 
-      const byId = new Map((ch.voiceMembers ?? []).map((m) => [m.id, m]));
-      for (const id of participantIds) {
-        if (byId.has(id)) continue;
-        const fromGuild = members.find((m) => m.id === id);
-        if (fromGuild) {
-          byId.set(id, {
-            id: fromGuild.id,
-            displayName: fromGuild.displayName,
-            avatarUrl: fromGuild.avatarUrl,
-            muted: false,
-            deafened: false,
-            isBot: Boolean(fromGuild.isBot),
-          });
-        } else if (user?.id === id) {
-          byId.set(id, {
+      // Aktivite kanalı: katılımcıları göster (gerçek ses başka kanaldaysa self ekleme)
+      if (aid && agid === guildId && ch.id === aid) {
+        const byId = new Map(membersList.map((m) => [m.id, m]));
+        for (const id of participantIds) {
+          if (byId.has(id)) continue;
+          const fromGuild = members.find((m) => m.id === id);
+          if (fromGuild) {
+            byId.set(id, {
+              id: fromGuild.id,
+              displayName: fromGuild.displayName,
+              avatarUrl: fromGuild.avatarUrl,
+              muted: false,
+              deafened: false,
+              isBot: Boolean(fromGuild.isBot),
+            });
+          } else if (user?.id === id) {
+            byId.set(id, {
+              id: user.id,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+              muted: false,
+              deafened: false,
+              isBot: Boolean(user.isBot),
+            });
+          }
+        }
+        const selfOnThisVoice = !vid || vid === aid;
+        if (user && !byId.has(user.id) && selfOnThisVoice) {
+          byId.set(user.id, {
             id: user.id,
             displayName: user.displayName,
             avatarUrl: user.avatarUrl,
             muted: false,
             deafened: false,
             isBot: Boolean(user.isBot),
+            joinedAt: new Date().toISOString(),
+          });
+        } else if (user && byId.has(user.id) && vid && vid !== aid) {
+          byId.delete(user.id);
+        }
+        return { ...ch, voiceMembers: [...byId.values()] };
+      }
+
+      // Bağlı ses kanalı: API + LiveKit peer’ları (oyun→ses geçişinde boş liste olmasın)
+      if (vid && vgid === guildId && ch.id === vid) {
+        const byId = new Map(membersList.map((m) => [m.id, m]));
+        if (user && !byId.has(user.id)) {
+          byId.set(user.id, {
+            id: user.id,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            muted: Boolean(voice?.muted),
+            deafened: Boolean(voice?.deafened),
+            isBot: Boolean(user.isBot),
+            joinedAt: new Date().toISOString(),
           });
         }
+        for (const p of voice?.peers ?? []) {
+          const peerId =
+            p.id === 'self' || (user && p.id === user.id) ? user!.id : p.id;
+          if (user && peerId === user.id) {
+            const existing = byId.get(user.id);
+            byId.set(user.id, {
+              id: user.id,
+              displayName: existing?.displayName ?? user.displayName,
+              avatarUrl: existing?.avatarUrl ?? user.avatarUrl,
+              muted: existing?.muted ?? Boolean(voice?.muted),
+              deafened: existing?.deafened ?? Boolean(voice?.deafened),
+              isBot: existing?.isBot ?? Boolean(user.isBot),
+              joinedAt: existing?.joinedAt,
+              speaking: p.speaking,
+            });
+            continue;
+          }
+          const existing = byId.get(peerId);
+          if (existing) {
+            byId.set(peerId, {
+              ...existing,
+              displayName: p.name,
+              speaking: p.speaking,
+            });
+          } else {
+            byId.set(peerId, {
+              id: peerId,
+              displayName: p.name,
+              avatarUrl: null,
+              speaking: p.speaking,
+              muted: false,
+              deafened: false,
+            });
+          }
+        }
+        return { ...ch, voiceMembers: [...byId.values()] };
       }
-      if (user && !byId.has(user.id)) {
-        byId.set(user.id, {
-          id: user.id,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          muted: false,
-          deafened: false,
-          isBot: Boolean(user.isBot),
-          joinedAt: new Date().toISOString(),
-        });
-      }
-      return { ...ch, voiceMembers: [...byId.values()] };
+
+      return changed ? { ...ch, voiceMembers: membersList } : ch;
     });
   }, [
     channels,
@@ -733,17 +913,23 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     activity?.activityChannelId,
     activity?.activityGuildId,
     activity?.activityParticipantIds,
+    voice?.voiceChannelId,
+    voice?.voiceGuildId,
+    voice?.muted,
+    voice?.deafened,
+    voice?.peers,
   ]);
 
   useEffect(() => {
     const tick = () => {
+      if (AppState.currentState !== 'active') return;
       void client
         .notificationsUnreadCount()
         .then((r) => setNotificationCount(r.count))
         .catch(() => undefined);
     };
     tick();
-    const id = setInterval(tick, 30_000);
+    const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
   }, [client]);
 
@@ -759,21 +945,20 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
 
   const leaveGuild = () => {
     if (!guildId) return;
-    Alert.alert('Sunucudan ayrıl', 'Bu sunucudan ayrılmak istiyor musun?', [
-      { text: 'İptal', style: 'cancel' },
-      {
-        text: 'Ayrıl',
-        style: 'destructive',
-        onPress: () => {
-          void client.leaveGuild(guildId).then(async () => {
-            const g = await reloadGuilds();
-            setServerMenuOpen(false);
-            if (g[0]) void selectGuild(g[0].id);
-            else goHome();
-          });
-        },
-      },
-    ]);
+    void confirmDialog({
+      title: 'Sunucudan ayrıl',
+      message: 'Bu sunucudan ayrılmak istiyor musun?',
+      confirmLabel: 'Ayrıl',
+      destructive: true,
+    }).then((ok) => {
+      if (!ok) return;
+      void client.leaveGuild(guildId).then(async () => {
+        const g = await reloadGuilds();
+        setServerMenuOpen(false);
+        if (g[0]) void selectGuild(g[0].id);
+        else goHome();
+      });
+    });
   };
 
   const createInvite = () => {
@@ -781,10 +966,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     void client
       .createInvite(guildId)
       .then((inv) => {
-        Alert.alert('Davet kodu', inv.code, [{ text: 'Tamam' }]);
+        void noticeDialog('Davet kodu', inv.code);
         setServerMenuOpen(false);
       })
-      .catch((e) => Alert.alert('Hata', e instanceof Error ? e.message : 'Davet oluşturulamadı'));
+      .catch((e) =>
+        void noticeDialog('Hata', e instanceof Error ? e.message : 'Davet oluşturulamadı'),
+      );
   };
 
   const onStatusChange = (status: PresenceStatus, customStatus?: string | null) => {
@@ -870,19 +1057,15 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
             onSelectGuild={(id) => void selectGuild(id, { openFirst: false })}
             onToggleFavorite={(id) => {
               const isFav = favoriteGuildIds.includes(id);
-              Alert.alert(
-                isFav ? 'Favorilerden çıkar' : 'Favorilere ekle',
-                isFav
+              void confirmDialog({
+                title: isFav ? 'Favorilerden çıkar' : 'Favorilere ekle',
+                message: isFav
                   ? 'Bu sunucu favorilerden kaldırılsın mı?'
                   : 'Bu sunucu favorilere eklensin mi?',
-                [
-                  { text: 'İptal', style: 'cancel' },
-                  {
-                    text: isFav ? 'Çıkar' : 'Ekle',
-                    onPress: () => toggleFavoriteGuild(id),
-                  },
-                ],
-              );
+                confirmLabel: isFav ? 'Çıkar' : 'Ekle',
+              }).then((ok) => {
+                if (ok) toggleFavoriteGuild(id);
+              });
             }}
             onCreate={() => {
               closeNav();

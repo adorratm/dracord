@@ -101,9 +101,13 @@ export function ActivityChannelView({
     })();
     return () => {
       cancelled = true;
+      // Embed: native Ayrıl WebView’ı unmount eder — presence burada da kopsun
+      if (embedMode && voice.voiceChannelId === channelId) {
+        voice.leave();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sadece kanal değişiminde
-  }, [channelId, guildId, user?.id]);
+  }, [channelId, guildId, user?.id, embedMode]);
   const [session, setSession] = useState<ActivitySessionDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);

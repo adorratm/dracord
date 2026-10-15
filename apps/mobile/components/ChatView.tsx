@@ -42,7 +42,11 @@ import { uploadImageFromUri } from '../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 import { Icon } from './Icon';
 import { UserAvatar } from './UserAvatar';
-import { presentMemberActions, type ProfileAction } from './shell/ProfileSheet';
+import {
+  ForwardPickerSheet,
+  MessageActionsSheet,
+  type MessageActionId,
+} from './MessageActionsSheet';
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '🔥', '😮', '😢', '🎉', '👀'];
 
@@ -94,6 +98,11 @@ export function ChatView({
   const [pendingAtt, setPendingAtt] = useState<MessageAttachment | null>(null);
   const [emojiDraft, setEmojiDraft] = useState('');
   const [emojiModal, setEmojiModal] = useState(false);
+  const [menuMessage, setMenuMessage] = useState<MessageDto | null>(null);
+  const [forwardMessage, setForwardMessage] = useState<MessageDto | null>(null);
+  const [forwardChannels, setForwardChannels] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
   const listRef = useRef<FlatList<ChatRow>>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userId = user?.id;
@@ -234,124 +243,180 @@ export function ChatView({
     [client, channel.id],
   );
 
-  const openMessageMenu = useCallback(
-    (m: MessageDto) => {
-      const mine = m.author?.id === userId;
-      const actions: ProfileAction[] = [
-        ...QUICK_EMOJI.slice(0, 4).map((e) => ({
-          id: `react-${e}`,
-          label: `${e} Tepki`,
-          onSelect: () => onReactMsg(m, e),
-        })),
-        { id: 'reply', label: 'Yanıtla', onSelect: () => onReplyMsg(m) },
-        { id: 'thread', label: 'Thread’de yanıtla', onSelect: () => onThreadMsg(m) },
-        {
-          id: 'pin',
-          label: m.pinnedAt ? 'Pini kaldır' : 'Sabitle',
-          onSelect: () => onPinMsg(m),
-        },
-        {
-          id: 'bookmark',
-          label: m.bookmarked ? 'Yer imini kaldır' : 'Yer imi',
-          onSelect: () => {
-            void (m.bookmarked
-              ? client.unbookmarkMessage(m.id)
-              : client.bookmarkMessage(m.id)
-            ).catch((e) => Alert.alert('Yer imi', e instanceof Error ? e.message : 'Hata'));
-          },
-        },
-        {
-          id: 'copy',
-          label: 'İçeriği kopyala',
-          onSelect: () => {
-            void Clipboard.setStringAsync(m.content || '').then(() =>
-              Alert.alert('Kopyalandı', 'Mesaj içeriği panoya alındı'),
-            );
-          },
-        },
-        {
-          id: 'copy-link',
-          label: 'Mesaj bağlantısını kopyala',
-          onSelect: () => {
-            const link = m.channelId
-              ? `https://dracord.com.tr/channels/${channel.guildId ?? '@me'}/${m.channelId}?around=${m.id}`
-              : m.id;
-            void Clipboard.setStringAsync(link).then(() =>
-              Alert.alert('Kopyalandı', 'Bağlantı panoya alındı'),
-            );
-          },
-        },
-        {
-          id: 'copy-id',
-          label: 'Mesaj ID kopyala',
-          onSelect: () => {
-            void Clipboard.setStringAsync(m.id);
-          },
-        },
-        {
-          id: 'copy-user',
-          label: 'Kullanıcı ID kopyala',
-          onSelect: () => {
-            if (m.author?.id) void Clipboard.setStringAsync(m.author.id);
-          },
-        },
-        {
-          id: 'unread',
-          label: 'Okunmadı işaretle',
-          onSelect: () => {
-            void client
-              .markChannelRead(channel.id, { messageId: m.id, unreadFrom: true })
-              .catch(() => undefined);
-          },
-        },
-        {
-          id: 'hide',
-          label: 'Mesajı gizle',
-          onSelect: () => {
-            void client.hideMessage(m.id).then(() => {
-              setMessages((prev) => prev.filter((x) => x.id !== m.id));
-            });
-          },
-        },
-      ];
+  const openMessageMenu = useCallback((m: MessageDto) => {
+    setMenuMessage(m);
+  }, []);
 
-      if (!mine && m.author?.id) {
-        actions.push({
-          id: 'block',
-          label: 'Kullanıcıyı engelle',
-          danger: true,
-          onSelect: () => {
-            Alert.alert('Engelle', `${m.author.displayName} engellensin mi?`, [
-              { text: 'İptal', style: 'cancel' },
+  const handleMessageAction = useCallback(
+    (id: MessageActionId, m: MessageDto) => {
+      switch (id) {
+        case 'reply':
+          onReplyMsg(m);
+          break;
+        case 'quote-reply':
+          setReplyTo(m);
+          setText((prev) => {
+            const quote = `> ${ (m.content || '').split('\n').join('\n> ') }\n\n`;
+            return prev ? `${quote}${prev}` : quote;
+          });
+          break;
+        case 'forward': {
+          const gid = channel.guildId;
+          if (!gid) {
+            Alert.alert('İlet', 'Şu an yalnızca sunucu kanallarına iletim destekleniyor.');
+            break;
+          }
+          void client
+            .getGuildChannels(gid)
+            .then((chs) => {
+              setForwardChannels(
+                chs
+                  .filter((c) => (c.type === 'TEXT' || c.type === 'FORUM') && c.id !== channel.id)
+                  .map((c) => ({ id: c.id, name: c.name })),
+              );
+              setForwardMessage(m);
+            })
+            .catch((e) =>
+              Alert.alert('İlet', e instanceof Error ? e.message : 'Kanallar yüklenemedi'),
+            );
+          break;
+        }
+        case 'heading':
+          void client
+            .sendMessage(channel.id, (m.content || 'Başlık').slice(0, 120), undefined, undefined, {
+              type: 'heading',
+            })
+            .catch((e) =>
+              Alert.alert('Alt başlık', e instanceof Error ? e.message : 'Oluşturulamadı'),
+            );
+          break;
+        case 'thread':
+          onThreadMsg(m);
+          break;
+        case 'pin':
+          onPinMsg(m);
+          break;
+        case 'bookmark':
+          void (m.bookmarked
+            ? client.unbookmarkMessage(m.id)
+            : client.bookmarkMessage(m.id)
+          ).catch((e) => Alert.alert('Yer imi', e instanceof Error ? e.message : 'Hata'));
+          break;
+        case 'copy-content':
+          void Clipboard.setStringAsync(m.content || '').then(() =>
+            Alert.alert('Kopyalandı', 'Mesaj içeriği panoya alındı'),
+          );
+          break;
+        case 'copy-attach':
+          if (m.attachments?.[0]?.url) {
+            void Clipboard.setStringAsync(m.attachments[0].url).then(() =>
+              Alert.alert('Kopyalandı', 'Ek bağlantısı panoya alındı'),
+            );
+          }
+          break;
+        case 'copy-poll':
+          if (m.poll) {
+            const text = [
+              m.poll.question,
+              ...m.poll.options.map((o) => `• ${o.text}: ${o.voteCount}`),
+            ].join('\n');
+            void Clipboard.setStringAsync(text);
+          }
+          break;
+        case 'mark-unread':
+          void client
+            .markChannelRead(channel.id, { messageId: m.id, unreadFrom: true })
+            .then(() => Alert.alert('Okunmadı', 'Kanal okunmadı olarak işaretlendi'))
+            .catch(() => undefined);
+          break;
+        case 'copy-link': {
+          const link = m.channelId
+            ? `https://dracord.com.tr/channels/${channel.guildId ?? '@me'}/${m.channelId}?around=${m.id}`
+            : m.id;
+          void Clipboard.setStringAsync(link).then(() =>
+            Alert.alert('Kopyalandı', 'Bağlantı panoya alındı'),
+          );
+          break;
+        }
+        case 'interactions': {
+          const reactions =
+            (m.reactions ?? []).map((r) => `${r.emoji} ${r.count}`).join(', ') || 'yok';
+          Alert.alert(
+            'Etkileşim bilgileri',
+            `Yazar: ${m.author?.displayName ?? '?'}\nID: ${m.id}\nTepki: ${reactions}\nZaman: ${new Date(m.createdAt).toLocaleString('tr-TR')}`,
+            [
               {
-                text: 'Engelle',
-                style: 'destructive',
-                onPress: () => void client.blockUser(m.author.id),
+                text: 'Bilgiyi kopyala',
+                onPress: () => {
+                  void Clipboard.setStringAsync(
+                    [
+                      `Mesaj: ${m.id}`,
+                      `Yazar: ${m.author?.displayName ?? '?'} (${m.author?.id ?? ''})`,
+                      `Tepki: ${reactions}`,
+                      `Zaman: ${m.createdAt}`,
+                    ].join('\n'),
+                  );
+                },
               },
-            ]);
-          },
-        });
+              { text: 'Tamam' },
+            ],
+          );
+          break;
+        }
+        case 'edit':
+          onEditMsg(m);
+          break;
+        case 'delete':
+          onDeleteMsg(m);
+          break;
+        case 'hide':
+          void client.hideMessage(m.id).then(() => {
+            setMessages((prev) => prev.filter((x) => x.id !== m.id));
+          });
+          break;
+        case 'report':
+          void client.hideMessage(m.id, true).then(() => {
+            setMessages((prev) => prev.filter((x) => x.id !== m.id));
+            Alert.alert('Bildirildi', 'Mesaj bildirildi ve gizlendi.');
+          });
+          break;
+        case 'block':
+          if (!m.author?.id) break;
+          Alert.alert('Engelle', `${m.author.displayName} engellensin mi?`, [
+            { text: 'İptal', style: 'cancel' },
+            {
+              text: 'Engelle',
+              style: 'destructive',
+              onPress: () => {
+                void client.blockUser(m.author.id).then(() =>
+                  client.hideMessage(m.id, true).then(() => {
+                    setMessages((prev) => prev.filter((x) => x.id !== m.id));
+                  }),
+                );
+              },
+            },
+          ]);
+          break;
+        case 'copy-id':
+          void Clipboard.setStringAsync(m.id).then(() =>
+            Alert.alert('Kopyalandı', 'Mesaj ID panoya alındı'),
+          );
+          break;
+        case 'copy-user-id':
+          if (m.author?.id) {
+            void Clipboard.setStringAsync(m.author.id).then(() =>
+              Alert.alert('Kopyalandı', 'Kullanıcı ID panoya alındı'),
+            );
+          }
+          break;
+        default:
+          break;
       }
-      if (mine) {
-        actions.push(
-          { id: 'edit', label: 'Düzenle', onSelect: () => onEditMsg(m) },
-          {
-            id: 'delete',
-            label: 'Mesajı sil',
-            danger: true,
-            onSelect: () => onDeleteMsg(m),
-          },
-        );
-      }
-
-      presentMemberActions('Mesaj', actions);
     },
     [
-      userId,
       client,
       channel.id,
       channel.guildId,
-      onReactMsg,
       onReplyMsg,
       onThreadMsg,
       onPinMsg,
@@ -1019,6 +1084,29 @@ export function ChatView({
           </View>
         </View>
       </Modal>
+
+      <MessageActionsSheet
+        message={menuMessage}
+        mine={menuMessage?.author?.id === userId}
+        onClose={() => setMenuMessage(null)}
+        onAction={handleMessageAction}
+        onReact={onReactMsg}
+      />
+      <ForwardPickerSheet
+        open={Boolean(forwardMessage)}
+        channels={forwardChannels}
+        onClose={() => {
+          setForwardMessage(null);
+          setForwardChannels([]);
+        }}
+        onPick={(targetChannelId, note) => {
+          if (!forwardMessage) return;
+          void client
+            .forwardMessage(forwardMessage.id, targetChannelId, note)
+            .then(() => Alert.alert('İletildi', 'Mesaj seçilen kanala iletildi'))
+            .catch((e) => Alert.alert('İlet', e instanceof Error ? e.message : 'İletilemedi'));
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

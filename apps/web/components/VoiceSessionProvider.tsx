@@ -1670,9 +1670,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       clearCameraViews();
       void (async () => {
         const saved = readActiveVoice();
+        // Mobil WebView: pagehide sessionStorage kaydı presence bırakmayı engelliyordu
+        const isRnEmbed =
+          typeof window !== 'undefined' &&
+          Boolean(
+            (window as Window & { ReactNativeWebView?: unknown }).ReactNativeWebView,
+          );
         const shouldLeavePresence =
           !transferringLeadershipRef.current &&
-          (intentionalLeaveRef.current || !saved || saved.channelId !== channelId);
+          (intentionalLeaveRef.current ||
+            isRnEmbed ||
+            !saved ||
+            saved.channelId !== channelId);
         try {
           if (shouldLeavePresence) {
             await client.leaveVoiceState(channelId);

@@ -3,6 +3,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { GAME_KIND_LABEL } from '@dracord/game-core';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { leaveActivityFully } from '../../lib/leaveActivityFully';
 import { useActivitySessionOptional } from './ActivitySession';
 import { useVoiceSessionOptional } from '../voice/VoiceSession';
 import { Icon } from '../Icon';
@@ -34,10 +35,22 @@ export function ActivityConnectionBar() {
   const padBottom = voice?.voiceChannelId ? 8 : Math.max(insets.bottom, 8);
 
   const leave = () => {
-    const sid = activity.activitySessionId;
-    // Önce native durumu temizle — yoksa odaya dönüş auto-join eder
-    activity.clearActiveActivity();
-    if (sid) void client.leaveActivity(sid).catch(() => undefined);
+    const chId = activity.activityChannelId;
+    void (async () => {
+      // Watch party: alt ses şeridi kalmasın
+      if (voice && chId && voice.voiceChannelId === chId) {
+        await Promise.resolve(voice.leave()).catch(() => undefined);
+      } else if (voice?.voiceChannelId && activity.activityKind === 'watch_party') {
+        await Promise.resolve(voice.leave()).catch(() => undefined);
+      }
+      await leaveActivityFully({
+        client,
+        sessionId: activity.activitySessionId,
+        channelId: chId,
+        clearActiveActivity: activity.clearActiveActivity,
+        voice,
+      });
+    })();
   };
 
   return (

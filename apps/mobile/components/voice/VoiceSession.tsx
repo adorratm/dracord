@@ -31,15 +31,57 @@ import {
   updateVoiceCallService,
   setupVoiceCallServiceListeners,
 } from '../../lib/voiceCallService';
+import { playUiTone } from '../../lib/sounds';
 
 type CameraFacing = 'user' | 'environment';
 
-// Arka plana alınca geçici WebSocket kopmaları LogBox’ı doldurmasın
-LogBox.ignoreLogs(['error reading from signal stream', 'ConnectionError']);
+// LiveKit kopma / arka plan uyarıları LogBox’ı doldurmasın (zararsız)
+LogBox.ignoreLogs([
+  'error reading from signal stream',
+  'ConnectionError',
+  'closed unexpectedly',
+  'DATA_TRACK_LOSSY',
+  'publisher data channel',
+  "right operand of 'in' is not an object",
+]);
+
+/**
+ * RN AbortController polyfill çoğu zaman abort(reason) yok sayar → reason undefined.
+ * LiveKit `getAbortReasonAsString` içinde `'toString' in reason` TypeError atar.
+ */
+function patchAbortControllerForLiveKit() {
+  try {
+    const g = globalThis as typeof globalThis & {
+      AbortController?: typeof AbortController;
+      __dracordAbortPatched?: boolean;
+    };
+    if (g.__dracordAbortPatched || !g.AbortController) return;
+    const proto = g.AbortController.prototype;
+    const orig = proto.abort;
+    proto.abort = function abort(this: AbortController, reason?: unknown) {
+      // Her zaman object — LiveKit `'x' in reason` için null/string kırılır
+      const safe =
+        reason !== undefined &&
+        reason !== null &&
+        typeof reason === 'object'
+          ? reason
+          : new Error(
+              typeof reason === 'string' && reason
+                ? reason
+                : 'Aborted',
+            );
+      return orig.call(this, safe);
+    };
+    g.__dracordAbortPatched = true;
+  } catch {
+    /* ignore */
+  }
+}
 
 let globalsReady = false;
 function ensureLiveKit() {
   if (!globalsReady) {
+    patchAbortControllerForLiveKit();
     registerGlobals();
     globalsReady = true;
   }
@@ -177,7 +219,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       try {
         await room.disconnect();
       } catch {
-        /* ignore */
+        /* RN AbortController + LiveKit abort reason yarışı */
       }
     }
     setPeers([]);
@@ -194,16 +236,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         name: p.name || p.identity,
         speaking: p.isSpeaking,
       }));
-      if (user?.displayName) {
+      // Gerçek user id — 'self' ayrı satır üretir (API üyesi + (sen) çifti)
+      if (user?.id) {
         list.unshift({
-          id: 'self',
-          name: `${user.displayName} (sen)`,
+          id: user.id,
+          name: user.displayName || user.id,
           speaking: room.localParticipant.isSpeaking,
         });
       }
       setPeers(list);
     },
-    [user?.displayName],
+    [user?.id, user?.displayName],
   );
 
   const leave = useCallback(async () => {
@@ -214,28 +257,41 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       reconnectTimer.current = null;
     }
     const ch = channelIdRef.current;
+    const gid = guildIdRef.current;
+    // Ref’leri hemen kes — AppState reconnect / heartbeat olmasın
     channelIdRef.current = null;
     guildIdRef.current = null;
     channelNameRef.current = null;
-    setVoiceChannelId(null);
-    setVoiceGuildId(null);
-    setVoiceChannelName(null);
-    setVoiceOnOtherClient(false);
-    setElsewherePlatform(null);
-    setStatus('');
-    await disconnectLiveKit();
-    void stopVoiceCallService();
-    try {
-      await AudioSession.stopAudioSession();
-    } catch {
-      /* ignore */
-    }
+    // Ayrılma tonu — AudioSession kapanmadan önce
+    if (ch) playUiTone('leave');
+    // Presence önce — sonra UI; aksi halde reload eski üyeyi geri getirir
     if (ch) {
       try {
         await client.leaveVoiceState(ch);
       } catch {
         /* ignore */
       }
+      if (gid) {
+        try {
+          client.emitVoiceState({ guildId: gid, channelId: null });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    setVoiceChannelId(null);
+    setVoiceGuildId(null);
+    setVoiceChannelName(null);
+    setVoiceOnOtherClient(false);
+    setElsewherePlatform(null);
+    setStatus('');
+    setPeers([]);
+    await disconnectLiveKit();
+    void stopVoiceCallService();
+    try {
+      await AudioSession.stopAudioSession();
+    } catch {
+      /* ignore */
     }
   }, [client, disconnectLiveKit]);
 
@@ -261,6 +317,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
 
       const gen = ++connectGen.current;
+      const stillThisJoin = () =>
+        gen === connectGen.current && !intentionalLeaveRef.current;
+
       const prev = channelIdRef.current;
       if (prev && prev !== channel.id) {
         try {
@@ -269,9 +328,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           /* ignore */
         }
       }
+      if (!stillThisJoin()) return;
       await disconnectLiveKit();
+      if (!stillThisJoin()) return;
 
       await prepareAudioSession();
+      if (!stillThisJoin()) return;
       void startVoiceCallService({
         channelName: channel.name,
         connected: false,
@@ -290,6 +352,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           },
         },
       });
+      // Leave yarışı: await sonrası hâlâ bu join mi?
+      if (!stillThisJoin()) {
+        try {
+          await room.disconnect();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       roomRef.current = room;
       channelIdRef.current = channel.id;
       guildIdRef.current = guildId;
@@ -312,8 +383,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         refreshPeers(room);
       };
 
-      room.on(RoomEvent.ParticipantConnected, () => refreshPeers(room));
-      room.on(RoomEvent.ParticipantDisconnected, () => refreshPeers(room));
+      room.on(RoomEvent.ParticipantConnected, () => {
+        playUiTone('peer-join');
+        refreshPeers(room);
+      });
+      room.on(RoomEvent.ParticipantDisconnected, () => {
+        if (!intentionalLeaveRef.current) playUiTone('peer-leave');
+        refreshPeers(room);
+      });
       room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
       room.on(RoomEvent.ActiveSpeakersChanged, () => refreshPeers(room));
       room.on(RoomEvent.Reconnecting, () => {
@@ -358,15 +435,70 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             deafened: deafenedRef.current,
           });
         }
+        if (!stillThisJoin()) {
+          await client.leaveVoiceState(channel.id).catch(() => undefined);
+          if (roomRef.current === room) {
+            roomRef.current = null;
+            channelIdRef.current = null;
+            guildIdRef.current = null;
+            channelNameRef.current = null;
+            setVoiceChannelId(null);
+            setVoiceGuildId(null);
+            setVoiceChannelName(null);
+            setConnected(false);
+          }
+          try {
+            await room.disconnect();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
         const tok = await client.getVoiceToken(channel.id);
-        if (gen !== connectGen.current) return;
+        if (!stillThisJoin()) {
+          await client.leaveVoiceState(channel.id).catch(() => undefined);
+          if (roomRef.current === room) {
+            roomRef.current = null;
+            channelIdRef.current = null;
+            guildIdRef.current = null;
+            channelNameRef.current = null;
+            setVoiceChannelId(null);
+            setVoiceGuildId(null);
+            setVoiceChannelName(null);
+            setConnected(false);
+          }
+          try {
+            await room.disconnect();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
         await room.connect(tok.url, tok.token);
+        if (!stillThisJoin()) {
+          try {
+            await room.disconnect();
+          } catch {
+            /* ignore */
+          }
+          await client.leaveVoiceState(channel.id).catch(() => undefined);
+          if (roomRef.current === room) {
+            roomRef.current = null;
+            channelIdRef.current = null;
+            setVoiceChannelId(null);
+            setVoiceGuildId(null);
+            setVoiceChannelName(null);
+            setConnected(false);
+          }
+          return;
+        }
         await room.localParticipant.setMicrophoneEnabled(
           !mutedRef.current && !deafenedRef.current,
         );
         setConnected(true);
         setStatus('Bağlı');
         refreshPeers(room);
+        if (!opts?.reclaim) playUiTone('join');
         void startVoiceCallService({
           channelName: channel.name,
           connected: true,
@@ -374,7 +506,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           deafened: deafenedRef.current,
         });
       } catch (e) {
-        if (gen !== connectGen.current) return;
+        if (!stillThisJoin()) return;
         setStatus(e instanceof Error ? e.message : 'Ses bağlantısı başarısız');
         channelIdRef.current = null;
         guildIdRef.current = null;

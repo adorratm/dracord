@@ -2,6 +2,8 @@ import { Pressable, Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@dracord/app-theme';
+import { useAuth } from '../../lib/auth';
+import { leaveVoiceFully } from '../../lib/leaveVoiceFully';
 import { useVoiceSessionOptional } from './VoiceSession';
 import { VoiceControls } from './VoiceControls';
 import { Icon } from '../Icon';
@@ -9,6 +11,7 @@ import { Icon } from '../Icon';
 /** Tüm sayfalarda altta kalan kompakt ses şeridi */
 export function VoiceConnectionBar() {
   const voice = useVoiceSessionOptional();
+  const { client } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -69,7 +72,17 @@ export function VoiceConnectionBar() {
       </Pressable>
 
       <View style={{ alignItems: 'center', width: '100%' }}>
-        <VoiceControls compact />
+        <VoiceControls
+          compact
+          onLeavePress={() =>
+            void leaveVoiceFully({
+              client,
+              voice,
+              router,
+              guildIdFallback: voice.voiceGuildId,
+            })
+          }
+        />
       </View>
     </View>
   );
