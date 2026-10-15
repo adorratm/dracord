@@ -683,6 +683,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const intentionalLeaveRef = useRef(false);
   /** Liderlik başka sekmeye geçerken presence’ı bırakma */
   const transferringLeadershipRef = useRef(false);
+  /** getDisplayMedia picker / paylaşım kurulumu sırasında liderlik ve devicechange’i kilitle */
+  const screenShareBusyRef = useRef(false);
+  /** Bu oturumda en az bir kez LiveKit’e bağlanıldı — reconnect fail’de odayı boşaltma */
+  const hadConnectedRef = useRef(false);
+  /** Soft fail sonrası tek seferlik oda yeniden kurma */
+  const softReconnectPendingRef = useRef(false);
+  const [roomEpoch, setRoomEpoch] = useState(0);
   const voicePasswordRef = useRef<string | undefined>(undefined);
   const tabIdRef = useRef(createTabId());
   const voiceBcRef = useRef<BroadcastChannel | null>(null);
@@ -733,13 +740,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, [client]);
 
   const yieldLiveKitLeadership = useCallback((platform?: string | null) => {
+    // Ekran paylaşımı / picker açıkken liderliği bırakma — oda + presence düşmesin
+    if (screenSharingRef.current || screenShareBusyRef.current) {
+      return;
+    }
     transferringLeadershipRef.current = true;
     setIsVoiceLeader(false);
     setVoiceOnOtherTab(true);
     setVoiceElsewherePlatform(platform ?? 'web');
     window.setTimeout(() => {
       transferringLeadershipRef.current = false;
-    }, 800);
+    }, 2500);
   }, []);
 
   const claimVoiceLeadership = useCallback((channelId: string, guildId: string) => {
@@ -774,6 +785,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (msg.type === 'claim') {
         if (msg.tabId === tabIdRef.current) return;
         if (channelIdRef.current && msg.channelId === channelIdRef.current) {
+          // Ekran paylaşımı sırasında başka sekme çalmasın — liderliği geri iste
+          if (screenSharingRef.current || screenShareBusyRef.current) {
+            const g = guildIdRef.current;
+            if (g) claimVoiceLeadership(channelIdRef.current, g);
+            return;
+          }
           yieldLiveKitLeadership('web');
         }
         return;
@@ -801,7 +818,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       bc?.close();
       voiceBcRef.current = null;
     };
-  }, [client, yieldLiveKitLeadership]);
+  }, [client, yieldLiveKitLeadership, claimVoiceLeadership]);
 
   /** Sekme odağı: yalnızca bu tarayıcıda (başka cihaz aldıysa otomatik çalma) */
   useEffect(() => {
@@ -810,6 +827,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const g = guildIdRef.current;
       if (!ch || !g) return;
       if (document.visibilityState !== 'visible') return;
+      // getDisplayMedia picker / paylaşım sırasında focus/visibility claim fırtınası yapmasın
+      if (screenShareBusyRef.current || screenSharingRef.current) return;
       if (!isLeaderRef.current && voiceElsewherePlatform && voiceElsewherePlatform !== 'web') {
         return;
       }
@@ -967,6 +986,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     await refreshAudioDevices(false);
     const room = roomRef.current;
     if (!room) return;
+    // Ekran paylaşımı sırasında switchActiveDevice mic/share track’lerini düşürebilir
+    if (screenSharingRef.current || screenShareBusyRef.current) return;
     const settings = audioSettingsRef.current;
     try {
       const [inputs, outputs] = await Promise.all([
@@ -1301,7 +1322,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, [applyScreenShareView, listScreenShares]);
 
   useEffect(() => {
-    if (!voiceChannelId || !user) {
+    if (!voiceChannelId || !user?.id) {
       return;
     }
     if (!isVoiceLeader) {
@@ -1311,6 +1332,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const channelId = voiceChannelId;
     const guildId = voiceGuildId;
     let disposed = false;
+    let everConnected = false;
     const settings = audioSettingsRef.current;
     const audioPublish = voiceAudioPublishOptions(settings.audioBitrateKbps);
     const room = new Room({
@@ -1570,6 +1592,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
 
         playUiTone('join');
+        everConnected = true;
+        hadConnectedRef.current = true;
         setConnected(true);
         refreshParticipants(room, mutedRef.current);
         if (guildId) {
@@ -1578,10 +1602,27 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (!disposed) {
           setError(err instanceof Error ? err.message : 'Ses odasına bağlanılamadı');
-          setVoiceChannelId(null);
-          setVoiceGuildId(null);
-          if (!restoringRef.current) {
-            clearActiveVoice();
+          // Reconnect / kısa kopma: presence + kanalı koru (ekran paylaşımı sonrası sık)
+          const keepChannel =
+            everConnected ||
+            hadConnectedRef.current ||
+            screenSharingRef.current ||
+            screenShareBusyRef.current;
+          if (!keepChannel) {
+            setVoiceChannelId(null);
+            setVoiceGuildId(null);
+            if (!restoringRef.current) {
+              clearActiveVoice();
+            }
+          } else if (!softReconnectPendingRef.current && !intentionalLeaveRef.current) {
+            softReconnectPendingRef.current = true;
+            window.setTimeout(() => {
+              softReconnectPendingRef.current = false;
+              if (intentionalLeaveRef.current) return;
+              if (channelIdRef.current !== channelId) return;
+              if (!isLeaderRef.current) return;
+              setRoomEpoch((n) => n + 1);
+            }, 800);
           }
         }
       }
@@ -1593,6 +1634,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         .then((r) => {
           if (disposed) return;
           if (r && 'active' in r && r.active === false) {
+            // Paylaşım sırasında heartbeat false → liderlik bırakma (odadan düşme)
+            if (screenSharingRef.current || screenShareBusyRef.current) return;
             yieldLiveKitLeadership(null);
           }
         })
@@ -1659,6 +1702,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       window.clearInterval(audioHealth);
       window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibility);
+      // setState öncesi yakala — render ref’i false yapmadan presence kararını ver
+      const keepForScreenShare =
+        screenSharingRef.current || screenShareBusyRef.current;
+      const transferring = transferringLeadershipRef.current;
+      const intentional = intentionalLeaveRef.current;
       deepFilterActiveRef.current = false;
       clarityRef.current = null;
       micGainRef.current = null;
@@ -1677,8 +1725,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             (window as Window & { ReactNativeWebView?: unknown }).ReactNativeWebView,
           );
         const shouldLeavePresence =
-          !transferringLeadershipRef.current &&
-          (intentionalLeaveRef.current ||
+          !transferring &&
+          !keepForScreenShare &&
+          (intentional ||
             isRnEmbed ||
             !saved ||
             saved.channelId !== channelId);
@@ -1706,7 +1755,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     voiceGuildId,
     isVoiceLeader,
     client,
-    user,
+    user?.id,
+    roomEpoch,
     refreshParticipants,
     applyScreenShareView,
     syncCameraTracks,
@@ -1871,6 +1921,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const guildId = guildIdRef.current;
     intentionalLeaveRef.current = true;
     transferringLeadershipRef.current = false;
+    screenShareBusyRef.current = false;
+    hadConnectedRef.current = false;
+    softReconnectPendingRef.current = false;
     voicePasswordRef.current = undefined;
     clearActiveVoice();
     stopNsfwMonitors();
@@ -1884,6 +1937,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     setParticipants([]);
     setError(null);
     setScreenSharing(false);
+    screenSharingRef.current = false;
     setCameraEnabled(false);
     setAvailableScreenShares([]);
     focusedScreenShareIdRef.current = null;
@@ -2317,7 +2371,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     if (screenSharingRef.current) {
       setError(null);
-      await stopLocalScreenShare();
+      screenShareBusyRef.current = true;
+      try {
+        await stopLocalScreenShare();
+      } finally {
+        screenShareBusyRef.current = false;
+      }
       return;
     }
 
@@ -2333,6 +2392,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
 
     setError(null);
+    screenShareBusyRef.current = true;
 
     const shareCap = screenShareCaptureResolution(audioSettingsRef.current);
     const shareCaptureOpts = (withAudio: boolean) =>
@@ -2402,6 +2462,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } catch {
         // ignore
       }
+    } finally {
+      screenShareBusyRef.current = false;
     }
   }, [
     refreshParticipants,

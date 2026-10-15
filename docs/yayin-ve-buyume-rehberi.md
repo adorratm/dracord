@@ -21,17 +21,31 @@ Hesaplar: Google Play ve App Store **var** · Apple Developer **var** → macOS 
 
 ### Windows / Linux (hemen)
 
-- [ ] Actions → **Desktop release** çalıştır veya tag: `desktop-v0.1.0`
-- [ ] Artifact / Release asset URL’lerini kopyala (`SHA256SUMS.txt` dahil)
-- [ ] Prod env’ye yaz:
+**Önemli:** Actions’ta yalnız *Run workflow* (artifact) = geçici, public değil. Siteye koymak için **GitHub Release** URL’si lazım.
 
-```env
-NEXT_PUBLIC_DOWNLOAD_WINDOWS=https://.../Dracord-Setup-x.y.z.exe
-NEXT_PUBLIC_DOWNLOAD_LINUX=https://.../Dracord-x.y.z-linux.AppImage
+1. Tag ile release üret (asset’ler public indirilebilir olur):
+
+```bash
+git tag desktop-v0.1.0
+git push origin desktop-v0.1.0
 ```
 
-- [ ] Siteyi yeniden deploy et (landing `#indir` + `/download` URL’leri build-time okur)
-- [ ] Windows indirmede popup çıktığını kontrol et (SmartScreen talimatları)
+2. Release sayfasından asset linklerini kopyala  
+   `https://github.com/<owner>/<repo>/releases/download/desktop-v0.1.0/Dracord-Setup-….exe`  
+   (Linux AppImage, isteğe MSI/DMG)
+
+3. Repo → **Settings → Secrets and variables → Actions → Variables** ekle:
+
+| Variable | Örnek |
+| --- | --- |
+| `NEXT_PUBLIC_DOWNLOAD_WINDOWS` | `…/Dracord-Setup-0.1.0.exe` |
+| `NEXT_PUBLIC_DOWNLOAD_LINUX` | `…/Dracord-0.1.0-linux.AppImage` |
+| `NEXT_PUBLIC_DOWNLOAD_MACOS` | `…/Dracord-0.1.0-mac.dmg` (varsa) |
+
+4. **Deploy** workflow’unu çalıştır (web image bu var’ları build-time gömer).
+5. Kontrol: `https://dracord.com.tr/#indir` ve `/download` — Windows’ta SmartScreen popup’ı çıkmalı.
+
+Yerel build’i public yapmak: dosyaları aynı Release’e yükle (`gh release upload desktop-v0.1.0 apps/desktop/release/*`) veya tag push ile CI’ya bırak.
 
 Yerel: `yarn workspace @dracord/desktop build:win` / `build:linux`
 

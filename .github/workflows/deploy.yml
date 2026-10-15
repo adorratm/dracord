@@ -47,6 +47,11 @@ jobs:
               NEXT_PUBLIC_API_URL=https://api.dracord.com.tr
               NEXT_PUBLIC_LIVEKIT_URL=wss://rtc.dracord.com.tr
               NEXT_PUBLIC_SITE_URL=https://dracord.com.tr
+              NEXT_PUBLIC_DOWNLOAD_WINDOWS=${{ vars.NEXT_PUBLIC_DOWNLOAD_WINDOWS }}
+              NEXT_PUBLIC_DOWNLOAD_LINUX=${{ vars.NEXT_PUBLIC_DOWNLOAD_LINUX }}
+              NEXT_PUBLIC_DOWNLOAD_MACOS=${{ vars.NEXT_PUBLIC_DOWNLOAD_MACOS }}
+              NEXT_PUBLIC_DOWNLOAD_PLAY=${{ vars.NEXT_PUBLIC_DOWNLOAD_PLAY }}
+              NEXT_PUBLIC_DOWNLOAD_IOS=${{ vars.NEXT_PUBLIC_DOWNLOAD_IOS }}
           - service: admin
             dockerfile: docker/Dockerfile.admin
             build_args: |
