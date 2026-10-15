@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { SocketEvents, type ActivitySessionDto, type ChannelSummary } from '@dracord/types';
 import { watchPartyParseState } from '@dracord/game-core';
@@ -37,6 +38,7 @@ export function ActivityRoom({
   channel: ChannelSummary;
 }) {
   const { client, user } = useAuth();
+  const router = useRouter();
   const activityCtx = useActivitySessionOptional() ?? NOOP_ACTIVITY;
   const {
     activityChannelId,
@@ -52,6 +54,8 @@ export function ActivityRoom({
   const [showChat, setShowChat] = useState(false);
   const [joining, setJoining] = useState(false);
   const [gameLandscapeFs, setGameLandscapeFs] = useState(false);
+  /** Ayrıldıktan sonra enterRoom auto-join etmesin */
+  const leftRef = useRef(false);
 
   const browsingOther =
     Boolean(activityChannelId) && activityChannelId !== channel.id;
@@ -116,16 +120,52 @@ export function ActivityRoom({
   }, [client, guildId, channel.id]);
 
   const enterRoom = useCallback(async () => {
+    if (leftRef.current) return null;
     let s = await refresh();
+    if (leftRef.current) return null;
     if (!s) s = await client.startActivity({ guildId, channelId: channel.id });
     setSession(s);
-    if (user && s && !s.playerIds.includes(user.id) && !s.spectatorIds.includes(user.id)) {
+    if (
+      user &&
+      s &&
+      !s.playerIds.includes(user.id) &&
+      !s.spectatorIds.includes(user.id)
+    ) {
+      if (leftRef.current) return null;
       s = await client.joinActivity(s.id, false);
       setSession(s);
     }
-    if (s) remember(s);
+    if (s && !leftRef.current) remember(s);
     return s;
   }, [client, guildId, channel.id, refresh, user, remember]);
+
+  const leaveRoom = useCallback(async () => {
+    leftRef.current = true;
+    const sid = session?.id ?? activitySessionId;
+    clearActiveActivity();
+    setSession(null);
+    if (sid) {
+      await client.leaveActivity(sid).catch(() => undefined);
+    }
+    try {
+      const channels = await client.getGuildChannels(guildId);
+      const text = channels.find((c) => c.type === 'TEXT');
+      if (text) {
+        router.replace(`/(app)/channels/${guildId}/${text.id}`);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    router.replace('/(app)/guilds');
+  }, [
+    session?.id,
+    activitySessionId,
+    clearActiveActivity,
+    client,
+    guildId,
+    router,
+  ]);
 
   useEffect(() => {
     if (browsingOther) {
@@ -133,6 +173,7 @@ export function ActivityRoom({
       setError(null);
       return;
     }
+    leftRef.current = false;
     void (async () => {
       try {
         setError(null);
@@ -260,6 +301,7 @@ export function ActivityRoom({
           busy={busy}
           onRefresh={() => void refresh()}
           onChat={() => setShowChat(true)}
+          onLeave={() => void leaveRoom()}
         />
       ) : null}
 
@@ -271,6 +313,7 @@ export function ActivityRoom({
           guildId={guildId}
           channelId={channel.id}
           onLandscapeFullscreenChange={setGameLandscapeFs}
+          onActivityLeave={() => void leaveRoom()}
         />
       )}
     </View>
@@ -282,11 +325,13 @@ function ActivityHeader({
   busy,
   onRefresh,
   onChat,
+  onLeave,
 }: {
   channelName: string;
   busy: boolean;
   onRefresh: () => void;
   onChat: () => void;
+  onLeave: () => void;
 }) {
   return (
     <View
@@ -321,6 +366,21 @@ function ActivityHeader({
       </Pressable>
       <Pressable onPress={onRefresh} disabled={busy} hitSlop={8}>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>↻</Text>
+      </Pressable>
+      <Pressable
+        onPress={onLeave}
+        hitSlop={8}
+        style={{
+          paddingHorizontal: 10,
+          height: 32,
+          borderRadius: 8,
+          backgroundColor: 'rgba(255,85,85,0.15)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        accessibilityLabel="Ayrıl"
+      >
+        <Text style={{ color: colors.danger, fontWeight: '700', fontSize: 12 }}>Ayrıl</Text>
       </Pressable>
     </View>
   );

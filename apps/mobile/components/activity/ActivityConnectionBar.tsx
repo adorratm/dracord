@@ -33,6 +33,13 @@ export function ActivityConnectionBar() {
   // Altında ses şeridi varsa safe-area’yı ses alır
   const padBottom = voice?.voiceChannelId ? 8 : Math.max(insets.bottom, 8);
 
+  const leave = () => {
+    const sid = activity.activitySessionId;
+    // Önce native durumu temizle — yoksa odaya dönüş auto-join eder
+    activity.clearActiveActivity();
+    if (sid) void client.leaveActivity(sid).catch(() => undefined);
+  };
+
   return (
     <View
       style={{
@@ -43,6 +50,9 @@ export function ActivityConnectionBar() {
         paddingRight: 10,
         paddingTop: 8,
         paddingBottom: padBottom,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
       }}
     >
       <Pressable
@@ -51,7 +61,7 @@ export function ActivityConnectionBar() {
             `/(app)/activity/${activity.activityGuildId}/${activity.activityChannelId}`,
           );
         }}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }}
       >
         <Icon
           name={activity.activityKind === 'watch_party' ? 'movie' : 'sports_esports'}
@@ -67,26 +77,21 @@ export function ActivityConnectionBar() {
           </Text>
         </View>
         <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Dön</Text>
-        <Pressable
-          hitSlop={8}
-          onPress={() => {
-            const sid = activity.activitySessionId;
-            activity.clearActiveActivity();
-            if (sid) void client.leaveActivity(sid).catch(() => undefined);
-          }}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            backgroundColor: colors.danger,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginLeft: 4,
-          }}
-          accessibilityLabel="Aktiviteden ayrıl"
-        >
-          <Icon name="close" size={16} color="#fff" />
-        </Pressable>
+      </Pressable>
+      <Pressable
+        hitSlop={8}
+        onPress={leave}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          backgroundColor: colors.danger,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        accessibilityLabel="Aktiviteden ayrıl"
+      >
+        <Icon name="close" size={16} color="#fff" />
       </Pressable>
     </View>
   );

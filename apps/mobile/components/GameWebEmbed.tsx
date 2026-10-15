@@ -37,10 +37,13 @@ export function GameWebEmbed({
   guildId,
   channelId,
   onLandscapeFullscreenChange,
+  onActivityLeave,
 }: {
   guildId: string;
   channelId: string;
   onLandscapeFullscreenChange?: (active: boolean) => void;
+  /** Web embed içinden Ayrıl */
+  onActivityLeave?: () => void;
 }) {
   const { getSessionTokens } = useAuth();
   const [html, setHtml] = useState<string | null>(null);
@@ -78,12 +81,16 @@ export function GameWebEmbed({
 
   const onBridgeMessage = useCallback(
     (msg: Record<string, unknown>) => {
+      if (msg.type === 'dracord-activity-leave') {
+        onActivityLeave?.();
+        return;
+      }
       if (msg.type !== 'dracord-game-fs') return;
       const active = Boolean(msg.enter) && Boolean(msg.landscape ?? true);
       setLandscapeFs(active);
       onLandscapeFullscreenChange?.(active);
     },
-    [onLandscapeFullscreenChange],
+    [onLandscapeFullscreenChange, onActivityLeave],
   );
 
   useEffect(() => {

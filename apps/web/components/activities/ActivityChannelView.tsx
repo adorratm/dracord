@@ -260,6 +260,22 @@ export function ActivityChannelView({
       if (voice.voiceChannelId === channelId) {
         voice.leave();
       }
+      // Mobil WebView: native ActivitySession + rota temizlensin (aksi halde auto-join)
+      if (embedMode && typeof window !== 'undefined' && window.ReactNativeWebView) {
+        try {
+          window.ReactNativeWebView.postMessage(
+            JSON.stringify({
+              type: 'dracord-activity-leave',
+              sessionId: session.id,
+              guildId,
+              channelId,
+            }),
+          );
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       await refresh();
       try {
         const channels = await client.getGuildChannels(guildId);
@@ -545,36 +561,13 @@ export function ActivityChannelView({
   );
 
   if (embedMode) {
+    // Mobil WebView: üst bar + Ayrıl native ActivityRoom’da — embed’de gösterme
     return (
       <div
         className={
-          className ??
-          'flex h-[100dvh] w-full flex-col overflow-hidden bg-[#11131e] [&:has([data-rn-fs])>header]:hidden'
+          className ?? 'flex h-[100dvh] w-full flex-col overflow-hidden bg-[#11131e]'
         }
       >
-        <header className="flex shrink-0 items-center gap-2 border-b border-[#44307a]/50 px-3 py-2">
-          <span className="material-symbols-outlined text-[18px] text-[#bd93f9]">
-            {kind ? KIND_ICON[kind] : 'sports_esports'}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f8f8f2]">
-            {channel.name}
-          </span>
-          {session ? (
-            <span className="shrink-0 text-[11px] text-[#ccc3d3]">
-              {session.playerIds.length}/{session.maxPlayers}
-            </span>
-          ) : null}
-          {session && isMember ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void leave()}
-              className="h-7 shrink-0 rounded-md px-2 text-xs text-[#ff5555] hover:bg-[#ff5555]/10 disabled:opacity-50"
-            >
-              Ayrıl
-            </button>
-          ) : null}
-        </header>
         {stage}
       </div>
     );
