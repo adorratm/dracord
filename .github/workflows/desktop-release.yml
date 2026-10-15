@@ -36,19 +36,39 @@ jobs:
       - name: Install
         run: yarn install --immutable
 
+      # Boş CSC_LINK/CSC_KEY_PASSWORD → electron-builder "not a file" hatası verir; yoksa unset et
+      - name: Code-sign env (skip if no cert secrets)
+        shell: bash
+        env:
+          CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD_SECRET: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_PROVIDER_SECRET: ${{ secrets.ASC_PROVIDER }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CSC_LINK_SECRET:-}" ]; then
+            echo "CSC_LINK<<EOF" >> "$GITHUB_ENV"
+            echo "$CSC_LINK_SECRET" >> "$GITHUB_ENV"
+            echo "EOF" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=${CSC_KEY_PASSWORD_SECRET}" >> "$GITHUB_ENV"
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> "$GITHUB_ENV"
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            echo "No CSC_LINK — unsigned desktop build"
+          fi
+          if [ -n "${APPLE_ID_SECRET:-}" ]; then
+            echo "APPLE_ID=${APPLE_ID_SECRET}" >> "$GITHUB_ENV"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=${APPLE_APP_SPECIFIC_PASSWORD_SECRET}" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=${APPLE_TEAM_ID_SECRET}" >> "$GITHUB_ENV"
+            echo "ASC_PROVIDER=${ASC_PROVIDER_SECRET}" >> "$GITHUB_ENV"
+          fi
+
       - name: Build desktop (desktop-ui + electron-builder)
         working-directory: apps/desktop
         env:
-          # Native UI prod API
           VITE_API_URL: ${{ vars.VITE_API_URL != '' && vars.VITE_API_URL || 'https://api.dracord.com.tr' }}
-          # Windows Authenticode — secrets yoksa imzasız build (SmartScreen uyarısı beklenir)
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # macOS notarize — APPLE_* doluysa electron-builder notarize eder (Developer hesabı yeter; ekstra ücret yok)
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          ASC_PROVIDER: ${{ secrets.ASC_PROVIDER }}
         run: yarn ${{ matrix.script }}
 
       - name: SHA256 checksums

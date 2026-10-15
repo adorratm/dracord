@@ -27,6 +27,7 @@
     "electronVersion": "44.7.2",
     "appId": "com.dracord.desktop",
     "productName": "Dracord",
+    "executableName": "Dracord",
     "copyright": "Copyright © Dracord",
     "directories": {
       "output": "release",
@@ -114,6 +115,8 @@
         "AppImage"
       ],
       "category": "Network",
+      "executableName": "Dracord",
+      "syncDesktopName": true,
       "artifactName": "Dracord-${version}-linux.${ext}"
     },
     "protocols": [
