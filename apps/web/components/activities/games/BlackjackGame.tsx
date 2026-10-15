@@ -478,12 +478,60 @@ export function BlackjackGame(props: GameProps) {
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, camera, renderer } = api;
     const cam = camera as PerspectiveCamera;
-    cam.fov = 40;
-    // Daha dik bakış: yakın kenar aşağıda, kurpiyer kartları + belden yukarı
-    cam.position.set(0, CAM_Y, CAM_Z);
-    cam.lookAt(0, LOOK_Y, LOOK_Z);
-    cam.updateProjectionMatrix();
     renderer.toneMappingExposure = 0.95;
+
+    // Masa + apron (~8.1 geniş) — dik telefonda sabit CAM_* sağ/sol taşır
+    let camY = CAM_Y;
+    let camZ = CAM_Z;
+    const lookTarget = new THREE.Vector3(0, LOOK_Y, LOOK_Z);
+    const fitCamera = () => {
+      const el = api.root;
+      const w = Math.max(1, el.clientWidth);
+      const h = Math.max(1, el.clientHeight);
+      const aspect = w / h;
+      const halfW = 4.25;
+      const halfD = 3.5;
+      const margin = 1.06;
+      let fov = 40;
+      let y = CAM_Y;
+      let z = CAM_Z;
+      if (aspect < 0.72) {
+        fov = 46;
+        y = 7.1;
+        z = 9.6;
+      } else if (aspect < 1.05) {
+        fov = 43;
+        y = 6.1;
+        z = 8.4;
+      }
+      cam.aspect = aspect;
+      for (let i = 0; i < 14; i++) {
+        cam.fov = fov;
+        cam.position.set(0, y, z);
+        cam.lookAt(lookTarget);
+        cam.updateProjectionMatrix();
+        const dist = cam.position.distanceTo(lookTarget);
+        const vFov = (fov * Math.PI) / 180;
+        const visibleH = 2 * Math.tan(vFov / 2) * dist;
+        const visibleW = visibleH * aspect;
+        const need = Math.max(
+          (halfD * 2 * margin) / visibleH,
+          (halfW * 2 * margin) / visibleW,
+        );
+        if (need <= 1) break;
+        if (fov < 58) {
+          fov = Math.min(58, fov * Math.sqrt(need));
+        } else {
+          y = LOOK_Y + (y - LOOK_Y) * need;
+          z = LOOK_Z + (z - LOOK_Z) * need;
+        }
+      }
+      camY = y;
+      camZ = z;
+    };
+    fitCamera();
+    const camRo = new ResizeObserver(fitCamera);
+    camRo.observe(api.root);
 
     const root = new THREE.Group();
     scene.add(root);
@@ -963,12 +1011,12 @@ export function BlackjackGame(props: GameProps) {
       }
       const camX = Math.sin(t * 0.12) * 0.05;
       cam.position.x = camX;
-      cam.position.y = CAM_Y;
-      cam.position.z = CAM_Z;
+      cam.position.y = camY;
+      cam.position.z = camZ;
       cam.lookAt(0, LOOK_Y + Math.sin(t * 0.18) * 0.012, LOOK_Z);
       // Bakış nadiren değişir — her kare yüz güncellemesi gerekmez
       if ((raf & 1) === 0) {
-        dealer.faceCamera(camX, CAM_Y, CAM_Z);
+        dealer.faceCamera(camX, camY, camZ);
       }
     };
     tick();
@@ -994,6 +1042,7 @@ export function BlackjackGame(props: GameProps) {
     return () => {
       dealerCancelled = true;
       cancelAnimationFrame(raf);
+      camRo.disconnect();
       ctlRef.current = null;
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
@@ -1017,7 +1066,7 @@ export function BlackjackGame(props: GameProps) {
       <ThreeSceneHost className="absolute inset-0 min-h-0 overflow-hidden" onReady={onReady} />
       <GameHud
         title="21 Blackjack"
-        lockLandscape={false}
+        lockLandscape
         status={statusText}
         meta={
           <div className="flex flex-wrap items-center gap-2">
