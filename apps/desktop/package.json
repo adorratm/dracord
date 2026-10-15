@@ -19,11 +19,12 @@
     "lint": "echo ok"
   },
   "devDependencies": {
-    "electron": "^44.7.2",
+    "electron": "44.7.2",
     "electron-builder": "^26.17.0",
     "png-to-ico": "^3.0.2"
   },
   "build": {
+    "electronVersion": "44.7.2",
     "appId": "com.dracord.desktop",
     "productName": "Dracord",
     "copyright": "Copyright © Dracord",

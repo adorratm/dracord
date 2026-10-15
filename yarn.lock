@@ -1377,7 +1377,7 @@ __metadata:
   resolution: "@dracord/desktop@workspace:apps/desktop"
   dependencies:
     edge-tts-universal: "npm:1.4.0"
-    electron: "npm:^44.7.2"
+    electron: "npm:44.7.2"
     electron-builder: "npm:^26.17.0"
     png-to-ico: "npm:^3.0.2"
   languageName: unknown
@@ -7861,7 +7861,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:^44.7.2":
+"electron@npm:44.7.2":
   version: 44.7.2
   resolution: "electron@npm:44.7.2"
   dependencies:
