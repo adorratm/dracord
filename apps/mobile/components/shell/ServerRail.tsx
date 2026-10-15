@@ -53,7 +53,7 @@ export function ServerRail({
           onPress={() => onSelectGuild(g.id)}
         />
       ))}
-      <RailBtn onPress={onCreate} outline success icon="add" />
+      <RailBtn onPress={onCreate} outline accent icon="add" />
       <RailBtn onPress={onJoin} outline icon="login" />
       <RailBtn onPress={onDiscover} outline icon="explore" />
     </ScrollView>
@@ -65,7 +65,7 @@ function RailBtn({
   active,
   onPress,
   outline,
-  success,
+  accent,
   imageUrl,
   icon,
 }: {
@@ -73,11 +73,11 @@ function RailBtn({
   active?: boolean;
   onPress: () => void;
   outline?: boolean;
-  success?: boolean;
+  accent?: boolean;
   imageUrl?: string | null;
   icon?: string;
 }) {
-  const iconColor = active || success ? (active ? colors.primaryOn : '#fff') : colors.text;
+  const iconColor = active || accent ? colors.primaryOn : colors.text;
   const uri = resolveMediaUrl(imageUrl);
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -88,16 +88,14 @@ function RailBtn({
         width: BTN,
         height: BTN,
         borderRadius: active ? 12 : 20,
-        backgroundColor: active
+        backgroundColor: active || accent
           ? colors.primary
-          : success
-            ? colors.success
-            : outline
-              ? 'transparent'
-              : colors.surfaceHigh,
-        borderWidth: outline && !active ? 1.5 : 0,
+          : outline
+            ? 'transparent'
+            : colors.surfaceHigh,
+        borderWidth: outline && !active && !accent ? 1.5 : 0,
         borderColor: colors.outline,
-        borderStyle: outline ? 'dashed' : 'solid',
+        borderStyle: outline && !accent ? 'dashed' : 'solid',
         alignItems: 'center',
         justifyContent: 'center',
         opacity: pressed ? 0.85 : 1,

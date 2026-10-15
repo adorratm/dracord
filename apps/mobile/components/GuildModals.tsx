@@ -6,8 +6,11 @@ import {
   TextInput,
   View,
   ActivityIndicator,
+  Switch,
+  ScrollView,
 } from 'react-native';
 import { colors } from '@dracord/app-theme';
+import { DISCOVER_CATEGORIES, type DiscoverCategory } from '@dracord/types';
 import { useAuth } from '../lib/auth';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 import { Icon } from './Icon';
@@ -61,6 +64,8 @@ export function CreateGuildModal({
 }) {
   const { client } = useAuth();
   const [name, setName] = useState('');
+  const [discoverable, setDiscoverable] = useState(true);
+  const [discoverCategory, setDiscoverCategory] = useState<DiscoverCategory>('gaming');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!open) return null;
@@ -68,24 +73,83 @@ export function CreateGuildModal({
   return (
     <Sheet title="Sunucu oluştur" onClose={onClose}>
       {error ? <Text style={{ color: colors.danger, marginBottom: 8 }}>{error}</Text> : null}
+      <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 6 }}>Sunucu adı</Text>
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="Sunucu adı"
+        placeholder="Dracula Alemi"
         placeholderTextColor={colors.textMuted}
-        style={{ ...inputStyle, marginBottom: 12 }}
+        style={{ ...inputStyle, marginBottom: 14 }}
       />
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: discoverable ? 12 : 16,
+        }}
+      >
+        <Text style={{ color: colors.text, fontSize: 15 }}>Keşfette göster</Text>
+        <Switch
+          value={discoverable}
+          onValueChange={setDiscoverable}
+          trackColor={{ false: colors.surfaceHigh, true: colors.primary }}
+          thumbColor={colors.text}
+        />
+      </View>
+      {discoverable ? (
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+            Sunucu türü
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {DISCOVER_CATEGORIES.map((cat) => {
+                const selected = discoverCategory === cat.id;
+                return (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => setDiscoverCategory(cat.id)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: selected ? colors.primary : colors.surfaceHigh,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: selected ? colors.primaryOn : colors.text,
+                        fontWeight: selected ? '700' : '500',
+                        fontSize: 13,
+                      }}
+                    >
+                      {cat.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+      ) : null}
       <Pressable
         disabled={busy || name.trim().length < 2}
         onPress={() => {
           setBusy(true);
           setError(null);
           void client
-            .createGuild({ name: name.trim(), discoverable: true })
+            .createGuild({
+              name: name.trim(),
+              discoverable,
+              discoverCategory: discoverable ? discoverCategory : undefined,
+            })
             .then((g) => {
               onCreated(g.id);
               onClose();
               setName('');
+              setDiscoverable(true);
+              setDiscoverCategory('gaming');
             })
             .catch((e) => setError(e instanceof Error ? e.message : 'Oluşturulamadı'))
             .finally(() => setBusy(false));
