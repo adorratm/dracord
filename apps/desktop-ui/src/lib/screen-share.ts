@@ -20,9 +20,10 @@ export type ActiveScreenShare = {
 };
 
 export function screenShareSimulcastLayersForHeight(height: number): VideoPreset[] {
-  if (height >= 2160) return [VideoPresets.h720, VideoPresets.h1080];
-  if (height >= 1440) return [VideoPresets.h720, VideoPresets.h1080];
-  if (height >= 1080) return [VideoPresets.h360, VideoPresets.h720];
+  // Daha az katman = daha az encode CPU (desktop takılma)
+  if (height >= 2160) return [VideoPresets.h1080];
+  if (height >= 1440) return [VideoPresets.h720];
+  if (height >= 1080) return [VideoPresets.h720];
   if (height >= 720) return [VideoPresets.h360];
   return [VideoPresets.h180];
 }
@@ -135,8 +136,9 @@ export function applyRemoteScreenShareViewQuality(
 
   if (qualityId === 'auto') {
     if (focused) clearScreenShareQualityFloor();
+    // HIGH zorlamayı kaldır — adaptiveStream katman seçsin (CPU/bant)
     try {
-      pub.setVideoQuality(VideoQuality.HIGH);
+      pub.setVideoQuality(VideoQuality.MEDIUM);
     } catch {
       /* ignore */
     }

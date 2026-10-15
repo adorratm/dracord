@@ -34,16 +34,9 @@ git push origin desktop-v0.1.0
    `https://github.com/<owner>/<repo>/releases/download/desktop-v0.1.0/Dracord-Setup-….exe`  
    (Linux AppImage, isteğe MSI/DMG)
 
-3. Repo → **Settings → Secrets and variables → Actions → Variables** ekle:
-
-| Variable | Örnek |
-| --- | --- |
-| `NEXT_PUBLIC_DOWNLOAD_WINDOWS` | `…/Dracord-Setup-0.1.0.exe` |
-| `NEXT_PUBLIC_DOWNLOAD_LINUX` | `…/Dracord-0.1.0-linux.AppImage` |
-| `NEXT_PUBLIC_DOWNLOAD_MACOS` | `…/Dracord-0.1.0-mac.dmg` (varsa) |
-
-4. **Deploy** workflow’unu çalıştır (web image bu var’ları build-time gömer).
-5. Kontrol: `https://dracord.com.tr/#indir` ve `/download` — Windows’ta SmartScreen popup’ı çıkmalı.
+3. İndirme URL’leri `apps/web/lib/downloads.ts` + `deploy.yml` içinde **sabit** (public Release linkleri). Sunucu `.env` / Actions Variables tek başına yetmez — web image rebuild şart.
+4. **Deploy** workflow’unu çalıştır (veya main’e push).
+5. Kontrol: `https://dracord.com.tr/#indir` ve `/download` — Windows’ta SmartScreen popup’ı çıkmalı. iOS App Store id gelince `NEXT_PUBLIC_DOWNLOAD_IOS` / `downloads.ts` güncelle.
 
 Yerel build’i public yapmak: dosyaları aynı Release’e yükle (`gh release upload desktop-v0.1.0 apps/desktop/release/*`) veya tag push ile CI’ya bırak.
 

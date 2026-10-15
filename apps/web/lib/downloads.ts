@@ -1,4 +1,4 @@
-/** Mağaza / Release URL’leri — prod env ile doldurulur */
+/** Mağaza / Release URL’leri — NEXT_PUBLIC_* (build-time) veya aşağıdaki varsayılanlar */
 
 export type DownloadPlatformId = 'play' | 'ios' | 'windows' | 'linux' | 'macos';
 
@@ -11,37 +11,58 @@ export type DownloadItem = {
   warnBeforeDownload?: 'windows-unsigned';
 };
 
+/** Boş string de fallback’e düşsün (Docker ARG default = "") */
+function downloadHref(envValue: string | undefined, fallback = ''): string {
+  const v = (envValue ?? '').trim();
+  return v || fallback;
+}
+
+const RELEASE = 'https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0';
+
 export const DOWNLOADS: DownloadItem[] = [
   {
     id: 'play',
     label: 'Google Play',
     icon: 'android',
-    href: process.env.NEXT_PUBLIC_DOWNLOAD_PLAY ?? '',
+    href: downloadHref(
+      process.env.NEXT_PUBLIC_DOWNLOAD_PLAY,
+      'https://play.google.com/store/apps/details?id=com.dracord.mobile',
+    ),
   },
   {
     id: 'ios',
     label: 'App Store',
     icon: 'phone_iphone',
-    href: process.env.NEXT_PUBLIC_DOWNLOAD_IOS ?? '',
+    // App Store id yokken boş bırak — «Yakında»
+    href: downloadHref(process.env.NEXT_PUBLIC_DOWNLOAD_IOS),
   },
   {
     id: 'windows',
     label: 'Windows',
     icon: 'desktop_windows',
-    href: process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS ?? '',
+    href: downloadHref(
+      process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS,
+      `${RELEASE}/Dracord-Setup-0.1.0.exe`,
+    ),
     warnBeforeDownload: 'windows-unsigned',
   },
   {
     id: 'linux',
     label: 'Linux',
     icon: 'terminal',
-    href: process.env.NEXT_PUBLIC_DOWNLOAD_LINUX ?? '',
+    href: downloadHref(
+      process.env.NEXT_PUBLIC_DOWNLOAD_LINUX,
+      `${RELEASE}/Dracord-0.1.0-linux.AppImage`,
+    ),
   },
   {
     id: 'macos',
     label: 'macOS',
     icon: 'laptop_mac',
-    href: process.env.NEXT_PUBLIC_DOWNLOAD_MACOS ?? '',
+    href: downloadHref(
+      process.env.NEXT_PUBLIC_DOWNLOAD_MACOS,
+      `${RELEASE}/Dracord-0.1.0-mac.dmg`,
+    ),
   },
 ];
 

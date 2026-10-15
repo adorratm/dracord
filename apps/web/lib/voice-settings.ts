@@ -14,7 +14,8 @@ export const SCREEN_SHARE_RESOLUTION_PRESETS = [
   '8k',
 ] as const;
 export type ScreenShareResolutionId = (typeof SCREEN_SHARE_RESOLUTION_PRESETS)[number];
-export const DEFAULT_SCREEN_SHARE_RESOLUTION: ScreenShareResolutionId = '1080p';
+/** Varsayılan 720p — 1080p@30 simulcast desktop’ta encoder’ı zorluyordu */
+export const DEFAULT_SCREEN_SHARE_RESOLUTION: ScreenShareResolutionId = '720p';
 
 export const SCREEN_SHARE_FPS_PRESETS = [15, 24, 30, 60] as const;
 export type ScreenShareFps = (typeof SCREEN_SHARE_FPS_PRESETS)[number];

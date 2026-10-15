@@ -43,15 +43,17 @@ jobs:
             build_args: ""
           - service: web
             dockerfile: docker/Dockerfile.web
+            # Public indirme URL’leri — vars.* bazen matrix build-args’a boş geçiyor;
+            # bu yüzden burada sabitleniyor (override: workflow vars ile değiştirilebilir).
             build_args: |
               NEXT_PUBLIC_API_URL=https://api.dracord.com.tr
               NEXT_PUBLIC_LIVEKIT_URL=wss://rtc.dracord.com.tr
               NEXT_PUBLIC_SITE_URL=https://dracord.com.tr
-              NEXT_PUBLIC_DOWNLOAD_WINDOWS=${{ vars.NEXT_PUBLIC_DOWNLOAD_WINDOWS }}
-              NEXT_PUBLIC_DOWNLOAD_LINUX=${{ vars.NEXT_PUBLIC_DOWNLOAD_LINUX }}
-              NEXT_PUBLIC_DOWNLOAD_MACOS=${{ vars.NEXT_PUBLIC_DOWNLOAD_MACOS }}
-              NEXT_PUBLIC_DOWNLOAD_PLAY=${{ vars.NEXT_PUBLIC_DOWNLOAD_PLAY }}
-              NEXT_PUBLIC_DOWNLOAD_IOS=${{ vars.NEXT_PUBLIC_DOWNLOAD_IOS }}
+              NEXT_PUBLIC_DOWNLOAD_WINDOWS=https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0/Dracord-Setup-0.1.0.exe
+              NEXT_PUBLIC_DOWNLOAD_LINUX=https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0/Dracord-0.1.0-linux.AppImage
+              NEXT_PUBLIC_DOWNLOAD_MACOS=https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0/Dracord-0.1.0-mac.dmg
+              NEXT_PUBLIC_DOWNLOAD_PLAY=https://play.google.com/store/apps/details?id=com.dracord.mobile
+              NEXT_PUBLIC_DOWNLOAD_IOS=
           - service: admin
             dockerfile: docker/Dockerfile.admin
             build_args: |

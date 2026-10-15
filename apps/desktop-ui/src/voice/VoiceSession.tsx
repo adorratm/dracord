@@ -265,6 +265,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const voiceGuildIdRef = useRef<string | null>(null);
   const screenVideoElRef = useRef<HTMLVideoElement | null>(null);
   const focusedShareIdRef = useRef<string | null>(null);
+  /** Bağlı ekran paylaşımı kimliği — gereksiz re-attach önlemek için */
+  const activeScreenShareIdRef = useRef<string | null>(null);
   const viewPausedRef = useRef(false);
   const screenSharingRef = useRef(false);
   const audioSettingsRef = useRef(loadVoiceAudioSettings());
@@ -403,6 +405,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
     }
     boundShareTrackRef.current = null;
+    activeScreenShareIdRef.current = null;
     setActiveScreenShare(null);
     clearScreenShareQualityFloor();
   }, []);
@@ -411,6 +414,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     (track: Track | null, share: ActiveScreenShare) => {
       const el = screenVideoElRef.current;
       const prev = boundShareTrackRef.current;
+      // Aynı track + aynı kişi → yeniden attach etme (konuşma event flicker/takılma)
+      if (
+        track &&
+        prev === track &&
+        activeScreenShareIdRef.current === share.identity
+      ) {
+        setActiveScreenShare(share);
+        return;
+      }
       if (prev && prev !== track && el) {
         try {
           prev.detach(el);
@@ -419,8 +431,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
       }
       boundShareTrackRef.current = track;
+      if (!track) {
+        activeScreenShareIdRef.current = null;
+        setActiveScreenShare(null);
+        return;
+      }
+      activeScreenShareIdRef.current = share.identity;
       setActiveScreenShare(share);
-      if (el && track) {
+      if (el && prev !== track) {
         track.attach(el);
         el.playsInline = true;
         el.autoplay = true;
@@ -557,6 +575,71 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     applyScreenShareView(room);
   }, [applyScreenShareView, cameraEnabled, displayName, user?.avatarUrl, userId]);
 
+  /** Yalnız peer listesi — ekran track’ine dokunma (ActiveSpeakersChanged) */
+  const refreshPeers = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) {
+      setPeers([]);
+      return;
+    }
+    const metaOf = (raw?: string) => {
+      if (!raw) return { avatarUrl: null as string | null, isBot: false };
+      try {
+        const parsed = JSON.parse(raw) as { avatarUrl?: string | null; isBot?: boolean };
+        return {
+          avatarUrl: parsed.avatarUrl ?? null,
+          isBot: Boolean(parsed.isBot),
+        };
+      } catch {
+        return { avatarUrl: null, isBot: false };
+      }
+    };
+    const afk = afkSilenceRef.current;
+    const list: VoiceParticipant[] = [];
+    if (displayName && userId) {
+      list.push({
+        id: userId,
+        displayName,
+        avatarUrl: user?.avatarUrl,
+        speaking: afk ? false : room.localParticipant.isSpeaking,
+        muted: afk ? true : mutedRef.current,
+        camera: cameraEnabled,
+        video: screenSharingRef.current,
+        isBot: false,
+      });
+    }
+    for (const p of room.remoteParticipants.values()) {
+      const cams = Array.from(p.trackPublications.values()).some(
+        (pub) =>
+          pub.kind === Track.Kind.Video &&
+          pub.source === Track.Source.Camera &&
+          pub.isSubscribed,
+      );
+      const screens = Array.from(p.trackPublications.values()).some(
+        (pub) =>
+          pub.kind === Track.Kind.Video &&
+          pub.source === Track.Source.ScreenShare &&
+          pub.isSubscribed,
+      );
+      const meta = metaOf(p.metadata);
+      const isBot =
+        meta.isBot ||
+        p.identity === DRACORD_BOT_USER_ID ||
+        p.identity === 'system-dracord-bot';
+      list.push({
+        id: p.identity,
+        displayName: p.name || p.identity,
+        avatarUrl: meta.avatarUrl,
+        speaking: afk ? false : p.isSpeaking,
+        muted: afk ? true : p.isMicrophoneEnabled === false,
+        camera: cams,
+        video: screens,
+        isBot,
+      });
+    }
+    setPeers(list);
+  }, [cameraEnabled, displayName, user?.avatarUrl, userId]);
+
   const stopNsfwMonitor = useCallback(() => {
     nsfwShareMonitorRef.current?.stop();
     nsfwShareMonitorRef.current = null;
@@ -628,7 +711,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       stopNsfwMonitor();
       if (!audioSettingsRef.current.nsfwContentFilter) return;
       nsfwShareMonitorRef.current = startNsfwTrackMonitor({
-        intervalMs: NSFW_SAMPLE_INTERVAL_MS,
+        // Desktop’ta TF.js encode ile CPU yarışmasın
+        intervalMs: Math.max(NSFW_SAMPLE_INTERVAL_MS, 2500),
         getTrack: () => {
           const pub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
           return pub?.track?.mediaStreamTrack ?? null;
@@ -817,7 +901,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       });
       room.on(RoomEvent.TrackSubscribed, attachRemote);
       room.on(RoomEvent.TrackUnsubscribed, refresh);
-      room.on(RoomEvent.ActiveSpeakersChanged, refresh);
+      // Konuşma halkası — ekran track’ini yeniden bağlama (takılma / flicker)
+      room.on(RoomEvent.ActiveSpeakersChanged, refreshPeers);
       room.on(RoomEvent.LocalTrackPublished, refresh);
       room.on(RoomEvent.LocalTrackUnpublished, refresh);
 
@@ -857,7 +942,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         setVoiceChannelName(null);
       }
     },
-    [client, deafened, muted, refresh, teardownRoom],
+    [client, deafened, muted, refresh, refreshPeers, teardownRoom],
   );
 
   const leave = useCallback(async () => {
@@ -1255,6 +1340,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     const wantAudio = selection.systemAudio;
     const shareCap = screenShareCaptureResolution(audioSettingsRef.current);
+    // ≥30 FPS / oyun: framerate koru; düşük FPS metin: çözünürlük
+    const preferFps = shareCap.frameRate >= 30;
     const shareCaptureOpts = (withAudio: boolean) =>
       ({
         audio: withAudio,
@@ -1263,7 +1350,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           height: shareCap.height,
           frameRate: shareCap.frameRate,
         },
-        contentHint: 'detail' as const,
+        contentHint: (preferFps ? 'motion' : 'detail') as 'motion' | 'detail',
       }) as const;
 
     const sharePublishOpts = {
@@ -1273,7 +1360,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         maxFramerate: shareCap.frameRate,
       },
       screenShareSimulcastLayers: screenShareSimulcastLayersForHeight(shareCap.height),
-      degradationPreference: 'maintain-resolution' as const,
+      degradationPreference: (preferFps
+        ? 'maintain-framerate'
+        : 'maintain-resolution') as 'maintain-framerate' | 'maintain-resolution',
     };
 
     try {
