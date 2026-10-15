@@ -19,7 +19,7 @@ export default function PrivacyLegalPage() {
       <h2>1. Veri sorumlusu</h2>
       <p>
         Dracord platformunu işleten ekip, Türkiye’de sunulan hizmetler için KVKK kapsamında
-        veri sorumlusudur. İletişim: <strong>legal@dracord.com.tr</strong>.
+        veri sorumlusudur. İletişim: <strong>info@dracord.com.tr</strong>.
       </p>
 
       <h2>2. Topladığımız veriler</h2>
@@ -81,7 +81,7 @@ export default function PrivacyLegalPage() {
       <p>
         KVKK kapsamında bilme, düzeltme, silme, itiraz ve veri taşınabilirliği haklarınız
         vardır. Ayarlar → Veri ve Gizlilik üzerinden birçok tercihi yönetebilir; silme
-        talepleri için <strong>legal@dracord.com.tr</strong> adresine yazabilirsiniz.
+        talepleri için <strong>info@dracord.com.tr</strong> adresine yazabilirsiniz.
         Ayrıntılar için <a className="text-[#bd93f9] underline" href="/legal/kvkk">KVKK Aydınlatma Metni</a>.
       </p>
 

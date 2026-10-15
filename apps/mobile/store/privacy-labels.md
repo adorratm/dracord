@@ -42,4 +42,4 @@ Web: `https://dracord.com.tr/settings/account-status`
 
 ## Destek e-postası
 
-Mağaza formuna kendi destek adresini yaz (ör. `destek@dracord.com.tr`).
+Mağaza formuna kendi destek adresini yaz (ör. `info@dracord.com.tr`).

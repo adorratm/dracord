@@ -18,7 +18,7 @@ export default function KvkkLegalPage() {
       <h2>1. Veri sorumlusu</h2>
       <p>
         Dracord Hizmeti işleten veri sorumlusu adına bildirimler:{' '}
-        <strong>legal@dracord.com.tr</strong>.
+        <strong>info@dracord.com.tr</strong>.
       </p>
 
       <h2>2. İşlenen kişisel veri kategorileri</h2>
@@ -72,7 +72,7 @@ export default function KvkkLegalPage() {
 
       <h2>7. Başvuru</h2>
       <p>
-        Başvurularınızı <strong>legal@dracord.com.tr</strong> adresine yazılı olarak
+        Başvurularınızı <strong>info@dracord.com.tr</strong> adresine yazılı olarak
         iletebilirsiniz. KVKK md. 13 uyarınca talepler en geç 30 gün içinde sonuçlandırılır.
         Ücretsizdir; işlemin ayrıca bir maliyet gerektirmesi halinde Kişisel Verileri
         Koruma Kurulu’nca belirlenen tarifedeki ücret uygulanabilir.

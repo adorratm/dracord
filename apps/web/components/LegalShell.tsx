@@ -45,7 +45,7 @@ export function LegalShell({
           {children}
         </div>
         <p className="pt-8 border-t border-[#44475a]/40 text-sm text-[#6272a4]">
-          Sorularınız için: <a className="text-[#bd93f9] hover:underline" href="mailto:legal@dracord.com.tr">legal@dracord.com.tr</a>
+          Sorularınız için: <a className="text-[#bd93f9] hover:underline" href="mailto:info@dracord.com.tr">info@dracord.com.tr</a>
         </p>
       </article>
     </div>
