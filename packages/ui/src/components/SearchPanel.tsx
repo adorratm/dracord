@@ -58,7 +58,7 @@ export function SearchPanel({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center pt-[10vh] bg-black/50"
+      className="fixed inset-0 z-[200] flex items-start justify-center pt-[10vh] bg-black/50"
       onClick={onClose}
     >
       <div

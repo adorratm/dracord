@@ -82,15 +82,6 @@ const CURATED_APPS: CuratedApp[] = [
     gradient: 'from-rose-700/60 via-pink-900/40 to-surface-container-high',
     kind: 'utility',
   },
-  {
-    id: 'polls',
-    name: 'Anketler',
-    tagline: 'Hızlı oylama',
-    description: 'Metin kanalında kısa anketler oluştur (kürate demo).',
-    icon: 'ballot',
-    gradient: 'from-sky-700/60 via-cyan-900/40 to-surface-container-high',
-    kind: 'utility',
-  },
 ];
 
 function formatCount(n: number): string {

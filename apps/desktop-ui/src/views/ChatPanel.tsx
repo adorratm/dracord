@@ -183,7 +183,7 @@ export function ChatPanel({
         .search({
           q: query.trim(),
           limit: 24,
-          types: ['message'],
+          types: ['messages'],
           guildId: scope === 'guild' || scope === 'channel' ? guildId : undefined,
           channelId: scope === 'channel' ? channel.id : undefined,
         })

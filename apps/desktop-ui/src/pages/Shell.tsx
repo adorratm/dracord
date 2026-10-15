@@ -2044,6 +2044,8 @@ export function Shell() {
         onClose={() => setSearchOpen(false)}
         guildId={activeGuildId}
         channelId={activeChannelId}
+        guilds={guilds}
+        channels={channels}
         onOpenChannel={(guildId, channelId) => {
           openChannel(guildId, channelId);
         }}
