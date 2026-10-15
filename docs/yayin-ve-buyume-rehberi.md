@@ -125,7 +125,30 @@ Hesap silme (mağaza zorunluluğu) uygulamada hazır: Ayarlar → Hesap Durumu �
 
 ---
 
-## 7. Hızlı komutlar
+## 7. Deploy: Docker pull Lchown hatası (VPS)
+
+CI log’unda şuna benzer bir satır görürsen:
+
+`failed to extract layer … Lchown … typings.js.map … no such file or directory`
+
+Bu **uygulama bug’ı değil**; Hetzner’de containerd/overlayfs katman çıkarma yarışı veya yarım kalmış snapshot. Disk dolu değilse:
+
+```bash
+# SSH → sunucu
+cd /opt/dracord
+docker image rm -f ghcr.io/adorratm/dracord/api:<sha> || true
+docker image prune -f
+# Gerekirse (diğer siteleri kısa keser):
+sudo systemctl restart containerd docker
+```
+
+Sonra GitHub Actions’ta deploy’u **Re-run**. `docker/pull-prebuilt.sh` artık birkaç kez retry eder.
+
+Sürekli tekrarlıyorsa: Docker/containerd sürümünü güncelle veya API imajını küçült (prod `node_modules` sadeleştirme).
+
+---
+
+## 8. Hızlı komutlar
 
 ```bash
 # Desktop
