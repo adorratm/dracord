@@ -164,6 +164,8 @@ export default function SettingsScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [deactivatePassword, setDeactivatePassword] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletePhrase, setDeletePhrase] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startup, setStartup] = useState(false);
@@ -621,6 +623,53 @@ export default function SettingsScreen() {
               }}
             >
               <Text style={{ ...primaryBtnText, color: '#fff' }}>Hesabı devre dışı bırak</Text>
+            </Pressable>
+
+            <H1>Hesabı kalıcı sil</H1>
+            <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 8 }}>
+              Geri alınamaz. Sahip olduğun sunucuları önce sil veya sahipliği devret. Onay
+              için SİL yaz.
+            </Text>
+            <Label>Onay (SİL)</Label>
+            <TextInput
+              value={deletePhrase}
+              onChangeText={setDeletePhrase}
+              autoCapitalize="characters"
+              placeholder="SİL"
+              placeholderTextColor={colors.textMuted}
+              style={{ ...inputStyle, marginBottom: 12 }}
+            />
+            <Label>Şifre (şifreli hesaplarda zorunlu)</Label>
+            <TextInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              secureTextEntry
+              style={{ ...inputStyle, marginBottom: 12 }}
+            />
+            <Pressable
+              style={{ ...primaryBtn, backgroundColor: colors.danger }}
+              onPress={() => {
+                void confirmDialog({
+                  title: 'Hesabı kalıcı sil',
+                  message: 'Tüm verilerin silinir. Bu işlem geri alınamaz.',
+                  confirmLabel: 'Kalıcı sil',
+                  destructive: true,
+                }).then((ok) => {
+                  if (!ok) return;
+                  void client
+                    .deleteAccount({
+                      password: deletePassword || undefined,
+                      confirm: deletePhrase,
+                    })
+                    .then(() => logout())
+                    .then(() => router.replace('/(auth)/login'))
+                    .catch((e) =>
+                      setError(e instanceof Error ? e.message : 'Silme başarısız'),
+                    );
+                });
+              }}
+            >
+              <Text style={{ ...primaryBtnText, color: '#fff' }}>Hesabımı kalıcı sil</Text>
             </Pressable>
           </>
         )}

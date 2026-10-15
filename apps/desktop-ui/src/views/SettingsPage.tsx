@@ -154,6 +154,10 @@ export function SettingsPage({
   const [deactivateConfirming, setDeactivateConfirming] = useState(false);
   const [deactivatePassword, setDeactivatePassword] = useState('');
   const [deactivateBusy, setDeactivateBusy] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletePhrase, setDeletePhrase] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [boostGuilds, setBoostGuilds] = useState<GuildSummary[]>([]);
   const [boostBusyId, setBoostBusyId] = useState<string | null>(null);
   const [giftCode, setGiftCode] = useState('');
@@ -794,7 +798,7 @@ export function SettingsPage({
       {tab === 'account-status' && (
         <SettingsPageBody
           title="Hesap Durumu"
-          description="Hesabı geçici olarak devre dışı bırak. Oturumlar kapanır; giriş engellenir."
+          description="Hesabı geçici kapat veya kalıcı sil. Silme geri alınamaz."
         >
           <SettingsSection title="Devre dışı bırak">
             <div className="px-space-md py-space-md space-y-3">
@@ -846,6 +850,78 @@ export function SettingsPage({
                       type="button"
                       className="px-4 py-2 rounded-lg bg-surface-container-high font-semibold"
                       onClick={() => setDeactivateConfirming(false)}
+                    >
+                      Vazgeç
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </SettingsSection>
+          <SettingsSection title="Hesabı kalıcı sil">
+            <div className="px-space-md py-space-md space-y-3">
+              <SettingsNote>
+                Tüm verilerin silinir. Sahip olduğun sunucuları önce sil veya sahipliği
+                devret. Onay için <strong>SİL</strong> yaz.
+              </SettingsNote>
+              {!deleteConfirming ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirming(true)}
+                  className="px-4 py-2 rounded-lg bg-error/20 text-error font-semibold hover:bg-error/30"
+                >
+                  Hesabımı kalıcı sil…
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <label className="block space-y-1">
+                    <span className="text-xs text-on-surface-variant">Onay (SİL yaz)</span>
+                    <input
+                      type="text"
+                      value={deletePhrase}
+                      onChange={(e) => setDeletePhrase(e.target.value)}
+                      placeholder="SİL"
+                      autoComplete="off"
+                      className="w-full h-10 rounded-lg bg-surface-container-highest px-3 outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-on-surface-variant">
+                      Şifreni onayla (şifreli hesaplarda zorunlu)
+                    </span>
+                    <input
+                      type="password"
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      className="w-full h-10 rounded-lg bg-surface-container-highest px-3 outline-none"
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={deleteBusy}
+                      className="px-4 py-2 rounded-lg bg-error text-on-error font-semibold disabled:opacity-50"
+                      onClick={() => {
+                        setDeleteBusy(true);
+                        setError(null);
+                        void client
+                          .deleteAccount({
+                            password: deletePassword || undefined,
+                            confirm: deletePhrase,
+                          })
+                          .then(() => logout())
+                          .catch((e) =>
+                            setError(e instanceof Error ? e.message : 'Silme başarısız'),
+                          )
+                          .finally(() => setDeleteBusy(false));
+                      }}
+                    >
+                      Kalıcı sil ve çık
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg bg-surface-container-high font-semibold"
+                      onClick={() => setDeleteConfirming(false)}
                     >
                       Vazgeç
                     </button>

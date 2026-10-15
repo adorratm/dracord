@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
   const paths = [
     '',
+    '/download',
     '/login',
     '/legal/privacy',
     '/legal/terms',
@@ -18,7 +19,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return paths.map((path) => ({
     url: `${siteUrl}${path || '/'}`,
     lastModified: now,
-    changeFrequency: path === '' ? 'weekly' : 'monthly',
-    priority: path === '' ? 1 : path.startsWith('/legal') ? 0.4 : path === '/llms.txt' ? 0.3 : 0.7,
+    changeFrequency: path === '' || path === '/download' ? 'weekly' : 'monthly',
+    priority:
+      path === ''
+        ? 1
+        : path === '/download'
+          ? 0.9
+          : path.startsWith('/legal')
+            ? 0.4
+            : path === '/llms.txt'
+              ? 0.3
+              : 0.7,
   }));
 }

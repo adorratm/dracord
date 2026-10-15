@@ -53,6 +53,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "Dracord-Setup-${version}.${ext}",
@@ -61,6 +67,11 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dracord"
+    },
+    "msi": {
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Dracord"

@@ -108,7 +108,13 @@ packages/
 
 ## Mobil
 
-`apps/mobile` bilinçli olarak minimal tutulmuştur; Google / Apple oturum açma ileride eklenecek. Bkz. `apps/mobile/README.md`.
+`apps/mobile` — Expo uygulaması. Bkz. `apps/mobile/README.md`.
+
+## Yayınlama
+
+Senin checklist’in: **[docs/yayin-ve-buyume-rehberi.md](docs/yayin-ve-buyume-rehberi.md)**
+
+İndirme URL env: `NEXT_PUBLIC_DOWNLOAD_PLAY|IOS|WINDOWS|LINUX|MACOS` — sayfalar: `/#indir`, `/download`.
 
 ## Lisans
 

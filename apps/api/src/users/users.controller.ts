@@ -111,6 +111,14 @@ export class UsersController {
     return this.usersService.deactivateAccount(req.user.sub, body.password);
   }
 
+  @Delete('me')
+  deleteMe(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { password?: string; confirm?: string },
+  ) {
+    return this.usersService.deleteOwnAccount(req.user.sub, body);
+  }
+
   @Post('me/reactivate')
   reactivate(@Req() req: { user: { sub: string } }) {
     return this.usersService.reactivateAccount(req.user.sub);

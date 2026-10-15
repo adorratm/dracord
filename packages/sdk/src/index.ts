@@ -257,6 +257,16 @@ export class DracordClient {
     });
   }
 
+  async deleteAccount(opts: {
+    password?: string;
+    confirm: string;
+  }): Promise<{ ok: true }> {
+    return this.request('/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify(opts),
+    });
+  }
+
   async deactivateAccount(password?: string): Promise<{ ok: true }> {
     return this.request('/users/me/deactivate', {
       method: 'POST',

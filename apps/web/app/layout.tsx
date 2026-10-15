@@ -23,7 +23,7 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://dracord.com.tr';
 
 const siteDescription =
-  'Dracord: Dracula temalı topluluk sohbeti. Metin kanalları, sesli odalar, müzik botu, roller, arkadaşlar ve maskot Draco ile sunucunu kur — Türkçe arayüz.';
+  'Dracord: reklamsız, ücretsiz Dracula temalı topluluk sohbeti. Metin kanalları, sesli odalar, müzik botu, roller, arkadaşlar ve maskot Draco — Türkçe arayüz.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -44,6 +44,8 @@ export const metadata: Metadata = {
     'topluluk',
     'müzik botu',
     'Türkçe Discord',
+    'reklamsız sohbet',
+    'ücretsiz sesli sohbet',
     'ekran paylaşımı',
     'KVKK',
   ],
@@ -99,17 +101,29 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const downloadUrls = [
+    process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS,
+    process.env.NEXT_PUBLIC_DOWNLOAD_MACOS,
+    process.env.NEXT_PUBLIC_DOWNLOAD_LINUX,
+    process.env.NEXT_PUBLIC_DOWNLOAD_PLAY,
+    process.env.NEXT_PUBLIC_DOWNLOAD_IOS,
+  ].filter((u): u is string => Boolean(u?.trim()));
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
     name: 'Dracord',
     url: siteUrl,
     applicationCategory: 'SocialNetworkingApplication',
-    operatingSystem: 'Web, Windows, macOS, Linux',
+    operatingSystem: 'Web, Windows, macOS, Linux, Android, iOS',
     description: siteDescription,
     inLanguage: 'tr-TR',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'TRY' },
+    ...(downloadUrls.length
+      ? { downloadUrl: downloadUrls.length === 1 ? downloadUrls[0] : downloadUrls }
+      : {}),
     featureList: [
+      'Reklamsız sohbet',
       'Metin kanalları',
       'Sesli odalar',
       'Oyun odaları',

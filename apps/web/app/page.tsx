@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Draco } from '@/components/Draco';
+import { DownloadPlatformGrid } from '@/components/DownloadPlatformGrid';
 import { useAuth } from '@/components/AuthProvider';
 import { hasSession } from '@/lib/storage';
 
@@ -207,6 +208,13 @@ export default function LandingPage() {
             >
               Güvenlik
             </a>
+            <a
+              href="#indir"
+              onClick={(e) => onHashClick(e, 'indir')}
+              className="hidden sm:inline font-label-md text-[#9a95b0] hover:text-[#f8f8f2] transition-colors px-3 py-2"
+            >
+              İndir
+            </a>
             <Link
               href="/login"
               className="font-label-md text-[#c4a8f0] hover:text-[#f8f8f2] transition-colors px-3 py-2"
@@ -244,9 +252,16 @@ export default function LandingPage() {
                 Hemen başla
               </Link>
               <a
+                href="#indir"
+                onClick={(e) => onHashClick(e, 'indir')}
+                className="inline-flex items-center justify-center h-12 px-6 rounded-full font-bold text-[#f8f8f2] bg-[#44475a]/60 hover:bg-[#6272a4]/50 transition-all hover:-translate-y-0.5"
+              >
+                Uygulamayı indir
+              </a>
+              <a
                 href="#ozellikler"
                 onClick={(e) => onHashClick(e, 'ozellikler')}
-                className="inline-flex items-center justify-center h-12 px-6 rounded-full font-bold text-[#f8f8f2] bg-[#44475a]/60 hover:bg-[#6272a4]/50 transition-all hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center h-12 px-6 rounded-full font-bold text-[#9a95b0] hover:text-[#f8f8f2] transition-colors"
               >
                 Keşfet
               </a>
@@ -368,6 +383,25 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
+      </section>
+
+      <section
+        id="indir"
+        className="relative px-6 md:px-10 py-20 md:py-28 max-w-5xl mx-auto scroll-mt-6 border-t border-[#44475a]/35"
+      >
+        <div className="text-center mb-12 space-y-3">
+          <p className="font-black tracking-[0.18em] text-xs text-[#50fa7b] uppercase">
+            İndir
+          </p>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-[#c4a8f0]">
+            Her yerde Dracord
+          </h2>
+          <p className="text-[#9a95b0] max-w-xl mx-auto leading-relaxed">
+            Tarayıcıda hemen başla; masaüstü ve mobil uygulamalar burada. Reklamsız
+            çekirdek deneyim — premium özellikler sonra.
+          </p>
+        </div>
+        <DownloadPlatformGrid />
       </section>
 
       <section className="relative px-6 md:px-10 pb-24">
