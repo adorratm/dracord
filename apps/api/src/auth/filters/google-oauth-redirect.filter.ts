@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { isAdminOAuthIntent } from '@/auth/admin-emails';
+import { isAdminOAuthIntent, isDesktopOAuthIntent } from '@/auth/admin-emails';
 
 /** After GoogleAuthGuard already redirected, swallow the follow-up 401. */
 @Catch(UnauthorizedException)
@@ -19,11 +19,13 @@ export class GoogleOAuthRedirectFilter implements ExceptionFilter {
     const req = ctx.getRequest<Request>();
 
     if (req.url?.includes('/auth/google') && !res.headersSent) {
-      const admin = isAdminOAuthIntent(req.query?.state ?? req.query?.intent);
+      const stateOrIntent = req.query?.state ?? req.query?.intent;
+      const admin = isAdminOAuthIntent(stateOrIntent);
+      const desktop = isDesktopOAuthIntent(stateOrIntent);
       const appBase = admin
         ? (this.config.get<string>('ADMIN_URL') ?? 'http://localhost:3001')
         : (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000');
-      const url = new URL('/login', appBase);
+      const url = new URL(desktop ? '/auth/desktop-done' : '/login', appBase);
       url.searchParams.set('error', admin ? 'admin_denied' : 'google_oauth');
       const msg =
         typeof exception.message === 'string' ? exception.message : 'failed';

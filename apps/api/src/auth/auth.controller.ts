@@ -132,16 +132,18 @@ export class AuthController {
         admin: adminIntent,
       });
       if (desktopIntent) {
-        const deep = new URL('dracord://oauth');
+        // Tarayıcıda dracord:// doğrudan redirect → sekme loading’de kalır.
+        // Önce web “desktop-done” sayfası; o deep link’i tetikler + sekmeyi kapatmayı söyler.
+        const done = new URL('/auth/desktop-done', appBase);
         if ('requires2fa' in result && result.requires2fa) {
-          deep.searchParams.set('challengeToken', result.challengeToken);
-          res.redirect(deep.toString());
+          done.searchParams.set('challengeToken', result.challengeToken);
+          res.redirect(done.toString());
           return;
         }
         this.setRefreshCookie(res, result.refreshToken);
-        deep.searchParams.set('accessToken', result.accessToken);
-        deep.searchParams.set('refreshToken', result.refreshToken);
-        res.redirect(deep.toString());
+        done.searchParams.set('accessToken', result.accessToken);
+        done.searchParams.set('refreshToken', result.refreshToken);
+        res.redirect(done.toString());
         return;
       }
       const redirectUrl = new URL('/auth/callback', appBase);
@@ -156,13 +158,13 @@ export class AuthController {
       res.redirect(redirectUrl.toString());
     } catch (err) {
       if (desktopIntent) {
-        const deep = new URL('dracord://oauth');
-        deep.searchParams.set('error', adminIntent ? 'admin_denied' : 'google_oauth');
-        deep.searchParams.set(
+        const done = new URL('/auth/desktop-done', appBase);
+        done.searchParams.set('error', adminIntent ? 'admin_denied' : 'google_oauth');
+        done.searchParams.set(
           'reason',
           err instanceof Error ? err.message.slice(0, 160) : 'callback_failed',
         );
-        res.redirect(deep.toString());
+        res.redirect(done.toString());
         return;
       }
       const url = new URL('/login', appBase);
