@@ -131,24 +131,33 @@ CI log’unda şuna benzer bir satır görürsen:
 
 `failed to extract layer … Lchown … typings.js.map … no such file or directory`
 
-Bu **uygulama bug’ı değil**; Hetzner’de containerd/overlayfs katman çıkarma yarışı veya yarım kalmış snapshot. Disk dolu değilse:
+Bu **uygulama bug’ı değil**; Hetzner’de containerd/overlayfs katman çıkarma yarışı. **Docker’ı restart etme** (tüm siteler iner). Önce:
 
 ```bash
-# SSH → sunucu
 cd /opt/dracord
 docker image rm -f ghcr.io/adorratm/dracord/api:<sha> || true
 docker image prune -f
-# Gerekirse (diğer siteleri kısa keser):
-sudo systemctl restart containerd docker
 ```
 
-Sonra GitHub Actions’ta deploy’u **Re-run**. `docker/pull-prebuilt.sh` artık birkaç kez retry eder.
-
-Sürekli tekrarlıyorsa: Docker/containerd sürümünü güncelle veya API imajını küçült (prod `node_modules` sadeleştirme).
+Sonra Actions **Re-run**. `docker/pull-prebuilt.sh` retry eder. Restart gerçekten şartsa hemen ardından §8.
 
 ---
 
-## 8. Hızlı komutlar
+## 8. Tüm siteler 521 / No vhost (acil recover)
+
+Paylaşılan `ttengamesstudio-nginx` + kardeş stack’ler:
+
+```bash
+sudo bash /opt/dracord/docker/recover-all-sites.sh
+```
+
+Script: nginx → DB → apps → hydrorage SSL (`/opt/ttengamesstudio/docker/ssl/hydrorage`) → template conf.d → upstream `hydrorage-nginx-1:80` → Dracord sync → smoke.
+
+**Not:** Docker restart sonrası conf.d boşalabilir; templates (`kiliccoffee`, `portfolio`, `hydrorage`, `dracord`) yeniden kopyalanır.
+
+---
+
+## 9. Hızlı komutlar
 
 ```bash
 # Desktop
