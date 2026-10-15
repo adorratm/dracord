@@ -56,8 +56,12 @@ export function GameHud({
       setFs(isElementFullscreen(el as HTMLElement | null));
     };
     document.addEventListener('fullscreenchange', onFs);
+    window.addEventListener('dracord-rn-fs', onFs);
     onFs();
-    return () => document.removeEventListener('fullscreenchange', onFs);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs);
+      window.removeEventListener('dracord-rn-fs', onFs);
+    };
   }, [fullscreenTargetRef]);
 
   const onToggleFs = useCallback(() => {

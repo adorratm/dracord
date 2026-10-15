@@ -141,6 +141,8 @@ export const SafeWebView = forwardRef<
     youtubeId?: string | null;
     youtubeStartAt?: number;
     onYoutubeMessage?: (msg: Record<string, unknown>) => void;
+    /** Genel WebView mesajları (oyun fullscreen vb.) */
+    onBridgeMessage?: (msg: Record<string, unknown>) => void;
     /** Ham HTML (oyun bootstrap vb.) — uri yerine */
     html?: string | null;
     baseUrl?: string;
@@ -153,6 +155,7 @@ export const SafeWebView = forwardRef<
     youtubeId,
     youtubeStartAt = 0,
     onYoutubeMessage,
+    onBridgeMessage,
     html,
     baseUrl,
   },
@@ -210,10 +213,10 @@ export const SafeWebView = forwardRef<
       thirdPartyCookiesEnabled
       originWhitelist={['*']}
       onMessage={(ev) => {
-        if (!onYoutubeMessage) return;
         try {
           const msg = JSON.parse(ev.nativeEvent.data) as Record<string, unknown>;
-          onYoutubeMessage(msg);
+          onBridgeMessage?.(msg);
+          onYoutubeMessage?.(msg);
         } catch {
           /* ignore */
         }

@@ -549,10 +549,10 @@ export function ActivityChannelView({
       <div
         className={
           className ??
-          'flex h-[100dvh] w-full flex-col overflow-hidden bg-[#11131e]'
+          'flex h-[100dvh] w-full flex-col overflow-hidden bg-[#11131e] [&:has([data-rn-fs])>header]:hidden'
         }
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#44307a]/50 px-3 py-2">
+        <header className="flex shrink-0 items-center gap-2 border-b border-[#44307a]/50 px-3 py-2">
           <span className="material-symbols-outlined text-[18px] text-[#bd93f9]">
             {kind ? KIND_ICON[kind] : 'sports_esports'}
           </span>
@@ -574,7 +574,7 @@ export function ActivityChannelView({
               Ayrıl
             </button>
           ) : null}
-        </div>
+        </header>
         {stage}
       </div>
     );

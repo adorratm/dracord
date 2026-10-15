@@ -51,6 +51,7 @@ export function ActivityRoom({
   const [busy, setBusy] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [gameLandscapeFs, setGameLandscapeFs] = useState(false);
 
   const browsingOther =
     Boolean(activityChannelId) && activityChannelId !== channel.id;
@@ -252,19 +253,25 @@ export function ActivityRoom({
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ActivityHeader
-        channelName={channel.name}
-        busy={busy}
-        onRefresh={() => void refresh()}
-        onChat={() => setShowChat(true)}
-      />
+    <View style={{ flex: 1, overflow: 'hidden' }}>
+      {!gameLandscapeFs ? (
+        <ActivityHeader
+          channelName={channel.name}
+          busy={busy}
+          onRefresh={() => void refresh()}
+          onChat={() => setShowChat(true)}
+        />
+      ) : null}
 
       {session.kind === 'watch_party' ? (
         <WatchPartyNative session={session} userId={user.id} onPatch={patch} />
       ) : (
         // Tavla / bilardo / bowling / okey / blackjack — web/desktop ile aynı Three.js
-        <GameWebEmbed guildId={guildId} channelId={channel.id} />
+        <GameWebEmbed
+          guildId={guildId}
+          channelId={channel.id}
+          onLandscapeFullscreenChange={setGameLandscapeFs}
+        />
       )}
     </View>
   );

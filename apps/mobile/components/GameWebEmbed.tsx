@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
@@ -24,19 +31,23 @@ location.replace(${JSON.stringify(targetPath)});
 
 /**
  * Web/desktop Three.js — `/embed/activity/...` (web deploy gerekir).
- * Deploy yoksa 404 → tarayıcı fallback metni.
+ * Tam ekran: RN WebView’da document.fullscreen yok → 90° yatay yerleşim (aynı WebView).
  */
 export function GameWebEmbed({
   guildId,
   channelId,
+  onLandscapeFullscreenChange,
 }: {
   guildId: string;
   channelId: string;
+  onLandscapeFullscreenChange?: (active: boolean) => void;
 }) {
   const { getSessionTokens } = useAuth();
   const [html, setHtml] = useState<string | null>(null);
   const [openUri, setOpenUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [landscapeFs, setLandscapeFs] = useState(false);
+  const [box, setBox] = useState({ w: 0, h: 0 });
   const hasNative = useMemo(() => isNativeWebViewAvailable(), []);
 
   useEffect(() => {
@@ -48,7 +59,6 @@ export function GameWebEmbed({
           if (!cancelled) setError('Oturum bulunamadı — yeniden giriş yapın');
           return;
         }
-        // Salt oyun kabuğu (sidebar yok) — web build’te /embed route gerekir
         const path = `${WEB_URL}/embed/activity/${guildId}/${channelId}`;
         const page = bootstrapHtml(path, tokens.accessToken, tokens.refreshToken);
         if (!cancelled) {
@@ -65,6 +75,25 @@ export function GameWebEmbed({
       cancelled = true;
     };
   }, [getSessionTokens, guildId, channelId]);
+
+  const onBridgeMessage = useCallback(
+    (msg: Record<string, unknown>) => {
+      if (msg.type !== 'dracord-game-fs') return;
+      const active = Boolean(msg.enter) && Boolean(msg.landscape ?? true);
+      setLandscapeFs(active);
+      onLandscapeFullscreenChange?.(active);
+    },
+    [onLandscapeFullscreenChange],
+  );
+
+  useEffect(() => {
+    return () => onLandscapeFullscreenChange?.(false);
+  }, [onLandscapeFullscreenChange]);
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+  }, []);
 
   if (error) {
     return (
@@ -118,15 +147,41 @@ export function GameWebEmbed({
     );
   }
 
+  const portrait = box.w > 0 && box.w < box.h;
+  const rotateLandscape = landscapeFs && portrait;
+  const shellStyle = rotateLandscape
+    ? {
+        position: 'absolute' as const,
+        width: box.h,
+        height: box.w,
+        top: (box.h - box.w) / 2,
+        left: (box.w - box.h) / 2,
+        transform: [{ rotate: '90deg' as const }],
+        backgroundColor: '#11131e',
+        overflow: 'hidden' as const,
+      }
+    : {
+        flex: 1,
+        backgroundColor: '#11131e',
+        overflow: 'hidden' as const,
+      };
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#11131e' }} collapsable={false}>
-      <SafeWebView
-        uri={openUri}
-        html={html}
-        baseUrl={WEB_URL}
-        label="Oyun"
-        style={{ flex: 1, backgroundColor: '#11131e' }}
-      />
+    <View
+      style={{ flex: 1, backgroundColor: '#11131e', overflow: 'hidden' }}
+      collapsable={false}
+      onLayout={onLayout}
+    >
+      <View style={shellStyle} collapsable={false}>
+        <SafeWebView
+          uri={openUri}
+          html={html}
+          baseUrl={WEB_URL}
+          label="Oyun"
+          onBridgeMessage={onBridgeMessage}
+          style={{ flex: 1, width: '100%', height: '100%', backgroundColor: '#11131e' }}
+        />
+      </View>
     </View>
   );
 }

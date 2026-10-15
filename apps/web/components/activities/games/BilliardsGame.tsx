@@ -178,33 +178,44 @@ export function BilliardsGame(props: GameProps) {
       const w = Math.max(1, el.clientWidth);
       const h = Math.max(1, el.clientHeight);
       const aspect = w / h;
-      const halfW = 5.9;
-      const halfD = 3.4;
+      // Masa + banlar (~11.3 × 6.3) + kenar payı
+      const halfW = 6.15;
+      const halfD = 3.55;
+      const margin = 1.08;
       let fov = 48;
       let elev = 9.2;
       let zOff = 5.8;
-      if (aspect < 0.75) {
-        fov = 62;
-        elev = 12.4;
-        zOff = 0.05;
+      if (aspect < 0.72) {
+        // Dik telefon: neredeyse üstten bak; FOV tavanı yetmezse kamerayı uzaklaştır
+        fov = 52;
+        elev = 16;
+        zOff = 0.12;
       } else if (aspect < 1.05) {
-        fov = 54;
-        elev = 10.6;
-        zOff = 3.2;
+        fov = 50;
+        elev = 11.2;
+        zOff = 3.4;
       }
-      camera.fov = fov;
       camera.aspect = aspect;
-      camera.position.set(0, elev, zOff);
-      camera.lookAt(0, 0, 0);
-      camera.updateProjectionMatrix();
-      const vFov = (camera.fov * Math.PI) / 180;
-      const dist = camera.position.length();
-      const visibleH = 2 * Math.tan(vFov / 2) * dist;
-      const visibleW = visibleH * aspect;
-      const need = Math.max((halfD * 2) / visibleH, (halfW * 2) / visibleW);
-      if (need > 0.92) {
-        camera.fov = Math.min(72, camera.fov * need * 1.08);
+      for (let i = 0; i < 14; i++) {
+        camera.fov = fov;
+        camera.position.set(0, elev, zOff);
+        camera.lookAt(0, 0, 0);
         camera.updateProjectionMatrix();
+        const dist = camera.position.length();
+        const vFov = (camera.fov * Math.PI) / 180;
+        const visibleH = 2 * Math.tan(vFov / 2) * dist;
+        const visibleW = visibleH * aspect;
+        const need = Math.max(
+          (halfD * 2 * margin) / visibleH,
+          (halfW * 2 * margin) / visibleW,
+        );
+        if (need <= 1) break;
+        if (fov < 68) {
+          fov = Math.min(68, fov * Math.sqrt(need));
+        } else {
+          elev *= need;
+          zOff *= need;
+        }
       }
     };
     fitCamera();
