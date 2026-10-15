@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import type { PresenceStatus, PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
+import { presenceLabelTr } from '../../lib/presence';
 import { Icon } from '../Icon';
 import { UserAvatar } from '../UserAvatar';
 
+/** Seçicide OFFLINE = görünmez; listelerde Çevrimdışı */
 const STATUSES: Array<{ id: PresenceStatus; label: string }> = [
   { id: 'ONLINE', label: 'Çevrimiçi' },
   { id: 'IDLE', label: 'Boşta' },
@@ -55,9 +57,7 @@ export function UserPanel({
             {user?.displayName ?? 'Kullanıcı'}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-            {user?.customStatus?.trim() ||
-              STATUSES.find((s) => s.id === status)?.label ||
-              `@${user?.username ?? ''}`}
+            {presenceLabelTr(status, user?.customStatus) || `@${user?.username ?? ''}`}
           </Text>
         </View>
         <Pressable onPress={onOpenSettings} hitSlop={8} style={{ padding: 6 }}>

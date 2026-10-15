@@ -15,6 +15,7 @@ import { colors } from '@dracord/app-theme';
 import { UserAvatar } from '../UserAvatar';
 import { useElapsedLabel } from '../../lib/formatElapsed';
 import { resolveMediaUrl } from '../../lib/mediaUrl';
+import { normalizePresence, presenceLabelTr } from '../../lib/presence';
 
 export type ProfileAction = {
   id: string;
@@ -38,7 +39,7 @@ export function ProfileSheet({
 }) {
   const elapsed = useElapsedLabel(joinedAt);
   if (!user) return null;
-  const st = user.status ?? 'OFFLINE';
+  const st = normalizePresence(user.status);
   const primary = actions.filter((a) => !a.danger);
   const danger = actions.filter((a) => a.danger);
 
@@ -86,13 +87,13 @@ export function ProfileSheet({
               {user.displayName}
             </Text>
             <Text style={{ color: colors.textMuted }}>@{user.username}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
+              {presenceLabelTr(st, user.customStatus)}
+            </Text>
             {elapsed ? (
               <Text style={{ color: colors.primary, fontSize: 12, marginTop: 4, fontWeight: '700' }}>
                 Seste · {elapsed}
               </Text>
-            ) : null}
-            {user.customStatus ? (
-              <Text style={{ color: colors.textMuted, marginTop: 6 }}>{user.customStatus}</Text>
             ) : null}
             {user.bio ? (
               <Text style={{ color: colors.text, lineHeight: 20, marginTop: 10 }}>{user.bio}</Text>

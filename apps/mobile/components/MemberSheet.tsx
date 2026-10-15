@@ -1,6 +1,7 @@
 import { FlatList, Modal, Pressable, Text, View } from 'react-native';
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
+import { isOnlinePresence, normalizePresence, presenceLabelTr } from '../lib/presence';
 import { UserAvatar } from './UserAvatar';
 import { Icon } from './Icon';
 
@@ -19,8 +20,8 @@ export function MemberSheet({
   onSelectMember?: (user: PublicUser) => void;
   onMemberLongPress?: (user: PublicUser) => void;
 }) {
-  const online = members.filter((m) => m.status && m.status !== 'OFFLINE');
-  const offline = members.filter((m) => !m.status || m.status === 'OFFLINE');
+  const online = members.filter((m) => isOnlinePresence(m.status));
+  const offline = members.filter((m) => !isOnlinePresence(m.status));
   const sections = [
     { key: 'on', label: `Çevrimiçi — ${online.length}`, data: online },
     { key: 'off', label: `Çevrimdışı — ${offline.length}`, data: offline },
@@ -102,7 +103,9 @@ function MemberRow({
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
-  const st = user.status ?? 'OFFLINE';
+  const st = normalizePresence(user.status);
+  const offline = st === 'OFFLINE';
+  const subtitle = presenceLabelTr(st, user.customStatus);
   return (
     <Pressable
       onPress={onPress}
@@ -115,17 +118,17 @@ function MemberRow({
         gap: 10,
         paddingHorizontal: 16,
         paddingVertical: 8,
+        opacity: offline ? 0.72 : 1,
       }}
     >
       <UserAvatar displayName={user.displayName} imageUrl={user.avatarUrl} size={36} status={st} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontWeight: '600' }}>{user.displayName}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>@{user.username}</Text>
-        {user.customStatus ? (
-          <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-            {user.customStatus}
-          </Text>
-        ) : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+          {user.displayName}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+          {subtitle}
+        </Text>
       </View>
       {user.isBot ? (
         <Text

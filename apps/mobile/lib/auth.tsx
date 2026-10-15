@@ -13,9 +13,18 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DracordClient } from '@dracord/sdk';
-import type { AuthTokens, PublicUser } from '@dracord/types';
+import type { AuthTokens, PresenceStatus, PublicUser } from '@dracord/types';
+import { SocketEvents } from '@dracord/types';
 import { API_URL } from './config';
 import { syncStickersWithCloud } from './sticker-sync';
+
+/** Socket açıkken API’nin stale OFFLINE’ını ONLINE say (web AuthProvider parity) */
+function liveSelfStatus(me: PublicUser, socketConnected: boolean): PublicUser {
+  if (socketConnected && me.status === 'OFFLINE') {
+    return { ...me, status: 'ONLINE' };
+  }
+  return me;
+}
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -115,8 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       client.setToken(access);
       try {
         const me = await client.getMe();
-        setUser(me);
-        client.connectSocket();
+        const sock = client.connectSocket();
+        setUser(liveSelfStatus(me, Boolean(sock.connected)));
       } catch {
         await SecureStore.deleteItemAsync(ACCESS_KEY);
         await SecureStore.deleteItemAsync(REFRESH_KEY);
@@ -127,6 +136,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [client]);
+
+  // Presence — bağlanınca ONLINE; kendi OFFLINE event’ini yok say (reconnect race)
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    const userId = user.id;
+    const sock = client.connectSocket();
+    const onPresence = (payload: {
+      userId: string;
+      status: PresenceStatus;
+      customStatus?: string | null;
+    }) => {
+      if (payload.userId !== userId) return;
+      if (payload.status === 'OFFLINE') return;
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: payload.status,
+              customStatus:
+                payload.customStatus !== undefined
+                  ? payload.customStatus
+                  : prev.customStatus,
+            }
+          : prev,
+      );
+    };
+    const onConnect = () => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        if (prev.status === 'IDLE' || prev.status === 'DND') return prev;
+        return { ...prev, status: 'ONLINE' };
+      });
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on('connect', onConnect);
+    if (sock.connected) onConnect();
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off('connect', onConnect);
+    };
+  }, [ready, user?.id, client]);
 
   useEffect(() => {
     const onUrl = ({ url }: { url: string }) => {
@@ -156,7 +206,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const me = await client.getMe();
-      setUser(me);
+      setUser((prev) => {
+        const connected = Boolean(client.socket?.connected);
+        if (
+          connected &&
+          me.status === 'OFFLINE' &&
+          prev &&
+          (prev.status === 'ONLINE' || prev.status === 'IDLE' || prev.status === 'DND')
+        ) {
+          return {
+            ...me,
+            status: prev.status,
+            customStatus: prev.customStatus ?? me.customStatus,
+          };
+        }
+        return liveSelfStatus(me, connected);
+      });
       return me;
     } catch {
       return null;

@@ -607,6 +607,36 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     };
   }, [client, guildId]);
 
+  // Üye presence — çevrimiçi/çevrimdışı anlık
+  useEffect(() => {
+    const sock = client.connectSocket();
+    const onPresence = (payload: {
+      userId: string;
+      status: PresenceStatus;
+      customStatus?: string | null;
+    }) => {
+      setMembers((prev) => {
+        if (!prev.some((m) => m.id === payload.userId)) return prev;
+        return prev.map((m) =>
+          m.id === payload.userId
+            ? {
+                ...m,
+                status: payload.status,
+                customStatus:
+                  payload.customStatus !== undefined
+                    ? payload.customStatus
+                    : m.customStatus,
+              }
+            : m,
+        );
+      });
+    };
+    sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    return () => {
+      sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+    };
+  }, [client]);
+
   // Aktivite üye listesi — overlay’de oyun/watch party katılımcıları
   useEffect(() => {
     const aid = activity?.activityChannelId;

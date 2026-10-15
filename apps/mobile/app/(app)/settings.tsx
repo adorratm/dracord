@@ -141,7 +141,7 @@ const STATUS_OPTIONS: { value: PresenceStatus; label: string }[] = [
   { value: 'ONLINE', label: 'Çevrimiçi' },
   { value: 'IDLE', label: 'Boşta' },
   { value: 'DND', label: 'Rahatsız etme' },
-  { value: 'OFFLINE', label: 'Görünmez' },
+  { value: 'OFFLINE', label: 'Görünmez (başkalarına çevrimdışı)' },
 ];
 
 export default function SettingsScreen() {

@@ -10,6 +10,7 @@ import {
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
+import { normalizePresence, presenceLabelTr } from '../lib/presence';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 import { UserAvatar } from './UserAvatar';
 
@@ -250,14 +251,14 @@ function UserRow({ user, actions }: { user: PublicUser; actions: ReactNode }) {
         displayName={user.displayName}
         imageUrl={user.avatarUrl}
         size={40}
-        status={user.status ?? 'OFFLINE'}
+        status={normalizePresence(user.status)}
       />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
           {user.displayName}
         </Text>
         <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-          @{user.username}
+          {presenceLabelTr(user.status, user.customStatus)}
         </Text>
       </View>
       {actions}
