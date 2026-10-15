@@ -6,6 +6,8 @@ export function ServerMenu({
   open,
   serverName,
   onClose,
+  onFavorite,
+  favorite,
   onInvite,
   onEvents,
   onBoost,
@@ -15,6 +17,8 @@ export function ServerMenu({
   open: boolean;
   serverName: string;
   onClose: () => void;
+  onFavorite?: () => void;
+  favorite?: boolean;
   onInvite?: () => void;
   onEvents?: () => void;
   onBoost?: () => void;
@@ -48,6 +52,13 @@ export function ServerMenu({
           >
             {serverName}
           </Text>
+          {onFavorite ? (
+            <MenuItem
+              icon="star"
+              label={favorite ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+              onPress={onFavorite}
+            />
+          ) : null}
           {onInvite ? (
             <MenuItem icon="person_add" label="Davet oluştur" onPress={onInvite} />
           ) : null}

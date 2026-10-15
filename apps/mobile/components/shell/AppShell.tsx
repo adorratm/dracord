@@ -116,12 +116,61 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [extrasTab, setExtrasTab] = useState<'events' | 'boost'>('events');
+  const [favoriteGuildIds, setFavoriteGuildIds] = useState<string[]>([]);
+  const [guildOrderIds, setGuildOrderIds] = useState<string[]>([]);
 
   const reloadGuilds = useCallback(async () => {
     const g = await client.listGuilds();
     setGuilds(g);
     return g;
   }, [client]);
+
+  useEffect(() => {
+    if (!user) return;
+    void client
+      .getClientSettings()
+      .then((s) => {
+        setFavoriteGuildIds(s.appearance?.favoriteGuildIds ?? []);
+        setGuildOrderIds(s.appearance?.guildOrderIds ?? []);
+      })
+      .catch(() => undefined);
+  }, [client, user?.id]);
+
+  const railGuilds = useMemo(() => {
+    const favSet = new Set(favoriteGuildIds);
+    const byId = new Map(guilds.map((g) => [g.id, g]));
+    const ordered: GuildSummary[] = [];
+    for (const id of guildOrderIds) {
+      const g = byId.get(id);
+      if (g) {
+        ordered.push(g);
+        byId.delete(id);
+      }
+    }
+    for (const g of byId.values()) ordered.push(g);
+    return ordered.map((g) => ({ ...g, favorite: favSet.has(g.id) }));
+  }, [guilds, favoriteGuildIds, guildOrderIds]);
+
+  const toggleFavoriteGuild = useCallback(
+    (id: string) => {
+      const isFav = favoriteGuildIds.includes(id);
+      const next = isFav
+        ? favoriteGuildIds.filter((x) => x !== id)
+        : [...favoriteGuildIds, id];
+      setFavoriteGuildIds(next);
+      void client
+        .getClientSettings()
+        .then((s) =>
+          client.updateClientSettings({
+            appearance: { ...s.appearance, favoriteGuildIds: next },
+          }),
+        )
+        .catch(() => {
+          setFavoriteGuildIds(favoriteGuildIds);
+        });
+    },
+    [client, favoriteGuildIds],
+  );
 
   const refreshMembers = useCallback(async () => {
     if (!guildId) {
@@ -784,11 +833,27 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       >
         <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
           <ServerRail
-            guilds={guilds}
+            guilds={railGuilds}
             activeGuildId={guildId}
             homeActive={mode === 'home'}
             onHome={goHome}
             onSelectGuild={(id) => void selectGuild(id, { openFirst: false })}
+            onToggleFavorite={(id) => {
+              const isFav = favoriteGuildIds.includes(id);
+              Alert.alert(
+                isFav ? 'Favorilerden çıkar' : 'Favorilere ekle',
+                isFav
+                  ? 'Bu sunucu favorilerden kaldırılsın mı?'
+                  : 'Bu sunucu favorilere eklensin mi?',
+                [
+                  { text: 'İptal', style: 'cancel' },
+                  {
+                    text: isFav ? 'Çıkar' : 'Ekle',
+                    onPress: () => toggleFavoriteGuild(id),
+                  },
+                ],
+              );
+            }}
             onCreate={() => {
               closeNav();
               setCreateOpen(true);
@@ -896,6 +961,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         open={serverMenuOpen}
         serverName={activeGuild?.name ?? 'Sunucu'}
         onClose={() => setServerMenuOpen(false)}
+        favorite={Boolean(guildId && favoriteGuildIds.includes(guildId))}
+        onFavorite={() => {
+          if (!guildId) return;
+          setServerMenuOpen(false);
+          toggleFavoriteGuild(guildId);
+        }}
         onInvite={createInvite}
         onEvents={() => {
           setServerMenuOpen(false);
