@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   setSystemPrefs: (prefs) => {
     ipcRenderer.send('system-prefs', prefs);
   },
+  /** Google OAuth vb. — sistem tarayıcısında aç (uygulama içi navigasyon session’ı bozar) */
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getDesktopSources: () => ipcRenderer.invoke('desktop-capturer:get-sources'),
   setDisplayMediaSelection: (selection) =>
     ipcRenderer.invoke('desktop-capturer:set-selection', selection),

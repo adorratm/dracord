@@ -377,6 +377,14 @@ function createWindow() {
 
   loadUi(mainWindow);
 
+  // Uygulama içi <a target=_blank> / window.open → sistem tarayıcısı
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
   // Renderer crash / blank screen teşhisi (DRACORD_DEBUG=1)
   if (process.env.DRACORD_DEBUG === '1') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -415,6 +423,28 @@ function registerProtocol() {
 }
 
 function registerWindowIpc() {
+  ipcMain.handle('shell:open-external', async (_event, rawUrl) => {
+    if (typeof rawUrl !== 'string' || rawUrl.length > 2048) {
+      return { ok: false, error: 'invalid_url' };
+    }
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return { ok: false, error: 'invalid_url' };
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return { ok: false, error: 'protocol' };
+    }
+    try {
+      await shell.openExternal(parsed.toString());
+      return { ok: true };
+    } catch (err) {
+      console.warn('[shell:open-external]', err);
+      return { ok: false, error: 'open_failed' };
+    }
+  });
+
   ipcMain.on('window-minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     win?.minimize();

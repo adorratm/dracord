@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../auth';
 import { Draco } from '../components/Draco';
 
 export function LoginPage() {
-  const { loginGoogle } = useAuth();
+  const { loginGoogle, loginHint } = useAuth();
+  const [busy, setBusy] = useState(false);
 
   return (
     <div
@@ -46,7 +48,11 @@ export function LoginPage() {
 
         <button
           type="button"
-          onClick={loginGoogle}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void loginGoogle().finally(() => setBusy(false));
+          }}
           style={{
             width: '100%',
             height: 48,
@@ -55,7 +61,8 @@ export function LoginPage() {
             background: colors.surfaceHigh,
             color: colors.text,
             fontWeight: 700,
-            cursor: 'pointer',
+            cursor: busy ? 'wait' : 'pointer',
+            opacity: busy ? 0.75 : 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -64,8 +71,14 @@ export function LoginPage() {
           }}
         >
           <GoogleIcon />
-          Google ile giriş yap
+          {busy ? 'Açılıyor…' : 'Google ile giriş yap'}
         </button>
+
+        {loginHint ? (
+          <p style={{ margin: 0, color: colors.success, fontSize: 13, maxWidth: 320, lineHeight: 1.4 }}>
+            {loginHint}
+          </p>
+        ) : null}
 
         <p style={{ margin: 0, color: colors.outline, fontSize: 12, maxWidth: 280 }}>
           Devam ederek Hizmet Şartları ve Gizlilik Politikası’nı kabul etmiş olursun.

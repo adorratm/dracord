@@ -24,7 +24,8 @@ type AuthCtx = {
   client: DracordClient;
   user: PublicUser | null;
   ready: boolean;
-  loginGoogle: () => void;
+  loginGoogle: () => Promise<void>;
+  loginHint: string | null;
   logout: () => void;
   setSession: (tokens: AuthTokens, user: PublicUser) => void;
   refreshUser: () => Promise<PublicUser | null>;
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useMemo(() => new DracordClient(API_URL), []);
   const [user, setUser] = useState<PublicUser | null>(null);
   const [ready, setReady] = useState(false);
+  const [loginHint, setLoginHint] = useState<string | null>(null);
 
   const setSession = useCallback(
     (tokens: AuthTokens, nextUser: PublicUser) => {
@@ -82,8 +84,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setReady(true));
   }, [client]);
 
-  const loginGoogle = useCallback(() => {
-    window.location.href = client.getGoogleLoginUrl('desktop');
+  const loginGoogle = useCallback(async () => {
+    const url = client.getGoogleLoginUrl('desktop');
+    const openExternal = window.dracordDesktop?.openExternal;
+    if (openExternal) {
+      setLoginHint('Tarayıcıda Google açılıyor — girişten sonra uygulamaya döneceksin…');
+      const res = await openExternal(url);
+      if (!res?.ok) {
+        setLoginHint(
+          'Tarayıcı açılamadı. Varsayılan tarayıcıyı kontrol et veya tekrar dene.',
+        );
+      }
+      return;
+    }
+    // Web / Electron preload yok: aynı pencerede devam
+    window.location.href = url;
   }, [client]);
 
   const logout = useCallback(() => {
@@ -178,13 +193,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      loginHint,
       logout,
       setSession,
       refreshUser,
       setUser,
       updatePresence,
     }),
-    [client, user, ready, loginGoogle, logout, setSession, refreshUser, updatePresence],
+    [
+      client,
+      user,
+      ready,
+      loginGoogle,
+      loginHint,
+      logout,
+      setSession,
+      refreshUser,
+      updatePresence,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
