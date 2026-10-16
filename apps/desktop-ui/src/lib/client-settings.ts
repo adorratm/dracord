@@ -154,3 +154,17 @@ export function saveLocalPrefs(prefs: ClientSettings) {
   localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
   applyPrefsDom(prefs);
 }
+
+/** Electron main: başlangıçta aç + tepsi — OS login item / autostart */
+export function syncDesktopSystemPrefs(
+  system: Pick<ClientSettings['system'], 'openOnStartup' | 'minimizeToTray'>,
+) {
+  const api = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+  if (!api?.setSystemPrefs) return;
+  void Promise.resolve(
+    api.setSystemPrefs({
+      openOnStartup: Boolean(system.openOnStartup),
+      minimizeToTray: Boolean(system.minimizeToTray),
+    }),
+  ).catch(() => undefined);
+}

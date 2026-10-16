@@ -13,9 +13,25 @@ type DracordDesktopDealerTtsResult =
   | { ok: true; base64: string; mime: string; voice?: string }
   | { ok: false; error: string };
 
+type DracordDesktopSystemPrefs = {
+  openOnStartup?: boolean;
+  minimizeToTray?: boolean;
+};
+
+type DracordDesktopSystemPrefsResult = {
+  ok?: boolean;
+  openOnStartup?: boolean;
+  minimizeToTray?: boolean;
+  openAtLoginApplied?: boolean;
+  error?: string;
+};
+
 type DracordDesktopApi = {
   isElectron: true;
-  setSystemPrefs: (prefs: { openOnStartup?: boolean; minimizeToTray?: boolean }) => void;
+  setSystemPrefs: (
+    prefs: DracordDesktopSystemPrefs,
+  ) => void | Promise<DracordDesktopSystemPrefsResult>;
+  getSystemPrefs?: () => Promise<DracordDesktopSystemPrefsResult>;
   openExternal?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   openOAuth?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   getDesktopSources: () => Promise<DracordDesktopCaptureSource[]>;

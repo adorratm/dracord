@@ -210,6 +210,141 @@ let tray = null;
 /** @type {boolean} */
 let trayEnabled = true;
 
+function systemPrefsFile() {
+  return path.join(app.getPath('userData'), 'system-prefs.json');
+}
+
+function readStoredSystemPrefs() {
+  try {
+    const raw = fs.readFileSync(systemPrefsFile(), 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      openOnStartup: Boolean(parsed.openOnStartup),
+      minimizeToTray:
+        parsed.minimizeToTray === undefined ? true : Boolean(parsed.minimizeToTray),
+    };
+  } catch {
+    return { openOnStartup: false, minimizeToTray: true };
+  }
+}
+
+function writeStoredSystemPrefs(prefs) {
+  try {
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.writeFileSync(systemPrefsFile(), JSON.stringify(prefs, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[system-prefs] write', err);
+  }
+}
+
+function quoteDesktopExecArg(p) {
+  if (!/[\s"]/.test(p)) return p;
+  return `"${String(p).replace(/"/g, '\\"')}"`;
+}
+
+/** Windows: paket yolu; Linux: ~/.config/autostart; macOS: login items */
+function loginItemLaunchOptions() {
+  if (process.platform !== 'win32') return {};
+  if (app.isPackaged) {
+    return { path: process.execPath, args: [] };
+  }
+  // Dev: electron.exe + apps/desktop dizini
+  return { path: process.execPath, args: [path.resolve(__dirname)] };
+}
+
+function linuxAutostartPath() {
+  const home = app.getPath('home');
+  return path.join(home, '.config', 'autostart', 'dracord.desktop');
+}
+
+function applyLinuxAutostart(enabled) {
+  const desktopPath = linuxAutostartPath();
+  if (!enabled) {
+    try {
+      fs.unlinkSync(desktopPath);
+    } catch {
+      /* yoksa sorun değil */
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(desktopPath), { recursive: true });
+  const exec = app.isPackaged
+    ? quoteDesktopExecArg(process.execPath)
+    : `${quoteDesktopExecArg(process.execPath)} ${quoteDesktopExecArg(path.resolve(__dirname))}`;
+  const iconCandidate = path.join(__dirname, 'build', 'icon.png');
+  const iconLine = fs.existsSync(iconCandidate) ? `Icon=${iconCandidate}\n` : '';
+  fs.writeFileSync(
+    desktopPath,
+    `[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Dracord
+Comment=Dracord
+Exec=${exec}
+${iconLine}Terminal=false
+Categories=Network;InstantMessaging;
+X-GNOME-Autostart-enabled=true
+StartupNotify=false
+`,
+    'utf8',
+  );
+}
+
+function applyOpenAtLogin(enabled) {
+  const on = Boolean(enabled);
+  if (process.platform === 'linux') {
+    applyLinuxAutostart(on);
+    return;
+  }
+  // macOS + Windows
+  const launch = loginItemLaunchOptions();
+  app.setLoginItemSettings({
+    openAtLogin: on,
+    openAsHidden: false,
+    enabled: true,
+    name: 'Dracord',
+    ...launch,
+  });
+}
+
+function isOpenAtLoginEnabled() {
+  if (process.platform === 'linux') {
+    return fs.existsSync(linuxAutostartPath());
+  }
+  try {
+    const launch = loginItemLaunchOptions();
+    const s = app.getLoginItemSettings(launch);
+    return Boolean(s.openAtLogin || s.executableWillLaunchAtLogin);
+  } catch {
+    return readStoredSystemPrefs().openOnStartup;
+  }
+}
+
+function applySystemPrefs(partial = {}) {
+  const current = readStoredSystemPrefs();
+  const next = {
+    openOnStartup:
+      partial.openOnStartup !== undefined
+        ? Boolean(partial.openOnStartup)
+        : current.openOnStartup,
+    minimizeToTray:
+      partial.minimizeToTray !== undefined
+        ? Boolean(partial.minimizeToTray)
+        : current.minimizeToTray,
+  };
+  writeStoredSystemPrefs(next);
+  trayEnabled = next.minimizeToTray;
+  try {
+    applyOpenAtLogin(next.openOnStartup);
+  } catch (err) {
+    console.warn('[system-prefs] openAtLogin', err);
+  }
+  return {
+    ...next,
+    openAtLoginApplied: isOpenAtLoginEnabled(),
+  };
+}
+
 function resolveAppIconPath() {
   const candidates = [
     path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
@@ -592,17 +727,26 @@ function registerWindowIpc() {
     }
   });
 
+  // Eski send API (geriye dönük)
   ipcMain.on('system-prefs', (_event, prefs) => {
     if (!prefs || typeof prefs !== 'object') return;
-    try {
-      app.setLoginItemSettings({
-        openAtLogin: Boolean(prefs.openOnStartup),
-        openAsHidden: false,
-      });
-    } catch {
-      // platform desteklemeyebilir
+    applySystemPrefs(prefs);
+  });
+
+  ipcMain.handle('system-prefs:set', (_event, prefs) => {
+    if (!prefs || typeof prefs !== 'object') {
+      return { ok: false, error: 'invalid' };
     }
-    trayEnabled = Boolean(prefs.minimizeToTray);
+    const applied = applySystemPrefs(prefs);
+    return { ok: true, ...applied };
+  });
+
+  ipcMain.handle('system-prefs:get', () => {
+    const stored = readStoredSystemPrefs();
+    return {
+      ...stored,
+      openAtLoginApplied: isOpenAtLoginEnabled(),
+    };
   });
 }
 
@@ -636,6 +780,14 @@ if (!gotLock) {
   app.whenReady().then(() => {
     if (process.platform === 'win32') {
       app.setAppUserModelId('com.dracord.desktop');
+    }
+    // Kayıtlı “başlangıçta aç” tercihini OS’e yeniden uygula
+    try {
+      const stored = readStoredSystemPrefs();
+      trayEnabled = stored.minimizeToTray;
+      applyOpenAtLogin(stored.openOnStartup);
+    } catch (err) {
+      console.warn('[system-prefs] boot', err);
     }
     registerApiOriginBridge();
     registerMediaCaptureHandlers();

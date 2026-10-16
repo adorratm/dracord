@@ -29,6 +29,7 @@ import {
   loadLocalPrefs,
   mergeClientSettings,
   saveLocalPrefs,
+  syncDesktopSystemPrefs,
 } from '../lib/client-settings';
 import { readGuildLastChannel, readLastChannel, rememberChannel } from '../lib/lastChannel';
 import { useVoiceSession } from '../voice/VoiceSession';
@@ -255,6 +256,7 @@ export function Shell() {
         const merged = mergeClientSettings(remote as unknown as Record<string, unknown>);
         setPrefs(merged);
         saveLocalPrefs(merged);
+        syncDesktopSystemPrefs(merged.system);
       })
       .catch(() => undefined);
   }, [client, user?.id]);

@@ -9,9 +9,9 @@ contextBridge.exposeInMainWorld('windowControls', {
 
 contextBridge.exposeInMainWorld('dracordDesktop', {
   isElectron: true,
-  setSystemPrefs: (prefs) => {
-    ipcRenderer.send('system-prefs', prefs);
-  },
+  /** OS başlangıç / tepsi tercihlerini main process’e uygula */
+  setSystemPrefs: (prefs) => ipcRenderer.invoke('system-prefs:set', prefs),
+  getSystemPrefs: () => ipcRenderer.invoke('system-prefs:get'),
   /** Genel harici link */
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   /** Google OAuth — kapatılabilir Electron penceresi (sistem sekmesi kapanmaz) */

@@ -33,6 +33,7 @@ import {
   loadLocalPrefs,
   saveLocalPrefs,
   mergeClientSettings,
+  syncDesktopSystemPrefs,
 } from '../lib/client-settings';
 import {
   SettingsNote,
@@ -232,9 +233,11 @@ export function SettingsPage({
         const merged = mergeClientSettings(remote as unknown as Record<string, unknown>);
         setPrefs(merged);
         saveLocalPrefs(merged);
+        syncDesktopSystemPrefs(merged.system);
       })
       .catch(() => {
         /* yerel prefs yeterli */
+        syncDesktopSystemPrefs(loadLocalPrefs().system);
       });
   }, [client]);
 
@@ -247,6 +250,9 @@ export function SettingsPage({
         } as ClientSettings;
         saveLocalPrefs(next);
         void client.updateClientSettings({ [key]: next[key] } as Partial<ClientSettings>).catch(() => {});
+        if (key === 'system') {
+          syncDesktopSystemPrefs(next.system);
+        }
         return next;
       });
     },
@@ -1807,12 +1813,9 @@ export function SettingsPage({
           <SettingsSection>
             <SettingsToggle
               label="Başlangıçta aç"
-              description="İşletim sistemi açılışında Dracord başlar."
+              description="İşletim sistemi açılışında Dracord başlar (Windows / macOS / Linux)."
               checked={prefs.system.openOnStartup}
-              onChange={(v) => {
-                setSection('system', { openOnStartup: v });
-                localStorage.setItem('dracord.desktop.startup', v ? '1' : '0');
-              }}
+              onChange={(v) => setSection('system', { openOnStartup: v })}
             />
             <SettingsToggle
               label="Donanım hızlandırma"
