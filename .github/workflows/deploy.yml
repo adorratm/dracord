@@ -53,9 +53,9 @@ jobs:
               NEXT_PUBLIC_API_URL=https://api.dracord.com.tr
               NEXT_PUBLIC_LIVEKIT_URL=wss://rtc.dracord.com.tr
               NEXT_PUBLIC_SITE_URL=https://dracord.com.tr
-              NEXT_PUBLIC_DOWNLOAD_WINDOWS=https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0/Dracord-Setup-0.1.0.exe
-              NEXT_PUBLIC_DOWNLOAD_LINUX=https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0/Dracord-0.1.0-linux.AppImage
-              NEXT_PUBLIC_DOWNLOAD_MACOS=https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0/Dracord-0.1.0-mac.dmg
+              NEXT_PUBLIC_DOWNLOAD_WINDOWS=https://github.com/adorratm/dracord/releases/latest/download/Dracord-Setup-Windows.exe
+              NEXT_PUBLIC_DOWNLOAD_LINUX=https://github.com/adorratm/dracord/releases/latest/download/Dracord-linux.AppImage
+              NEXT_PUBLIC_DOWNLOAD_MACOS=https://github.com/adorratm/dracord/releases/latest/download/Dracord-mac.dmg
               NEXT_PUBLIC_DOWNLOAD_PLAY=https://play.google.com/store/apps/details?id=com.dracord.mobile
               NEXT_PUBLIC_DOWNLOAD_IOS=
           - service: admin

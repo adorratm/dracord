@@ -17,7 +17,12 @@ function downloadHref(envValue: string | undefined, fallback = ''): string {
   return v || fallback;
 }
 
-const RELEASE = 'https://github.com/adorratm/dracord/releases/download/desktop-v0.1.0';
+/**
+ * Sürümsüz dosya adları + GitHub “latest” — .env her release’te değişmez.
+ * Artifact adları apps/desktop package.json build.artifactName ile uyumlu olmalı.
+ */
+const LATEST =
+  'https://github.com/adorratm/dracord/releases/latest/download';
 
 export const DOWNLOADS: DownloadItem[] = [
   {
@@ -42,7 +47,7 @@ export const DOWNLOADS: DownloadItem[] = [
     icon: 'desktop_windows',
     href: downloadHref(
       process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS,
-      `${RELEASE}/Dracord-Setup-0.1.0.exe`,
+      `${LATEST}/Dracord-Setup-Windows.exe`,
     ),
     warnBeforeDownload: 'windows-unsigned',
   },
@@ -52,7 +57,7 @@ export const DOWNLOADS: DownloadItem[] = [
     icon: 'terminal',
     href: downloadHref(
       process.env.NEXT_PUBLIC_DOWNLOAD_LINUX,
-      `${RELEASE}/Dracord-0.1.0-linux.AppImage`,
+      `${LATEST}/Dracord-linux.AppImage`,
     ),
   },
   {
@@ -61,7 +66,7 @@ export const DOWNLOADS: DownloadItem[] = [
     icon: 'laptop_mac',
     href: downloadHref(
       process.env.NEXT_PUBLIC_DOWNLOAD_MACOS,
-      `${RELEASE}/Dracord-0.1.0-mac.dmg`,
+      `${LATEST}/Dracord-mac.dmg`,
     ),
   },
 ];

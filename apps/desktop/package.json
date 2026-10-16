@@ -74,7 +74,7 @@
           ]
         }
       ],
-      "artifactName": "Dracord-Setup-${version}.${ext}",
+      "artifactName": "Dracord-Setup-Windows.${ext}",
       "verifyUpdateCodeSignature": false
     },
     "nsis": {
@@ -103,7 +103,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "artifactName": "Dracord-${version}-mac.${ext}",
+      "artifactName": "Dracord-mac.${ext}",
       "identity": null
     },
     "dmg": {
@@ -127,7 +127,7 @@
       "category": "Network",
       "executableName": "Dracord",
       "syncDesktopName": true,
-      "artifactName": "Dracord-${version}-linux.${ext}"
+      "artifactName": "Dracord-linux.${ext}"
     },
     "protocols": [
       {

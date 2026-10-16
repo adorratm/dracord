@@ -31,7 +31,7 @@ git push origin desktop-v0.1.0
 ```
 
 2. Release sayfasından asset linklerini kopyala  
-   `https://github.com/<owner>/<repo>/releases/download/desktop-v0.1.0/Dracord-Setup-….exe`  
+   `https://github.com/<owner>/<repo>/releases/latest/download/Dracord-Setup-Windows.exe` (sürümsüz dosya adı; her release’te aynı URL)  
    (Linux AppImage, isteğe MSI/DMG)
 
 3. İndirme URL’leri `apps/web/lib/downloads.ts` + `deploy.yml` içinde **sabit** (public Release linkleri). Sunucu `.env` / Actions Variables tek başına yetmez — web image rebuild şart.
