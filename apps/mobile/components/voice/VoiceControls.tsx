@@ -10,11 +10,14 @@ export function VoiceControls({
   compact = false,
   showLeave = true,
   onLeavePress,
+  allowScreenShare = true,
 }: {
   compact?: boolean;
   showLeave?: boolean;
   /** Varsayılan: voice.leave() — rota çıkışı için override */
   onLeavePress?: () => void | Promise<void>;
+  /** GAME / WATCH_PARTY’de kapalı */
+  allowScreenShare?: boolean;
 }) {
   const voice = useVoiceSessionOptional();
   if (!voice?.voiceChannelId) return null;
@@ -22,6 +25,10 @@ export function VoiceControls({
   const disabled = voice.voiceOnOtherClient;
   const size = compact ? 32 : BTN;
   const iconSz = compact ? 18 : 20;
+  const screenShareAllowed =
+    allowScreenShare &&
+    voice.voiceChannelType !== 'GAME' &&
+    voice.voiceChannelType !== 'WATCH_PARTY';
 
   return (
     <ScrollView
@@ -73,15 +80,17 @@ export function VoiceControls({
           accessibilityLabel="Kamerayı döndür"
         />
       ) : null}
-      <Ctrl
-        size={size}
-        iconSize={iconSz}
-        icon={voice.screenSharing ? 'stop_screen_share' : 'present_to_all'}
-        active={voice.screenSharing}
-        disabled={disabled}
-        onPress={() => void voice.toggleScreenShare()}
-        accessibilityLabel={voice.screenSharing ? 'Paylaşımı durdur' : 'Ekran paylaş'}
-      />
+      {screenShareAllowed ? (
+        <Ctrl
+          size={size}
+          iconSize={iconSz}
+          icon={voice.screenSharing ? 'stop_screen_share' : 'present_to_all'}
+          active={voice.screenSharing}
+          disabled={disabled}
+          onPress={() => void voice.toggleScreenShare()}
+          accessibilityLabel={voice.screenSharing ? 'Paylaşımı durdur' : 'Ekran paylaş'}
+        />
+      ) : null}
       {voice.voiceOnOtherClient ? (
         <Ctrl
           size={size}

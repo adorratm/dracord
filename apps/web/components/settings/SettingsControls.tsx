@@ -121,3 +121,57 @@ export function SettingsNote({ children }: { children: ReactNode }) {
     <p className="px-space-md py-space-md font-body-sm text-on-surface-variant">{children}</p>
   );
 }
+
+export function SettingsSlider({
+  label,
+  description,
+  value,
+  min = 0,
+  max = 100,
+  step = 1,
+  onChange,
+  disabled,
+  suffix,
+}: {
+  label: string;
+  description?: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (next: number) => void;
+  disabled?: boolean;
+  suffix?: string;
+}) {
+  return (
+    <label
+      className={cn(
+        'flex flex-col gap-space-sm px-space-md py-space-md min-w-0',
+        disabled && 'opacity-50 cursor-not-allowed',
+      )}
+    >
+      <div className="flex items-center justify-between gap-space-sm">
+        <div className="min-w-0 flex-1">
+          <p className="font-body-md text-on-surface">{label}</p>
+          {description && (
+            <p className="font-body-sm text-on-surface-variant mt-1">{description}</p>
+          )}
+        </div>
+        <span className="shrink-0 font-label-sm tabular-nums text-outline">
+          {Math.round(value)}
+          {suffix ?? ''}
+        </span>
+      </div>
+      <input
+        type="range"
+        className="w-full accent-primary-container"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}

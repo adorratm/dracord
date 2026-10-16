@@ -1,13 +1,15 @@
 /**
  * Okey 101 kural motoru (standart “eli bitir” okey değil).
  * - 21 taş / oyuncu
- * - Açılış ≥101 puan veya 5 çift
- * - Masaya per/seri açma; ceza puanı birikimi
+ * - Açılış ≥33 puan ve en az 2 yan (per/seri) veya 5 çift
+ * - Masaya per/seri açma; ceza puanı birikimi (eleme 101)
  */
 
 export const TILE_COUNT = 106;
 export const HAND_SIZE = 21;
-export const OPEN_THRESHOLD = 101;
+export const OPEN_THRESHOLD = 33;
+/** Açılışta en az kaç ayrı per/seri (yan) gerekir */
+export const MIN_OPEN_GROUPS = 2;
 export const PAIR_OPEN_COUNT = 5;
 export const ELIMINATION_SCORE = 101;
 
@@ -152,12 +154,19 @@ export function canOpen(
   if (groups.some((g) => g.length === 2)) {
     return { ok: false, points: 0, reason: 'Çiftler ile per/seri karıştırılamaz' };
   }
+  if (groups.length < MIN_OPEN_GROUPS) {
+    return {
+      ok: false,
+      points: groups.reduce((s, g) => s + meldPoints(g, okey), 0),
+      reason: `Açılış için en az ${MIN_OPEN_GROUPS} yan (per/seri) gerekir`,
+    };
+  }
   const points = groups.reduce((s, g) => s + meldPoints(g, okey), 0);
   if (points < OPEN_THRESHOLD) {
     return {
       ok: false,
       points,
-      reason: `Açılış için en az ${OPEN_THRESHOLD} puan (şu an ${points})`,
+      reason: `Açılış için en az ${OPEN_THRESHOLD} puan ve ${MIN_OPEN_GROUPS} yan (şu an ${points}p / ${groups.length} yan)`,
     };
   }
   return { ok: true, points };

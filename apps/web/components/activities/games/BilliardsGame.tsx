@@ -803,12 +803,11 @@ export function BilliardsGame(props: GameProps) {
         if (id === 8) continue;
         const g = ballGroup(id);
         if (g !== 'solid' && g !== 'stripe') continue;
-        const owner =
-          nextGroups[shooterId] === g
-            ? shooterId
-            : nextGroups[oppId] === g
-              ? oppId
-              : shooterId;
+        // Yanlış tip / atanmamış grup → shooter’a yazma (8/7 vs 6/7 bug’ı)
+        let owner: string | null = null;
+        if (nextGroups[shooterId] === g) owner = shooterId;
+        else if (oppId && nextGroups[oppId] === g) owner = oppId;
+        if (!owner) continue;
         if (!nextPocketed[owner]?.includes(id)) {
           nextPocketed[owner] = [...(nextPocketed[owner] ?? []), id];
         }
@@ -905,7 +904,11 @@ export function BilliardsGame(props: GameProps) {
       const dx = shot.dx / len;
       const dz = shot.dz / len;
       const pw = Math.min(1, Math.max(0.1, shot.power));
-      const speed = 3 + pw * 10;
+      const groupsNow = parseGroups(propsRef.current.session.state.groups);
+      const pocketedNow = parsePocketed(propsRef.current.session.state.pocketed);
+      const anyPocketed = Object.values(pocketedNow).some((arr) => (arr?.length ?? 0) > 0);
+      const isBreak = !anyPocketed && Object.keys(groupsNow).length === 0;
+      const speed = (3 + pw * 10) * (isBreak ? 1.45 : 1);
       cue.vx = dx * speed;
       cue.vz = dz * speed;
       simulating = true;
@@ -1499,14 +1502,20 @@ export function BilliardsGame(props: GameProps) {
         }
         players={session.playerIds.map((pid) => {
           const g = groups[pid];
-          const sunk = [...(pocketed[pid] ?? [])].sort((a, b) => a - b);
+          const sunkRaw = [...(pocketed[pid] ?? [])].sort((a, b) => a - b);
+          const sunk = g
+            ? sunkRaw.filter((id) => ballGroup(id) === g)
+            : sunkRaw.filter((id) => {
+                const bg = ballGroup(id);
+                return bg === 'solid' || bg === 'stripe';
+              });
           const groupLabel = g ? (g === 'solid' ? 'Düz' : 'Çizgili') : '—';
           return {
             id: pid,
             label: labelFor(props, pid),
             active: pid === turnPlayer && !winner,
             detail: groupLabel,
-            highlight: `${sunk.length}/7`,
+            highlight: `${Math.min(7, sunk.length)}/7`,
             extra: (
               <div className="flex flex-col gap-0.5">
                 <span className="text-[9px] text-[#f8f8f2]/55">

@@ -87,7 +87,12 @@ function ensureLiveKit() {
   }
 }
 
-export type VoicePeer = { id: string; name: string; speaking?: boolean };
+export type VoicePeer = {
+  id: string;
+  name: string;
+  speaking?: boolean;
+  camera?: boolean;
+};
 
 type VoiceSessionApi = {
   voiceChannelId: string | null;
@@ -117,6 +122,8 @@ type VoiceSessionApi = {
   toggleCamera: () => Promise<void>;
   flipCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
+  /** Kamera VideoView için LiveKit track (yoksa null) */
+  getCameraTrack: (identity: string) => LocalVideoTrack | RemoteTrack | null;
 };
 
 const Ctx = createContext<VoiceSessionApi | null>(null);
@@ -241,10 +248,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const refreshPeers = useCallback(
     (room: Room) => {
-      const list = Array.from(room.remoteParticipants.values()).map((p) => ({
+      const hasCam = (pubs: Iterable<{ source?: Track.Source; track?: unknown }>) =>
+        Array.from(pubs).some(
+          (pub) => pub.source === Track.Source.Camera && pub.track != null,
+        );
+      const list: VoicePeer[] = Array.from(room.remoteParticipants.values()).map((p) => ({
         id: p.identity,
         name: p.name || p.identity,
         speaking: p.isSpeaking,
+        camera: hasCam(p.trackPublications.values()),
       }));
       // Gerçek user id — 'self' ayrı satır üretir (API üyesi + (sen) çifti)
       if (user?.id) {
@@ -252,9 +264,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           id: user.id,
           name: user.displayName || user.id,
           speaking: room.localParticipant.isSpeaking,
+          camera: hasCam(room.localParticipant.trackPublications.values()),
         });
       }
       setPeers(list);
+      setCamOn(hasCam(room.localParticipant.trackPublications.values()));
     },
     [user?.id, user?.displayName],
   );
@@ -414,6 +428,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         refreshPeers(room);
       });
       room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
+      room.on(RoomEvent.TrackUnsubscribed, () => refreshPeers(room));
+      room.on(RoomEvent.LocalTrackPublished, () => refreshPeers(room));
+      room.on(RoomEvent.LocalTrackUnpublished, () => refreshPeers(room));
       room.on(RoomEvent.ActiveSpeakersChanged, () => refreshPeers(room));
       room.on(RoomEvent.Reconnecting, () => {
         setConnected(false);
@@ -624,11 +641,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         setCamOn(false);
         syncCallNotification({ camOn: false });
       }
+      refreshPeers(room);
     } catch (e) {
       setCamOn(false);
+      refreshPeers(room);
       Alert.alert('Kamera', e instanceof Error ? e.message : 'Kamera açılamadı');
     }
-  }, [camOn, cameraFacing, syncCallNotification]);
+  }, [camOn, cameraFacing, refreshPeers, syncCallNotification]);
 
   const flipCamera = useCallback(async () => {
     const room = roomRef.current;
@@ -652,6 +671,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const toggleScreenShare = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
+    const chType = channelTypeRef.current ?? voiceChannelType;
+    if (
+      !screenSharing &&
+      (chType === 'GAME' || chType === 'WATCH_PARTY')
+    ) {
+      return;
+    }
     const next = !screenSharing;
     try {
       await room.localParticipant.setScreenShareEnabled(next);
@@ -666,7 +692,31 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           : 'Ekran paylaşımı bu cihazda kullanılamıyor. Geliştirme derlemesi (dev client) gerekir.',
       );
     }
-  }, [screenSharing, syncCallNotification]);
+  }, [screenSharing, syncCallNotification, voiceChannelType]);
+
+  // Oyun / watch party: açıksa ekran paylaşımını kapat
+  useEffect(() => {
+    if (
+      (voiceChannelType === 'GAME' || voiceChannelType === 'WATCH_PARTY') &&
+      screenSharing
+    ) {
+      void toggleScreenShare();
+    }
+  }, [voiceChannelType, screenSharing, toggleScreenShare]);
+
+  const getCameraTrack = useCallback((identity: string) => {
+    const room = roomRef.current;
+    if (!room) return null;
+    if (identity === user?.id || identity === room.localParticipant.identity) {
+      return (
+        (room.localParticipant.getTrackPublication(Track.Source.Camera)
+          ?.track as LocalVideoTrack | undefined) ?? null
+      );
+    }
+    const p = room.remoteParticipants.get(identity);
+    const track = p?.getTrackPublication(Track.Source.Camera)?.track;
+    return (track as RemoteTrack | undefined) ?? null;
+  }, [user?.id]);
 
   // Bildirim / ada butonları
   useEffect(() => {
@@ -909,6 +959,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       toggleCamera,
       flipCamera,
       toggleScreenShare,
+      getCameraTrack,
     }),
     [
       voiceChannelId,
@@ -933,6 +984,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       toggleCamera,
       flipCamera,
       toggleScreenShare,
+      getCameraTrack,
     ],
   );
 

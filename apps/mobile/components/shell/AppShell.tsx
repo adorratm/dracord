@@ -613,7 +613,37 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     if (!guildId) return;
     void client
       .getGuildChannels(guildId)
-      .then(setChannels)
+      .then((chs) => {
+        setChannels((prev) => {
+          const prevById = new Map(prev.map((c) => [c.id, c]));
+          return chs.map((ch) => {
+            if (
+              ch.type !== 'VOICE' &&
+              ch.type !== 'GAME' &&
+              ch.type !== 'WATCH_PARTY'
+            ) {
+              return ch;
+            }
+            const apiList = [...(ch.voiceMembers ?? [])];
+            const prevList = prevById.get(ch.id)?.voiceMembers ?? [];
+            const byId = new Map(apiList.map((m) => [m.id, m]));
+            if (apiList.length === 0) {
+              for (const m of prevList) byId.set(m.id, m);
+            } else {
+              for (const m of prevList) {
+                const existing = byId.get(m.id);
+                if (!existing) continue;
+                byId.set(m.id, {
+                  ...existing,
+                  ...m,
+                  speaking: m.speaking ?? existing.speaking,
+                });
+              }
+            }
+            return { ...ch, voiceMembers: [...byId.values()] };
+          });
+        });
+      })
       .catch(() => undefined);
   }, [client, guildId]);
 
@@ -626,12 +656,37 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     }, 280);
   }, [reloadChannels]);
 
-  // Ses aktifliği — kanal listesinde voiceMembers güncelle (debounce + seyrek poll)
+  // Ses aktifliği — anında local merge + debounce API refresh
   useEffect(() => {
     if (!guildId) return;
     const sock = client.connectSocket();
     const onVoice = (payload: VoiceStatePayload) => {
       if (payload.guildId !== guildId) return;
+      setChannels((prev) =>
+        prev.map((ch) => {
+          if (
+            ch.type !== 'VOICE' &&
+            ch.type !== 'GAME' &&
+            ch.type !== 'WATCH_PARTY'
+          ) {
+            return ch;
+          }
+          let list = [...(ch.voiceMembers ?? [])].filter(
+            (m) => m.id !== payload.user.id,
+          );
+          if (
+            payload.action !== 'leave' &&
+            payload.channelId &&
+            ch.id === payload.channelId
+          ) {
+            list.push(payload.user);
+          }
+          const same =
+            list.length === (ch.voiceMembers?.length ?? 0) &&
+            list.every((m, i) => m.id === ch.voiceMembers?.[i]?.id);
+          return same ? ch : { ...ch, voiceMembers: list };
+        }),
+      );
       scheduleReloadChannels();
     };
     sock.on(SocketEvents.VOICE_STATE, onVoice);

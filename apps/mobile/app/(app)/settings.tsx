@@ -32,6 +32,7 @@ import { confirmDialog } from '../../components/ConfirmModal';
 import { ShellHeader } from '../../components/shell/AppShell';
 import { Icon } from '../../components/Icon';
 import { UserAvatar } from '../../components/UserAvatar';
+import { configureUiTones } from '../../lib/sounds';
 
 const SOCIAL_FIELDS: Array<{ key: keyof SocialLinks; label: string }> = [
   { key: 'website', label: 'Website' },
@@ -175,7 +176,16 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     void AsyncStorage.getItem(STARTUP_KEY).then((v) => setStartup(v === '1'));
-    void client.getClientSettings().then(setSettings).catch(() => undefined);
+    void client
+      .getClientSettings()
+      .then((s) => {
+        setSettings(s);
+        configureUiTones({
+          enabled: s.notifications.soundEnabled !== false,
+          volume: s.notifications.uiToneVolume ?? 0.85,
+        });
+      })
+      .catch(() => undefined);
   }, [client]);
 
   useEffect(() => {
@@ -224,6 +234,12 @@ export default function SettingsScreen() {
       .updateClientSettings(patch)
       .then((next) => {
         setSettings(next);
+        if (patch.notifications) {
+          configureUiTones({
+            enabled: next.notifications.soundEnabled !== false,
+            volume: next.notifications.uiToneVolume ?? 0.85,
+          });
+        }
         setMsg('Ayarlar kaydedildi');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Kayıt başarısız'));
@@ -885,6 +901,53 @@ export default function SettingsScreen() {
                 })
               }
             />
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.text, fontSize: 15 }}>Ses kanalı bildirim sesi</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                  {Math.round((settings.notifications.uiToneVolume ?? 0.85) * 100)}%
+                </Text>
+              </View>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                Katılma / ayrılma tonlarının yüksekliği
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                {[0.25, 0.5, 0.7, 0.85, 1].map((v) => (
+                  <Pressable
+                    key={v}
+                    disabled={!settings.notifications.soundEnabled}
+                    onPress={() =>
+                      patchSettings({
+                        notifications: { ...settings.notifications, uiToneVolume: v },
+                      })
+                    }
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      backgroundColor:
+                        Math.abs((settings.notifications.uiToneVolume ?? 0.85) - v) < 0.01
+                          ? colors.primary
+                          : colors.surfaceHigh,
+                      opacity: settings.notifications.soundEnabled ? 1 : 0.4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          Math.abs((settings.notifications.uiToneVolume ?? 0.85) - v) < 0.01
+                            ? colors.primaryOn
+                            : colors.text,
+                        fontWeight: '600',
+                        fontSize: 12,
+                      }}
+                    >
+                      {Math.round(v * 100)}%
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
             <ToggleRow
               label="Okunmamış rozeti"
               value={settings.notifications.unreadBadge}

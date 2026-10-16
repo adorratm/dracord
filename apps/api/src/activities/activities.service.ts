@@ -209,6 +209,34 @@ export class ActivitiesService {
     if (s.hostUserId === userId) {
       s.hostUserId = s.playerIds[0] ?? s.spectatorIds[0] ?? s.hostUserId;
     }
+
+    // Blackjack: çıkan oyuncunun koltuğunu temizle; sıra onda kaldıysa ilerlet
+    if (s.kind === 'blackjack' && s.status !== 'ended') {
+      const state = { ...((s.state ?? {}) as Record<string, unknown>) };
+      const seats = {
+        ...((state.seats as Record<string, { status?: string } | undefined>) ?? {}),
+      };
+      delete seats[userId];
+      state.seats = seats;
+      const pending = {
+        ...((state.pendingBets as Record<string, number> | undefined) ?? {}),
+      };
+      delete pending[userId];
+      state.pendingBets = pending;
+      if (state.turn === userId) {
+        const playing = s.playerIds.find((id) => seats[id]?.status === 'playing');
+        if (playing) {
+          state.turn = playing;
+        } else if (s.playerIds.length > 0 && state.phase === 'play') {
+          state.turn = null;
+          state.phase = 'dealer';
+        } else {
+          state.turn = null;
+        }
+      }
+      s.state = state;
+    }
+
     const empty =
       s.playerIds.length === 0 && s.spectatorIds.length === 0;
     // Oyunlar: min oyuncu altına düşünce otomatik sonlanır

@@ -17,6 +17,7 @@ import {
 } from '@dracord/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { DEFAULT_CLIENT_SETTINGS, mergeClientSettings } from '@/lib/client-settings-defaults';
+import { configureUiTones } from '@/lib/sounds';
 
 const STORAGE_KEY = 'dracord.userPreferences.v1';
 
@@ -57,6 +58,10 @@ function applyDomClasses(prefs: UserPreferences) {
     }
   ).dracordDesktop;
   desktop?.setSystemPrefs?.(prefs.system);
+  configureUiTones({
+    enabled: prefs.notifications.soundEnabled !== false,
+    volume: prefs.notifications.uiToneVolume ?? 0.85,
+  });
 }
 
 function mergePrefs(

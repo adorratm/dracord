@@ -1022,6 +1022,16 @@ export function Shell() {
   const isActivity =
     activeChannel?.type === 'GAME' || activeChannel?.type === 'WATCH_PARTY';
 
+  // Oyun / watch party sesinde ekran paylaşımı kapalı
+  useEffect(() => {
+    if (
+      (voice.voiceChannelType === 'GAME' || voice.voiceChannelType === 'WATCH_PARTY') &&
+      voice.screenSharing
+    ) {
+      void voice.toggleScreenShare();
+    }
+  }, [voice.voiceChannelType, voice.screenSharing, voice.toggleScreenShare]);
+
   const electronApi = (
     window as unknown as {
       electronAPI?: { minimize?: () => void; maximize?: () => void; close?: () => void };
@@ -1254,9 +1264,12 @@ export function Shell() {
                 onToggleCamera: inVoiceInThisGuild
                   ? () => void voice.toggleCamera()
                   : undefined,
-                onToggleScreenShare: inVoiceInThisGuild
-                  ? () => void voice.toggleScreenShare()
-                  : undefined,
+                onToggleScreenShare:
+                  inVoiceInThisGuild &&
+                  voice.voiceChannelType !== 'GAME' &&
+                  voice.voiceChannelType !== 'WATCH_PARTY'
+                    ? () => void voice.toggleScreenShare()
+                    : undefined,
                 onActivitiesClick: inVoiceInThisGuild
                   ? () => {
                       const game = channels.find((c) => c.type === 'GAME');

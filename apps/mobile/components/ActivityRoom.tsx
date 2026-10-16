@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView as ExpoVideoView } from 'expo-video';
+import { VideoView as LiveKitVideoView } from '@livekit/react-native';
 import { SocketEvents, type ActivitySessionDto, type ChannelSummary } from '@dracord/types';
 import { watchPartyParseState } from '@dracord/game-core';
 import { colors } from '@dracord/app-theme';
@@ -15,6 +16,7 @@ import { useVoiceSessionOptional } from './voice/VoiceSession';
 import { SafeWebView, type SafeWebViewHandle } from './SafeWebView';
 import { GameWebEmbed } from './GameWebEmbed';
 import { primaryBtn, primaryBtnText } from '../lib/ui';
+import { VoiceControls } from './voice/VoiceControls';
 
 const NOOP_ACTIVITY = {
   activityChannelId: null as string | null,
@@ -343,6 +345,8 @@ export function ActivityRoom({
     );
   }
 
+  const cameraPeers = (voice?.peers ?? []).filter((p) => p.camera);
+
   return (
     <View style={{ flex: 1, overflow: 'hidden' }}>
       {!gameLandscapeFs ? (
@@ -366,6 +370,64 @@ export function ActivityRoom({
           onActivityLeave={() => void leaveRoom()}
         />
       )}
+
+      {!gameLandscapeFs && cameraPeers.length > 0 && voice ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ maxHeight: 112, borderTopWidth: 1, borderTopColor: colors.surfaceHigh }}
+          contentContainerStyle={{ padding: 8, gap: 8 }}
+        >
+          {cameraPeers.map((p) => {
+            const track = voice.getCameraTrack(p.id);
+            if (!track) return null;
+            return (
+              <View
+                key={p.id}
+                style={{
+                  width: 140,
+                  height: 96,
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  backgroundColor: '#000',
+                }}
+              >
+                <LiveKitVideoView
+                  style={{ width: 140, height: 80 }}
+                  videoTrack={track as never}
+                  mirror={p.id === user.id}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.text,
+                    fontSize: 10,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    backgroundColor: colors.surfaceHigh,
+                  }}
+                >
+                  {p.name}
+                  {p.id === user.id ? ' (sen)' : ''}
+                </Text>
+              </View>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
+      {!gameLandscapeFs ? (
+        <View
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: colors.surfaceHigh,
+            paddingVertical: 6,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <VoiceControls compact allowScreenShare={false} showLeave={false} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -687,7 +749,7 @@ function WatchPartyNative({
           </Text>
         </View>
       ) : directUri ? (
-        <VideoView
+        <ExpoVideoView
           player={player}
           style={{ width: '100%', height: 220, backgroundColor: '#000', borderRadius: 12 }}
           contentFit="contain"

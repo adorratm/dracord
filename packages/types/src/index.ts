@@ -593,6 +593,8 @@ export interface ClientSettings {
     /** Sekme kapalıyken Web Push */
     pushEnabled?: boolean;
     soundEnabled: boolean;
+    /** Ses kanalı katılma/ayrılma UI tonları (0–1) */
+    uiToneVolume?: number;
     unreadBadge: boolean;
     mentionsOnly: boolean;
     quietHours: boolean;

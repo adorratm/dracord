@@ -44,17 +44,37 @@ export function useVoiceMembersByChannel({
       setVoiceMembersByChannel({});
       return;
     }
-    const map: Record<string, VoiceMemberSummary[]> = {};
-    for (const ch of channels) {
-      if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') continue;
-      let list = [...(ch.voiceMembers ?? [])];
-      if (user && voiceChannelId !== ch.id) {
-        list = list.filter((m) => m.id !== user.id);
-      }
-      map[ch.id] = list;
-    }
     setVoiceMembersByChannel((prev) => {
-      const next = { ...map };
+      const next: Record<string, VoiceMemberSummary[]> = {};
+      for (const ch of channels) {
+        if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
+          continue;
+        }
+        let apiList = [...(ch.voiceMembers ?? [])];
+        if (user && voiceChannelId !== ch.id) {
+          apiList = apiList.filter((m) => m.id !== user.id);
+        }
+        const prevList = prev[ch.id] ?? [];
+        // Boş API snapshot socket ile dolmuş listeyi silmesin; dolu API’de prev-only hayalet ekleme
+        const byId = new Map(apiList.map((m) => [m.id, m]));
+        if (apiList.length === 0) {
+          for (const m of prevList) {
+            if (user && m.id === user.id && voiceChannelId !== ch.id) continue;
+            byId.set(m.id, m);
+          }
+        } else {
+          for (const m of prevList) {
+            const existing = byId.get(m.id);
+            if (!existing) continue;
+            byId.set(m.id, {
+              ...existing,
+              ...m,
+              speaking: m.speaking ?? existing.speaking,
+            });
+          }
+        }
+        next[ch.id] = [...byId.values()];
+      }
       if (voiceGuildId === guildId && voiceChannelId && prev[voiceChannelId]) {
         const local = prev[voiceChannelId]!;
         const api = next[voiceChannelId] ?? [];

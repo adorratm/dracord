@@ -1,4 +1,5 @@
 import type { ClientSettings } from '@dracord/types';
+import { configureUiTones } from '@/lib/sounds';
 
 export const PREFS_STORAGE_KEY = 'dracord.userPreferences.v1';
 
@@ -24,6 +25,7 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     desktopEnabled: true,
     pushEnabled: false,
     soundEnabled: true,
+    uiToneVolume: 0.85,
     unreadBadge: true,
     mentionsOnly: false,
     quietHours: false,
@@ -138,6 +140,10 @@ export function applyPrefsDom(prefs: ClientSettings) {
   root.classList.toggle('no-hw-accel', !prefs.system.hardwareAcceleration);
   root.classList.toggle('experimental-ui', prefs.developer.experimental);
   root.lang = prefs.language.locale === 'en' ? 'en' : 'tr';
+  configureUiTones({
+    enabled: prefs.notifications.soundEnabled !== false,
+    volume: prefs.notifications.uiToneVolume ?? 0.85,
+  });
 }
 
 export function loadLocalPrefs(): ClientSettings {

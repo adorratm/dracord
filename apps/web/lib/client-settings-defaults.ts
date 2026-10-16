@@ -22,6 +22,7 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     desktopEnabled: true,
     pushEnabled: false,
     soundEnabled: true,
+    uiToneVolume: 0.85,
     unreadBadge: true,
     mentionsOnly: false,
     quietHours: false,

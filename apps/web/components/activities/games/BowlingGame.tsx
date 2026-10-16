@@ -463,7 +463,7 @@ export function BowlingGame(props: GameProps) {
       const vrel = (avx - b.vx) * nx + (avz - b.vz) * nz;
       const push = min - dist;
       let ja = 0;
-      if (vrel > 0) ja = ((1 + 0.85) * vrel) / (1 / am + 1 / bm);
+      if (vrel > 0) ja = ((1 + 0.52) * vrel) / (1 / am + 1 / bm);
       return { nx, nz, push, ja };
     };
 
@@ -481,22 +481,24 @@ export function BowlingGame(props: GameProps) {
           const target = ball.gutter * (LANE_HALF + 0.3);
           ball.x += (target - ball.x) * Math.min(1, h * 10);
         }
-        const bm = 5;
+        const bm = 3.2;
         for (const pin of pins) {
           if (!pin.active) continue;
           const c = collide(ball.x, ball.z, ball.vx, ball.vz, bm, BALL_R, pin, 1, PIN_R);
           if (c) {
             ball.vx -= (c.ja * c.nx) / bm;
             ball.vz -= (c.ja * c.nz) / bm;
-            pin.vx += c.ja * c.nx;
-            pin.vz += c.ja * c.nz;
+            pin.vx += c.ja * c.nx * 0.85;
+            pin.vz += c.ja * c.nz * 0.85;
             pin.x += c.nx * c.push;
             pin.z += c.nz * c.push;
-            if (c.ja > 0.4) GameAudio.pin();
+            if (c.ja > 0.55) GameAudio.pin();
           }
         }
-        // top ters dönmesin
-        if (ball.vz > -4 && ball.gutter === 0 && ball.z < PIN_Z + 1) ball.vz = Math.min(ball.vz, -4);
+        // top ters dönmesin — daha düşük min hız → zincirleme labut daha zor
+        if (ball.vz > -2.2 && ball.gutter === 0 && ball.z < PIN_Z + 1) {
+          ball.vz = Math.min(ball.vz, -2.2);
+        }
       }
       // labutlar
       for (let i = 0; i < pins.length; i++) {
@@ -521,7 +523,7 @@ export function BowlingGame(props: GameProps) {
           p.z = -11.6;
           p.vz *= -0.3;
         }
-        if (!p.fallen && (sp > 0.7 || Math.hypot(p.x - p.bx, p.z - p.bz) > 0.32)) {
+        if (!p.fallen && (sp > 1.15 || Math.hypot(p.x - p.bx, p.z - p.bz) > 0.48)) {
           p.fallen = true;
           const l = Math.hypot(p.vx, p.vz) || 1;
           const dx = sp > 0.05 ? p.vx / l : ball.vx / (Math.hypot(ball.vx, ball.vz) || 1);
@@ -711,7 +713,7 @@ export function BowlingGame(props: GameProps) {
         dz = PIN_Z - bz;
       }
       const len = Math.hypot(dx, dz) || 1;
-      const speed = 16;
+      const speed = 12.5;
       aimVx = (dx / len) * speed;
       aimVz = (dz / len) * speed;
     };
@@ -792,18 +794,18 @@ export function BowlingGame(props: GameProps) {
         title="Bowling"
         status={statusText}
         meta={
-          lastRoll ? (
-            <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
-              Son: {lastRoll.pins === 10 ? 'STRIKE!' : `${lastRoll.pins} labut`} ·{' '}
-              {labelFor(props, lastRoll.by)}
-            </span>
-          ) : undefined
+          <span className="rounded-lg bg-[#11131e]/75 px-2.5 py-1">
+            Tur {Math.min(10, Math.max(...totals.map((t) => t.frame), 1))}/10
+            {lastRoll
+              ? ` · Son: ${lastRoll.pins === 10 ? 'STRIKE!' : `${lastRoll.pins} labut`} · ${labelFor(props, lastRoll.by)}`
+              : ''}
+          </span>
         }
         players={totals.map((t) => ({
           id: t.id,
           label: labelFor(props, t.id),
           active: t.id === shooter && !finished,
-          detail: `K${t.frame}`,
+          detail: `${t.frame}/10`,
           highlight: String(t.score),
         }))}
       >

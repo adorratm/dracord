@@ -340,6 +340,27 @@ export function BlackjackGame(props: GameProps) {
     });
   };
 
+  // Ayrılan oyuncunun turn’ü kaldıysa kalanlarla devam et
+  useEffect(() => {
+    if (st.phase !== 'play' || !st.turn || !userId || !canPlay) return;
+    if (session.playerIds[0] !== userId) return;
+    if (session.playerIds.includes(st.turn)) return;
+    const nxt = nextPlayer(session.playerIds, st.seats, null);
+    if (nxt) {
+      void patch({ turn: nxt, seats: st.seats });
+    } else {
+      void patch({ turn: null, phase: 'dealer', seats: st.seats });
+    }
+  }, [
+    st.phase,
+    st.turn,
+    st.seats,
+    session.playerIds,
+    userId,
+    canPlay,
+    patch,
+  ]);
+
   // Dağıtım animasyonu bitsin → play / dealer
   useEffect(() => {
     if (st.phase !== 'dealing' || !userId || !canPlay) return;

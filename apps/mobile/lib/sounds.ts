@@ -7,6 +7,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 export type UiToneKind = 'join' | 'leave' | 'peer-join' | 'peer-leave';
 
+let uiToneEnabled = true;
+let uiToneVolume = 0.85;
+
+/** Ayarlar / prefs yüklendiğinde çağır */
+export function configureUiTones(opts: { enabled?: boolean; volume?: number }) {
+  if (typeof opts.enabled === 'boolean') uiToneEnabled = opts.enabled;
+  if (typeof opts.volume === 'number' && Number.isFinite(opts.volume)) {
+    uiToneVolume = Math.max(0, Math.min(1, opts.volume));
+  }
+}
+
 const SAMPLE_RATE = 22_050;
 const CACHE_PREFIX = 'dracord-ui-tone-';
 
@@ -98,7 +109,7 @@ function samplesFor(kind: UiToneKind): Float32Array {
         { t: 0.09, hz: 880 },
       ],
       0.22,
-      0.28,
+      0.55,
     );
   }
   if (kind === 'leave') {
@@ -109,7 +120,7 @@ function samplesFor(kind: UiToneKind): Float32Array {
         { t: 0.2, hz: 260 },
       ],
       0.38,
-      0.3,
+      0.58,
       0.025,
     );
   }
@@ -120,7 +131,7 @@ function samplesFor(kind: UiToneKind): Float32Array {
         { t: 0.06, hz: 720 },
       ],
       0.14,
-      0.18,
+      0.42,
       0.01,
     );
   }
@@ -130,7 +141,7 @@ function samplesFor(kind: UiToneKind): Float32Array {
       { t: 0.07, hz: 340 },
     ],
     0.18,
-    0.16,
+    0.38,
     0.012,
   );
 }
@@ -170,6 +181,7 @@ async function ensureToneFiles(): Promise<void> {
 }
 
 export function playUiTone(kind: UiToneKind): void {
+  if (!uiToneEnabled || uiToneVolume <= 0) return;
   void (async () => {
     try {
       if (!ensurePromise) ensurePromise = ensureToneFiles();
@@ -177,7 +189,7 @@ export function playUiTone(kind: UiToneKind): void {
       const uri = uriCache.get(kind);
       if (!uri) return;
       const player = createAudioPlayer({ uri }, { updateInterval: 1000 });
-      player.volume = 1;
+      player.volume = uiToneVolume;
       player.play();
       const ms =
         kind === 'leave' ? 450 : kind === 'join' ? 280 : kind === 'peer-leave' ? 220 : 180;

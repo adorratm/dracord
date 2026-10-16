@@ -258,6 +258,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const roomRef = useRef<Room | null>(null);
   const attached = useRef<HTMLMediaElement[]>([]);
   const cameraEls = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const cameraTracksRef = useRef<Map<string, Track>>(new Map());
   const joinGen = useRef(0);
   const knownPeersRef = useRef(new Set<string>());
   const intentionalLeaveRef = useRef(false);
@@ -509,6 +510,48 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [applyShareAudioVolumes, bindScreenShareTrack, clearScreenShareView, listScreenShares],
   );
 
+  const attachCameraEl = useCallback((identity: string, track: Track, el: HTMLVideoElement) => {
+    track.attach(el);
+    el.playsInline = true;
+    el.autoplay = true;
+    el.muted = true;
+    void el.play().catch(() => undefined);
+  }, []);
+
+  const syncCameraTracks = useCallback(
+    (room: Room) => {
+      const next = new Map<string, Track>();
+      const localCam = room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+      if (localCam) next.set(room.localParticipant.identity, localCam);
+      for (const p of room.remoteParticipants.values()) {
+        const cam = p.getTrackPublication(Track.Source.Camera)?.track;
+        if (cam) next.set(p.identity, cam);
+      }
+
+      for (const [identity, track] of cameraTracksRef.current) {
+        if (!next.has(identity)) {
+          const el = cameraEls.current.get(identity);
+          if (el) {
+            try {
+              track.detach(el);
+            } catch {
+              /* ignore */
+            }
+            el.srcObject = null;
+          }
+        }
+      }
+
+      cameraTracksRef.current = next;
+      for (const [identity, track] of next) {
+        const el = cameraEls.current.get(identity);
+        if (el) attachCameraEl(identity, track, el);
+      }
+      setCameraEnabled(Boolean(localCam));
+    },
+    [attachCameraEl],
+  );
+
   const refresh = useCallback(() => {
     const room = roomRef.current;
     if (!room) {
@@ -516,6 +559,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShares([]);
       return;
     }
+    syncCameraTracks(room);
     const metaOf = (raw?: string) => {
       if (!raw) return { avatarUrl: null as string | null, isBot: false };
       try {
@@ -530,6 +574,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     };
     const afk = afkSilenceRef.current;
     const list: VoiceParticipant[] = [];
+    const localCamOn = Boolean(
+      room.localParticipant.getTrackPublication(Track.Source.Camera)?.track,
+    );
     if (displayName && userId) {
       list.push({
         id: userId,
@@ -537,7 +584,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         avatarUrl: user?.avatarUrl,
         speaking: afk ? false : room.localParticipant.isSpeaking,
         muted: afk ? true : mutedRef.current,
-        camera: cameraEnabled,
+        camera: localCamOn,
         video: screenSharingRef.current,
         isBot: false,
       });
@@ -547,7 +594,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         (pub) =>
           pub.kind === Track.Kind.Video &&
           pub.source === Track.Source.Camera &&
-          pub.isSubscribed,
+          (pub.isSubscribed || pub.track != null),
       );
       const screens = Array.from(p.trackPublications.values()).some(
         (pub) =>
@@ -573,7 +620,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
     setPeers(list);
     applyScreenShareView(room);
-  }, [applyScreenShareView, cameraEnabled, displayName, user?.avatarUrl, userId]);
+  }, [applyScreenShareView, displayName, syncCameraTracks, user?.avatarUrl, userId]);
 
   /** Yalnız peer listesi — ekran track’ine dokunma (ActiveSpeakersChanged) */
   const refreshPeers = useCallback(() => {
@@ -613,7 +660,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         (pub) =>
           pub.kind === Track.Kind.Video &&
           pub.source === Track.Source.Camera &&
-          pub.isSubscribed,
+          (pub.isSubscribed || pub.track != null),
       );
       const screens = Array.from(p.trackPublications.values()).some(
         (pub) =>
@@ -638,7 +685,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       });
     }
     setPeers(list);
-  }, [cameraEnabled, displayName, user?.avatarUrl, userId]);
+  }, [displayName, user?.avatarUrl, userId]);
 
   const stopNsfwMonitor = useCallback(() => {
     nsfwShareMonitorRef.current?.stop();
@@ -743,6 +790,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         el.remove();
       }
       attached.current = [];
+      for (const [identity, track] of cameraTracksRef.current) {
+        const el = cameraEls.current.get(identity);
+        if (el) {
+          try {
+            track.detach(el);
+          } catch {
+            /* ignore */
+          }
+          el.srcObject = null;
+        }
+      }
+      cameraTracksRef.current.clear();
       cameraEls.current.clear();
       if (room) {
         room.removeAllListeners();
@@ -1247,12 +1306,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const next = !cameraEnabled;
     if (!next) {
       setStatus(null);
-      setCameraEnabled(false);
       try {
         await room.localParticipant.setCameraEnabled(false);
       } catch {
         /* ignore */
       }
+      syncCameraTracks(room);
+      refresh();
       void refreshAudioDevices();
       return;
     }
@@ -1273,6 +1333,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignore */
       }
+      syncCameraTracks(room);
       return;
     }
 
@@ -1290,9 +1351,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         await room.localParticipant.setCameraEnabled(false);
         setCameraEnabled(false);
         setStatus(NO_CAMERA_MSG);
+        syncCameraTracks(room);
         return;
       }
-      setCameraEnabled(true);
+      syncCameraTracks(room);
+      refresh();
       void refreshAudioDevices();
     } catch (err) {
       setCameraEnabled(false);
@@ -1302,8 +1365,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignore */
       }
+      syncCameraTracks(room);
     }
-  }, [cameraEnabled, refreshAudioDevices]);
+  }, [cameraEnabled, refresh, refreshAudioDevices, syncCameraTracks]);
 
   const toggleScreenShare = useCallback(async () => {
     const room = roomRef.current;
@@ -1564,25 +1628,39 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const attachCamera = useCallback(
     (identity: string, el: HTMLVideoElement | null) => {
+      const prev = cameraEls.current.get(identity);
+      const track = cameraTracksRef.current.get(identity);
+      if (prev && track && prev !== el) {
+        try {
+          track.detach(prev);
+        } catch {
+          /* ignore */
+        }
+        prev.srcObject = null;
+      }
       if (!el) {
         cameraEls.current.delete(identity);
         return;
       }
       cameraEls.current.set(identity, el);
+      if (track) {
+        attachCameraEl(identity, track, el);
+        return;
+      }
       const room = roomRef.current;
       if (!room) return;
       if (identity === userId) {
         const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-        pub?.track?.attach(el);
+        if (pub?.track) attachCameraEl(identity, pub.track, el);
       } else {
         const p = room.remoteParticipants.get(identity);
         const pub = p
           ? Array.from(p.trackPublications.values()).find((x) => x.source === Track.Source.Camera)
           : undefined;
-        pub?.track?.attach(el);
+        if (pub?.track) attachCameraEl(identity, pub.track, el);
       }
     },
-    [userId],
+    [attachCameraEl, userId],
   );
 
   useEffect(() => {

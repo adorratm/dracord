@@ -25,6 +25,7 @@ import {
   HAND_SIZE,
   ELIMINATION_SCORE,
   OPEN_THRESHOLD,
+  MIN_OPEN_GROUPS,
   TILE_COUNT,
   canOpen,
   colorOf,
@@ -60,10 +61,12 @@ export function OkeyGame(props: GameProps) {
   const st = readOkey101(session.state);
   const myTurn = isMyTurn(props);
   const okey = okeyFromIndicator(st.ind);
+  // İstaka sırası korunur — otomatik sort yok
   const myHand = useMemo(
-    () => (userId ? sortHand(st.hands[userId] ?? [], okey) : []),
-    [userId, st.hands, okey],
+    () => (userId ? [...(st.hands[userId] ?? [])] : []),
+    [userId, st.hands],
   );
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
   const opened = Boolean(userId && st.opened[userId]);
   const phase: 'draw' | 'discard' | 'wait' =
     !myTurn || !st.dealt || st.win !== undefined
@@ -166,7 +169,7 @@ export function OkeyGame(props: GameProps) {
       const p = propsRef.current;
       const s = readOkey101(p.session.state);
       if (!p.userId || !isMyTurn(p)) return;
-      const hand = sortHand(s.hands[p.userId] ?? [], okeyFromIndicator(s.ind));
+      const hand = [...(s.hands[p.userId] ?? [])];
       const idxs = selectedRef.current;
       if (idxs.length < 2) {
         setError('Grup için en az 2 taş seç');
@@ -212,7 +215,7 @@ export function OkeyGame(props: GameProps) {
         setError(check.reason ?? 'Açılamaz');
         return;
       }
-      const hand = sortHand(s.hands[p.userId] ?? [], ok);
+      const hand = [...(s.hands[p.userId] ?? [])];
       const used = groups.flat();
       const rest = [...hand];
       for (const code of used) {
@@ -240,6 +243,37 @@ export function OkeyGame(props: GameProps) {
         scores: s.scores,
       });
     },
+    moveTile: (from: number, to: number) => {
+      const p = propsRef.current;
+      const s = readOkey101(p.session.state);
+      if (!p.userId || busyRef.current) return;
+      const hand = [...(s.hands[p.userId] ?? [])];
+      if (from < 0 || to < 0 || from >= hand.length || to >= hand.length || from === to) return;
+      const [tile] = hand.splice(from, 1);
+      if (tile === undefined) return;
+      hand.splice(to, 0, tile);
+      setSelected((prev) =>
+        prev.map((i) => {
+          if (i === from) return to;
+          if (from < to && i > from && i <= to) return i - 1;
+          if (to < from && i >= to && i < from) return i + 1;
+          return i;
+        }),
+      );
+      void send({
+        hands: packHands(
+          { ...s.hands, [p.userId]: hand },
+          s.deck,
+          s.discard,
+          s.ind,
+          s.win,
+          s.eliminated,
+        ),
+        melds: s.melds,
+        opened: s.opened,
+        scores: s.scores,
+      });
+    },
     lay: () => {
       const p = propsRef.current;
       const s = readOkey101(p.session.state);
@@ -256,7 +290,7 @@ export function OkeyGame(props: GameProps) {
           return;
         }
       }
-      const hand = sortHand(s.hands[p.userId] ?? [], ok);
+      const hand = [...(s.hands[p.userId] ?? [])];
       const used = groups.flat();
       const rest = [...hand];
       for (const code of used) {
@@ -289,7 +323,7 @@ export function OkeyGame(props: GameProps) {
       const s = readOkey101(p.session.state);
       if (!p.userId || !isMyTurn(p) || s.win !== undefined) return;
       const ok = okeyFromIndicator(s.ind);
-      const hand = sortHand(s.hands[p.userId] ?? [], ok);
+      const hand = [...(s.hands[p.userId] ?? [])];
       const idxs = selectedRef.current;
       if (hand.length <= HAND_SIZE || idxs.length !== 1) {
         setError('Atmak için tam bir taş seç');
@@ -356,9 +390,7 @@ export function OkeyGame(props: GameProps) {
       if (pick.kind === 'deck') return actions.draw('deck');
       if (pick.kind === 'discard') return actions.draw('discard');
       const s = readOkey101(p.session.state);
-      const hand = p.userId
-        ? sortHand(s.hands[p.userId] ?? [], okeyFromIndicator(s.ind))
-        : [];
+      const hand = p.userId ? [...(s.hands[p.userId] ?? [])] : [];
       if (!p.userId || pick.index >= hand.length) return;
       GameAudio.tile();
       setSelected((prev) =>
@@ -526,7 +558,9 @@ export function OkeyGame(props: GameProps) {
         const rel = (i - base + players.length) % Math.max(1, players.length);
         const raw = s.hands[id] ?? [];
         const mine = id === p.userId;
-        const hand = mine || winnerRevealed ? sortHand(raw, face) : raw;
+        // Kendi elinde istaka sırası; rakipler kapalı / el bitince sıralı göster
+        const hand =
+          mine ? raw : winnerRevealed ? sortHand(raw, face) : raw;
         const n = hand.length;
         const spacing = mine ? Math.min(0.78, 12 / Math.max(1, n)) : 0.48;
         hand.forEach((code, k) => {
@@ -634,10 +668,10 @@ export function OkeyGame(props: GameProps) {
           ? phase === 'draw'
             ? opened
               ? 'Çek → masaya koy / at'
-              : `Çek → ${OPEN_THRESHOLD}+ ile aç veya çift aç`
+              : `Çek → ${OPEN_THRESHOLD}+ / ${MIN_OPEN_GROUPS} yan veya 5 çift ile aç`
             : opened
               ? 'Taş seç → at (el bitince kazan)'
-              : 'Grup hazırla → Aç · sonra bir taş at'
+              : 'İstakada diz → grup hazırla → Ortaya aç'
           : `Sıra: ${turnPlayer ? labelFor(props, turnPlayer) : '—'}`;
 
   const stagedPts = useMemo(() => {
@@ -702,7 +736,7 @@ export function OkeyGame(props: GameProps) {
                       disabled={busy || staged.length === 0}
                       onClick={() => actions.open()}
                     >
-                      Aç (≥{OPEN_THRESHOLD})
+                      Ortaya aç (≥{OPEN_THRESHOLD}, {MIN_OPEN_GROUPS}+ yan)
                     </GameHudButton>
                   )}
                   {opened && (
@@ -751,6 +785,75 @@ export function OkeyGame(props: GameProps) {
         )}
       </GameHud>
     </ThreeSceneHost>
+    {/* İstaka — sürükleyerek diz; sıra sunucuya yazılır */}
+    {canPlay && st.dealt && myHand.length > 0 && (
+      <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 border-t border-[#bd93f9]/25 bg-[#11131e]/92 px-2 py-2 backdrop-blur-sm">
+        <div className="mb-1 flex items-center justify-between gap-2 px-1">
+          <span className="font-label-sm uppercase tracking-wide text-[#bd93f9]/90">
+            İstaka
+          </span>
+          <span className="text-[10px] text-[#f8f8f2]/55">
+            Sürükle veya ◀ ▶ ile diz · {myHand.length} taş
+          </span>
+        </div>
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {myHand.map((code, i) => {
+            const face = okey
+              ? code >= 104
+                ? { label: '★', color: COLOR_HEX[okey.c]! }
+                : {
+                    label: String(numOf(code)),
+                    color: COLOR_HEX[colorOf(code)]!,
+                  }
+              : { label: '?', color: '#888' };
+            const isSel = selected.includes(i);
+            return (
+              <div key={`${code}-${i}`} className="flex shrink-0 flex-col items-center gap-0.5">
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={() => setDragFrom(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragFrom != null) actions.moveTile(dragFrom, i);
+                    setDragFrom(null);
+                  }}
+                  onClick={() => actions.pick({ kind: 'hand', index: i })}
+                  className={`flex h-11 w-8 flex-col items-center justify-center rounded-md border text-xs font-bold shadow ${
+                    isSel
+                      ? 'border-[#f1fa8c] bg-[#f1fa8c]/20 text-[#f1fa8c]'
+                      : 'border-white/20 bg-[#1e2030] text-[#f8f8f2]'
+                  }`}
+                  style={{ boxShadow: `inset 0 -3px 0 ${face.color}` }}
+                >
+                  <span style={{ color: face.color }}>{face.label}</span>
+                </button>
+                <div className="flex gap-0.5">
+                  <button
+                    type="button"
+                    className="h-5 w-5 rounded bg-white/10 text-[10px] text-[#f8f8f2]/70"
+                    aria-label="Sola kaydır"
+                    disabled={i === 0 || busy}
+                    onClick={() => actions.moveTile(i, i - 1)}
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    className="h-5 w-5 rounded bg-white/10 text-[10px] text-[#f8f8f2]/70"
+                    aria-label="Sağa kaydır"
+                    disabled={i >= myHand.length - 1 || busy}
+                    onClick={() => actions.moveTile(i, i + 1)}
+                  >
+                    ▶
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
     </div>
   );
 }

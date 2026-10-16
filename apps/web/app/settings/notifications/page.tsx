@@ -4,6 +4,7 @@ import {
   SettingsPage,
   SettingsSection,
   SettingsToggle,
+  SettingsSlider,
   SettingsNote,
 } from '@/components/settings/SettingsControls';
 import { useAuth } from '@/components/AuthProvider';
@@ -97,6 +98,17 @@ export default function NotificationsSettingsPage() {
           label="Bildirim sesi"
           checked={prefs.notifications.soundEnabled}
           onChange={(v) => setSection('notifications', { soundEnabled: v })}
+        />
+        <SettingsSlider
+          label="Ses kanalı bildirim sesi"
+          description="Katılma / ayrılma tonlarının yüksekliği."
+          value={Math.round((prefs.notifications.uiToneVolume ?? 0.85) * 100)}
+          min={0}
+          max={100}
+          step={5}
+          suffix="%"
+          disabled={!prefs.notifications.soundEnabled}
+          onChange={(v) => setSection('notifications', { uiToneVolume: v / 100 })}
         />
         <SettingsToggle
           label="Okunmamış rozeti"

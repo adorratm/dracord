@@ -147,6 +147,15 @@ export function GuildChannelView({
   const inVoiceInThisGuild =
     Boolean(voice.voiceChannelId) && voice.voiceGuildId === guildId;
   const inVoice = inVoiceInThisGuild;
+  const voiceInActivityChannel =
+    voiceChannel?.type === 'GAME' || voiceChannel?.type === 'WATCH_PARTY';
+
+  // Oyun / watch party sesinde ekran paylaşımı kapalı
+  useEffect(() => {
+    if (voiceInActivityChannel && voice.screenSharing) {
+      void voice.toggleScreenShare();
+    }
+  }, [voiceInActivityChannel, voice.screenSharing, voice.toggleScreenShare]);
   const showingVoiceStage =
     isVoiceView && inVoiceInThisGuild && voice.voiceChannelId === channelId;
   const isConnecting =
@@ -651,21 +660,39 @@ export function GuildChannelView({
   }, [client, guildId]);
 
   useEffect(() => {
-    const map: Record<string, VoiceMemberSummary[]> = {};
-    for (const ch of channels) {
-      if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
-        continue;
-      }
-      let members = [...(ch.voiceMembers ?? [])];
-      // Sunucudan gelen hayalet self kaydını daha en başta ele
-      if (user && voice.voiceChannelId !== ch.id) {
-        members = members.filter((m) => m.id !== user.id);
-      }
-      // Anahtarı her zaman yaz — boş dizi API fallback’ini engeller (hayalet ikon)
-      map[ch.id] = members;
-    }
     setVoiceMembersByChannel((prev) => {
-      const next = { ...map };
+      const next: Record<string, VoiceMemberSummary[]> = {};
+      for (const ch of channels) {
+        if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
+          continue;
+        }
+        let apiList = [...(ch.voiceMembers ?? [])];
+        // Sunucudan gelen hayalet self kaydını daha en başta ele
+        if (user && voice.voiceChannelId !== ch.id) {
+          apiList = apiList.filter((m) => m.id !== user.id);
+        }
+        const prevList = prev[ch.id] ?? [];
+        // Boş API snapshot socket ile dolmuş listeyi silmesin; dolu API’de prev-only hayalet ekleme
+        const byId = new Map(apiList.map((m) => [m.id, m]));
+        if (apiList.length === 0) {
+          for (const m of prevList) {
+            if (user && m.id === user.id && voice.voiceChannelId !== ch.id) continue;
+            byId.set(m.id, m);
+          }
+        } else {
+          for (const m of prevList) {
+            const existing = byId.get(m.id);
+            if (!existing) continue;
+            byId.set(m.id, {
+              ...existing,
+              ...m,
+              speaking: m.speaking ?? existing.speaking,
+            });
+          }
+        }
+        // Anahtarı her zaman yaz — boş dizi API fallback’ini engeller (hayalet ikon)
+        next[ch.id] = [...byId.values()];
+      }
       if (
         voice.voiceGuildId === guildId &&
         voice.voiceChannelId &&
@@ -2453,7 +2480,12 @@ export function GuildChannelView({
         cameraOn: inVoice ? voice.cameraEnabled : false,
         screenSharing: inVoice ? voice.screenSharing : false,
         onToggleCamera: inVoice ? () => void voice.toggleCamera() : undefined,
-        onToggleScreenShare: inVoice ? () => void voice.toggleScreenShare() : undefined,
+        onToggleScreenShare:
+          inVoice &&
+          voiceChannel?.type !== 'GAME' &&
+          voiceChannel?.type !== 'WATCH_PARTY'
+            ? () => void voice.toggleScreenShare()
+            : undefined,
         onActivitiesClick: inVoice
           ? () => {
               const game = channels.find((c) => c.type === 'GAME');
@@ -2742,6 +2774,17 @@ export function GuildChannelView({
                         key={p.id}
                         className="box-border w-full rounded-lg bg-surface-container px-space-sm py-space-sm"
                       >
+                        {p.camera ? (
+                          <div className="mb-space-xs aspect-video w-full overflow-hidden rounded-md bg-black">
+                            <video
+                              ref={(el) => voice.setCameraVideoElement(p.id, el)}
+                              className="h-full w-full object-cover"
+                              playsInline
+                              autoPlay
+                              muted
+                            />
+                          </div>
+                        ) : null}
                         <div className="flex min-w-0 items-center gap-space-sm">
                           <Avatar
                             displayName={p.displayName}
@@ -2756,6 +2799,11 @@ export function GuildChannelView({
                           {p.muted && (
                             <span className="material-symbols-outlined text-[16px] text-error">
                               mic_off
+                            </span>
+                          )}
+                          {p.camera && (
+                            <span className="material-symbols-outlined text-[16px] text-primary-container">
+                              videocam
                             </span>
                           )}
                         </div>
@@ -2849,7 +2897,11 @@ export function GuildChannelView({
           onToggleMute={() => void voice.toggleMute()}
           onToggleDeafen={() => void voice.toggleDeafen()}
           onToggleCamera={() => void voice.toggleCamera()}
-          onToggleScreenShare={() => void voice.toggleScreenShare()}
+          onToggleScreenShare={
+            voiceInActivityChannel
+              ? undefined
+              : () => void voice.toggleScreenShare()
+          }
           onLeave={() => {
             leaveVoiceAndMaybeNavigate();
           }}

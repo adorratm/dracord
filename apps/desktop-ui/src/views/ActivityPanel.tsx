@@ -499,6 +499,31 @@ export function ActivityPanel({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto px-1 py-2">
+              {voice.peers.some((p) => p.camera) ? (
+                <div className="mb-3 space-y-2 px-2">
+                  <p className="font-label-sm uppercase tracking-wide text-outline">Kameralar</p>
+                  {voice.peers
+                    .filter((p) => p.camera)
+                    .map((p) => (
+                      <div
+                        key={`cam-${p.id}`}
+                        className="overflow-hidden rounded-lg bg-black"
+                      >
+                        <video
+                          ref={(el) => voice.attachCamera(p.id, el)}
+                          className="aspect-video w-full object-cover"
+                          playsInline
+                          autoPlay
+                          muted
+                        />
+                        <p className="truncate bg-surface-container-high px-2 py-1 font-label-sm text-on-surface">
+                          {p.displayName}
+                          {p.id === me ? ' (sen)' : ''}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
               <MemberList groups={participantGroups} className="w-full" />
             </div>
           </div>
