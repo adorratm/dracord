@@ -157,17 +157,18 @@ Script: nginx → DB → apps → hydrorage SSL (`/opt/ttengamesstudio/docker/ss
 
 **Not:** Docker restart sonrası conf.d boşalabilir; templates (`kiliccoffee`, `portfolio-emrekilic` *veya* `portfolio`, `hydrorage`, `dracord`) yeniden kopyalanır. `portfolio.conf` + `portfolio-emrekilic.conf` birlikte kurulmaz (emrekilic.web.tr çakışması → yanlış vhost).
 
-**ttengamesstudio 500 / yanlış site:** sunucuda hemen:
+**ttengamesstudio 500:** vhost doğru (`default.conf`); sebep çoğu zaman Nuxt frontend image (`nostics` eksik). Rebuild:
 
 ```bash
-# Çift portfolio vhost temizle
-docker exec ttengamesstudio-nginx rm -f /etc/nginx/conf.d/portfolio.conf
+# Çift vhost temizliği
+docker exec ttengamesstudio-nginx rm -f /etc/nginx/conf.d/portfolio.conf /etc/nginx/conf.d/hydrorage.com.tr.conf
 docker exec ttengamesstudio-nginx nginx -t && docker exec ttengamesstudio-nginx nginx -s reload
-# Hangi conf hangi host?
-docker exec ttengamesstudio-nginx sh -c 'grep -R server_name /etc/nginx/conf.d/'
-curl -sk -D- --resolve ttengamesstudio.com.tr:443:127.0.0.1 https://ttengamesstudio.com.tr/ -o /tmp/tten.body | head
-head -c 200 /tmp/tten.body; echo
-docker logs ttengamesstudio-frontend --tail 80
+
+# TTEN frontend (Nuxt) — eksik nostics → yeniden build
+cd /opt/ttengamesstudio
+docker compose build --no-cache frontend   # veya projedeki compose servis adı
+docker compose up -d frontend
+docker logs ttengamesstudio-frontend --tail 40
 ```
 
 ---

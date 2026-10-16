@@ -105,8 +105,16 @@ pick_portfolio_vhost() {
   fi
 }
 
-# hydrorage.conf, default.conf içinde zaten hydrorage.com.tr varsa ignore edilir.
-# Asıl hydrorage vhost’un hangisi olduğunu raporla.
+# hydrorage.conf + hydrorage.com.tr.conf aynı host’u iki kez tanımlıyor.
+pick_hydrorage_vhost() {
+  local tpl="$TTEN_TPL/hydrorage.conf"
+  if [[ -f "$tpl" ]]; then
+    restore_conf_from_template hydrorage.conf "$tpl"
+  fi
+  # Eski/çift dosya — conf.d içinde kalsın diye sil
+  remove_conf_d hydrorage.com.tr.conf
+}
+
 report_server_name_conflicts() {
   log "server_name çakışma taraması"
   docker exec "$NGINX_CTN" sh -c '
@@ -213,7 +221,7 @@ fi
 # ÖNEMLİ: portfolio + portfolio-emrekilic birlikte → conflicting server_name (emrekilic)
 [[ -f "$TTEN_TPL/kiliccoffee.conf" ]] && restore_conf_from_template kiliccoffee.conf "$TTEN_TPL/kiliccoffee.conf"
 pick_portfolio_vhost
-[[ -f "$TTEN_TPL/hydrorage.conf" ]] && restore_conf_from_template hydrorage.conf "$TTEN_TPL/hydrorage.conf"
+pick_hydrorage_vhost
 [[ -f "$TTEN_TPL/dracord.conf" ]] && restore_conf_from_template dracord.conf "$TTEN_TPL/dracord.conf"
 
 # default.conf içinde hydrorage / emrekilic varsa hydrorage.conf ile çakışır — raporla
