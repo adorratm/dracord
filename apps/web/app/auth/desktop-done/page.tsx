@@ -18,24 +18,44 @@ function buildDeepLink(params: URLSearchParams): string {
   return deep.toString();
 }
 
+function isElectronUa(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Electron/i.test(navigator.userAgent);
+}
+
 function DesktopDoneInner() {
   const params = useSearchParams();
   const [launched, setLaunched] = useState(false);
+  const [closeHint, setCloseHint] = useState(false);
   const deepLink = useMemo(() => buildDeepLink(params), [params]);
   const hasError = Boolean(params.get('error'));
   const hasSession = Boolean(
     params.get('accessToken') || params.get('challengeToken'),
   );
+  const inElectron = isElectronUa();
 
   useEffect(() => {
     if (!hasSession && !hasError) return;
-    // Deep link protokolünü tetikle — Electron uygulamayı öne alır
     const t = window.setTimeout(() => {
       window.location.href = deepLink;
       setLaunched(true);
-    }, 150);
+      // Sistem tarayıcısında window.close çalışmaz — kısayol ipucu
+      if (!inElectron) {
+        window.setTimeout(() => setCloseHint(true), 400);
+      } else {
+        // Electron OAuth penceresi: ana süreç did-navigate ile kapatır;
+        // yedek olarak close dene
+        window.setTimeout(() => {
+          try {
+            window.close();
+          } catch {
+            /* ignore */
+          }
+        }, 500);
+      }
+    }, 120);
     return () => window.clearTimeout(t);
-  }, [deepLink, hasSession, hasError]);
+  }, [deepLink, hasSession, hasError, inElectron]);
 
   return (
     <main
@@ -68,10 +88,12 @@ function DesktopDoneInner() {
         ) : (
           <>
             <p style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-              {launched ? 'Uygulama açıldı' : 'Masaüstü uygulamasına dönülüyor…'}
+              {launched ? 'Giriş başarılı' : 'Masaüstü uygulamasına dönülüyor…'}
             </p>
             <p style={{ margin: 0, color: '#8be9fd', lineHeight: 1.5 }}>
-              Giriş başarılı. Bu tarayıcı sekmesini kapatabilirsin.
+              {inElectron
+                ? 'Bu pencere otomatik kapanacak.'
+                : 'Dracord açıldı. Bu sekmeyi elle kapatabilirsin.'}
             </p>
           </>
         )}
@@ -92,27 +114,46 @@ function DesktopDoneInner() {
           >
             Dracord’u aç
           </a>
-          <button
-            type="button"
-            onClick={() => {
-              window.close();
-            }}
-            style={{
-              height: 40,
-              borderRadius: 12,
-              border: '1px solid #44475a',
-              background: 'transparent',
-              color: '#f8f8f2',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-          >
-            Sekmeyi kapat
-          </button>
-          <p style={{ margin: 0, fontSize: 12, color: '#6272a4' }}>
-            Sekme kapanmazsa tarayıcı güvenlik nedeniyle engelliyor olabilir —
-            sekmeyi elle kapatman yeterli.
-          </p>
+          {!inElectron ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 14,
+                color: closeHint ? '#f8f8f2' : '#6272a4',
+                lineHeight: 1.45,
+              }}
+            >
+              Sekmeyi kapatmak için{' '}
+              <kbd
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  border: '1px solid #44475a',
+                  background: '#1a1c2c',
+                  fontWeight: 700,
+                }}
+              >
+                Ctrl+W
+              </kbd>{' '}
+              (Mac:{' '}
+              <kbd
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  border: '1px solid #44475a',
+                  background: '#1a1c2c',
+                  fontWeight: 700,
+                }}
+              >
+                Cmd+W
+              </kbd>
+              ).
+              <br />
+              <span style={{ fontSize: 12, color: '#6272a4' }}>
+                Tarayıcılar güvenlik nedeniyle «sekmeyi kapat» düğmesine izin vermez.
+              </span>
+            </p>
+          ) : null}
         </div>
       </div>
     </main>

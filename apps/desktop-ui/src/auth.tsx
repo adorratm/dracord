@@ -86,7 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginGoogle = useCallback(async () => {
     const url = client.getGoogleLoginUrl('desktop');
+    const openOAuth = window.dracordDesktop?.openOAuth;
     const openExternal = window.dracordDesktop?.openExternal;
+    if (openOAuth) {
+      setLoginHint('Google giriş penceresi açılıyor…');
+      const res = await openOAuth(url);
+      if (!res?.ok) {
+        setLoginHint('Giriş penceresi açılamadı — tekrar dene.');
+      }
+      return;
+    }
     if (openExternal) {
       setLoginHint('Tarayıcıda Google açılıyor — girişten sonra uygulamaya döneceksin…');
       const res = await openExternal(url);
@@ -97,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
-    // Web / Electron preload yok: aynı pencerede devam
     window.location.href = url;
   }, [client]);
 

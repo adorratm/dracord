@@ -17,6 +17,7 @@ type DracordDesktopApi = {
   isElectron: true;
   setSystemPrefs: (prefs: { openOnStartup?: boolean; minimizeToTray?: boolean }) => void;
   openExternal?: (url: string) => Promise<{ ok: boolean; error?: string }>;
+  openOAuth?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   getDesktopSources: () => Promise<DracordDesktopCaptureSource[]>;
   setDisplayMediaSelection: (selection: {
     sourceId: string;

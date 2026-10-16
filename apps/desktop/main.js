@@ -288,8 +288,23 @@ function loadUi(win) {
   void resolveUiEntry().then((entry) => applyUiEntry(win, entry));
 }
 
+/** Google OAuth için ayrı pencere — sistem tarayıcı sekmesi kapanmaz sorununu önler */
+let oauthWindow = null;
+
+function closeOAuthWindow() {
+  if (oauthWindow && !oauthWindow.isDestroyed()) {
+    try {
+      oauthWindow.close();
+    } catch {
+      /* ignore */
+    }
+  }
+  oauthWindow = null;
+}
+
 function handleDeepLink(rawUrl) {
   if (!rawUrl || !rawUrl.startsWith('dracord://')) return;
+  closeOAuthWindow();
   const payload = rawUrl.replace(/^dracord:\/\//, '');
   const hash = `/auth/callback?electron=1&payload=${encodeURIComponent(payload)}`;
   if (mainWindow) {
@@ -304,6 +319,104 @@ function handleDeepLink(rawUrl) {
       }
     });
   }
+}
+
+/**
+ * desktop-done veya dracord:// URL’sinden oturumu tamamla ve OAuth penceresini kapat.
+ * @returns {boolean}
+ */
+function finishOAuthFromUrl(urlString) {
+  if (!urlString || typeof urlString !== 'string') return false;
+  try {
+    if (urlString.startsWith('dracord://')) {
+      handleDeepLink(urlString);
+      return true;
+    }
+    const u = new URL(urlString);
+    if (!u.pathname.includes('/auth/desktop-done')) return false;
+    const q = new URLSearchParams();
+    for (const key of [
+      'accessToken',
+      'refreshToken',
+      'challengeToken',
+      'error',
+      'reason',
+    ]) {
+      const v = u.searchParams.get(key);
+      if (v) q.set(key, v);
+    }
+    if ([...q.keys()].length === 0) return false;
+    handleDeepLink(`dracord://oauth?${q.toString()}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function openOAuthWindow(rawUrl) {
+  if (typeof rawUrl !== 'string' || rawUrl.length > 2048) {
+    return { ok: false, error: 'invalid_url' };
+  }
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { ok: false, error: 'invalid_url' };
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { ok: false, error: 'protocol' };
+  }
+
+  closeOAuthWindow();
+  const icon = loadAppIcon();
+  oauthWindow = new BrowserWindow({
+    width: 560,
+    height: 740,
+    minWidth: 420,
+    minHeight: 560,
+    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+    modal: false,
+    show: true,
+    autoHideMenuBar: true,
+    backgroundColor: '#11131e',
+    title: 'Dracord — Google ile giriş',
+    ...(icon ? { icon } : {}),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+
+  const wc = oauthWindow.webContents;
+  const onNav = (_event, url) => {
+    if (finishOAuthFromUrl(url)) return;
+  };
+  wc.on('will-redirect', (event, url) => {
+    if (url.startsWith('dracord://') || url.includes('/auth/desktop-done')) {
+      event.preventDefault();
+      finishOAuthFromUrl(url);
+    }
+  });
+  wc.on('will-navigate', (event, url) => {
+    if (url.startsWith('dracord://')) {
+      event.preventDefault();
+      finishOAuthFromUrl(url);
+      return;
+    }
+    if (url.includes('/auth/desktop-done')) {
+      // Sayfa yüklensin diye engelleme; did-navigate ile kapat
+    }
+  });
+  wc.on('did-navigate', onNav);
+  wc.on('did-navigate-in-page', onNav);
+
+  oauthWindow.on('closed', () => {
+    oauthWindow = null;
+  });
+
+  void oauthWindow.loadURL(parsed.toString());
+  return { ok: true };
 }
 
 function createTray() {
@@ -441,6 +554,15 @@ function registerWindowIpc() {
       return { ok: true };
     } catch (err) {
       console.warn('[shell:open-external]', err);
+      return { ok: false, error: 'open_failed' };
+    }
+  });
+
+  ipcMain.handle('shell:open-oauth', async (_event, rawUrl) => {
+    try {
+      return openOAuthWindow(rawUrl);
+    } catch (err) {
+      console.warn('[shell:open-oauth]', err);
       return { ok: false, error: 'open_failed' };
     }
   });
