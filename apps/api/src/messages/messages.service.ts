@@ -1240,7 +1240,8 @@ export class MessagesService {
           ? null
           : this.toPollDto(message.poll, opts.viewerId, opts.pollVoters),
       viewerHide: hidden ? 'hidden' : null,
-      bookmarked: Boolean(opts.bookmarked),
+      // Viewer-specific — yalnızca bilinçli set edildiğinde gönder (socket broadcast’te yok)
+      ...(opts.bookmarked !== undefined ? { bookmarked: Boolean(opts.bookmarked) } : {}),
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt?.toISOString() ?? null,
     };

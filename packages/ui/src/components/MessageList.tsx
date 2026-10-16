@@ -332,7 +332,10 @@ export function MessageItem({
   const isMine = Boolean(actions?.currentUserId && author.id === actions.currentUserId);
   const canDelete = isMine || Boolean(actions?.canManageMessages);
   const canEdit = isMine && message.type !== 'heading';
-  const canPin = Boolean(actions?.canManageMessages) || !actions?.guildId;
+  // DM: herkes; sunucu: MANAGE_MESSAGES (canManageMessages)
+  const canPin =
+    Boolean(actions?.onPin) &&
+    (Boolean(actions?.canManageMessages) || !actions?.guildId || Boolean(actions?.isDm));
   const sticker = isStickerOnly(message.content);
   const isSelfMention = contentHasSelfMention(message.content, mentionNames);
   const isHeading = message.type === 'heading';
@@ -843,22 +846,26 @@ export function MessageItem({
                         actions.onReply?.(message);
                       }}
                     />
-                    <MenuRow
-                      icon="forward"
-                      label="İlet"
-                      onClick={() => {
-                        closeAllMenus();
-                        actions.onForward?.(message);
-                      }}
-                    />
-                    <MenuRow
-                      icon="title"
-                      label="Alt Başlık Oluştur"
-                      onClick={() => {
-                        closeAllMenus();
-                        actions.onCreateHeading?.(message);
-                      }}
-                    />
+                    {actions.onForward && (
+                      <MenuRow
+                        icon="forward"
+                        label="İlet"
+                        onClick={() => {
+                          closeAllMenus();
+                          actions.onForward?.(message);
+                        }}
+                      />
+                    )}
+                    {actions.onCreateHeading && (
+                      <MenuRow
+                        icon="title"
+                        label="Alt Başlık Oluştur"
+                        onClick={() => {
+                          closeAllMenus();
+                          actions.onCreateHeading?.(message);
+                        }}
+                      />
+                    )}
                     {actions.onOpenThread && (
                       <MenuRow
                         icon="forum"

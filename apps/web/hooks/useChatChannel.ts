@@ -140,7 +140,16 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     const onUpdate = (message: MessageDto) => {
       if (message.channelId !== channelId) return;
       setMessages((prev) => {
-        const next = prev.map((m) => (m.id === message.id ? message : m));
+        const next = prev.map((m) =>
+          m.id === message.id
+            ? {
+                ...message,
+                // bookmarked kullanıcıya özel; broadcast’te gelmezse koru
+                bookmarked:
+                  message.bookmarked !== undefined ? message.bookmarked : m.bookmarked,
+              }
+            : m,
+        );
         remember(channelId, {
           items: next,
           hasMore: messageCache.get(channelId)?.hasMore ?? false,
@@ -339,7 +348,15 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     (message: MessageDto) => {
       if (!channelId) return;
       setMessages((prev) => {
-        const next = prev.map((m) => (m.id === message.id ? message : m));
+        const next = prev.map((m) =>
+          m.id === message.id
+            ? {
+                ...message,
+                bookmarked:
+                  message.bookmarked !== undefined ? message.bookmarked : m.bookmarked,
+              }
+            : m,
+        );
         remember(channelId, { items: next, hasMore });
         return next;
       });
@@ -470,7 +487,15 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
         ? await client.pinMessage(messageId)
         : await client.unpinMessage(messageId);
       setMessages((prev) => {
-        const next = prev.map((m) => (m.id === message.id ? message : m));
+        const next = prev.map((m) =>
+          m.id === message.id
+            ? {
+                ...message,
+                bookmarked:
+                  message.bookmarked !== undefined ? message.bookmarked : m.bookmarked,
+              }
+            : m,
+        );
         remember(channelId, { items: next, hasMore });
         return next;
       });
@@ -500,7 +525,15 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
       if (!channelId) return;
       setMessages((prev) => {
         if (prev.some((m) => m.id === message.id)) {
-          const next = prev.map((m) => (m.id === message.id ? message : m));
+          const next = prev.map((m) =>
+            m.id === message.id
+              ? {
+                  ...message,
+                  bookmarked:
+                    message.bookmarked !== undefined ? message.bookmarked : m.bookmarked,
+                }
+              : m,
+          );
           remember(channelId, { items: next, hasMore });
           return next;
         }

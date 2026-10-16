@@ -46,11 +46,14 @@ export function ActivityPanel({
   channel,
   members = [],
   textChannels = [],
+  onLeaveNavigate,
 }: {
   guildId: string;
   channel: ChannelSummary;
   members?: PublicUser[];
   textChannels?: ChannelSummary[];
+  /** Aktiviteden ayrıl / bitir sonrası metin kanalına geç */
+  onLeaveNavigate?: () => void;
 }) {
   const { client, user } = useAuth();
   const voice = useVoiceSession();
@@ -206,12 +209,24 @@ export function ActivityPanel({
     }
   };
 
+  /** Aktivite + watch party / oyun ses kanalından tamamen çık (web parity) */
+  const leaveVoiceAndNavigate = async (chId: string) => {
+    // Önce UI (ActivityPanel unmount) — auto-join effect tekrar bağlanmasın
+    onLeaveNavigate?.();
+    if (voice.voiceChannelId === chId) {
+      await voice.leave();
+    } else {
+      await client.leaveVoiceState(chId).catch(() => undefined);
+    }
+  };
+
   const leave = async () => {
     if (!session) return;
     setBusy(true);
     try {
+      const chId = channelId;
       await client.leaveActivity(session.id);
-      setSession(await refresh());
+      await leaveVoiceAndNavigate(chId);
     } catch (e) {
       setError(errMsg(e, 'Ayrılınamadı'));
     } finally {
@@ -223,8 +238,10 @@ export function ActivityPanel({
     if (!session) return;
     setBusy(true);
     try {
+      const chId = channelId;
       await client.endActivity(session.id);
       setSession(null);
+      await leaveVoiceAndNavigate(chId);
     } catch (e) {
       setError(errMsg(e, 'Bitirilemedi'));
     } finally {

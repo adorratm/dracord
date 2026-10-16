@@ -545,6 +545,16 @@ export function Shell() {
     return () => window.removeEventListener('dracord:jump-message', onJump);
   }, []);
 
+  useEffect(() => {
+    const onOpenDm = (e: Event) => {
+      const channelId = (e as CustomEvent<{ channelId?: string }>).detail?.channelId;
+      if (!channelId) return;
+      setView({ kind: 'dms', channelId });
+    };
+    window.addEventListener('dracord:open-dm', onOpenDm);
+    return () => window.removeEventListener('dracord:open-dm', onOpenDm);
+  }, []);
+
   const toggleCollapsed = (id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -1395,6 +1405,10 @@ export function Shell() {
               channel={activeChannel}
               members={members}
               textChannels={channels.filter((c) => c.type === 'TEXT')}
+              onLeaveNavigate={() => {
+                const text = channels.find((c) => c.type === 'TEXT');
+                if (text) openChannel(view.guildId, text.id);
+              }}
             />
           )}
           {view.kind === 'channel' && !activeChannel && <Empty>Kanal yükleniyor…</Empty>}

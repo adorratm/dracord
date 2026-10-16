@@ -9,10 +9,13 @@ import type {
 } from '@dracord/types';
 import { DRACORD_BOT_USER_ID, SocketEvents } from '@dracord/types';
 import {
+  Avatar,
   ChatInput,
   MessageList,
   Modal,
   SearchPanel,
+  SearchableSelect,
+  UserProfileCard,
   dataUrlToFile,
   type ChatMediaPayload,
   type SearchScope,
@@ -21,6 +24,13 @@ import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { DracoEmpty } from '../components/Draco';
 import { useAuth } from '../auth';
 import { useVoiceSession } from '../voice/VoiceSession';
+
+function mergeMessageUpdate(prev: MessageDto, next: MessageDto): MessageDto {
+  return {
+    ...next,
+    bookmarked: next.bookmarked !== undefined ? next.bookmarked : prev.bookmarked,
+  };
+}
 
 export function ChatPanel({
   guildId,
@@ -48,11 +58,25 @@ export function ChatPanel({
   const { client, user } = useAuth();
   const voice = useVoiceSession();
   const inVoice = Boolean(voice.voiceChannelId);
+  const isDm = !guildId;
   const [messages, setMessages] = useState<MessageDto[]>([]);
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
   const [editing, setEditing] = useState<MessageDto | null>(null);
   const [pins, setPins] = useState<MessageDto[]>([]);
-  const [showPins, setShowPins] = useState(false);
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const [canManageMessages, setCanManageMessages] = useState(isDm);
+  const [profileUser, setProfileUser] = useState<PublicUser | null>(null);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
+  const [forwardTarget, setForwardTarget] = useState<{
+    id: string;
+    contentPreview: string;
+  } | null>(null);
+  const [forwardChannelId, setForwardChannelId] = useState('');
+  const [forwardNote, setForwardNote] = useState('');
+  const [forwardOptions, setForwardOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([]);
+  const [forwardBusy, setForwardBusy] = useState(false);
   const [threadRoot, setThreadRoot] = useState<MessageDto | null>(null);
   const [threadMsgs, setThreadMsgs] = useState<MessageDto[]>([]);
   const [threadBusy, setThreadBusy] = useState(false);
@@ -110,8 +134,12 @@ export function ChatPanel({
     };
     const onUpdate = (msg: MessageDto) => {
       if (msg.channelId !== channel.id) return;
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
-      setThreadMsgs((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? mergeMessageUpdate(m, msg) : m)),
+      );
+      setThreadMsgs((prev) =>
+        prev.map((m) => (m.id === msg.id ? mergeMessageUpdate(m, msg) : m)),
+      );
     };
     const onDelete = (payload: { id: string; channelId: string }) => {
       if (payload.channelId !== channel.id) return;
@@ -192,8 +220,84 @@ export function ChatPanel({
   }, []);
 
   const patchThreadMsg = useCallback((msg: MessageDto) => {
-    setThreadMsgs((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
+    setThreadMsgs((prev) =>
+      prev.map((m) => (m.id === msg.id ? mergeMessageUpdate(m, msg) : m)),
+    );
   }, []);
+
+  const patchMessage = useCallback((msg: MessageDto) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msg.id ? mergeMessageUpdate(m, msg) : m)),
+    );
+    setThreadMsgs((prev) =>
+      prev.map((m) => (m.id === msg.id ? mergeMessageUpdate(m, msg) : m)),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!guildId || !user) {
+      setCanManageMessages(true);
+      return;
+    }
+    void client.getGuildPermissions(guildId).then((p) => {
+      const set = new Set(p.permissions);
+      const god = Boolean(p.platformAdmin) || Boolean(user.isPlatformAdmin);
+      setCanManageMessages(
+        god || p.owner || set.has('MANAGE_MESSAGES') || set.has('ADMINISTRATOR'),
+      );
+    });
+  }, [guildId, client, user]);
+
+  useEffect(() => {
+    void client
+      .getFriends()
+      .then((list) => setFriendIds(new Set(list.map((f) => f.id))))
+      .catch(() => undefined);
+  }, [client, user?.id]);
+
+  const openAuthorProfile = useCallback(
+    (author: PublicUser) => {
+      if (author.isBot || author.id === DRACORD_BOT_USER_ID) return;
+      const enriched = members.find((m) => m.id === author.id) ?? author;
+      setProfileUser(enriched);
+    },
+    [members],
+  );
+
+  const openForward = useCallback(
+    (m: MessageDto) => {
+      setForwardTarget({ id: m.id, contentPreview: m.content.slice(0, 80) });
+      setForwardNote('');
+      setForwardBusy(false);
+      const load = guildId
+        ? client.getGuildChannels(guildId).then((chs) =>
+            chs
+              .filter((c) => (c.type === 'TEXT' || c.type === 'FORUM') && c.id !== channel.id)
+              .map((c) => ({
+                value: c.id,
+                label: `${c.type === 'FORUM' ? 'forum: ' : '#'}${c.name}`,
+              })),
+          )
+        : client.listDms().then((dms) =>
+            dms
+              .filter((c) => c.id !== channel.id)
+              .map((c) => ({
+                value: c.id,
+                label: c.name || 'DM',
+              })),
+          );
+      void load
+        .then((opts) => {
+          setForwardOptions(opts);
+          setForwardChannelId(opts[0]?.value ?? '');
+        })
+        .catch(() => {
+          setForwardOptions([]);
+          setForwardChannelId('');
+        });
+    },
+    [client, guildId, channel.id],
+  );
 
   const openThreadsPreview = useCallback(() => {
     setThreadsPreviewOpen(true);
@@ -399,8 +503,8 @@ export function ChatPanel({
               type="button"
               className="h-8 px-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface flex items-center gap-1 text-sm"
               onClick={() => {
-                setShowPins((v) => !v);
-                void client.listPinnedMessages(channel.id).then(setPins);
+                setPinsOpen(true);
+                void client.listPinnedMessages(channel.id).then(setPins).catch(() => setPins([]));
               }}
             >
               <span className="material-symbols-outlined text-[18px]">push_pin</span>
@@ -428,17 +532,59 @@ export function ChatPanel({
           </header>
         )}
 
-        {showPins && (
-          <div className="max-h-40 overflow-auto border-b border-outline-variant bg-surface-container-low px-3 py-2">
-            {pins.map((p) => (
-              <div key={p.id} className="text-sm py-1">
-                <strong className="text-primary-container">{p.author?.displayName}</strong>
-                <span className="text-on-surface-variant">: {p.content}</span>
+        {pins[0] && !threadRoot && (
+          <div className="shrink-0 border-b border-outline-variant bg-surface-container-low/90">
+            <button
+              type="button"
+              onClick={() => {
+                setHighlightMessageId(pins[0]!.id);
+                void client
+                  .getMessages(channel.id, { limit: 50, around: pins[0]!.id })
+                  .then((page) => setMessages(page.items ?? []))
+                  .catch(() => undefined);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-surface-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px] text-primary-container shrink-0">
+                push_pin
+              </span>
+              <Avatar
+                displayName={pins[0].author.displayName}
+                imageUrl={pins[0].author.avatarUrl}
+                size="sm"
+                statusRing={false}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-on-surface-variant truncate">
+                  <span className="text-on-surface font-medium">
+                    {pins[0].author.displayName}
+                  </span>
+                  {pins.length > 1 ? ` · ${pins.length} sabit` : ' · Sabitlenen mesaj'}
+                </p>
+                <p className="text-sm text-on-surface truncate">
+                  {(pins[0].content || '').trim().replace(/\s+/g, ' ').slice(0, 120) ||
+                    (pins[0].attachments?.length ? 'Ek / medya' : 'Sabitlenmiş mesaj')}
+                </p>
               </div>
-            ))}
-            {pins.length === 0 && (
-              <div className="text-sm text-on-surface-variant">Pin yok</div>
-            )}
+              <span
+                role="button"
+                tabIndex={0}
+                className="text-xs text-primary-container hover:underline shrink-0 px-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinsOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPinsOpen(true);
+                  }
+                }}
+              >
+                Tümü
+              </span>
+            </button>
           </div>
         )}
 
@@ -488,7 +634,8 @@ export function ChatPanel({
               messageActions={{
                 currentUserId: user?.id,
                 guildId: guildId || null,
-                canManageMessages: true,
+                isDm,
+                canManageMessages: isDm || canManageMessages,
                 onEdit: (m) => {
                   setThreadEditing(m);
                   setThreadReplyTo(null);
@@ -507,9 +654,13 @@ export function ChatPanel({
                   setThreadReplyTo(m);
                   setThreadEditing(null);
                 },
+                onForward: openForward,
                 onPin: (m, pin) => {
                   void (pin ? client.pinMessage(m.id) : client.unpinMessage(m.id))
-                    .then(patchThreadMsg)
+                    .then((msg) => {
+                      patchThreadMsg(msg);
+                      patchMessage(msg);
+                    })
                     .then(() => client.listPinnedMessages(channel.id).then(setPins));
                 },
                 onBookmark: (m, bookmark) => {
@@ -521,10 +672,7 @@ export function ChatPanel({
                 onVotePoll: (m, optionId) => {
                   void client.votePoll(m.id, optionId).then(patchThreadMsg);
                 },
-                onAuthorClick: (author) => {
-                  if (author.isBot || author.id === DRACORD_BOT_USER_ID) return;
-                  void client.openDm(author.id);
-                },
+                onAuthorClick: openAuthorProfile,
               }}
               emptyState={
                 <DracoEmpty
@@ -595,6 +743,8 @@ export function ChatPanel({
                 messageActions={{
                   currentUserId: user?.id,
                   guildId: guildId || null,
+                  isDm,
+                  canManageMessages: isDm || canManageMessages,
                   onEdit: (m) => {
                     setEditing(m);
                     setReplyTo(null);
@@ -607,19 +757,32 @@ export function ChatPanel({
                     setReplyTo(m);
                     setEditing(null);
                   },
+                  onForward: openForward,
                   onPin: (m, pin) => {
-                    void (pin ? client.pinMessage(m.id) : client.unpinMessage(m.id)).then(() =>
-                      client.listPinnedMessages(channel.id).then(setPins),
-                    );
+                    void (pin ? client.pinMessage(m.id) : client.unpinMessage(m.id))
+                      .then((msg) => {
+                        patchMessage(msg);
+                        return client.listPinnedMessages(channel.id).then(setPins);
+                      })
+                      .catch(() => undefined);
                   },
                   onBookmark: (m, bookmark) => {
-                    void (bookmark ? client.bookmarkMessage(m.id) : client.unbookmarkMessage(m.id));
+                    void (bookmark
+                      ? client.bookmarkMessage(m.id)
+                      : client.unbookmarkMessage(m.id)
+                    )
+                      .then(patchMessage)
+                      .catch(() => undefined);
                   },
                   onOpenThread: (m) => openThread(m),
                   onVotePoll: (m, optionId) => void client.votePoll(m.id, optionId),
-                  onAuthorClick: (author) => {
-                    if (author.isBot || author.id === DRACORD_BOT_USER_ID) return;
-                    void client.openDm(author.id);
+                  onAuthorClick: openAuthorProfile,
+                  onJumpToMessage: (id) => {
+                    setHighlightMessageId(id);
+                    void client
+                      .getMessages(channel.id, { limit: 50, around: id })
+                      .then((page) => setMessages(page.items ?? []))
+                      .catch(() => undefined);
                   },
                 }}
                 emptyState={
@@ -846,6 +1009,164 @@ export function ChatPanel({
           </ul>
         )}
       </Modal>
+
+      <Modal
+        open={pinsOpen}
+        title="Sabitlenen mesajlar"
+        onClose={() => setPinsOpen(false)}
+      >
+        {pins.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">
+            Bu kanalda sabitlenmiş mesaj yok.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1 max-h-80 overflow-y-auto">
+            {pins.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="w-full text-left rounded-lg px-2 py-2 hover:bg-surface-container-highest"
+                  onClick={() => {
+                    setPinsOpen(false);
+                    setHighlightMessageId(p.id);
+                    void client
+                      .getMessages(channel.id, { limit: 50, around: p.id })
+                      .then((page) => setMessages(page.items ?? []))
+                      .catch(() => undefined);
+                  }}
+                >
+                  <span className="block text-sm text-primary-container truncate">
+                    {p.author?.displayName}
+                  </span>
+                  <span className="block text-sm text-on-surface truncate">
+                    {p.content?.trim() || 'Ek / medya'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(forwardTarget)}
+        title="Mesajı ilet"
+        onClose={() => setForwardTarget(null)}
+        footer={
+          <button
+            type="button"
+            disabled={forwardBusy || !forwardTarget || !forwardChannelId}
+            className="h-9 px-4 rounded-lg bg-primary-container text-on-primary-container font-bold disabled:opacity-50"
+            onClick={() => {
+              if (!forwardTarget || !forwardChannelId) return;
+              setForwardBusy(true);
+              void client
+                .forwardMessage(
+                  forwardTarget.id,
+                  forwardChannelId,
+                  forwardNote.trim() || undefined,
+                )
+                .then(() => setForwardTarget(null))
+                .catch(() => undefined)
+                .finally(() => setForwardBusy(false));
+            }}
+          >
+            İlet
+          </button>
+        }
+      >
+        {forwardTarget && (
+          <p className="text-sm text-on-surface-variant mb-3 truncate">
+            {forwardTarget.contentPreview || 'Ek / medya'}
+          </p>
+        )}
+        <label className="flex flex-col gap-1 mb-3">
+          <span className="text-sm text-on-surface-variant">Hedef kanal</span>
+          <SearchableSelect
+            fullWidth
+            value={forwardChannelId}
+            onChange={setForwardChannelId}
+            placeholder="Kanal seç…"
+            options={[{ value: '', label: 'Kanal seç…' }, ...forwardOptions]}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-on-surface-variant">Not (isteğe bağlı)</span>
+          <textarea
+            value={forwardNote}
+            onChange={(e) => setForwardNote(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg bg-surface-container-highest px-3 py-2 outline-none"
+          />
+        </label>
+      </Modal>
+
+      <UserProfileCard
+        open={Boolean(profileUser)}
+        onClose={() => setProfileUser(null)}
+        variant="popout"
+        user={{
+          id: profileUser?.id ?? '',
+          displayName: profileUser?.displayName ?? '',
+          username: profileUser?.username,
+          avatarUrl: profileUser?.avatarUrl,
+          bannerUrl: profileUser?.bannerUrl,
+          bannerColor: profileUser?.bannerColor,
+          bio: profileUser?.bio,
+          status: profileUser?.status,
+          customStatus: profileUser?.customStatus,
+          isBot: profileUser?.isBot,
+          roles: profileUser?.roles,
+          socialLinks: profileUser?.socialLinks,
+          accentColor: profileUser?.accentColor,
+        }}
+        actions={
+          profileUser && profileUser.id !== user?.id
+            ? [
+                ...(profileUser.isBot || profileUser.id === DRACORD_BOT_USER_ID
+                  ? []
+                  : [
+                      {
+                        id: 'dm',
+                        label: 'Mesaj gönder',
+                        onClick: () => {
+                          void client.openDm(profileUser.id).then((ch) => {
+                            setProfileUser(null);
+                            window.dispatchEvent(
+                              new CustomEvent('dracord:open-dm', {
+                                detail: { channelId: ch.id },
+                              }),
+                            );
+                          });
+                        },
+                      },
+                      ...(!friendIds.has(profileUser.id)
+                        ? [
+                            {
+                              id: 'friend',
+                              label: 'Arkadaşlık isteği gönder',
+                              onClick: () => {
+                                void client.sendFriendRequest(profileUser.id).then(() => {
+                                  setFriendIds((prev) => new Set([...prev, profileUser.id]));
+                                });
+                              },
+                            },
+                          ]
+                        : []),
+                      {
+                        id: 'block',
+                        label: 'Engelle',
+                        danger: true,
+                        onClick: () => {
+                          void client.blockUser(profileUser.id);
+                          setProfileUser(null);
+                        },
+                      },
+                    ]),
+              ]
+            : []
+        }
+      />
     </div>
   );
 }
