@@ -464,6 +464,13 @@ export interface VoiceStatePayload {
   targetChannelId?: string | null;
 }
 
+/** Sunucu ses roster snapshot — kanala girmeden sidebar için */
+export interface VoiceSyncPayload {
+  guildId: string;
+  /** channelId → odadaki üyeler (boş kanallar genelde yok) */
+  membersByChannel: Record<string, VoiceMemberSummary[]>;
+}
+
 export type NotificationType = 'MENTION' | 'ANNOUNCEMENT' | 'SYSTEM' | 'FRIEND' | 'DM';
 
 export interface NotificationDto {
@@ -490,6 +497,8 @@ export const SocketEvents = {
   CHANNEL_JOIN: 'channel:join',
   CHANNEL_LEAVE: 'channel:leave',
   VOICE_STATE: 'voice:state',
+  /** İstemci ister / sunucu guild roster snapshot gönderir */
+  VOICE_SYNC: 'voice:sync',
   /**
    * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
    * Eski istemci LiveKit’i bırakır; presence kanalda kalır.

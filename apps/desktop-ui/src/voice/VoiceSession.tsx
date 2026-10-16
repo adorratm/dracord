@@ -966,13 +966,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       room.on(RoomEvent.LocalTrackUnpublished, refresh);
 
       try {
-        if (!sameChannelReclaim) {
-          await client.joinVoiceState(channel.id, {
-            muted: mutedRef.current || afkSilenceRef.current,
-            deafened: deafenedRef.current || afkSilenceRef.current,
-            password: opts?.password,
-          });
-        } else {
+        // Presence her zaman yenilensin (TTL); reclaim’te de roster’da görünmek için şart
+        await client.joinVoiceState(channel.id, {
+          muted: mutedRef.current || afkSilenceRef.current,
+          deafened: deafenedRef.current || afkSilenceRef.current,
+          password: opts?.password,
+        });
+        if (sameChannelReclaim) {
           await client.claimVoiceClient(channel.id).catch(() => undefined);
         }
         const tok = await client.getVoiceToken(channel.id, opts?.password);
@@ -1045,6 +1045,33 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       sock.off(SocketEvents.VOICE_TAKEOVER, onTakeover);
     };
   }, [user, client, yieldToOtherClient]);
+
+  // Presence TTL (90s) — heartbeat yoksa sidebar’da görünmezsiniz
+  useEffect(() => {
+    if (!voiceChannelId || !connected) return;
+    const tick = () => {
+      void client
+        .voiceHeartbeat(voiceChannelId)
+        .then((r) => {
+          if (!r?.ok) {
+            void client
+              .joinVoiceState(voiceChannelId, {
+                muted: mutedRef.current || afkSilenceRef.current,
+                deafened: deafenedRef.current || afkSilenceRef.current,
+              })
+              .catch(() => undefined);
+            return;
+          }
+          if (r.active === false) {
+            void yieldToOtherClient(null);
+          }
+        })
+        .catch(() => undefined);
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [voiceChannelId, connected, client, yieldToOtherClient]);
 
   const patchAudioSettings = useCallback((patch: Partial<VoiceAudioSettings>) => {
     const next = { ...audioSettingsRef.current, ...patch };

@@ -20,6 +20,7 @@ function mapChannelItem(
   onChannelClick: (channel: ChannelSummary) => void,
   extras?: {
     voiceMembersByChannel?: Record<string, VoiceMemberSummary[]>;
+    voiceRosterReady?: boolean;
     selfUserId?: string;
     selfVoiceChannelId?: string | null;
     platformAdminIds?: Set<string>;
@@ -47,12 +48,36 @@ function mapChannelItem(
   const isActivity = ch.type === 'GAME' || ch.type === 'WATCH_PARTY';
   const localMap = extras?.voiceMembersByChannel;
   const hasLocal = Boolean(localMap && Object.prototype.hasOwnProperty.call(localMap, ch.id));
-  let voiceMembers =
-    isVoice || isActivity
-      ? hasLocal
-        ? (localMap![ch.id] ?? [])
-        : (ch.voiceMembers ?? [])
-      : undefined;
+  /**
+   * Sol kanal paneli: roster sync gelmeden boş local, API’deki üyeleri gizlemesin.
+   * Sync sonrası local (presence) kaynak; LiveKit’e girmeden de avatarlar görünür.
+   */
+  let voiceMembers: VoiceMemberSummary[] | undefined;
+  if (isVoice || isActivity) {
+    const local = hasLocal ? (localMap![ch.id] ?? []) : undefined;
+    const api = ch.voiceMembers ?? [];
+    const rosterReady = Boolean(extras?.voiceRosterReady);
+    if (local == null) {
+      voiceMembers = api;
+    } else if (!rosterReady && local.length === 0 && api.length > 0) {
+      voiceMembers = api;
+    } else if (rosterReady || local.length > 0) {
+      if (api.length === 0 || rosterReady) {
+        voiceMembers = local;
+      } else {
+        const byId = new Map(api.map((m) => [m.id, m]));
+        for (const m of local) {
+          const existing = byId.get(m.id);
+          byId.set(m.id, existing ? { ...existing, ...m } : m);
+        }
+        voiceMembers = [...byId.values()];
+      }
+    } else {
+      voiceMembers = api;
+    }
+  } else {
+    voiceMembers = undefined;
+  }
   if (voiceMembers && extras?.selfUserId && (isVoice || isActivity)) {
     const inThis =
       (extras.selfVoiceChannelId != null && extras.selfVoiceChannelId === ch.id) ||
@@ -140,6 +165,7 @@ export function buildSidebarCategories(
   onChannelClick: (channel: ChannelSummary) => void,
   extras?: {
     voiceMembersByChannel?: Record<string, VoiceMemberSummary[]>;
+    voiceRosterReady?: boolean;
     /** Kullanıcı gerçekten bu LiveKit oturumundaysa id; değilse kendisini listeden çıkar. */
     selfUserId?: string;
     selfVoiceChannelId?: string | null;

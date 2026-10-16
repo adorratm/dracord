@@ -1519,6 +1519,29 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
 
         const password = voicePasswordRef.current;
+        // Presence LiveKit’ten önce — gözlemciler sidebar’da hemen görsün
+        try {
+          await client.joinVoiceState(channelId, {
+            muted: afkSilenceRef.current || mutedRef.current,
+            deafened: afkSilenceRef.current || deafenedRef.current,
+            password,
+          });
+          if (guildId) {
+            client.connectSocket();
+            client.emitVoiceState({
+              guildId,
+              channelId,
+              muted: afkSilenceRef.current || mutedRef.current,
+              deafened: afkSilenceRef.current || deafenedRef.current,
+            });
+          }
+        } catch (presenceErr) {
+          throw presenceErr instanceof Error
+            ? presenceErr
+            : new Error('Ses presence kaydı başarısız');
+        }
+        if (disposed) return;
+
         const { token, url } = await client.getVoiceToken(channelId, password);
         const livekitUrl =
           process.env.NEXT_PUBLIC_LIVEKIT_URL?.trim() || url || 'ws://localhost:7880';
@@ -1572,24 +1595,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
         await applyRoomAudioSettings(room, audioSettingsRef.current);
         void refreshAudioDevices(false);
-        try {
-          await client.joinVoiceState(channelId, {
-            muted: afkSilenceRef.current || mutedRef.current,
-            deafened: afkSilenceRef.current || deafenedRef.current,
-            password,
-          });
-          if (guildId) {
-            client.connectSocket();
-            client.emitVoiceState({
-              guildId,
-              channelId,
-              muted: afkSilenceRef.current || mutedRef.current,
-              deafened: afkSilenceRef.current || deafenedRef.current,
-            });
-          }
-        } catch {
-          // presence sync optional
-        }
 
         playUiTone('join');
         everConnected = true;
@@ -1633,6 +1638,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         .voiceHeartbeat(channelId)
         .then((r) => {
           if (disposed) return;
+          if (r && r.ok === false) {
+            void client
+              .joinVoiceState(channelId, {
+                muted: afkSilenceRef.current || mutedRef.current,
+                deafened: afkSilenceRef.current || deafenedRef.current,
+              })
+              .catch(() => undefined);
+            return;
+          }
           if (r && 'active' in r && r.active === false) {
             // Paylaşım sırasında heartbeat false → liderlik bırakma (odadan düşme)
             if (screenSharingRef.current || screenShareBusyRef.current) return;

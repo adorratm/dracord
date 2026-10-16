@@ -1130,6 +1130,14 @@ export class DracordClient {
     });
   }
 
+  /** Sidebar: kanala girmeden sunucu ses roster’ı */
+  async getGuildVoiceRoster(guildId: string): Promise<{
+    guildId: string;
+    membersByChannel: Record<string, import('@dracord/types').VoiceMemberSummary[]>;
+  }> {
+    return this.request(`/voice/guilds/${guildId}/roster`);
+  }
+
   async getMusicState(
     guildId: string,
     voiceChannelId: string,
@@ -1320,6 +1328,11 @@ export class DracordClient {
     screenSharing?: boolean;
   }) {
     this.socket?.emit(SocketEvents.VOICE_STATE, payload);
+  }
+
+  /** Guild ses roster snapshot iste (sunucu VOICE_SYNC ile yanıtlar) */
+  requestVoiceSync(guildId: string) {
+    this.socket?.emit(SocketEvents.VOICE_SYNC, { guildId });
   }
 
   startTyping(channelId: string) {

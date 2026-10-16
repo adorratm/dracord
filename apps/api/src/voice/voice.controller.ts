@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Headers,
   Param,
   Patch,
@@ -15,10 +16,11 @@ import {
   type JwtPayloadUser,
 } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { DM_CALL_GUILD_ID } from '@dracord/types';
+import { DM_CALL_GUILD_ID, type VoiceSyncPayload } from '@dracord/types';
 import { ActivitiesService } from '@/activities/activities.service';
 import { ChannelsService } from '@/channels/channels.service';
 import { DmCallService } from '@/dm/dm-call.service';
+import { GuildsService } from '@/guilds/guilds.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { Channel } from '@/database/entities/channel.entity';
 import { EntityManager } from 'typeorm';
@@ -33,6 +35,7 @@ export class VoiceController {
     private readonly voiceService: VoiceService,
     private readonly presence: VoicePresenceService,
     private readonly channels: ChannelsService,
+    private readonly guilds: GuildsService,
     private readonly broadcast: SocketBroadcastService,
     private readonly em: EntityManager,
     private readonly dmCalls: DmCallService,
@@ -82,6 +85,17 @@ export class VoiceController {
         platform: platform ?? null,
       });
     }
+  }
+
+  /** Kanala girmeden sidebar’da kimler var — presence roster */
+  @Get('guilds/:guildId/roster')
+  async guildRoster(
+    @CurrentUser() user: JwtPayloadUser,
+    @Param('guildId') guildId: string,
+  ): Promise<VoiceSyncPayload> {
+    await this.guilds.ensureMember(guildId, user.sub);
+    const membersByChannel = await this.presence.listGuildVoice(guildId);
+    return { guildId, membersByChannel };
   }
 
   @Post('token')

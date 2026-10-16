@@ -6,6 +6,7 @@ import type {
   PublicUser,
   VoiceMemberSummary,
   VoiceStatePayload,
+  VoiceSyncPayload,
 } from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
@@ -173,6 +174,7 @@ export function GuildChannelView({
   const [voiceMembersByChannel, setVoiceMembersByChannel] = useState<
     Record<string, VoiceMemberSummary[]>
   >({});
+  const [voiceRosterReady, setVoiceRosterReady] = useState(false);
   const [channelModal, setChannelModal] = useState<{
     mode: 'create' | 'edit';
     categoryId: string | null;
@@ -660,6 +662,10 @@ export function GuildChannelView({
   }, [client, guildId]);
 
   useEffect(() => {
+    setVoiceRosterReady(false);
+  }, [guildId]);
+
+  useEffect(() => {
     setVoiceMembersByChannel((prev) => {
       const next: Record<string, VoiceMemberSummary[]> = {};
       for (const ch of channels) {
@@ -672,7 +678,7 @@ export function GuildChannelView({
           apiList = apiList.filter((m) => m.id !== user.id);
         }
         const prevList = prev[ch.id] ?? [];
-        // Boş API snapshot socket ile dolmuş listeyi silmesin; dolu API’de prev-only hayalet ekleme
+        // Boş API: socket listesini koru. Dolu API: birleştir (eksik roster kaybetmesin)
         const byId = new Map(apiList.map((m) => [m.id, m]));
         if (apiList.length === 0) {
           for (const m of prevList) {
@@ -682,7 +688,10 @@ export function GuildChannelView({
         } else {
           for (const m of prevList) {
             const existing = byId.get(m.id);
-            if (!existing) continue;
+            if (!existing) {
+              byId.set(m.id, m);
+              continue;
+            }
             byId.set(m.id, {
               ...existing,
               ...m,
@@ -718,8 +727,40 @@ export function GuildChannelView({
 
   useEffect(() => {
     if (!user) return;
-    client.connectSocket();
+    const sock = client.connectSocket();
     client.joinChannel(guildId);
+    client.requestVoiceSync(guildId);
+
+    const applyRoster = (
+      membersByChannel: Record<string, VoiceMemberSummary[]>,
+    ) => {
+      setVoiceMembersByChannel((prev) => {
+        const next: Record<string, VoiceMemberSummary[]> = {};
+        for (const ch of channels) {
+          if (
+            ch.type !== 'VOICE' &&
+            ch.type !== 'GAME' &&
+            ch.type !== 'WATCH_PARTY'
+          ) {
+            continue;
+          }
+          if (
+            voice.voiceGuildId === guildId &&
+            voice.voiceChannelId === ch.id &&
+            prev[ch.id]?.length
+          ) {
+            next[ch.id] = prev[ch.id]!;
+            continue;
+          }
+          let list = [...(membersByChannel[ch.id] ?? [])];
+          if (voice.voiceChannelId !== ch.id) {
+            list = list.filter((m) => m.id !== user.id);
+          }
+          next[ch.id] = list;
+        }
+        return next;
+      });
+    };
 
     const onVoice = (payload: VoiceStatePayload) => {
       if (payload.guildId !== guildId) return;
@@ -763,11 +804,74 @@ export function GuildChannelView({
       });
     };
 
-    client.socket?.on(SocketEvents.VOICE_STATE, onVoice);
-    return () => {
-      client.socket?.off(SocketEvents.VOICE_STATE, onVoice);
+    const onSync = (payload: VoiceSyncPayload) => {
+      if (payload.guildId !== guildId) return;
+      setVoiceRosterReady(true);
+      applyRoster(payload.membersByChannel);
     };
-  }, [client, guildId, user, voice.voiceChannelId, guild?.afkChannelId]);
+
+    sock.on(SocketEvents.VOICE_STATE, onVoice);
+    sock.on(SocketEvents.VOICE_SYNC, onSync);
+    return () => {
+      sock.off(SocketEvents.VOICE_STATE, onVoice);
+      sock.off(SocketEvents.VOICE_SYNC, onSync);
+    };
+  }, [
+    client,
+    guildId,
+    user,
+    voice.voiceChannelId,
+    voice.voiceGuildId,
+    guild?.afkChannelId,
+    channels,
+  ]);
+
+  // REST roster poll — kanala girmeden kimler var
+  useEffect(() => {
+    if (!user || !guildId) return;
+    let cancelled = false;
+    const pull = () => {
+      void client
+        .getGuildVoiceRoster(guildId)
+        .then((roster) => {
+          if (cancelled) return;
+          setVoiceRosterReady(true);
+          setVoiceMembersByChannel((prev) => {
+            const next: Record<string, VoiceMemberSummary[]> = {};
+            for (const ch of channels) {
+              if (
+                ch.type !== 'VOICE' &&
+                ch.type !== 'GAME' &&
+                ch.type !== 'WATCH_PARTY'
+              ) {
+                continue;
+              }
+              if (
+                voice.voiceGuildId === guildId &&
+                voice.voiceChannelId === ch.id &&
+                prev[ch.id]?.length
+              ) {
+                next[ch.id] = prev[ch.id]!;
+                continue;
+              }
+              let list = [...(roster.membersByChannel[ch.id] ?? [])];
+              if (voice.voiceChannelId !== ch.id) {
+                list = list.filter((m) => m.id !== user.id);
+              }
+              next[ch.id] = list;
+            }
+            return next;
+          });
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [client, guildId, user, channels, voice.voiceChannelId, voice.voiceGuildId]);
 
   // Tüm metin kanallarına join + okunmamış sayaç (aktif kanal hariç)
   useEffect(() => {
@@ -1712,6 +1816,7 @@ export function GuildChannelView({
     () =>
       buildSidebarCategories(channels, channelId, selectChannel, {
         voiceMembersByChannel,
+        voiceRosterReady,
         selfUserId: user?.id,
         selfVoiceChannelId: inVoiceInThisGuild ? voice.voiceChannelId : null,
         platformAdminIds,
@@ -1809,6 +1914,7 @@ export function GuildChannelView({
       channelId,
       selectChannel,
       voiceMembersByChannel,
+      voiceRosterReady,
       openEditChannel,
       user?.id,
       voice.voiceChannelId,

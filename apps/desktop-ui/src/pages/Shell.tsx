@@ -154,7 +154,7 @@ export function Shell() {
   const inVoiceInThisGuild =
     Boolean(voice.voiceChannelId) && voice.voiceGuildId === activeGuildId;
 
-  const voiceMembersByChannel = useVoiceMembersByChannel({
+  const { voiceMembersByChannel, voiceRosterReady } = useVoiceMembersByChannel({
     client,
     user,
     guildId: activeGuildId,
@@ -782,6 +782,7 @@ export function Shell() {
       buildSidebarCategories(channels, activeChannelId ?? undefined, selectChannel, {
         selfUserId: user?.id,
         voiceMembersByChannel,
+        voiceRosterReady,
         platformAdminIds,
         guildCategories,
         collapsedCategoryIds: collapsed,
@@ -906,6 +907,7 @@ export function Shell() {
       voice.participantVolumes,
       voice.setParticipantVolume,
       voiceMembersByChannel,
+      voiceRosterReady,
       platformAdminIds,
       voiceChannel,
       client,

@@ -466,13 +466,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       });
 
       try {
+        // Presence her zaman (TTL / roster); reclaim’te de sidebar’da görünsün
+        await client.joinVoiceState(channel.id, {
+          muted: mutedRef.current,
+          deafened: deafenedRef.current,
+        });
         if (opts?.reclaim) {
           await client.claimVoiceClient(channel.id).catch(() => undefined);
-        } else {
-          await client.joinVoiceState(channel.id, {
-            muted: mutedRef.current,
-            deafened: deafenedRef.current,
-          });
         }
         if (!stillThisJoin()) {
           await client.leaveVoiceState(channel.id).catch(() => undefined);
@@ -914,13 +914,22 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     join,
   ]);
 
-  // Heartbeat — aktif istemci kontrolü
+  // Heartbeat — presence TTL + aktif istemci kontrolü
   useEffect(() => {
     if (!voiceChannelId || !connected) return;
     const id = setInterval(() => {
       void client
         .voiceHeartbeat(voiceChannelId)
         .then((r) => {
+          if (r && r.ok === false) {
+            void client
+              .joinVoiceState(voiceChannelId, {
+                muted: mutedRef.current,
+                deafened: deafenedRef.current,
+              })
+              .catch(() => undefined);
+            return;
+          }
           if (r && 'active' in r && r.active === false) {
             intentionalLeaveRef.current = true;
             void disconnectLiveKit().then(() => {

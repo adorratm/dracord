@@ -19,6 +19,7 @@ import type {
   PublicUser,
   VoiceMemberSummary,
   VoiceStatePayload,
+  VoiceSyncPayload,
 } from '@dracord/types';
 import { DRACORD_BOT_USER_ID, SocketEvents } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
@@ -632,7 +633,10 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
             } else {
               for (const m of prevList) {
                 const existing = byId.get(m.id);
-                if (!existing) continue;
+                if (!existing) {
+                  byId.set(m.id, m);
+                  continue;
+                }
                 byId.set(m.id, {
                   ...existing,
                   ...m,
@@ -656,10 +660,35 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     }, 280);
   }, [reloadChannels]);
 
-  // Ses aktifliği — anında local merge + debounce API refresh
+  // Ses aktifliği — anında local merge + debounce API refresh + roster sync
   useEffect(() => {
     if (!guildId) return;
     const sock = client.connectSocket();
+    client.requestVoiceSync(guildId);
+
+    const applyRoster = (membersByChannel: Record<string, VoiceMemberSummary[]>) => {
+      setChannels((prev) =>
+        prev.map((ch) => {
+          if (
+            ch.type !== 'VOICE' &&
+            ch.type !== 'GAME' &&
+            ch.type !== 'WATCH_PARTY'
+          ) {
+            return ch;
+          }
+          // Bağlı kanalı LiveKit peers birleşimi korusun
+          if (voice?.voiceChannelId === ch.id && voice?.voiceGuildId === guildId) {
+            return ch;
+          }
+          const list = [...(membersByChannel[ch.id] ?? [])];
+          const same =
+            list.length === (ch.voiceMembers?.length ?? 0) &&
+            list.every((m, i) => m.id === ch.voiceMembers?.[i]?.id);
+          return same ? ch : { ...ch, voiceMembers: list };
+        }),
+      );
+    };
+
     const onVoice = (payload: VoiceStatePayload) => {
       if (payload.guildId !== guildId) return;
       setChannels((prev) =>
@@ -689,12 +718,65 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       );
       scheduleReloadChannels();
     };
+
+    const onSync = (payload: VoiceSyncPayload) => {
+      if (payload.guildId !== guildId) return;
+      applyRoster(payload.membersByChannel);
+    };
+
     sock.on(SocketEvents.VOICE_STATE, onVoice);
+    sock.on(SocketEvents.VOICE_SYNC, onSync);
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
+      sock.off(SocketEvents.VOICE_SYNC, onSync);
       if (voiceReloadTimer.current) clearTimeout(voiceReloadTimer.current);
     };
-  }, [client, guildId, scheduleReloadChannels]);
+  }, [
+    client,
+    guildId,
+    scheduleReloadChannels,
+    voice?.voiceChannelId,
+    voice?.voiceGuildId,
+  ]);
+
+  // Periyodik REST roster — kanala girmeden kimler görünür
+  useEffect(() => {
+    if (!guildId) return;
+    let cancelled = false;
+    const pull = () => {
+      void client
+        .getGuildVoiceRoster(guildId)
+        .then((roster) => {
+          if (cancelled) return;
+          setChannels((prev) =>
+            prev.map((ch) => {
+              if (
+                ch.type !== 'VOICE' &&
+                ch.type !== 'GAME' &&
+                ch.type !== 'WATCH_PARTY'
+              ) {
+                return ch;
+              }
+              if (voice?.voiceChannelId === ch.id && voice?.voiceGuildId === guildId) {
+                return ch;
+              }
+              const list = [...(roster.membersByChannel[ch.id] ?? [])];
+              const same =
+                list.length === (ch.voiceMembers?.length ?? 0) &&
+                list.every((m, i) => m.id === ch.voiceMembers?.[i]?.id);
+              return same ? ch : { ...ch, voiceMembers: list };
+            }),
+          );
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = setInterval(pull, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [client, guildId, voice?.voiceChannelId, voice?.voiceGuildId]);
 
   // Sesten çıkınca self’i anında listeden düş (API gecikse bile)
   useEffect(() => {

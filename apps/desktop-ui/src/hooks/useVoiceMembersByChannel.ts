@@ -4,12 +4,47 @@ import type {
   PublicUser,
   VoiceMemberSummary,
   VoiceStatePayload,
+  VoiceSyncPayload,
 } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import type { DracordClient } from '@dracord/sdk';
 import type { VoiceParticipant } from '@dracord/ui';
 
-/** Web GuildChannelView ile aynı: API seed + voice:state + LiveKit peers */
+function applyRosterSnapshot(
+  prev: Record<string, VoiceMemberSummary[]>,
+  channels: ChannelSummary[],
+  membersByChannel: Record<string, VoiceMemberSummary[]>,
+  opts: {
+    userId?: string | null;
+    voiceChannelId?: string | null;
+    voiceGuildId?: string | null;
+    guildId: string;
+  },
+): Record<string, VoiceMemberSummary[]> {
+  const next: Record<string, VoiceMemberSummary[]> = {};
+  for (const ch of channels) {
+    if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
+      continue;
+    }
+    // Bağlı olduğumuz kanalı LiveKit peers kaynağı korusun
+    if (
+      opts.voiceGuildId === opts.guildId &&
+      opts.voiceChannelId === ch.id &&
+      prev[ch.id]?.length
+    ) {
+      next[ch.id] = prev[ch.id]!;
+      continue;
+    }
+    let list = [...(membersByChannel[ch.id] ?? [])];
+    if (opts.userId && opts.voiceChannelId !== ch.id) {
+      list = list.filter((m) => m.id !== opts.userId);
+    }
+    next[ch.id] = list;
+  }
+  return next;
+}
+
+/** Web GuildChannelView ile aynı: API seed + voice:state + LiveKit peers + roster sync */
 export function useVoiceMembersByChannel({
   client,
   user,
@@ -38,12 +73,15 @@ export function useVoiceMembersByChannel({
   const [voiceMembersByChannel, setVoiceMembersByChannel] = useState<
     Record<string, VoiceMemberSummary[]>
   >({});
+  const [voiceRosterReady, setVoiceRosterReady] = useState(false);
 
   useEffect(() => {
     if (!guildId) {
       setVoiceMembersByChannel({});
+      setVoiceRosterReady(false);
       return;
     }
+    setVoiceRosterReady(false);
     setVoiceMembersByChannel((prev) => {
       const next: Record<string, VoiceMemberSummary[]> = {};
       for (const ch of channels) {
@@ -55,7 +93,6 @@ export function useVoiceMembersByChannel({
           apiList = apiList.filter((m) => m.id !== user.id);
         }
         const prevList = prev[ch.id] ?? [];
-        // Boş API snapshot socket ile dolmuş listeyi silmesin; dolu API’de prev-only hayalet ekleme
         const byId = new Map(apiList.map((m) => [m.id, m]));
         if (apiList.length === 0) {
           for (const m of prevList) {
@@ -63,9 +100,13 @@ export function useVoiceMembersByChannel({
             byId.set(m.id, m);
           }
         } else {
+          // Dolu API: roster ile birleştir (socket’ten gelenleri kaybetme)
           for (const m of prevList) {
             const existing = byId.get(m.id);
-            if (!existing) continue;
+            if (!existing) {
+              byId.set(m.id, m);
+              continue;
+            }
             byId.set(m.id, {
               ...existing,
               ...m,
@@ -103,6 +144,7 @@ export function useVoiceMembersByChannel({
     if (!user || !guildId) return;
     const sock = client.connectSocket();
     client.joinChannel(guildId);
+    client.requestVoiceSync(guildId);
 
     const onVoice = (payload: VoiceStatePayload) => {
       if (payload.guildId !== guildId) return;
@@ -142,11 +184,55 @@ export function useVoiceMembersByChannel({
       });
     };
 
+    const onSync = (payload: VoiceSyncPayload) => {
+      if (payload.guildId !== guildId) return;
+      setVoiceRosterReady(true);
+      setVoiceMembersByChannel((prev) =>
+        applyRosterSnapshot(prev, channels, payload.membersByChannel, {
+          userId: user.id,
+          voiceChannelId,
+          voiceGuildId,
+          guildId,
+        }),
+      );
+    };
+
     sock.on(SocketEvents.VOICE_STATE, onVoice);
+    sock.on(SocketEvents.VOICE_SYNC, onSync);
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
+      sock.off(SocketEvents.VOICE_SYNC, onSync);
     };
-  }, [client, guildId, user, voiceChannelId, afkChannelId]);
+  }, [client, guildId, user, voiceChannelId, voiceGuildId, afkChannelId, channels]);
+
+  // Periyodik REST roster — socket kaçırılsa bile sidebar dolu kalsın
+  useEffect(() => {
+    if (!user || !guildId) return;
+    let cancelled = false;
+    const pull = () => {
+      void client
+        .getGuildVoiceRoster(guildId)
+        .then((roster) => {
+          if (cancelled) return;
+          setVoiceRosterReady(true);
+          setVoiceMembersByChannel((prev) =>
+            applyRosterSnapshot(prev, channels, roster.membersByChannel, {
+              userId: user.id,
+              voiceChannelId,
+              voiceGuildId,
+              guildId,
+            }),
+          );
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [client, guildId, user, channels, voiceChannelId, voiceGuildId]);
 
   useEffect(() => {
     if (!voiceChannelId || voiceGuildId !== guildId) {
@@ -201,5 +287,5 @@ export function useVoiceMembersByChannel({
     members,
   ]);
 
-  return voiceMembersByChannel;
+  return { voiceMembersByChannel, voiceRosterReady };
 }

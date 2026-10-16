@@ -12,7 +12,12 @@ import {
   WebSocketServer,
   WsException,
 } from '@nestjs/websockets';
-import { SocketEvents, type DmCallPayload, type VoiceStatePayload } from '@dracord/types';
+import {
+  SocketEvents,
+  type DmCallPayload,
+  type VoiceStatePayload,
+  type VoiceSyncPayload,
+} from '@dracord/types';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { Server, Socket } from 'socket.io';
@@ -261,6 +266,27 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       customStatus: pub.customStatus ?? null,
     });
     return { ok: true, user: pub };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.VOICE_SYNC)
+  async handleVoiceSync(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { guildId: string },
+  ): Promise<VoiceSyncPayload> {
+    const user = client.data.user as WsUser;
+    if (!body?.guildId) throw new WsException('guildId gerekli');
+    try {
+      // Üyelik + VIEW_CHANNEL filtresi (yan etki: roster erişim kontrolü)
+      await this.channels.listGuildChannels(body.guildId, user.sub);
+    } catch (err) {
+      throw new WsException((err as Error).message || 'Forbidden');
+    }
+    void client.join(this.guildRoom(body.guildId));
+    const membersByChannel = await this.voicePresence.listGuildVoice(body.guildId);
+    const payload: VoiceSyncPayload = { guildId: body.guildId, membersByChannel };
+    client.emit(SocketEvents.VOICE_SYNC, payload);
+    return payload;
   }
 
   @UseGuards(WsJwtGuard)
