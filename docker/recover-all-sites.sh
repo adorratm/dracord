@@ -77,6 +77,68 @@ restore_conf_from_template() {
   ok "conf.d/$name ← $src"
 }
 
+remove_conf_d() {
+  local name="$1"
+  if docker exec "$NGINX_CTN" test -f "/etc/nginx/conf.d/$name" 2>/dev/null; then
+    docker exec "$NGINX_CTN" rm -f "/etc/nginx/conf.d/$name"
+    ok "conf.d/$name kaldırıldı (çakışma önleme)"
+  fi
+}
+
+# Aynı server_name iki conf’ta olursa nginx ikincisini ignore eder → yanlış site / 500.
+# portfolio.conf + portfolio-emrekilic.conf ikisi de emrekilic.web.tr tanımlıyor.
+pick_portfolio_vhost() {
+  local emre="$TTEN_TPL/portfolio-emrekilic.conf"
+  local port="$TTEN_TPL/portfolio.conf"
+  if [[ -f "$emre" ]]; then
+    restore_conf_from_template portfolio-emrekilic.conf "$emre"
+    remove_conf_d portfolio.conf
+    # Host mirror’da da çift kalmasın diye uyarı
+    if [[ -f "$port" ]]; then
+      warn "portfolio.conf atlandı (portfolio-emrekilic.conf tercih); emrekilic.web.tr çakışması önlendi"
+    fi
+  elif [[ -f "$port" ]]; then
+    restore_conf_from_template portfolio.conf "$port"
+    remove_conf_d portfolio-emrekilic.conf
+  else
+    warn "portfolio template yok"
+  fi
+}
+
+# hydrorage.conf, default.conf içinde zaten hydrorage.com.tr varsa ignore edilir.
+# Asıl hydrorage vhost’un hangisi olduğunu raporla.
+report_server_name_conflicts() {
+  log "server_name çakışma taraması"
+  docker exec "$NGINX_CTN" sh -c '
+    tmp=$(mktemp)
+    for f in /etc/nginx/conf.d/*.conf; do
+      [ -f "$f" ] || continue
+      # server_name satırlarındaki hostları çıkar
+      grep -oE "server_name[[:space:]]+[^;]+" "$f" 2>/dev/null \
+        | sed "s/server_name[[:space:]]*//" \
+        | tr " " "\n" \
+        | grep -E "[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" \
+        | while read -r h; do
+            echo "$h $(basename "$f")"
+          done
+    done | sort > "$tmp"
+    awk "{c[\$1]++; f[\$1]=f[\$1] \" \" \$2} END {for (h in c) if (c[h]>1) print \"CONFLICT\", h, \"→\" f[h]}" "$tmp"
+    rm -f "$tmp"
+  ' 2>/dev/null || true
+}
+
+https_smoke() {
+  local host="$1"
+  local code body
+  code="$(curl -sk -o /tmp/recover-https-body -w '%{http_code}' --resolve "${host}:443:127.0.0.1" "https://${host}/" 2>/dev/null || echo 000)"
+  body="$(head -c 120 /tmp/recover-https-body 2>/dev/null | tr '\n' ' ' || true)"
+  if [[ "$code" == "500" ]] || [[ "$code" == "502" ]] || [[ "$code" == "503" ]]; then
+    echo "  FAIL HTTPS $host → $code  body≈ ${body:0:80}"
+  else
+    echo "  HTTPS $host → $code"
+  fi
+}
+
 # --- 0. Docker ---
 need_docker
 
@@ -148,11 +210,14 @@ if [[ -f "$HYDRORAGE_HOST_CONF" ]]; then
 fi
 
 # Kilic / portfolio / hydrorage / dracord conf.d
+# ÖNEMLİ: portfolio + portfolio-emrekilic birlikte → conflicting server_name (emrekilic)
 [[ -f "$TTEN_TPL/kiliccoffee.conf" ]] && restore_conf_from_template kiliccoffee.conf "$TTEN_TPL/kiliccoffee.conf"
-[[ -f "$TTEN_TPL/portfolio.conf" ]] && restore_conf_from_template portfolio.conf "$TTEN_TPL/portfolio.conf"
-[[ -f "$TTEN_TPL/portfolio-emrekilic.conf" ]] && restore_conf_from_template portfolio-emrekilic.conf "$TTEN_TPL/portfolio-emrekilic.conf"
+pick_portfolio_vhost
 [[ -f "$TTEN_TPL/hydrorage.conf" ]] && restore_conf_from_template hydrorage.conf "$TTEN_TPL/hydrorage.conf"
 [[ -f "$TTEN_TPL/dracord.conf" ]] && restore_conf_from_template dracord.conf "$TTEN_TPL/dracord.conf"
+
+# default.conf içinde hydrorage / emrekilic varsa hydrorage.conf ile çakışır — raporla
+report_server_name_conflicts
 
 ensure_network_alias hydrorage-nginx-1 hydrorage-nginx
 ensure_network_alias docker-edge-1 dracord-edge
@@ -160,10 +225,16 @@ ensure_network_alias docker-livekit-1 dracord-livekit
 
 # --- 7. nginx -t + reload ---
 log "nginx -t + reload"
-if docker exec "$NGINX_CTN" nginx -t; then
+# nginx -t uyarıları stderr’de; “conflicting server name” varsa net yaz
+nginx_test_out="$(docker exec "$NGINX_CTN" nginx -t 2>&1)" || true
+echo "$nginx_test_out" | grep -i 'conflicting server name' | sort -u | while read -r line; do
+  warn "$line"
+done
+if echo "$nginx_test_out" | grep -q 'test is successful'; then
   docker exec "$NGINX_CTN" nginx -s reload
   ok "nginx reloaded"
 else
+  echo "$nginx_test_out" >&2
   warn "nginx -t FAILED — conf.d kontrol et"
   docker exec "$NGINX_CTN" ls -la /etc/nginx/conf.d/ || true
   exit 1
@@ -193,10 +264,25 @@ for host in \
   fi
 done
 
-for host in hydrorage.com.tr dracord.com.tr kiliccoffeeroaster.com.tr; do
-  code="$(curl -sk -o /dev/null -w '%{http_code}' --resolve "${host}:443:127.0.0.1" "https://${host}/" 2>/dev/null || echo 000)"
-  echo "  HTTPS $host → $code"
+for host in \
+  ttengamesstudio.com.tr \
+  kiliccoffeeroaster.com.tr \
+  emrekilic.web.tr \
+  hydrorage.com.tr \
+  dracord.com.tr; do
+  https_smoke "$host"
 done
+
+# Hangi vhost hangi host’a bakıyor (yanlış site şüphesi)
+log "vhost map (server_name → conf)"
+docker exec "$NGINX_CTN" sh -c '
+  for f in /etc/nginx/conf.d/*.conf; do
+    [ -f "$f" ] || continue
+    names=$(grep -oE "server_name[[:space:]]+[^;]+" "$f" 2>/dev/null | head -3 | tr "\n" "; ")
+    echo "  $(basename "$f"): $names"
+  done
+' 2>/dev/null || true
 
 log "Bitti. Hâlâ 521 ise Cloudflare origin IP / firewall kontrol et."
 echo "  docker ps --format 'table {{.Names}}\t{{.Status}}' | head -40"
+echo "  ttengamesstudio 500 ise: docker logs ttengamesstudio-frontend --tail 80"
