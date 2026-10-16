@@ -71,9 +71,13 @@ export function VoiceRoom({
         });
       }
       if (declinedAutoJoinRef.current) return;
-      await voice.join(guildId, { id: channel.id, name: channel.name });
+      await voice.join(guildId, {
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+      });
     })();
-  }, [guildId, channel.id, channel.name, browsingOther, inThisChannel]); // eslint-disable-line react-hooks/exhaustive-deps -- join stable
+  }, [guildId, channel.id, channel.name, channel.type, browsingOther, inThisChannel]); // eslint-disable-line react-hooks/exhaustive-deps -- join stable
 
   // Sunucu kanal listesinden voiceMembers (avatar + joinedAt)
   useEffect(() => {
@@ -141,7 +145,11 @@ export function VoiceRoom({
   const rejoin = async () => {
     if (!guildId) return;
     declinedAutoJoinRef.current = false;
-    await voice.join(guildId, { id: channel.id, name: channel.name });
+    await voice.join(guildId, {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+    });
   };
 
   if (showChat && guildId) {
@@ -253,7 +261,13 @@ export function VoiceRoom({
           {guildId ? (
             <Pressable
               style={primaryBtn}
-              onPress={() => void voice.join(guildId, { id: channel.id, name: channel.name })}
+              onPress={() =>
+                void voice.join(guildId, {
+                  id: channel.id,
+                  name: channel.name,
+                  type: channel.type,
+                })
+              }
             >
               <Text style={primaryBtnText}>Bu kanala katıl</Text>
             </Pressable>

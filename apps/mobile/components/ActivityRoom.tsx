@@ -215,7 +215,7 @@ export function ActivityRoom({
     if (!voice?.join) return;
     if (voice.voiceChannelId === channel.id) return;
     void voice
-      .join(guildId, { id: channel.id, name: channel.name })
+      .join(guildId, { id: channel.id, name: channel.name, type: channel.type })
       .catch(() => undefined);
   }, [
     browsingOther,

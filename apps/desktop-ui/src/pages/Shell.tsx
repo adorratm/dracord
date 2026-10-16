@@ -133,6 +133,8 @@ export function Shell() {
   const [voiceInviteError, setVoiceInviteError] = useState<string | null>(null);
   const lastSpokeAtRef = useRef(Date.now());
   const afkMovingRef = useRef(false);
+  const afkVoiceChannelTrackedRef = useRef<string | null>(null);
+  const selfSpeakingRef = useRef(false);
 
   const activeGuildId =
     view.kind === 'channel' ||
@@ -422,20 +424,30 @@ export function Shell() {
     const guild = guilds.find((g) => g.id === voice.voiceGuildId);
     const afkId = guild?.afkChannelId;
     const timeoutMin = guild?.afkTimeoutMinutes ?? 0;
+    const chId = voice.voiceChannelId;
     if (
       !afkId ||
       timeoutMin <= 0 ||
-      !voice.voiceChannelId ||
+      !chId ||
       !voice.voiceGuildId ||
       !voice.connected ||
       !user
     ) {
+      afkVoiceChannelTrackedRef.current = null;
       return;
+    }
+
+    // Ses kanalına yeni girince sayacı sıfırla (eski lastSpoke → anında AFK bug’ı)
+    if (chId !== afkVoiceChannelTrackedRef.current) {
+      afkVoiceChannelTrackedRef.current = chId;
+      if (chId !== afkId) {
+        lastSpokeAtRef.current = Date.now();
+      }
     }
 
     const chType =
       voice.voiceChannelType ??
-      channels.find((c) => c.id === voice.voiceChannelId)?.type ??
+      channels.find((c) => c.id === chId)?.type ??
       'VOICE';
     if (chType === 'GAME' || chType === 'WATCH_PARTY') {
       lastSpokeAtRef.current = Date.now();
@@ -443,7 +455,8 @@ export function Shell() {
     }
 
     const self = voice.peers.find((p) => p.id === user.id);
-    if (self?.speaking) {
+    selfSpeakingRef.current = Boolean(self?.speaking);
+    if (selfSpeakingRef.current) {
       lastSpokeAtRef.current = Date.now();
     }
 
@@ -455,6 +468,10 @@ export function Shell() {
         channels.find((c) => c.id === voice.voiceChannelId)?.type ??
         'VOICE';
       if (typeNow === 'GAME' || typeNow === 'WATCH_PARTY') {
+        lastSpokeAtRef.current = Date.now();
+        return;
+      }
+      if (selfSpeakingRef.current) {
         lastSpokeAtRef.current = Date.now();
         return;
       }
