@@ -1393,7 +1393,7 @@ __metadata:
     edge-tts-universal: "npm:1.4.0"
     electron: "npm:44.8.0"
     electron-builder: "npm:^26.17.0"
-    electron-updater: "npm:6.6.2"
+    electron-updater: "npm:6.8.9"
     png-to-ico: "npm:^3.0.2"
   languageName: unknown
   linkType: soft
@@ -6488,16 +6488,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"builder-util-runtime@npm:9.3.1":
-  version: 9.3.1
-  resolution: "builder-util-runtime@npm:9.3.1"
-  dependencies:
-    debug: "npm:^4.3.4"
-    sax: "npm:^1.2.4"
-  checksum: 10c0/32de87e5f294154de707f40acf59a5600af9d1ce903ccbba53b81824de7a1dd9568c5f0c033ed765e14c4ea73347aac09ecbce686e1bc7fefbd7b4f64d2c9d68
-  languageName: node
-  linkType: hard
-
 "builder-util-runtime@npm:9.7.0":
   version: 9.7.0
   resolution: "builder-util-runtime@npm:9.7.0"
@@ -7761,19 +7751,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron-updater@npm:6.6.2":
-  version: 6.6.2
-  resolution: "electron-updater@npm:6.6.2"
+"electron-updater@npm:6.8.9":
+  version: 6.8.9
+  resolution: "electron-updater@npm:6.8.9"
   dependencies:
-    builder-util-runtime: "npm:9.3.1"
+    builder-util-runtime: "npm:9.7.0"
     fs-extra: "npm:^10.1.0"
     js-yaml: "npm:^4.1.0"
     lazy-val: "npm:^1.0.5"
     lodash.escaperegexp: "npm:^4.1.2"
     lodash.isequal: "npm:^4.5.0"
-    semver: "npm:^7.6.3"
+    semver: "npm:~7.7.3"
     tiny-typed-emitter: "npm:^2.1.0"
-  checksum: 10c0/2b9ae5583b95f6772c4a2515ddba7ba52b65460ab81f09ae4f0b97c7e3d7b7e3d9426775eb9a53d3193bd4c3d5466bf30827c1a6ee75e4aca739c647f6ac46ff
+  checksum: 10c0/a95d8ffcadc52fe289b0e44721ad78cab6bf2a4d5951f1242e0dbdf2a065e42ca64d48ee5040bd55d6320b8491ec90ae3f23eb7e343540b92e004799eb001aab
   languageName: node
   linkType: hard
 
