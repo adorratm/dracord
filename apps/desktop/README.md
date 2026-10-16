@@ -52,6 +52,10 @@ yarn workspace @dracord/desktop build:win   # veya build:mac / build:linux
 | `CSC_LINK` | `.pfx` yolu veya base64 |
 | `CSC_KEY_PASSWORD` | PFX şifresi |
 
+CSC yoksa installer **imzasız** üretilir. Bu durumda `verifyUpdateCodeSignature` kapalıdır (güncelleme `latest.yml` sha512 ile doğrulanır). Authenticode sertifikası ekledikten sonra imzalı build + `publisherName` (sertifika Subject CN) ile doğrulamayı yeniden açabilirsiniz.
+
+**Not:** Eski kurulumda `publisherName: Dracord` varken imzasız 0.1.1 reddedilir. Bu düzeltmeyi içeren Setup’ı **bir kez elle** kurun; sonraki auto-update’ler çalışır.
+
 ### macOS (Developer ID + Notarize)
 
 | Değişken | Açıklama |

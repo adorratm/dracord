@@ -75,9 +75,7 @@
         }
       ],
       "artifactName": "Dracord-Setup-${version}.${ext}",
-      "signtoolOptions": {
-        "publisherName": "Dracord"
-      }
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,

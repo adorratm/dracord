@@ -385,6 +385,12 @@ function setupAutoUpdater() {
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  // CSC_LINK yokken Windows installer imzasız kalır. publisherName doğrulaması
+  // "not signed by the application owner" ile güncellemeyi düşürür.
+  // Dosya bütünlüğü latest.yml içindeki sha512 ile kontrol edilir.
+  if (process.platform === 'win32') {
+    autoUpdater.verifyUpdateCodeSignature = async () => null;
+  }
 
   autoUpdater.on('checking-for-update', () => {
     sendUpdateEvent('updater:status', { status: 'checking' });
