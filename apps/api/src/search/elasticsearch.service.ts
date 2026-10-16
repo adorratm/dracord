@@ -15,10 +15,11 @@ export class ElasticsearchService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly config: ConfigService) {
     const url = this.config.get<string>('ELASTICSEARCH_URL');
+    // Docker’da elasticsearch:8.15.x — client major sürümü sunucuyla aynı olmalı
+    // (@elastic/elasticsearch@9 → Accept v9 → media_type_header_exception)
     this.client = url
       ? new Client({
           node: url,
-          // ES 8 single-node local: no auth
         })
       : null;
   }

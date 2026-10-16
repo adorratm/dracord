@@ -241,9 +241,6 @@ export function SearchOverlay({
         onSelect={selectQuick}
       />
       <div className="fixed top-[calc(12vh+3.25rem)] left-1/2 z-[201] w-full max-w-xl -translate-x-1/2 px-3 flex items-center justify-between gap-2 pointer-events-none">
-        <p className="text-[11px] text-outline truncate pointer-events-none">
-          {busy ? '' : 'Sunucu, kanal veya kullanıcı'}
-        </p>
         <button
           type="button"
           className="pointer-events-auto h-7 px-2 rounded-md text-[11px] font-semibold text-primary-container hover:bg-surface-container-high"
