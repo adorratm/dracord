@@ -2047,6 +2047,27 @@ function DesktopUpdateControls() {
     void desktop.getAppVersion().then(setVersion).catch(() => setVersion(null));
   }, [desktop]);
 
+  useEffect(() => {
+    if (!desktop?.onUpdaterStatus) return;
+    return desktop.onUpdaterStatus((payload) => {
+      const cur = payload.currentVersion ?? version ?? '?';
+      const next = payload.version ?? '?';
+      if (payload.status === 'checking') {
+        setNote('Güncellemeler kontrol ediliyor…');
+      } else if (payload.status === 'not-available') {
+        setNote(`Uygulama güncel (v${cur}). Yeni sürüm yok.`);
+      } else if (payload.status === 'available') {
+        setNote(`Yeni sürüm v${next} mevcut (şimdi: v${cur}).`);
+      } else if (payload.status === 'downloading') {
+        setNote(`İndiriliyor… %${Math.round(payload.percent ?? 0)}`);
+      } else if (payload.status === 'downloaded') {
+        setNote(`v${next} indirildi — yeniden başlatarak kur.`);
+      } else if (payload.status === 'error') {
+        setNote(`Hata: ${payload.message ?? 'bilinmiyor'}`);
+      }
+    });
+  }, [desktop, version]);
+
   if (!desktop?.isElectron) return null;
 
   return (
@@ -2062,8 +2083,12 @@ function DesktopUpdateControls() {
         className="h-8 rounded-lg bg-surface-container-high px-3 font-label-sm text-on-surface hover:bg-surface-container-highest"
         onClick={() => {
           setNote('Güncellemeler kontrol ediliyor…');
-          void desktop.checkForUpdates?.().then(() => {
-            setNote('Kontrol tamamlandı — sonuç bildirimde görünür.');
+          void desktop.checkForUpdates?.().then((r) => {
+            if (r?.dev) {
+              setNote(
+                'Geliştirme / paketlenmemiş sürüm — güncelleme kontrolü yalnızca kurulu (installer) uygulamada çalışır.',
+              );
+            }
           });
         }}
       >

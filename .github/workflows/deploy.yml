@@ -32,6 +32,10 @@ env:
 jobs:
   build:
     name: Build images (GHCR)
+    # desktop version bump commit’leri ([skip ci]) yeniden deploy etmesin
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message || '', '[skip ci]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -185,34 +189,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect desktop version bump
+      # electron-updater aynı semver’i güncelleme saymaz. Desktop kodu değiştiyse
+      # (veya manuel deploy) auto_bump ile yeni patch + latest.yml yayınla.
+      - name: Detect desktop client changes
         id: desk
         shell: bash
         run: |
           set -euo pipefail
-          VER=$(node -p "require('./apps/desktop/package.json').version")
-          TAG="desktop-v${VER}"
-          echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "bump=false" >> "$GITHUB_OUTPUT"
-            echo "Desktop tag ${TAG} already exists — skip release"
+          CHANGED=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            CHANGED=true
+          elif [[ -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" \
+              | grep -E '^(apps/desktop/|apps/desktop-ui/)' >/dev/null; then
+              CHANGED=true
+            fi
           else
-            echo "bump=true" >> "$GITHUB_OUTPUT"
-            echo "Desktop version ${VER} is new — will trigger release"
+            # shallow / ilk push — desktop dosyalarına bak
+            if git ls-tree -r --name-only "${{ github.sha }}" \
+              | grep -E '^(apps/desktop/|apps/desktop-ui/)' >/dev/null; then
+              CHANGED=true
+            fi
           fi
+          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "Desktop client changed: ${CHANGED}"
 
-      - name: Trigger desktop-release
-        if: steps.desk.outputs.bump == 'true'
+      - name: Trigger desktop-release (auto-bump)
+        if: steps.desk.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          CUR=$(node -p "require('./apps/desktop/package.json').version")
+          echo "Current desktop package.json: ${CUR} — auto_bump new patch"
+          # Boş release_tag → workflow patch bump eder (aynı 0.1.0 ile güncelleme çıkmaz)
           gh workflow run desktop-release.yml \
             --ref "${{ github.ref_name }}" \
-            -f release_tag="${{ steps.desk.outputs.tag }}" \
-            -f publish_release=true
-          echo "Triggered desktop-release for ${{ steps.desk.outputs.tag }}"
+            -f release_tag= \
+            -f publish_release=true \
+            -f auto_bump=true
+          echo "Triggered desktop-release (auto_bump from ${CUR})"
 
       # EXPO_TOKEN yokken setup-node + cache:yarn çalıştırmayın: install atlanırsa
       # post-job "Path(s) specified for caching do not exist" ile düşer.

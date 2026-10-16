@@ -4,12 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'GitHub Release tag (ör. desktop-v0.1.0). Boşsa yalnız artifact.'
+        description: 'İsteğe bağlı tag (desktop-v0.1.2). Boşsa otomatik patch bump.'
         required: false
-        default: 'desktop-v0.1.0'
+        default: ''
         type: string
       publish_release:
         description: 'Artifact’ları public GitHub Release’e yükle'
+        required: false
+        default: true
+        type: boolean
+      auto_bump:
+        description: 'Tag zaten varsa / boşsa package.json patch’ini otomatik artır (electron-updater için şart)'
         required: false
         default: true
         type: boolean
@@ -21,7 +26,111 @@ permissions:
   contents: write
 
 jobs:
+  # electron-updater yalnızca DAHA YÜKSEK semver görür — aynı 0.1.0 ile release güncelleme vermez
+  version:
+    name: Resolve app version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      publish: ${{ steps.resolve.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version (auto-bump if needed)
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PKG=$(node -p "require('./apps/desktop/package.json').version")
+          echo "package.json version: ${PKG}"
+
+          LATEST_TAG=$(git tag -l 'desktop-v*' --sort=-v:refname | head -n1 || true)
+          LATEST_VER=""
+          if [[ -n "${LATEST_TAG}" ]]; then
+            LATEST_VER="${LATEST_TAG#desktop-v}"
+            echo "latest desktop tag: ${LATEST_TAG} (${LATEST_VER})"
+          fi
+
+          bump_patch() {
+            local v="$1"
+            local major minor patch
+            IFS=. read -r major minor patch <<<"${v}"
+            major=${major:-0}
+            minor=${minor:-0}
+            patch=${patch:-0}
+            # patch sayısal değilse sıfırla
+            [[ "$patch" =~ ^[0-9]+$ ]] || patch=0
+            echo "${major}.${minor}.$((patch + 1))"
+          }
+
+          semver_ge() {
+            # $1 >= $2 ?
+            node -e "const a=process.argv[1].split('.').map(Number);const b=process.argv[2].split('.').map(Number);for(let i=0;i<3;i++){const x=a[i]||0,y=b[i]||0;if(x>y)process.exit(0);if(x<y)process.exit(1)}process.exit(0)" "$1" "$2"
+          }
+
+          BASE="${PKG}"
+          if [[ -n "${LATEST_VER}" ]] && semver_ge "${LATEST_VER}" "${PKG}"; then
+            BASE="${LATEST_VER}"
+          fi
+
+          PUBLISH="true"
+          VER=""
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Tag push: sürüm tag’den
+            REF="${{ github.ref_name }}"
+            VER="${REF#desktop-v}"
+            echo "Tag push → version ${VER}"
+          else
+            # workflow_dispatch
+            RAW_TAG="${{ inputs.release_tag }}"
+            AUTO="${{ inputs.auto_bump }}"
+            WANT_PUBLISH="${{ inputs.publish_release }}"
+            if [[ "${WANT_PUBLISH}" != "true" ]]; then
+              PUBLISH="false"
+            fi
+
+            if [[ -n "${RAW_TAG}" ]]; then
+              CAND="${RAW_TAG#desktop-v}"
+              if git rev-parse "refs/tags/desktop-v${CAND}" >/dev/null 2>&1; then
+                if [[ "${AUTO}" == "true" ]]; then
+                  VER="$(bump_patch "${BASE}")"
+                  echo "Tag desktop-v${CAND} zaten var → auto-bump ${VER}"
+                else
+                  echo "::error::Tag desktop-v${CAND} zaten var; auto_bump kapalı. Yeni sürüm verin."
+                  exit 1
+                fi
+              else
+                VER="${CAND}"
+                echo "Yeni tag isteniyor → version ${VER}"
+              fi
+            else
+              # Boş tag: her release’te bump (aynı package.json ile de güncelleme çıksın)
+              if [[ "${AUTO}" == "true" ]]; then
+                VER="$(bump_patch "${BASE}")"
+                echo "Boş tag + auto_bump → ${VER}"
+              else
+                VER="${PKG}"
+                if git rev-parse "refs/tags/desktop-v${VER}" >/dev/null 2>&1; then
+                  echo "::error::desktop-v${VER} mevcut; auto_bump açın veya yeni sürüm verin."
+                  exit 1
+                fi
+              fi
+            fi
+          fi
+
+          TAG="desktop-v${VER}"
+          echo "Resolved version=${VER} tag=${TAG} publish=${PUBLISH}"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "publish=${PUBLISH}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +144,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Apply release version to package.json
+        shell: bash
+        env:
+          VER: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'apps/desktop/package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.version = process.env.VER;
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          console.log('Set apps/desktop version →', pkg.version);
+          NODE
 
       # Corepack önce: Yarn Berry cacheFolder doğru çözülsün (setup-node cache: yarn)
       - name: Enable Corepack
@@ -118,6 +242,11 @@ jobs:
             done
           } | tee "../dist-upload/SHA256SUMS-${{ matrix.os }}.txt"
           ls -lah ../dist-upload
+          # latest.yml sürümünü doğrula
+          if [[ -f latest.yml ]]; then
+            echo "--- latest.yml ---"
+            head -n 20 latest.yml || true
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -128,12 +257,8 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: build
-    if: >-
-      startsWith(github.ref, 'refs/tags/desktop-v') ||
-      (github.event_name == 'workflow_dispatch' &&
-       inputs.publish_release == true &&
-       inputs.release_tag != '')
+    needs: [version, build]
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download all build artifacts
@@ -149,8 +274,8 @@ jobs:
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || inputs.release_tag }}
-          name: Dracord Desktop ${{ startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || inputs.release_tag }}
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Dracord Desktop ${{ needs.version.outputs.tag }}
           files: release-assets/*
           fail_on_unmatched_files: true
           generate_release_notes: true
@@ -159,3 +284,38 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # package.json sürümünü main’de senkron tut (deploy döngüsünü [skip ci] ile kes)
+  sync-version:
+    name: Sync package.json version
+    needs: [version, publish]
+    if: success() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump package.json on branch
+        env:
+          VER: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          CUR=$(node -p "require('./apps/desktop/package.json').version")
+          if [[ "${CUR}" == "${VER}" ]]; then
+            echo "package.json already ${VER}"
+            exit 0
+          fi
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'apps/desktop/package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.version = process.env.VER;
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/package.json
+          git commit -m "chore(desktop): bump version to ${VER} [skip ci]"
+          git push
