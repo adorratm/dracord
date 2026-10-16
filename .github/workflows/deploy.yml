@@ -119,26 +119,59 @@ jobs:
           [[ -n "${HETZNER_SSH_KEY:-}" ]] || { echo "Missing secret HETZNER_SSH_KEY"; missing=1; }
           exit "$missing"
 
-      - name: Pull images + rolling deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.1
         with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: ${{ secrets.HETZNER_USER }}
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          port: ${{ secrets.HETZNER_SSH_PORT != '' && secrets.HETZNER_SSH_PORT || 22 }}
-          command_timeout: 20m
-          script_stop: true
-          debug: false
-          envs: DRACORD_DEPLOY_PATH,DRACORD_DEPLOY_BRANCH,DRACORD_REPLICAS,DRACORD_IMAGE_TAG,DRACORD_IMAGE_PREFIX,GHCR_TOKEN,GHCR_USER
-          script: |
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      # handshake reset / peer reset sık geçici (firewall, fail2ban, ağ).
+      # 3 deneme; kalıcı blokajda yine düşer — Hetzner Cloud Firewall :22 + fail2ban kontrol et.
+      - name: Pull images + rolling deploy over SSH
+        uses: nick-fields/retry@v3
+        env:
+          SSH_HOST: ${{ secrets.HETZNER_HOST }}
+          SSH_USER: ${{ secrets.HETZNER_USER }}
+          SSH_PORT: ${{ secrets.HETZNER_SSH_PORT }}
+          DRACORD_DEPLOY_PATH: ${{ secrets.DRACORD_DEPLOY_PATH }}
+          DRACORD_DEPLOY_BRANCH: ${{ secrets.DRACORD_DEPLOY_BRANCH }}
+          DRACORD_REPLICAS: ${{ secrets.DRACORD_REPLICAS }}
+          DRACORD_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          DRACORD_IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        with:
+          timeout_minutes: 22
+          max_attempts: 3
+          retry_wait_seconds: 40
+          warning_on_retry: true
+          command: |
+            set -euo pipefail
+            PORT="${SSH_PORT:-22}"
+            SSH_IP_OPT=()
+            if [[ "${SSH_HOST}" == *:* ]]; then SSH_IP_OPT+=(-6); fi
+            # Connectivity probe (handshake reset buradan da yakalanır)
+            ssh "${SSH_IP_OPT[@]}" \
+              -p "$PORT" \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=25 \
+              -o BatchMode=yes \
+              "${SSH_USER}@${SSH_HOST}" 'echo ssh-ok'
+
+            ssh "${SSH_IP_OPT[@]}" \
+              -p "$PORT" \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=15 \
+              -o ServerAliveCountMax=4 \
+              -o BatchMode=yes \
+              "${SSH_USER}@${SSH_HOST}" \
+              "export DRACORD_DEPLOY_PATH=$(printf %q "${DRACORD_DEPLOY_PATH:-}") DRACORD_DEPLOY_BRANCH=$(printf %q "${DRACORD_DEPLOY_BRANCH:-}") DRACORD_REPLICAS=$(printf %q "${DRACORD_REPLICAS:-}") DRACORD_IMAGE_TAG=$(printf %q "${DRACORD_IMAGE_TAG}") DRACORD_IMAGE_PREFIX=$(printf %q "${DRACORD_IMAGE_PREFIX}") GHCR_TOKEN=$(printf %q "${GHCR_TOKEN}") GHCR_USER=$(printf %q "${GHCR_USER}") DRACORD_COMPOSE_PROD=1 DRACORD_USE_REGISTRY=1; bash -s" <<'REMOTE'
             set -euo pipefail
             export DRACORD_DEPLOY_PATH="${DRACORD_DEPLOY_PATH:-/opt/dracord}"
             export DRACORD_DEPLOY_BRANCH="${DRACORD_DEPLOY_BRANCH:-main}"
             export DRACORD_REPLICAS="${DRACORD_REPLICAS:-2}"
-            export DRACORD_COMPOSE_PROD=1
-            export DRACORD_IMAGE_TAG="${DRACORD_IMAGE_TAG}"
-            export DRACORD_IMAGE_PREFIX="${DRACORD_IMAGE_PREFIX}"
-            export DRACORD_USE_REGISTRY=1
             if [[ ! -d "$DRACORD_DEPLOY_PATH/.git" ]]; then
               echo "Missing clone at $DRACORD_DEPLOY_PATH — create it once on the server."
               exit 1
@@ -147,7 +180,6 @@ jobs:
               echo "Missing $DRACORD_DEPLOY_PATH/.env on server (never commit .env)."
               exit 1
             fi
-            # GHCR auth (token is job-scoped; packages should allow this repo’s GITHUB_TOKEN)
             if [[ -n "${GHCR_TOKEN:-}" ]]; then
               echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-adorratm}" --password-stdin
             fi
@@ -157,14 +189,7 @@ jobs:
             git reset --hard "origin/$DRACORD_DEPLOY_BRANCH"
             export DRACORD_SKIP_GIT=1
             bash docker/deploy-remote.sh
-        env:
-          DRACORD_DEPLOY_PATH: ${{ secrets.DRACORD_DEPLOY_PATH }}
-          DRACORD_DEPLOY_BRANCH: ${{ secrets.DRACORD_DEPLOY_BRANCH }}
-          DRACORD_REPLICAS: ${{ secrets.DRACORD_REPLICAS }}
-          DRACORD_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-          DRACORD_IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_USER: ${{ github.actor }}
+            REMOTE
 
       - name: Public smoke checks
         if: success()
