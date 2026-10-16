@@ -13,13 +13,16 @@
     "start": "node ./scripts/make-icons.js && node ./scripts/ensure-ui.js && electron .",
     "prebuild": "node ./scripts/make-icons.js && yarn workspace @dracord/desktop-ui build && node ./scripts/copy-ui.js",
     "build": "electron-builder --publish never",
-    "build:win": "yarn prebuild && electron-builder --win --publish never",
+    "build:win": "yarn prebuild && electron-builder --win --x64 --publish never",
     "build:mac": "yarn prebuild && electron-builder --mac --publish never",
     "build:linux": "yarn prebuild && electron-builder --linux --publish never",
+    "publish:win": "yarn prebuild && electron-builder --win --x64 --publish always",
+    "publish:mac": "yarn prebuild && electron-builder --mac --publish always",
+    "publish:linux": "yarn prebuild && electron-builder --linux --publish always",
     "lint": "echo ok"
   },
   "devDependencies": {
-    "electron": "44.7.2",
+    "electron": "44.8.0",
     "electron-builder": "^26.17.0",
     "png-to-ico": "^3.0.2"
   },
@@ -29,6 +32,14 @@
     "productName": "Dracord",
     "executableName": "Dracord",
     "copyright": "Copyright © Dracord",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "adorratm",
+        "repo": "dracord",
+        "releaseType": "release"
+      }
+    ],
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -130,6 +141,7 @@
     ]
   },
   "dependencies": {
-    "edge-tts-universal": "1.4.0"
+    "edge-tts-universal": "1.4.0",
+    "electron-updater": "6.6.2"
   }
 }

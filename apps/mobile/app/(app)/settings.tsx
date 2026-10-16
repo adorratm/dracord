@@ -33,6 +33,13 @@ import { ShellHeader } from '../../components/shell/AppShell';
 import { Icon } from '../../components/Icon';
 import { UserAvatar } from '../../components/UserAvatar';
 import { configureUiTones } from '../../lib/sounds';
+import {
+  checkAppUpdates,
+  getNativeAppVersion,
+  promptOtaUpdate,
+  promptStoreUpdate,
+} from '../../lib/appUpdates';
+import * as Updates from 'expo-updates';
 
 const SOCIAL_FIELDS: Array<{ key: keyof SocialLinks; label: string }> = [
   { key: 'website', label: 'Website' },
@@ -1119,13 +1126,63 @@ export default function SettingsScreen() {
               }}
             />
             <ToggleRow
-              label="Otomatik güncelleme tercihi"
+              label="Otomatik güncelleme"
               value={settings.system.autoUpdate}
               onChange={(v) => patchSettings({ system: { ...settings.system, autoUpdate: v } })}
             />
-            <Text style={{ color: colors.textMuted, marginTop: 12, lineHeight: 20 }}>
-              Uygulama sürümü ve cihaz bildirim izinleri sistem ayarlarından yönetilir.
-            </Text>
+            <View style={{ marginTop: 12, gap: 8 }}>
+              <Text style={{ color: colors.text, fontSize: 15 }}>
+                Uygulama sürümü:{' '}
+                <Text style={{ color: colors.textMuted }}>v{getNativeAppVersion()}</Text>
+              </Text>
+              {Updates.updateId ? (
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                  OTA: {Updates.updateId.slice(0, 8)}…
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  void (async () => {
+                    try {
+                      const result = await checkAppUpdates(client);
+                      if (result.forceStore || result.storeUpdate) {
+                        promptStoreUpdate({
+                          current: result.current,
+                          remote: result.remoteStoreVersion,
+                          storeUrl: result.storeUrl,
+                          force: result.forceStore,
+                        });
+                        return;
+                      }
+                      if (result.otaAvailable) {
+                        promptOtaUpdate({
+                          current: result.current,
+                          autoApply: settings.system.autoUpdate,
+                        });
+                        return;
+                      }
+                      Alert.alert(
+                        'Güncelleme',
+                        `Uygulama güncel (v${result.current}).`,
+                      );
+                    } catch (e) {
+                      Alert.alert(
+                        'Güncelleme',
+                        e instanceof Error ? e.message : 'Kontrol başarısız',
+                      );
+                    }
+                  })();
+                }}
+                style={{
+                  ...primaryBtn,
+                  alignSelf: 'flex-start',
+                  paddingHorizontal: 14,
+                  height: 36,
+                }}
+              >
+                <Text style={primaryBtnText}>Şimdi güncelleme kontrol et</Text>
+              </Pressable>
+            </View>
           </>
         )}
 

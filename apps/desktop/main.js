@@ -222,9 +222,10 @@ function readStoredSystemPrefs() {
       openOnStartup: Boolean(parsed.openOnStartup),
       minimizeToTray:
         parsed.minimizeToTray === undefined ? true : Boolean(parsed.minimizeToTray),
+      autoUpdate: parsed.autoUpdate === undefined ? true : Boolean(parsed.autoUpdate),
     };
   } catch {
-    return { openOnStartup: false, minimizeToTray: true };
+    return { openOnStartup: false, minimizeToTray: true, autoUpdate: true };
   }
 }
 
@@ -331,6 +332,10 @@ function applySystemPrefs(partial = {}) {
       partial.minimizeToTray !== undefined
         ? Boolean(partial.minimizeToTray)
         : current.minimizeToTray,
+    autoUpdate:
+      partial.autoUpdate !== undefined
+        ? Boolean(partial.autoUpdate)
+        : current.autoUpdate,
   };
   writeStoredSystemPrefs(next);
   trayEnabled = next.minimizeToTray;
@@ -343,6 +348,133 @@ function applySystemPrefs(partial = {}) {
     ...next,
     openAtLoginApplied: isOpenAtLoginEnabled(),
   };
+}
+
+/** @type {ReturnType<typeof setInterval> | null} */
+let updateCheckTimer = null;
+
+function sendUpdateEvent(channel, payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(channel, payload);
+}
+
+function setupAutoUpdater() {
+  ipcMain.handle('updater:get-version', () => app.getVersion());
+
+  if (!app.isPackaged) {
+    console.log('[updater] skipped (dev / unpackaged)');
+    ipcMain.handle('updater:check', () => {
+      sendUpdateEvent('updater:status', {
+        status: 'not-available',
+        currentVersion: app.getVersion(),
+        version: app.getVersion(),
+      });
+      return { ok: true, dev: true };
+    });
+    ipcMain.handle('updater:download', () => ({ ok: false, error: 'dev' }));
+    ipcMain.handle('updater:install', () => ({ ok: false, error: 'dev' }));
+    return;
+  }
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    console.warn('[updater] electron-updater load failed', err);
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdateEvent('updater:status', { status: 'checking' });
+  });
+  autoUpdater.on('update-available', (info) => {
+    sendUpdateEvent('updater:status', {
+      status: 'available',
+      version: info.version,
+      releaseNotes: info.releaseNotes ?? null,
+      currentVersion: app.getVersion(),
+    });
+    const prefs = readStoredSystemPrefs();
+    if (prefs.autoUpdate) {
+      void autoUpdater.downloadUpdate().catch((err) => {
+        sendUpdateEvent('updater:status', {
+          status: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+  });
+  autoUpdater.on('update-not-available', (info) => {
+    sendUpdateEvent('updater:status', {
+      status: 'not-available',
+      version: info.version,
+      currentVersion: app.getVersion(),
+    });
+  });
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateEvent('updater:status', {
+      status: 'downloading',
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total,
+      currentVersion: app.getVersion(),
+    });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateEvent('updater:status', {
+      status: 'downloaded',
+      version: info.version,
+      currentVersion: app.getVersion(),
+    });
+  });
+  autoUpdater.on('error', (err) => {
+    sendUpdateEvent('updater:status', {
+      status: 'error',
+      message: err instanceof Error ? err.message : String(err),
+      currentVersion: app.getVersion(),
+    });
+  });
+
+  const check = (manual = false) => {
+    void autoUpdater.checkForUpdates().catch((err) => {
+      if (manual) {
+        sendUpdateEvent('updater:status', {
+          status: 'error',
+          message: err instanceof Error ? err.message : String(err),
+          currentVersion: app.getVersion(),
+        });
+      }
+    });
+  };
+
+  ipcMain.handle('updater:check', () => {
+    check(true);
+    return { ok: true };
+  });
+  ipcMain.handle('updater:download', async () => {
+    try {
+      await autoUpdater.downloadUpdate();
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+  ipcMain.handle('updater:install', () => {
+    setImmediate(() => {
+      autoUpdater.quitAndInstall(false, true);
+    });
+    return { ok: true };
+  });
+
+  // İlk kontrol (pencere hazır olduktan biraz sonra)
+  setTimeout(() => check(false), 8_000);
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
+  updateCheckTimer = setInterval(() => check(false), 4 * 60 * 60 * 1000);
 }
 
 function resolveAppIconPath() {
@@ -795,6 +927,7 @@ if (!gotLock) {
     registerProtocol();
     registerWindowIpc();
     createWindow();
+    setupAutoUpdater();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

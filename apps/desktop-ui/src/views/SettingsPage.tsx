@@ -1843,13 +1843,21 @@ export function SettingsPage({
             />
             <SettingsToggle
               label="Otomatik güncelleme"
+              description="Yeni sürüm çıkınca arka planda indir; kurulum için onay istenir."
               checked={prefs.system.autoUpdate}
-              onChange={(v) => setSection('system', { autoUpdate: v })}
+              onChange={(v) => {
+                setSection('system', { autoUpdate: v });
+                syncDesktopSystemPrefs({
+                  ...prefs.system,
+                  autoUpdate: v,
+                });
+              }}
             />
+            <DesktopUpdateControls />
           </SettingsSection>
           <SettingsSection>
             <SettingsNote>
-              Electron algılandı — başlangıç ve tepsi tercihleri anında uygulanır.
+              Electron algılandı — başlangıç, tepsi ve güncelleme tercihleri anında uygulanır.
             </SettingsNote>
           </SettingsSection>
         </SettingsPageBody>
@@ -2026,5 +2034,42 @@ export function SettingsPage({
         </SettingsPageBody>
       )}
     </SettingsShell>
+  );
+}
+
+function DesktopUpdateControls() {
+  const [version, setVersion] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const desktop = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+
+  useEffect(() => {
+    if (!desktop?.getAppVersion) return;
+    void desktop.getAppVersion().then(setVersion).catch(() => setVersion(null));
+  }, [desktop]);
+
+  if (!desktop?.isElectron) return null;
+
+  return (
+    <div className="px-space-md py-space-md space-y-2 border-t border-surface-container-high">
+      <p className="font-body-sm text-on-surface">
+        Uygulama sürümü:{' '}
+        <span className="font-label-sm tabular-nums text-outline">
+          {version ? `v${version}` : '…'}
+        </span>
+      </p>
+      <button
+        type="button"
+        className="h-8 rounded-lg bg-surface-container-high px-3 font-label-sm text-on-surface hover:bg-surface-container-highest"
+        onClick={() => {
+          setNote('Güncellemeler kontrol ediliyor…');
+          void desktop.checkForUpdates?.().then(() => {
+            setNote('Kontrol tamamlandı — sonuç bildirimde görünür.');
+          });
+        }}
+      >
+        Şimdi güncelleme kontrol et
+      </button>
+      {note ? <p className="font-body-sm text-on-surface-variant">{note}</p> : null}
+    </div>
   );
 }

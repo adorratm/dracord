@@ -1256,6 +1256,19 @@ export class DracordClient {
     return this.request('/notifications/push/vapid-public-key');
   }
 
+  /** Mağaza / OTA sürüm kontrolü (auth gerekmez) */
+  async getClientVersions(): Promise<{
+    android: string;
+    ios: string;
+    desktop: string;
+    minAndroid: string | null;
+    minIos: string | null;
+    storeUrlAndroid: string | null;
+    storeUrlIos: string | null;
+  }> {
+    return this.request('/client/versions');
+  }
+
   async subscribePush(data: {
     endpoint: string;
     keys: { p256dh: string; auth: string };

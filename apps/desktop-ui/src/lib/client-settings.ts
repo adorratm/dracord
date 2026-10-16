@@ -161,9 +161,12 @@ export function saveLocalPrefs(prefs: ClientSettings) {
   applyPrefsDom(prefs);
 }
 
-/** Electron main: başlangıçta aç + tepsi — OS login item / autostart */
+/** Electron main: başlangıçta aç + tepsi + autoUpdate — OS login item / autostart */
 export function syncDesktopSystemPrefs(
-  system: Pick<ClientSettings['system'], 'openOnStartup' | 'minimizeToTray'>,
+  system: Pick<
+    ClientSettings['system'],
+    'openOnStartup' | 'minimizeToTray' | 'autoUpdate'
+  >,
 ) {
   const api = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
   if (!api?.setSystemPrefs) return;
@@ -171,6 +174,7 @@ export function syncDesktopSystemPrefs(
     api.setSystemPrefs({
       openOnStartup: Boolean(system.openOnStartup),
       minimizeToTray: Boolean(system.minimizeToTray),
+      autoUpdate: system.autoUpdate !== false,
     }),
   ).catch(() => undefined);
 }

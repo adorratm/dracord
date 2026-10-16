@@ -170,3 +170,69 @@ jobs:
           sleep 5
           curl -fsS -o /dev/null -w "web %{http_code}\n" https://dracord.com.tr/health || true
           curl -fsS -o /dev/null -w "api %{http_code}\n" https://api.dracord.com.tr/health/ready || true
+
+  # Deploy yeşil → istemci güncellemeleri (EAS OTA + desktop version bump)
+  client-updates:
+    name: Client updates (OTA + desktop)
+    needs: deploy
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect desktop version bump
+        id: desk
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER=$(node -p "require('./apps/desktop/package.json').version")
+          TAG="desktop-v${VER}"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            echo "Desktop tag ${TAG} already exists — skip release"
+          else
+            echo "bump=true" >> "$GITHUB_OUTPUT"
+            echo "Desktop version ${VER} is new — will trigger release"
+          fi
+
+      - name: Trigger desktop-release
+        if: steps.desk.outputs.bump == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run desktop-release.yml \
+            --ref "${{ github.ref_name }}" \
+            -f release_tag="${{ steps.desk.outputs.tag }}" \
+            -f publish_release=true
+          echo "Triggered desktop-release for ${{ steps.desk.outputs.tag }}"
+
+      - name: Setup Node + EAS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+
+      - name: Publish EAS Update (production)
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_TOKEN:-}" ]]; then
+            echo "EXPO_TOKEN secret yok — EAS OTA atlandı"
+            exit 0
+          fi
+          corepack enable
+          yarn install --immutable
+          npx eas-cli update --channel production --non-interactive --message "deploy ${{ github.sha }}" || {
+            echo "EAS update skipped or failed (projectId / channel may be incomplete)"
+            exit 0
+          }

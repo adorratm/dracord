@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/auth';
 import { AppTour } from '../../components/AppTour';
 import { AppShellProvider } from '../../components/shell/AppShell';
 import { VoiceSessionProvider } from '../../components/voice/VoiceSession';
+import { AppUpdateGate } from '../../components/AppUpdateGate';
 import { VoiceConnectionBar } from '../../components/voice/VoiceConnectionBar';
 import { MusicPlayerBar } from '../../components/voice/MusicPlayerBar';
 import { ActivitySessionProvider } from '../../components/activity/ActivitySession';
@@ -39,6 +40,7 @@ export default function AppLayout() {
             <MusicPlayerBar />
             <VoiceConnectionBar />
             {!onOnboarding ? <AppTour /> : null}
+            <AppUpdateGate />
             <ConfirmModalHost />
           </View>
         </AppShellProvider>

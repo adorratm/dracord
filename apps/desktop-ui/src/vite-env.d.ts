@@ -16,14 +16,24 @@ type DracordDesktopDealerTtsResult =
 type DracordDesktopSystemPrefs = {
   openOnStartup?: boolean;
   minimizeToTray?: boolean;
+  autoUpdate?: boolean;
 };
 
 type DracordDesktopSystemPrefsResult = {
   ok?: boolean;
   openOnStartup?: boolean;
   minimizeToTray?: boolean;
+  autoUpdate?: boolean;
   openAtLoginApplied?: boolean;
   error?: string;
+};
+
+type DracordDesktopUpdaterStatus = {
+  status: string;
+  version?: string;
+  currentVersion?: string;
+  percent?: number;
+  message?: string;
 };
 
 type DracordDesktopApi = {
@@ -41,6 +51,13 @@ type DracordDesktopApi = {
   }) => Promise<{ ok: boolean }>;
   clearDisplayMediaSelection: () => Promise<{ ok: boolean }>;
   synthesizeDealerTts?: (text: string) => Promise<DracordDesktopDealerTtsResult>;
+  getAppVersion?: () => Promise<string>;
+  checkForUpdates?: () => Promise<{ ok: boolean; dev?: boolean }>;
+  downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
+  installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
+  onUpdaterStatus?: (
+    callback: (payload: DracordDesktopUpdaterStatus) => void,
+  ) => () => void;
 };
 
 interface Window {

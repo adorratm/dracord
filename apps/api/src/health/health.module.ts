@@ -26,7 +26,27 @@ class HealthController {
   }
 }
 
+/** İstemci sürümleri — mağaza / OTA prompt (auth gerekmez) */
+@Controller('client')
+class ClientVersionsController {
+  @Get('versions')
+  versions() {
+    const env = process.env;
+    return {
+      android: env.CLIENT_VERSION_ANDROID?.trim() || '0.1.0',
+      ios: env.CLIENT_VERSION_IOS?.trim() || '0.1.0',
+      desktop: env.CLIENT_VERSION_DESKTOP?.trim() || '0.1.0',
+      minAndroid: env.CLIENT_MIN_VERSION_ANDROID?.trim() || null,
+      minIos: env.CLIENT_MIN_VERSION_IOS?.trim() || null,
+      storeUrlAndroid:
+        env.CLIENT_STORE_URL_ANDROID?.trim() ||
+        'https://play.google.com/store/apps/details?id=com.dracord.mobile',
+      storeUrlIos: env.CLIENT_STORE_URL_IOS?.trim() || null,
+    };
+  }
+}
+
 @Module({
-  controllers: [HealthController],
+  controllers: [HealthController, ClientVersionsController],
 })
 export class HealthModule {}

@@ -54,6 +54,14 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-https://dracord.com.tr}
       ADMIN_URL: ${ADMIN_URL:-https://admin.dracord.com.tr}
       ADMIN_EMAILS: ${ADMIN_EMAILS:?set ADMIN_EMAILS}
+      # İstemci sürümleri — GET /client/versions (mağaza prompt)
+      CLIENT_VERSION_ANDROID: ${CLIENT_VERSION_ANDROID:-0.1.0}
+      CLIENT_VERSION_IOS: ${CLIENT_VERSION_IOS:-0.1.0}
+      CLIENT_VERSION_DESKTOP: ${CLIENT_VERSION_DESKTOP:-0.1.0}
+      CLIENT_MIN_VERSION_ANDROID: ${CLIENT_MIN_VERSION_ANDROID:-}
+      CLIENT_MIN_VERSION_IOS: ${CLIENT_MIN_VERSION_IOS:-}
+      CLIENT_STORE_URL_ANDROID: ${CLIENT_STORE_URL_ANDROID:-https://play.google.com/store/apps/details?id=com.dracord.mobile}
+      CLIENT_STORE_URL_IOS: ${CLIENT_STORE_URL_IOS:-}
     depends_on: !reset
       pgbouncer:
         condition: service_started

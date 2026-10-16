@@ -6,6 +6,15 @@
     "orientation": "default",
     "scheme": "dracord",
     "userInterfaceStyle": "dark",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/replace-with-eas-project-id",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD",
+      "enabled": true
+    },
     "platforms": [
       "ios",
       "android"
@@ -78,7 +87,8 @@
       ],
       "@config-plugins/react-native-webrtc",
       "./plugins/withVoiceForegroundService.js",
-      "expo-audio"
+      "expo-audio",
+      "expo-updates"
     ],
     "extra": {
       "apiUrl": "https://api.dracord.com.tr",

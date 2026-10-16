@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('windowControls', {
 
 contextBridge.exposeInMainWorld('dracordDesktop', {
   isElectron: true,
-  /** OS başlangıç / tepsi tercihlerini main process’e uygula */
+  /** OS başlangıç / tepsi / autoUpdate tercihlerini main process’e uygula */
   setSystemPrefs: (prefs) => ipcRenderer.invoke('system-prefs:set', prefs),
   getSystemPrefs: () => ipcRenderer.invoke('system-prefs:get'),
   /** Genel harici link */
@@ -22,4 +22,14 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   clearDisplayMediaSelection: () => ipcRenderer.invoke('desktop-capturer:clear-selection'),
   /** @param {string} text */
   synthesizeDealerTts: (text) => ipcRenderer.invoke('dealer-tts:synthesize', text),
+  /** Uygulama sürümü (paketli) */
+  getAppVersion: () => ipcRenderer.invoke('updater:get-version'),
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater:download'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+  onUpdaterStatus: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('updater:status', handler);
+    return () => ipcRenderer.removeListener('updater:status', handler);
+  },
 });

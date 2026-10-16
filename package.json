@@ -28,7 +28,7 @@
     "search:reindex": "yarn workspace @dracord/api search:reindex"
   },
   "devDependencies": {
-    "turbo": "^2.11.8",
+    "turbo": "^2.11.9",
     "typescript": "^6.0.3"
   },
   "volta": {
