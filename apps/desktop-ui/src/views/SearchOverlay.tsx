@@ -214,13 +214,9 @@ export function SearchOverlay({
           onScopeChange={setScope}
           hits={hits}
           loading={busy}
+          error={error}
           onSelectMessage={selectMessage}
         />
-        {error ? (
-          <p className="fixed bottom-6 left-1/2 z-[201] -translate-x-1/2 rounded-lg bg-surface-container-high px-3 py-2 text-sm text-error">
-            {error}
-          </p>
-        ) : null}
         <button
           type="button"
           className="fixed top-[12vh] right-[max(1rem,calc(50%-20rem))] z-[201] h-8 px-2 rounded-lg text-xs text-on-surface-variant hover:bg-surface-container"
@@ -241,11 +237,12 @@ export function SearchOverlay({
         onQueryChange={setQ}
         hits={hits}
         loading={busy}
+        error={error}
         onSelect={selectQuick}
       />
       <div className="fixed top-[calc(12vh+3.25rem)] left-1/2 z-[201] w-full max-w-xl -translate-x-1/2 px-3 flex items-center justify-between gap-2 pointer-events-none">
         <p className="text-[11px] text-outline truncate pointer-events-none">
-          {error ?? (busy ? '' : 'Sunucu, kanal veya kullanıcı')}
+          {busy ? '' : 'Sunucu, kanal veya kullanıcı'}
         </p>
         <button
           type="button"

@@ -9,9 +9,10 @@ import { Icon } from '../../../../components/Icon';
 import { ShellHeader, useAppShell } from '../../../../components/shell/AppShell';
 
 export default function ChannelScreen() {
-  const { guildId = '', channelId = '' } = useLocalSearchParams<{
+  const { guildId = '', channelId = '', around } = useLocalSearchParams<{
     guildId: string;
     channelId: string;
+    around?: string;
   }>();
   const { client } = useAuth();
   const router = useRouter();
@@ -66,7 +67,12 @@ export default function ChannelScreen() {
           <View style={{ flex: 1 }} />
         )}
       </View>
-      <ChatView channel={channel} hideChannelChrome />
+      <ChatView
+        channel={channel}
+        hideChannelChrome
+        guildId={guildId}
+        aroundMessageId={typeof around === 'string' ? around : around?.[0] ?? null}
+      />
     </View>
   );
 }

@@ -17,6 +17,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
+import { useRouter } from 'expo-router';
 import type {
   ChannelSummary,
   GifDto,
@@ -70,12 +71,18 @@ function isMediaUrl(value: string): boolean {
 export function ChatView({
   channel,
   hideChannelChrome,
+  aroundMessageId,
+  guildId,
 }: {
   channel: ChannelSummary;
   /** ShellHeader zaten kanal adını gösteriyorsa üst çubuğu gizle */
   hideChannelChrome?: boolean;
+  /** Arama sonucu: bu mesaj civarını yükle */
+  aroundMessageId?: string | null;
+  guildId?: string | null;
 }) {
   const { client, user } = useAuth();
+  const router = useRouter();
   const [messages, setMessages] = useState<MessageDto[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -83,6 +90,7 @@ export function ChatView({
   const [editing, setEditing] = useState<MessageDto | null>(null);
   const [pins, setPins] = useState<MessageDto[]>([]);
   const [showPins, setShowPins] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(aroundMessageId ?? null);
   const [threadRoot, setThreadRoot] = useState<MessageDto | null>(null);
   const [threadMsgs, setThreadMsgs] = useState<MessageDto[]>([]);
   const [threadDraft, setThreadDraft] = useState('');
@@ -117,17 +125,36 @@ export function ChatView({
   }, [refreshStickers]);
 
   useEffect(() => {
+    if (!highlightId || messages.length === 0) return;
+    const idx = messages.findIndex((m) => m.id === highlightId);
+    if (idx < 0) return;
+    const t = setTimeout(() => {
+      try {
+        listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.4 });
+      } catch {
+        /* ignore */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightId, messages]);
+
+  useEffect(() => {
     setMessages([]);
     setReplyTo(null);
     setEditing(null);
     setText('');
     setShowPins(false);
+    setHighlightId(aroundMessageId ?? null);
     client.joinChannel(channel.id);
-    void client.getMessages(channel.id).then((page) => {
-      // API ASC (eski→yeni); inverted list için yeni→eski saklarız
-      const items = page.items ?? [];
-      setMessages([...items].filter((m) => !m.viewerHide).reverse());
-    });
+    const around = aroundMessageId || undefined;
+    void client
+      .getMessages(channel.id, around ? { limit: 50, around } : 50)
+      .then((page) => {
+        // API ASC (eski→yeni); inverted list için yeni→eski saklarız
+        const items = page.items ?? [];
+        setMessages([...items].filter((m) => !m.viewerHide).reverse());
+        if (around) setHighlightId(around);
+      });
     void client.listPinnedMessages(channel.id).then(setPins).catch(() => setPins([]));
     const sock = client.connectSocket();
     const onMsg = (msg: MessageDto) => {
@@ -164,7 +191,7 @@ export function ChatView({
       sock.off(SocketEvents.TYPING_START, onTyping);
       client.leaveChannel(channel.id);
     };
-  }, [client, channel.id, userId]);
+  }, [client, channel.id, userId, aroundMessageId]);
 
   /** inverted: index 0 = en yeni (görsel alt); index+1 = daha eski */
   const chatRows = useMemo<ChatRow[]>(() => {
@@ -627,6 +654,22 @@ export function ChatView({
           </View>
           <Pressable
             onPress={() => {
+              router.push({
+                pathname: '/(app)/search',
+                params: {
+                  scope: 'messages',
+                  channelId: channel.id,
+                  guildId: guildId ?? '',
+                },
+              });
+            }}
+            style={{ ...chipBtn, marginRight: 6 }}
+            accessibilityLabel="Mesajlarda ara"
+          >
+            <Icon name="search" size={16} color={colors.text} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
               setShowPins((v) => !v);
               void client.listPinnedMessages(channel.id).then(setPins);
             }}
@@ -637,7 +680,23 @@ export function ChatView({
           </Pressable>
         </View>
       ) : (
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 6 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 6, gap: 6 }}>
+          <Pressable
+            onPress={() => {
+              router.push({
+                pathname: '/(app)/search',
+                params: {
+                  scope: 'messages',
+                  channelId: channel.id,
+                  guildId: guildId ?? '',
+                },
+              });
+            }}
+            style={chipBtn}
+            accessibilityLabel="Mesajlarda ara"
+          >
+            <Icon name="search" size={14} color={colors.text} />
+          </Pressable>
           <Pressable
             onPress={() => {
               setShowPins((v) => !v);

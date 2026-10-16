@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { ChannelSummary, GuildSummary, SearchHit } from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
@@ -28,11 +28,11 @@ const SCOPES: { id: Scope; label: string }[] = [
   { id: 'messages', label: 'Mesajlar' },
 ];
 
-function typesForScope(scope: Scope): string[] | undefined {
+function typesForScope(scope: Scope): string[] {
   if (scope === 'people') return ['users'];
   if (scope === 'servers') return ['guilds', 'channels'];
   if (scope === 'messages') return ['messages'];
-  return undefined;
+  return ['guilds', 'channels', 'users', 'messages'];
 }
 
 /** ES yoksa /search 503 verdiğinde yerel API ile yedek */
@@ -114,8 +114,15 @@ export default function SearchScreen() {
   const { client } = useAuth();
   const router = useRouter();
   const shell = useAppShellOptional();
+  const params = useLocalSearchParams<{
+    scope?: string;
+    channelId?: string;
+    guildId?: string;
+  }>();
   const [q, setQ] = useState('');
-  const [scope, setScope] = useState<Scope>('all');
+  const [scope, setScope] = useState<Scope>(() =>
+    params.scope === 'messages' ? 'messages' : 'all',
+  );
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -142,12 +149,19 @@ export default function SearchScreen() {
       setError(null);
 
       try {
+        const channelFilter =
+          typeof params.channelId === 'string' ? params.channelId : undefined;
+        const guildFilter =
+          (typeof params.guildId === 'string' && params.guildId
+            ? params.guildId
+            : null) || shell?.guildId || undefined;
         const r = await client.search({
           q: trimmed,
           types: typesForScope(nextScope),
-          // Mesaj aramasında mevcut sunucuya daralt; diğerlerinde global
+          // Mesaj: kanal paramı veya mevcut sunucu
           guildId:
-            nextScope === 'messages' && shell?.guildId ? shell.guildId : undefined,
+            nextScope === 'messages' && !channelFilter ? guildFilter : undefined,
+          channelId: nextScope === 'messages' ? channelFilter : undefined,
           limit: 40,
         });
         if (gen !== genRef.current) return;
@@ -188,7 +202,7 @@ export default function SearchScreen() {
         if (gen === genRef.current) setBusy(false);
       }
     },
-    [client, shell],
+    [client, shell, params.channelId, params.guildId],
   );
 
   // Yazarken canlı ara (web ile aynı)
@@ -249,12 +263,22 @@ export default function SearchScreen() {
       return;
     }
 
-    // message
-    if (hit.guildId && hit.channelId) {
-      await rememberChannel(hit.guildId, hit.channelId);
-      router.push(`/(app)/channels/${hit.guildId}/${hit.channelId}`);
-    } else if (hit.dmChannelId || hit.channelId) {
-      router.push('/(app)/dms');
+    // message → kanala around ile git
+    if (hit.type === 'message') {
+      const around = hit.threadRootId || hit.id;
+      if (hit.guildId && hit.channelId) {
+        await rememberChannel(hit.guildId, hit.channelId);
+        router.push({
+          pathname: `/(app)/channels/${hit.guildId}/${hit.channelId}`,
+          params: { around },
+        });
+        return;
+      }
+      if (hit.channelId || hit.dmChannelId) {
+        const dmId = hit.dmChannelId || hit.channelId;
+        await rememberChannel('me', dmId);
+        router.push({ pathname: '/(app)/dms', params: { channelId: dmId, around } });
+      }
     }
   };
 

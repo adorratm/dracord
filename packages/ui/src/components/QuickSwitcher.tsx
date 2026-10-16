@@ -11,6 +11,7 @@ export interface QuickSwitcherProps {
   onQueryChange: (q: string) => void;
   hits: SearchHit[];
   loading?: boolean;
+  error?: string | null;
   onSelect: (hit: SearchHit) => void;
 }
 
@@ -21,6 +22,7 @@ export function QuickSwitcher({
   onQueryChange,
   hits,
   loading,
+  error,
   onSelect,
 }: QuickSwitcherProps) {
   const [active, setActive] = useState(0);
@@ -84,7 +86,9 @@ export function QuickSwitcher({
             <li className="px-space-md py-space-sm font-body-sm text-outline">Aranıyor…</li>
           )}
           {!loading && query && filtered.length === 0 && (
-            <li className="px-space-md py-space-sm font-body-sm text-outline">Sonuç yok</li>
+            <li className="px-space-md py-space-sm font-body-sm text-outline">
+              {error || 'Sonuç yok'}
+            </li>
           )}
           {filtered.map((hit, i) => (
             <li key={`${hit.type}-${hit.id}`}>

@@ -74,6 +74,7 @@ export function Shell() {
   const [view, setView] = useState<View>({ kind: 'home' });
   const [showMembers, setShowMembers] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [jumpAroundId, setJumpAroundId] = useState<string | null>(null);
   const [profileUser, setProfileUser] = useState<PublicUser | null>(null);
   const [findChatOpen, setFindChatOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -515,9 +516,33 @@ export function Shell() {
         e.preventDefault();
         setSearchOpen(true);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        window.dispatchEvent(new Event('dracord:open-channel-search'));
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    const onJump = (e: Event) => {
+      const detail = (e as CustomEvent<{
+        guildId?: string | null;
+        channelId?: string;
+        around?: string;
+        highlightId?: string;
+      }>).detail;
+      if (!detail?.channelId || !detail.around) return;
+      if (detail.guildId) {
+        openChannel(detail.guildId, detail.channelId);
+        setJumpAroundId(detail.highlightId || detail.around);
+      } else {
+        setView({ kind: 'dms', channelId: detail.channelId });
+      }
+    };
+    window.addEventListener('dracord:jump-message', onJump);
+    return () => window.removeEventListener('dracord:jump-message', onJump);
   }, []);
 
   const toggleCollapsed = (id: string) => {
@@ -1333,6 +1358,8 @@ export function Shell() {
               channel={activeChannel}
               members={members}
               showMembersToggle={() => setShowMembers((v) => !v)}
+              jumpAroundId={jumpAroundId}
+              onJumpAroundConsumed={() => setJumpAroundId(null)}
             />
           )}
           {view.kind === 'channel' && activeChannel?.type === 'FORUM' && (
@@ -1342,6 +1369,8 @@ export function Shell() {
               channel={activeChannel}
               members={members}
               showMembersToggle={() => setShowMembers((v) => !v)}
+              jumpAroundId={jumpAroundId}
+              onJumpAroundConsumed={() => setJumpAroundId(null)}
             />
           )}
           {view.kind === 'channel' && activeChannel?.type === 'VOICE' && (
@@ -2046,11 +2075,13 @@ export function Shell() {
         channelId={activeChannelId}
         guilds={guilds}
         channels={channels}
-        onOpenChannel={(guildId, channelId) => {
+        onOpenChannel={(guildId, channelId, opts) => {
           openChannel(guildId, channelId);
+          if (opts?.around) setJumpAroundId(opts.around);
         }}
-        onOpenDm={(channelId) => {
+        onOpenDm={(channelId, opts) => {
           setView({ kind: 'dms', channelId });
+          if (opts?.around) setJumpAroundId(opts.around);
         }}
       />
 

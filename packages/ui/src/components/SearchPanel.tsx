@@ -15,6 +15,8 @@ export interface SearchPanelProps {
   onScopeChange: (s: SearchScope) => void;
   hits: SearchHit[];
   loading?: boolean;
+  /** Boş sonuç değil, servis/izin hatası */
+  error?: string | null;
   onSelectMessage: (hit: SearchHitMessage) => void;
   guildName?: string;
   channelName?: string;
@@ -29,6 +31,7 @@ export function SearchPanel({
   onScopeChange,
   hits,
   loading,
+  error,
   onSelectMessage,
   guildName,
   channelName,
@@ -97,7 +100,12 @@ export function SearchPanel({
             <li className="px-space-md py-space-sm font-body-sm text-outline">Aranıyor…</li>
           )}
           {!loading && query && messages.length === 0 && (
-            <li className="px-space-md py-space-sm font-body-sm text-outline">Mesaj bulunamadı</li>
+            <li className="px-space-md py-space-sm font-body-sm text-outline">
+              {error || 'Mesaj bulunamadı'}
+            </li>
+          )}
+          {!loading && error && messages.length > 0 && (
+            <li className="px-space-md py-space-sm font-body-sm text-error">{error}</li>
           )}
           {messages.map((hit) => (
             <li key={hit.id}>

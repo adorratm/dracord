@@ -45,11 +45,14 @@ export function GlobalSearch() {
   const [panelHits, setPanelHits] = useState<SearchHit[]>([]);
   const [loadingQuick, setLoadingQuick] = useState(false);
   const [loadingPanel, setLoadingPanel] = useState(false);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
 
   useEffect(() => {
     const onOpenPanel = () => {
       setPanelOpen(true);
       setQuickOpen(false);
+      setScope(channelId ? 'channel' : guildId ? 'guild' : 'everywhere');
     };
     const onOpenQuick = () => {
       setQuickOpen(true);
@@ -61,7 +64,7 @@ export function GlobalSearch() {
       window.removeEventListener(OPEN_MESSAGE_SEARCH, onOpenPanel);
       window.removeEventListener(OPEN_QUICK_SEARCH, onOpenQuick);
     };
-  }, []);
+  }, [channelId, guildId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,23 +78,31 @@ export function GlobalSearch() {
         e.preventDefault();
         setPanelOpen(true);
         setQuickOpen(false);
+        setScope(channelId ? 'channel' : guildId ? 'guild' : 'everywhere');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [channelId, guildId]);
 
   useEffect(() => {
     if (!quickOpen || !user || quickQ.trim().length < 1) {
       setQuickHits([]);
+      setQuickError(null);
       return;
     }
     const t = window.setTimeout(() => {
       setLoadingQuick(true);
+      setQuickError(null);
       void client
         .search({ q: quickQ, types: ['guilds', 'channels', 'users'], limit: 20 })
-        .then((r) => setQuickHits(r.hits))
-        .catch(() => setQuickHits([]))
+        .then((r) => setQuickHits(r.hits ?? []))
+        .catch((e) => {
+          setQuickHits([]);
+          setQuickError(
+            e instanceof Error ? e.message : 'Arama şu an kullanılamıyor',
+          );
+        })
         .finally(() => setLoadingQuick(false));
     }, 200);
     return () => window.clearTimeout(t);
@@ -100,10 +111,12 @@ export function GlobalSearch() {
   useEffect(() => {
     if (!panelOpen || !user || panelQ.trim().length < 1) {
       setPanelHits([]);
+      setPanelError(null);
       return;
     }
     const t = window.setTimeout(() => {
       setLoadingPanel(true);
+      setPanelError(null);
       const opts: Parameters<typeof client.search>[0] = {
         q: panelQ,
         types: ['messages'],
@@ -114,13 +127,19 @@ export function GlobalSearch() {
       void client
         .search(opts)
         .then((r) => {
+          const list = r.hits ?? [];
           if (scope === 'dms') {
-            setPanelHits(r.hits.filter((h) => h.type === 'message' && h.dmChannelId));
+            setPanelHits(list.filter((h) => h.type === 'message' && h.dmChannelId));
           } else {
-            setPanelHits(r.hits);
+            setPanelHits(list);
           }
         })
-        .catch(() => setPanelHits([]))
+        .catch((e) => {
+          setPanelHits([]);
+          setPanelError(
+            e instanceof Error ? e.message : 'Mesaj araması şu an kullanılamıyor',
+          );
+        })
         .finally(() => setLoadingPanel(false));
     }, 250);
     return () => window.clearTimeout(t);
@@ -170,11 +189,10 @@ export function GlobalSearch() {
     }
     const path = hit.guildId
       ? `/channels/${hit.guildId}/${hit.channelId}`
-      : `/channels/@me/${hit.channelId}`;
+      : `/channels/me/${hit.channelId}`;
     router.push(`${path}?${qs.toString()}`);
   };
 
-  // Mobil oyun gömme — site araması gösterme
   if (isEmbed) return null;
 
   return (
@@ -186,6 +204,7 @@ export function GlobalSearch() {
         onQueryChange={setQuickQ}
         hits={quickHits}
         loading={loadingQuick}
+        error={quickError}
         onSelect={(h) => void onSelectQuick(h)}
       />
       <SearchPanel
@@ -197,6 +216,7 @@ export function GlobalSearch() {
         onScopeChange={setScope}
         hits={panelHits}
         loading={loadingPanel}
+        error={panelError}
         onSelectMessage={onSelectMessage}
       />
     </>

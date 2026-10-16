@@ -1,8 +1,10 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type { SearchHit, SearchResponse } from '@dracord/types';
-import { EntityManager, In } from 'typeorm';
+import { EntityManager } from 'typeorm';
+import { Channel } from '@/database/entities/channel.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Friendship } from '@/database/entities/friendship.entity';
+import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
 import { User } from '@/database/entities/user.entity';
 import { FriendshipStatus } from '@/database/enums';
@@ -13,6 +15,24 @@ import {
   IDX_MESSAGES,
   IDX_USERS,
 } from './elasticsearch.service';
+
+const TYPE_ALIASES: Record<string, string> = {
+  guild: 'guilds',
+  guilds: 'guilds',
+  channel: 'channels',
+  channels: 'channels',
+  user: 'users',
+  users: 'users',
+  message: 'messages',
+  messages: 'messages',
+};
+
+function normalizeSearchTypes(raw?: string[]): Set<string> {
+  const list = (raw?.length ? raw : ['guilds', 'channels', 'users', 'messages']).map((t) =>
+    TYPE_ALIASES[t.toLowerCase()] ?? t.toLowerCase(),
+  );
+  return new Set(list);
+}
 
 @Injectable()
 export class SearchService {
@@ -31,18 +51,39 @@ export class SearchService {
       limit?: number;
     } = {},
   ): Promise<SearchResponse> {
-    if (!this.es.client || !this.es.isReady()) {
-      throw new ServiceUnavailableException('Arama servisi kullanılamıyor');
-    }
     const query = q.trim();
     if (query.length < 1) {
       return { query, hits: [] };
+    }
+    const types = normalizeSearchTypes(opts.types);
+    const wantsMessages = types.has('messages');
+    const wantsNav =
+      types.has('guilds') || types.has('channels') || types.has('users');
+
+    // ES yoksa: nav DB yedek; yalnızca mesaj isteniyorsa 503
+    if (!this.es.client || !this.es.isReady()) {
+      if (wantsMessages && !wantsNav) {
+        throw new ServiceUnavailableException('Mesaj araması şu an kullanılamıyor');
+      }
+      if (wantsMessages && wantsNav) {
+        // Mesajları atla, nav sonuçlarını dön
+        const navTypes = [...types].filter((t) => t !== 'messages');
+        return this.dbFallbackSearch(userId, query, {
+          ...opts,
+          types: navTypes,
+        });
+      }
+      return this.dbFallbackSearch(userId, query, opts);
     }
 
     try {
       return await this.runSearch(userId, query, opts);
     } catch (err) {
       if (err instanceof ServiceUnavailableException) throw err;
+      // ES anlık hata → nav için DB yedek
+      if (wantsNav && !wantsMessages) {
+        return this.dbFallbackSearch(userId, query, opts);
+      }
       throw new ServiceUnavailableException(
         `Arama başarısız: ${(err as Error).message?.slice(0, 120) || 'bilinmeyen hata'}`,
       );
@@ -59,12 +100,12 @@ export class SearchService {
       limit?: number;
     } = {},
   ): Promise<SearchResponse> {
-    if (!this.es.client || !this.es.isReady()) {
-      throw new ServiceUnavailableException('Arama servisi kullanılamıyor');
-    }
     const query = q.trim();
     if (query.length < 1) {
       return { query, hits: [] };
+    }
+    if (!this.es.client || !this.es.isReady()) {
+      throw new ServiceUnavailableException('Arama servisi kullanılamıyor');
     }
     try {
       return await this.runSearch('__platform_admin__', query, {
@@ -77,6 +118,114 @@ export class SearchService {
         `Arama başarısız: ${(err as Error).message?.slice(0, 120) || 'bilinmeyen hata'}`,
       );
     }
+  }
+
+  /** Elasticsearch kapalıyken sunucu / kanal / kullanıcı (üyelik + ILIKE) */
+  private async dbFallbackSearch(
+    userId: string,
+    query: string,
+    opts: {
+      types?: string[];
+      guildId?: string;
+      channelId?: string;
+      limit?: number;
+    },
+  ): Promise<SearchResponse> {
+    const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
+    const types = normalizeSearchTypes(opts.types);
+    const like = `%${query.replace(/[%_]/g, '')}%`;
+    const hits: SearchHit[] = [];
+
+    const memberships = await this.em.find(GuildMember, {
+      where: { userId },
+      select: { guildId: true },
+    });
+    const memberGuildIds = memberships.map((m) => m.guildId);
+
+    if (types.has('guilds') && memberGuildIds.length) {
+      const guildRows = await this.em
+        .createQueryBuilder(Guild, 'g')
+        .where('g.id IN (:...ids)', { ids: memberGuildIds })
+        .andWhere('g.name ILIKE :like', { like })
+        .take(limit)
+        .getMany();
+      for (const g of guildRows) {
+        hits.push({
+          type: 'guild',
+          id: g.id,
+          name: g.name,
+          iconUrl: g.iconUrl,
+          discoverable: g.discoverable,
+        });
+      }
+    }
+
+    if (types.has('channels') && memberGuildIds.length) {
+      const chQb = this.em
+        .createQueryBuilder(Channel, 'c')
+        .where('c.guildId IN (:...ids)', { ids: memberGuildIds })
+        .andWhere('c.name ILIKE :like', { like })
+        .take(limit);
+      if (opts.guildId) {
+        chQb.andWhere('c.guildId = :guildId', { guildId: opts.guildId });
+      }
+      const channels = await chQb.getMany();
+      for (const c of channels) {
+        hits.push({
+          type: 'channel',
+          id: c.id,
+          guildId: c.guildId,
+          name: c.name,
+          channelType: c.type,
+        });
+      }
+    }
+
+    if (types.has('users')) {
+      const friendships = await this.em.find(Friendship, {
+        where: [
+          { userId, status: FriendshipStatus.ACCEPTED },
+          { friendId: userId, status: FriendshipStatus.ACCEPTED },
+        ],
+      });
+      const friendIds = friendships.map((f) =>
+        f.userId === userId ? f.friendId : f.userId,
+      );
+      let coMemberIds: string[] = [];
+      if (memberGuildIds.length) {
+        const co = await this.em
+          .createQueryBuilder(GuildMember, 'gm')
+          .select('DISTINCT gm.userId', 'userId')
+          .where('gm.guildId IN (:...guildIds)', { guildIds: memberGuildIds })
+          .andWhere('gm.userId != :userId', { userId })
+          .take(400)
+          .getRawMany<{ userId: string }>();
+        coMemberIds = co.map((c) => c.userId);
+      }
+      const visible = [...new Set([...friendIds, ...coMemberIds])];
+      if (visible.length) {
+        const users = await this.em
+          .createQueryBuilder(User, 'u')
+          .where('u.id IN (:...ids)', { ids: visible })
+          .andWhere(
+            '(u.username ILIKE :like OR u.displayName ILIKE :like)',
+            { like },
+          )
+          .take(limit)
+          .getMany();
+        for (const u of users) {
+          hits.push({
+            type: 'user',
+            id: u.id,
+            username: u.username,
+            displayName: u.displayName,
+            avatarUrl: u.avatarUrl,
+          });
+        }
+      }
+    }
+
+    return { query, hits: hits.slice(0, limit) };
   }
 
   private async runSearch(
@@ -95,11 +244,7 @@ export class SearchService {
       throw new ServiceUnavailableException('Arama servisi kullanılamıyor');
     }
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
-    const types = new Set(
-      (opts.types?.length ? opts.types : ['guilds', 'channels', 'users', 'messages']).map((t) =>
-        t.toLowerCase(),
-      ),
-    );
+    const types = normalizeSearchTypes(opts.types);
     const isAdmin = Boolean(opts.platformAdmin);
 
     const memberships = isAdmin

@@ -30,6 +30,8 @@ export function ChatPanel({
   hideHeader = false,
   titleOverride,
   className,
+  jumpAroundId = null,
+  onJumpAroundConsumed,
 }: {
   guildId: string;
   channel: ChannelSummary;
@@ -39,6 +41,9 @@ export function ChatPanel({
   hideHeader?: boolean;
   titleOverride?: string;
   className?: string;
+  /** Global aramadan gelen mesaj id — around fetch + highlight */
+  jumpAroundId?: string | null;
+  onJumpAroundConsumed?: () => void;
 }) {
   const { client, user } = useAuth();
   const voice = useVoiceSession();
@@ -63,9 +68,11 @@ export function ChatPanel({
   const [searchQ, setSearchQ] = useState('');
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchScope, setSearchScope] = useState<SearchScope>('channel');
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const closeThread = useCallback(() => {
     setThreadRoot(null);
@@ -84,6 +91,8 @@ export function ChatPanel({
     closeThread();
     setThreadsPreviewOpen(false);
     setThreadsPreview([]);
+    setSearchError(null);
+    setHighlightMessageId(null);
     const sock = client.connectSocket();
     const onMsg = (msg: MessageDto) => {
       if (msg.channelId !== channel.id) return;
@@ -119,6 +128,30 @@ export function ChatPanel({
       client.leaveChannel(channel.id);
     };
   }, [client, channel.id, closeThread]);
+
+  useEffect(() => {
+    if (!jumpAroundId) return;
+    const around = jumpAroundId;
+    void client
+      .getMessages(channel.id, { limit: 50, around })
+      .then((page) => {
+        setMessages(page.items ?? []);
+        setHighlightMessageId(around);
+      })
+      .finally(() => onJumpAroundConsumed?.());
+  }, [jumpAroundId, channel.id, client, onJumpAroundConsumed]);
+
+  useEffect(() => {
+    const onOpen = () => {
+      setSearchScope('channel');
+      setSearchQ('');
+      setSearchHits([]);
+      setSearchError(null);
+      setChannelSearchOpen(true);
+    };
+    window.addEventListener('dracord:open-channel-search', onOpen);
+    return () => window.removeEventListener('dracord:open-channel-search', onOpen);
+  }, []);
 
   // Thread yükle + canlı yanıtlar (web GuildChannelView parity)
   useEffect(() => {
@@ -174,22 +207,40 @@ export function ChatPanel({
 
   const runChannelSearch = useCallback(
     (query: string, scope: SearchScope) => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
       if (!query.trim()) {
         setSearchHits([]);
+        setSearchError(null);
+        setSearchBusy(false);
         return;
       }
-      setSearchBusy(true);
-      void client
-        .search({
-          q: query.trim(),
-          limit: 24,
-          types: ['messages'],
-          guildId: scope === 'guild' || scope === 'channel' ? guildId : undefined,
-          channelId: scope === 'channel' ? channel.id : undefined,
-        })
-        .then((res) => setSearchHits(res.hits ?? []))
-        .catch(() => setSearchHits([]))
-        .finally(() => setSearchBusy(false));
+      searchDebounceRef.current = setTimeout(() => {
+        setSearchBusy(true);
+        setSearchError(null);
+        void client
+          .search({
+            q: query.trim(),
+            limit: 24,
+            types: ['messages'],
+            guildId: scope === 'guild' || scope === 'channel' ? guildId : undefined,
+            channelId: scope === 'channel' ? channel.id : undefined,
+          })
+          .then((res) => {
+            const list = res.hits ?? [];
+            if (scope === 'dms') {
+              setSearchHits(list.filter((h) => h.type === 'message' && h.dmChannelId));
+            } else {
+              setSearchHits(list);
+            }
+          })
+          .catch((e) => {
+            setSearchHits([]);
+            setSearchError(
+              e instanceof Error ? e.message : 'Mesaj araması şu an kullanılamıyor',
+            );
+          })
+          .finally(() => setSearchBusy(false));
+      }, 250);
     },
     [client, guildId, channel.id],
   );
@@ -666,10 +717,36 @@ export function ChatPanel({
         }}
         hits={searchHits}
         loading={searchBusy}
+        error={searchError}
         channelName={channel.name}
         onSelectMessage={(hit: SearchHitMessage) => {
           setChannelSearchOpen(false);
-          setHighlightMessageId(hit.id);
+          const around = hit.threadRootId || hit.id;
+          if (hit.channelId === channel.id) {
+            void client
+              .getMessages(channel.id, { limit: 50, around })
+              .then((page) => {
+                setMessages(page.items ?? []);
+                setHighlightMessageId(hit.id);
+                if (hit.threadRootId) {
+                  const root = (page.items ?? []).find((m) => m.id === hit.threadRootId);
+                  if (root) openThread(root);
+                }
+              })
+              .catch(() => setHighlightMessageId(hit.id));
+            return;
+          }
+          // Başka kanal: parent Shell jumpAround ile açsın diye custom event
+          window.dispatchEvent(
+            new CustomEvent('dracord:jump-message', {
+              detail: {
+                guildId: hit.guildId,
+                channelId: hit.channelId,
+                around,
+                highlightId: hit.id,
+              },
+            }),
+          );
         }}
       />
 
