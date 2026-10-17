@@ -21,9 +21,9 @@
     "@dracord/sdk": "workspace:*",
     "@dracord/types": "workspace:*",
     "@expo-google-fonts/material-symbols-outlined": "^0.4.62",
-    "@livekit/react-native": "^3.0.0",
-    "@livekit/react-native-expo-plugin": "^1.0.3",
-    "@livekit/react-native-webrtc": "^144.2.0",
+    "@livekit/react-native": "^3.1.0",
+    "@livekit/react-native-expo-plugin": "^1.1.0",
+    "@livekit/react-native-webrtc": "^150.1.0",
     "@react-native-async-storage/async-storage": "3.1.1",
     "@supersami/rn-foreground-service": "^2.2.5",
     "expo": "~58.0.14",
@@ -58,6 +58,7 @@
   "devDependencies": {
     "@types/react": "~19.3.0",
     "@types/three": "^0.186.0",
+    "expo-build-properties": "^58.0.11",
     "typescript": "^6.0.3"
   }
 }

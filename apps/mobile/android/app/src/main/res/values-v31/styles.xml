@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+  <!--
+    Android 12+ splash icon is masked to a circle (~2/3 of canvas).
+    splashscreen_logo is a padded rounded-square so edges are not clipped.
+  -->
+  <style name="Theme.App.SplashScreen" parent="AppTheme">
+    <item name="android:windowBackground">@drawable/splashscreen</item>
+    <item name="android:windowSplashScreenBackground">@color/splashscreen_background</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/splashscreen_logo</item>
+    <item name="android:windowSplashScreenIconBackgroundColor">@color/splashscreen_background</item>
+  </style>
+</resources>

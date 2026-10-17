@@ -159,6 +159,79 @@ export const DISCOVER_CATEGORIES: { id: DiscoverCategory; label: string }[] = [
   { id: 'education', label: 'Eğitim' },
 ];
 
+/** Keşfet → Uygulamalar (web / desktop / mobil ortak) */
+export type DiscoverCuratedApp = {
+  id: string;
+  name: string;
+  tagline: string;
+  description: string;
+  icon: string;
+  kind: 'game' | 'utility';
+  /** GAME kanalı gameKind eşlemesi */
+  gameChannelHint?: string;
+  /** Web / desktop kart gradient (Tailwind) */
+  gradient: string;
+  /** Mobil kart vurgu rengi */
+  accent: string;
+};
+
+export const DISCOVER_CURATED_APPS: DiscoverCuratedApp[] = [
+  {
+    id: 'billiards',
+    name: 'Bilardo',
+    tagline: 'Masada rastgele oyun',
+    description: 'Sunucundaki oyun kanalında bilardo masası aç ve arkadaşlarınla oyna.',
+    icon: 'sports_bar',
+    kind: 'game',
+    gameChannelHint: 'billiards',
+    gradient: 'from-emerald-700/80 via-teal-800/50 to-surface-container-high',
+    accent: '#0d9488',
+  },
+  {
+    id: 'okey',
+    name: 'Okey',
+    tagline: 'Klasik masa oyunu',
+    description: 'Dört kişilik okey masası — oyun kanalından Başlat.',
+    icon: 'grid_view',
+    kind: 'game',
+    gameChannelHint: 'okey',
+    gradient: 'from-amber-700/70 via-orange-900/40 to-surface-container-high',
+    accent: '#d97706',
+  },
+  {
+    id: 'blackjack',
+    name: '21 Blackjack',
+    tagline: 'Kurpiyere karşı',
+    description: '4 kişilik blackjack masası — kart al, dur, double.',
+    icon: 'style',
+    kind: 'game',
+    gameChannelHint: 'blackjack',
+    gradient: 'from-emerald-800/70 via-green-950/50 to-surface-container-high',
+    accent: '#059669',
+  },
+  {
+    id: 'bowling',
+    name: 'Bowling',
+    tagline: 'Şeritlerde skor',
+    description: 'Oyun kanalında bowling — tur at, skor tut, arkadaşlarınla yarış.',
+    icon: 'sports_martial_arts',
+    kind: 'game',
+    gameChannelHint: 'bowling',
+    gradient: 'from-sky-700/70 via-cyan-900/40 to-surface-container-high',
+    accent: '#0284c7',
+  },
+  {
+    id: 'watch',
+    name: 'Watch Party',
+    tagline: 'Birlikte izle',
+    description: 'Watch Party kanalında video senkronu, ses ve sohbet.',
+    icon: 'live_tv',
+    kind: 'utility',
+    gradient: 'from-indigo-700/70 via-violet-900/40 to-surface-container-high',
+    accent: '#6366f1',
+  },
+];
+
 export interface GuildSummary {
   id: string;
   name: string;

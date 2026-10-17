@@ -6,9 +6,7 @@
     "orientation": "default",
     "scheme": "dracord",
     "userInterfaceStyle": "dark",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "0.1.0",
     "updates": {
       "url": "https://u.expo.dev/replace-with-eas-project-id",
       "fallbackToCacheTimeout": 0,
@@ -21,7 +19,7 @@
     ],
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#11131e"
     },
@@ -64,6 +62,16 @@
       "expo-web-browser",
       "expo-video",
       "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enablePngCrunchInReleaseBuilds": true
+          }
+        }
+      ],
       [
         "expo-notifications",
         {

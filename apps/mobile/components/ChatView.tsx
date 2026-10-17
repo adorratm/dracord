@@ -42,6 +42,7 @@ import { resolveMediaUrl } from '../lib/mediaUrl';
 import { uploadImageFromUri } from '../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 import { Icon } from './Icon';
+import { LinkifiedText } from './LinkifiedText';
 import { UserAvatar } from './UserAvatar';
 import {
   ForwardPickerSheet,
@@ -91,6 +92,8 @@ export function ChatView({
   const [pins, setPins] = useState<MessageDto[]>([]);
   const [showPins, setShowPins] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(aroundMessageId ?? null);
+  const [scrolledAway, setScrolledAway] = useState(false);
+  const [pendingNewCount, setPendingNewCount] = useState(0);
   const [threadRoot, setThreadRoot] = useState<MessageDto | null>(null);
   const [threadMsgs, setThreadMsgs] = useState<MessageDto[]>([]);
   const [threadDraft, setThreadDraft] = useState('');
@@ -113,7 +116,12 @@ export function ChatView({
   );
   const listRef = useRef<FlatList<ChatRow>>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrolledAwayRef = useRef(false);
   const userId = user?.id;
+
+  useEffect(() => {
+    scrolledAwayRef.current = scrolledAway;
+  }, [scrolledAway]);
 
   const refreshStickers = useCallback(() => {
     void loadStickersFromDisk().then((s) => setStickers(s.custom));
@@ -128,14 +136,28 @@ export function ChatView({
     if (!highlightId || messages.length === 0) return;
     const idx = messages.findIndex((m) => m.id === highlightId);
     if (idx < 0) return;
-    const t = setTimeout(() => {
-      try {
-        listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.4 });
-      } catch {
-        /* ignore */
-      }
-    }, 300);
-    return () => clearTimeout(t);
+    setScrolledAway(true);
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    timers.push(
+      setTimeout(() => {
+        try {
+          listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.35 });
+        } catch {
+          /* ignore */
+        }
+      }, 280),
+    );
+    timers.push(
+      setTimeout(() => {
+        try {
+          listRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0.35 });
+        } catch {
+          /* ignore */
+        }
+      }, 500),
+    );
+    timers.push(setTimeout(() => setHighlightId(null), 2500));
+    return () => timers.forEach(clearTimeout);
   }, [highlightId, messages]);
 
   useEffect(() => {
@@ -144,6 +166,8 @@ export function ChatView({
     setEditing(null);
     setText('');
     setShowPins(false);
+    setScrolledAway(false);
+    setPendingNewCount(0);
     setHighlightId(aroundMessageId ?? null);
     client.joinChannel(channel.id);
     const around = aroundMessageId || undefined;
@@ -161,6 +185,9 @@ export function ChatView({
       if (msg.channelId !== channel.id) return;
       if (msg.viewerHide) return;
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [msg, ...prev]));
+      if (scrolledAwayRef.current) {
+        setPendingNewCount((c) => c + 1);
+      }
     };
     const onUpdate = (msg: MessageDto) => {
       if (msg.channelId !== channel.id) return;
@@ -230,6 +257,48 @@ export function ChatView({
     },
     [client, channel.id],
   );
+
+  const jumpToMessage = useCallback(
+    async (messageId: string) => {
+      setShowPins(false);
+      setScrolledAway(true);
+      // Aynı id tekrar seçilirse effect yeniden tetiklensin
+      setHighlightId(null);
+      const go = () => setHighlightId(messageId);
+      const existing = messages.findIndex((m) => m.id === messageId);
+      if (existing >= 0) {
+        requestAnimationFrame(go);
+        return;
+      }
+      try {
+        const page = await client.getMessages(channel.id, { limit: 50, around: messageId });
+        const items = page.items ?? [];
+        setMessages([...items].filter((m) => !m.viewerHide).reverse());
+        requestAnimationFrame(go);
+      } catch {
+        Alert.alert('Mesaj', 'Mesaja gidilemedi.');
+      }
+    },
+    [client, channel.id, messages],
+  );
+
+  const jumpToPresent = useCallback(async () => {
+    setPendingNewCount(0);
+    setHighlightId(null);
+    setBusy(true);
+    try {
+      const page = await client.getMessages(channel.id, { limit: 50 });
+      setMessages([...(page.items ?? [])].filter((m) => !m.viewerHide).reverse());
+      setScrolledAway(false);
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
+    } catch {
+      Alert.alert('Mesaj', 'Güncel mesajlar alınamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }, [client, channel.id]);
   const onReactMsg = useCallback(
     (m: MessageDto, emoji: string) => {
       void client.toggleReaction(m.id, emoji);
@@ -454,7 +523,14 @@ export function ChatView({
 
   const renderMessage = useCallback(
     ({ item }: ListRenderItemInfo<ChatRow>) => (
-      <View style={{ paddingHorizontal: 12 }}>
+      <View
+        style={{
+          paddingHorizontal: 12,
+          borderRadius: 10,
+          backgroundColor:
+            highlightId === item.m.id ? 'rgba(189,147,249,0.18)' : 'transparent',
+        }}
+      >
         <MessageRow
           m={item.m}
           mine={item.m.author?.id === userId}
@@ -491,6 +567,7 @@ export function ChatView({
       userId,
       channel.peerUserId,
       channel.peerAvatarUrl,
+      highlightId,
       onReplyMsg,
       onEditMsg,
       onDeleteMsg,
@@ -713,46 +790,142 @@ export function ChatView({
       {showPins ? (
         <ScrollView
           style={{
-            maxHeight: 120,
+            maxHeight: 180,
             borderBottomWidth: 1,
             borderBottomColor: colors.surfaceHigh,
-            padding: 8,
+            backgroundColor: colors.surface,
           }}
+          contentContainerStyle={{ padding: 8, gap: 6 }}
+          keyboardShouldPersistTaps="handled"
         >
-          {pins.map((p) => (
-            <Text key={p.id} style={{ color: colors.text, fontSize: 13, marginBottom: 4 }}>
-              <Text style={{ fontWeight: '700' }}>{p.author?.displayName}</Text>: {p.content}
-            </Text>
-          ))}
-          {pins.length === 0 ? <Text style={{ color: colors.textMuted }}>Pin yok</Text> : null}
+          {pins.map((p) => {
+            const preview =
+              (p.content || '').trim() ||
+              (p.attachments?.length ? 'Ek / medya' : 'Sabitlenmiş mesaj');
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => void jumpToMessage(p.id)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                  backgroundColor: colors.surfaceHigh,
+                }}
+              >
+                <Icon name="push_pin" size={16} color={colors.primary} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }} numberOfLines={1}>
+                    {p.author?.displayName ?? 'üye'}
+                  </Text>
+                  <LinkifiedText
+                    content={preview}
+                    numberOfLines={2}
+                    style={{ fontSize: 13, marginTop: 2 }}
+                  />
+                </View>
+              </Pressable>
+            );
+          })}
+          {pins.length === 0 ? (
+            <Text style={{ color: colors.textMuted, padding: 4 }}>Pin yok</Text>
+          ) : null}
         </ScrollView>
       ) : null}
 
-      <FlatList
-        ref={listRef}
-        style={{ flex: 1 }}
-        data={chatRows}
-        keyExtractor={(row) => row.m.id}
-        inverted
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: 8,
-          paddingBottom: 4,
-        }}
-        renderItem={renderMessage}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        removeClippedSubviews={Platform.OS === 'android'}
-        initialNumToRender={16}
-        maxToRenderPerBatch={8}
-        updateCellsBatchingPeriod={50}
-        windowSize={9}
-        maintainVisibleContentPosition={
-          Platform.OS === 'ios'
-            ? { minIndexForVisible: 0, autoscrollToTopThreshold: 40 }
-            : undefined
-        }
-      />
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={listRef}
+          style={{ flex: 1 }}
+          data={chatRows}
+          keyExtractor={(row) => row.m.id}
+          inverted
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingTop: 8,
+            paddingBottom: 4,
+          }}
+          renderItem={renderMessage}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={16}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          windowSize={9}
+          onScroll={(e) => {
+            // inverted: offset 0 = canlı kenar (en yeni)
+            const y = e.nativeEvent.contentOffset.y;
+            const away = y > 72;
+            if (away !== scrolledAwayRef.current) {
+              setScrolledAway(away);
+              if (!away) setPendingNewCount(0);
+            }
+          }}
+          scrollEventThrottle={100}
+          onScrollToIndexFailed={(info) => {
+            listRef.current?.scrollToOffset({
+              offset: Math.max(0, info.averageItemLength * info.index),
+              animated: true,
+            });
+            setTimeout(() => {
+              try {
+                listRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: true,
+                  viewPosition: 0.35,
+                });
+              } catch {
+                /* ignore */
+              }
+            }, 350);
+          }}
+          maintainVisibleContentPosition={
+            Platform.OS === 'ios'
+              ? { minIndexForVisible: 0, autoscrollToTopThreshold: 40 }
+              : undefined
+          }
+        />
+
+        {scrolledAway || pendingNewCount > 0 ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 10,
+              alignItems: 'center',
+              zIndex: 20,
+            }}
+          >
+            <Pressable
+              onPress={() => void jumpToPresent()}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: colors.surfaceHigh,
+                borderWidth: 1,
+                borderColor: colors.outline,
+              }}
+            >
+              <Icon name="keyboard_double_arrow_down" size={16} color={colors.primary} />
+              <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+                {pendingNewCount > 0
+                  ? `${pendingNewCount} yeni mesaj · Günümüze git`
+                  : 'Günümüze git'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
 
       {typingUsers.length > 0 ? (
         <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 12, color: colors.textMuted }}>
@@ -1286,7 +1459,7 @@ const MessageRow = memo(function MessageRow({
             <Text style={{ fontSize: 48, marginTop: 4 }}>{glyph}</Text>
           )
         ) : m.content ? (
-          <Text style={{ color: colors.text, lineHeight: 20 }}>{m.content}</Text>
+          <LinkifiedText content={m.content} />
         ) : null}
 
         {m.attachments?.map((a) =>

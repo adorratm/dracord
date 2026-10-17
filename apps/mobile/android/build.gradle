@@ -22,3 +22,13 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// Windows + Metro eşzamanlı çalışırken @expo/fingerprint ExpoConfigLoader
+// arada exit 1 veriyor (build yine SUCCESS). Debug embed opsiyonel; gürültüyü kes.
+gradle.taskGraph.whenReady { graph ->
+  graph.allTasks.findAll { it.name == "createExpoFingerprint" }.each { task ->
+    if (task instanceof Exec) {
+      task.environment("EXPO_SKIP_FINGERPRINT_EMBED", "1")
+    }
+  }
+}

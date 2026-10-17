@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DISCOVER_CATEGORIES,
+  DISCOVER_CURATED_APPS,
   type DiscoverCategory,
+  type DiscoverCuratedApp,
   type GuildSummary,
 } from '@dracord/types';
 import { cn, DiscoverSkeleton } from '@dracord/ui';
@@ -15,67 +17,9 @@ const CATEGORIES = [
 
 type DiscoverView = 'servers' | 'apps';
 
-type CuratedApp = {
-  id: string;
-  name: string;
-  tagline: string;
-  description: string;
-  icon: string;
-  gradient: string;
-  kind: 'game' | 'utility';
-  gameChannelHint?: string;
-};
+type CuratedApp = DiscoverCuratedApp;
 
-const CURATED_APPS: CuratedApp[] = [
-  {
-    id: 'billiards',
-    name: 'Bilardo',
-    tagline: 'Masada rastgele oyun',
-    description: 'Sunucundaki oyun kanalında bilardo masası aç ve arkadaşlarınla oyna.',
-    icon: 'sports_bar',
-    gradient: 'from-emerald-700/80 via-teal-800/50 to-surface-container-high',
-    kind: 'game',
-    gameChannelHint: 'billiards',
-  },
-  {
-    id: 'okey',
-    name: 'Okey',
-    tagline: 'Klasik masa oyunu',
-    description: 'Dört kişilik okey masası — oyun kanalından Başlat.',
-    icon: 'grid_view',
-    gradient: 'from-amber-700/70 via-orange-900/40 to-surface-container-high',
-    kind: 'game',
-    gameChannelHint: 'okey',
-  },
-  {
-    id: 'blackjack',
-    name: '21 Blackjack',
-    tagline: 'Kurpiyere karşı',
-    description: '4 kişilik blackjack masası — kart al, dur, double.',
-    icon: 'style',
-    gradient: 'from-emerald-800/70 via-green-950/50 to-surface-container-high',
-    kind: 'game',
-    gameChannelHint: 'blackjack',
-  },
-  {
-    id: 'watch',
-    name: 'Watch Party',
-    tagline: 'Birlikte izle',
-    description: 'Watch Party kanalında video senkronu ve sohbet.',
-    icon: 'live_tv',
-    gradient: 'from-indigo-700/70 via-violet-900/40 to-surface-container-high',
-    kind: 'utility',
-  },
-  {
-    id: 'music',
-    name: 'Müzik Botu',
-    tagline: 'Ses kanalında çal',
-    description: 'Slash komutlarıyla kuyruk, ses seviyesi ve kontroller (demo katalog).',
-    icon: 'music_note',
-    gradient: 'from-rose-700/60 via-pink-900/40 to-surface-container-high',
-    kind: 'utility',
-  },
-];
+const CURATED_APPS = DISCOVER_CURATED_APPS;
 
 const DEFAULT_BANNER = 'https://dracord.com.tr/guild-banner-default.webp';
 

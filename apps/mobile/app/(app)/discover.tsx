@@ -12,7 +12,9 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import {
   DISCOVER_CATEGORIES,
+  DISCOVER_CURATED_APPS,
   type DiscoverCategory,
+  type DiscoverCuratedApp,
   type GuildSummary,
 } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
@@ -24,76 +26,9 @@ import { primaryBtn, primaryBtnText } from '../../lib/ui';
 
 type DiscoverView = 'servers' | 'apps';
 
-type CuratedApp = {
-  id: string;
-  name: string;
-  tagline: string;
-  description: string;
-  icon: string;
-  kind: 'game' | 'utility';
-  gameChannelHint?: string;
-  accent: string;
-};
+type CuratedApp = DiscoverCuratedApp;
 
-const CURATED_APPS: CuratedApp[] = [
-  {
-    id: 'billiards',
-    name: 'Bilardo',
-    tagline: 'Masada rastgele oyun',
-    description: 'Sunucundaki oyun kanalında bilardo masası aç ve arkadaşlarınla oyna.',
-    icon: 'sports_bar',
-    kind: 'game',
-    gameChannelHint: 'billiards',
-    accent: '#0d9488',
-  },
-  {
-    id: 'okey',
-    name: 'Okey',
-    tagline: 'Klasik masa oyunu',
-    description: 'Dört kişilik okey masası — oyun kanalından Başlat.',
-    icon: 'grid_view',
-    kind: 'game',
-    gameChannelHint: 'okey',
-    accent: '#d97706',
-  },
-  {
-    id: 'blackjack',
-    name: '21 Blackjack',
-    tagline: 'Kurpiyere karşı',
-    description: '4 kişilik blackjack masası — kart al, dur, double.',
-    icon: 'style',
-    kind: 'game',
-    gameChannelHint: 'blackjack',
-    accent: '#059669',
-  },
-  {
-    id: 'watch',
-    name: 'Watch Party',
-    tagline: 'Birlikte izle',
-    description: 'Watch Party kanalında video senkronu, ses ve sohbet.',
-    icon: 'live_tv',
-    kind: 'utility',
-    accent: '#6366f1',
-  },
-  {
-    id: 'music',
-    name: 'Müzik Botu',
-    tagline: 'Ses kanalında çal',
-    description: 'Slash komutlarıyla kuyruk, ses seviyesi ve kontroller (demo katalog).',
-    icon: 'music_note',
-    kind: 'utility',
-    accent: '#e11d48',
-  },
-  {
-    id: 'polls',
-    name: 'Anketler',
-    tagline: 'Hızlı oylama',
-    description: 'Metin kanalında kısa anketler oluştur (kürate demo).',
-    icon: 'ballot',
-    kind: 'utility',
-    accent: '#0284c7',
-  },
-];
+const CURATED_APPS = DISCOVER_CURATED_APPS;
 
 const SERVER_CATEGORIES = [
   { id: 'all' as const, label: 'Ana Sayfa' },
