@@ -17,6 +17,7 @@ import type {
   GuildSummary,
   PresenceStatus,
   PublicUser,
+  RoleDto,
   VoiceMemberSummary,
   VoiceStatePayload,
   VoiceSyncPayload,
@@ -26,6 +27,7 @@ import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
 import { leaveActivityFully } from '../../lib/leaveActivityFully';
 import { rememberChannel, readGuildLastChannel, readLastChannel } from '../../lib/lastChannel';
+import { ActionsSheet, type ActionSheetItem } from '../ActionsSheet';
 import { CreateGuildModal, JoinInviteModal } from '../GuildModals';
 import { MemberSheet } from '../MemberSheet';
 import { Drawer } from './Drawer';
@@ -33,17 +35,18 @@ import { ServerRail } from './ServerRail';
 import { ChannelList } from './ChannelList';
 import { UserPanel } from './UserPanel';
 import { ServerMenu } from './ServerMenu';
-import {
-  ProfileSheet,
-  copyUserId,
-  presentMemberActions,
-  type ProfileAction,
-} from './ProfileSheet';
+import { ProfileSheet, copyUserId, type ProfileAction } from './ProfileSheet';
 import { GuildExtrasSheet } from './GuildExtrasSheet';
 import { TitleBar } from './TitleBar';
 import { useVoiceSessionOptional } from '../voice/VoiceSession';
 import { useActivitySessionOptional } from '../activity/ActivitySession';
 import { confirmDialog, noticeDialog } from '../ConfirmModal';
+
+type MemberMenuState = {
+  title: string;
+  subtitle?: string;
+  actions: ActionSheetItem[];
+};
 
 type ShellMode = 'home' | 'guild';
 
@@ -106,6 +109,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   const [profileUser, setProfileUser] = useState<PublicUser | null>(null);
   const [profileJoinedAt, setProfileJoinedAt] = useState<string | null>(null);
   const [profileActions, setProfileActions] = useState<ProfileAction[]>([]);
+  const [guildRoles, setGuildRoles] = useState<RoleDto[]>([]);
+  const [memberMenu, setMemberMenu] = useState<MemberMenuState | null>(null);
+  const [moveTargetUser, setMoveTargetUser] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
   const [activeChannelId, setActiveChannelIdState] = useState<string | null>(null);
   const setActiveChannelId = useCallback((id: string | null) => {
     setActiveChannelIdState(id);
@@ -405,34 +414,68 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       .getGuildPermissions(guildId)
       .then(setGuildPermissions)
       .catch(() => setGuildPermissions(null));
+    void client
+      .listGuildRoles(guildId)
+      .then(setGuildRoles)
+      .catch(() => setGuildRoles([]));
     void refreshMembers();
   }, [client, guildId, mode, refreshMembers]);
+
+  const findMemberVoiceChannelId = useCallback(
+    (userId: string, preferred?: string | null) => {
+      if (preferred) return preferred;
+      const live = channels.find(
+        (c) =>
+          (c.type === 'VOICE' || c.type === 'GAME' || c.type === 'WATCH_PARTY') &&
+          (c.voiceMembers ?? []).some((m) => m.id === userId),
+      );
+      return live?.id ?? voice?.voiceChannelId ?? null;
+    },
+    [channels, voice?.voiceChannelId],
+  );
 
   const buildMemberActions = useCallback(
     (target: PublicUser, opts?: { voiceChannelId?: string | null; joinedAt?: string | null }) => {
       const actions: ProfileAction[] = [];
       const isSelf = target.id === user?.id;
       const isBot = Boolean(target.isBot) || target.id === DRACORD_BOT_USER_ID;
+      const isPlatformAdmin = Boolean(target.isPlatformAdmin);
       const perms = guildPermissions?.permissions ?? [];
-      const canKick =
-        Boolean(guildPermissions?.owner || guildPermissions?.platformAdmin) ||
-        perms.includes('KICK_MEMBERS');
-      const canBan =
-        Boolean(guildPermissions?.owner || guildPermissions?.platformAdmin) ||
-        perms.includes('BAN_MEMBERS');
-      const canModerate =
-        Boolean(guildPermissions?.owner || guildPermissions?.platformAdmin) ||
-        perms.includes('MODERATE_MEMBERS');
+      const elevated = Boolean(guildPermissions?.owner || guildPermissions?.platformAdmin);
+      const canKick = elevated || perms.includes('KICK_MEMBERS');
+      const canBan = elevated || perms.includes('BAN_MEMBERS');
+      const canModerate = elevated || perms.includes('MODERATE_MEMBERS');
+      const canManageChannels = elevated || perms.includes('MANAGE_CHANNELS');
+      const canMoveMembers = elevated || perms.includes('MOVE_MEMBERS');
+      const canManageRoles = elevated || perms.includes('MANAGE_ROLES');
+      const voiceChId = findMemberVoiceChannelId(target.id, opts?.voiceChannelId);
+      const voiceChannel = voiceChId ? channels.find((c) => c.id === voiceChId) : undefined;
+      const denied = Boolean(voiceChannel?.deniedUserIds?.includes(target.id));
+      const inVoice = Boolean(voiceChId);
 
       if (isSelf) {
         actions.push(
           {
             id: 'settings-profile',
+            icon: 'person',
             label: 'Profil ayarları',
             onSelect: () => router.push('/(app)/settings'),
           },
           {
+            id: 'settings',
+            icon: 'settings',
+            label: 'Kullanıcı ayarları',
+            onSelect: () => router.push('/(app)/settings'),
+          },
+          {
+            id: 'voice-settings',
+            icon: 'headphones',
+            label: 'Ses ve görüntü ayarları',
+            onSelect: () => router.push('/(app)/settings'),
+          },
+          {
             id: 'copy-id',
+            icon: 'content_copy',
             label: 'Kullanıcı ID’sini kopyala',
             onSelect: () => void copyUserId(target.id),
           },
@@ -443,13 +486,20 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       if (!isBot) {
         actions.push({
           id: 'dm',
+          icon: 'chat',
           label: 'Mesaj gönder',
           onSelect: () => {
-            void client.openDm(target.id).then(() => router.push('/(app)/dms'));
+            void client
+              .openDm(target.id)
+              .then(() => router.push('/(app)/dms'))
+              .catch((e) =>
+                noticeDialog('Hata', e instanceof Error ? e.message : 'DM açılamadı'),
+              );
           },
         });
         actions.push({
           id: 'friend',
+          icon: 'person_add',
           label: 'Arkadaşlık isteği gönder',
           onSelect: () => {
             void client
@@ -462,6 +512,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         });
         actions.push({
           id: 'block',
+          icon: 'block',
           label: 'Kullanıcıyı engelle',
           danger: true,
           onSelect: () => {
@@ -483,9 +534,88 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      if (guildId && canKick && !isBot) {
+      if (!isSelf && canManageChannels && (inVoice || voice?.voiceChannelId)) {
+        const chForDeny = voiceChId ?? voice?.voiceChannelId;
+        if (chForDeny) {
+          if (denied) {
+            actions.push({
+              id: 'allow-voice',
+              icon: 'volume_up',
+              label: 'Ses odası engelini kaldır',
+              onSelect: () => {
+                void client
+                  .allowVoiceUser(chForDeny, target.id)
+                  .then(() => {
+                    if (guildId) void client.getGuildChannels(guildId).then(setChannels);
+                    void noticeDialog('Engel kaldırıldı', target.displayName);
+                  })
+                  .catch((e) =>
+                    noticeDialog('Hata', e instanceof Error ? e.message : 'Engel kaldırılamadı'),
+                  );
+              },
+            });
+          } else {
+            actions.push({
+              id: 'deny-voice',
+              icon: 'volume_off',
+              label: 'Ses odasından engelle',
+              danger: true,
+              onSelect: () => {
+                void confirmDialog({
+                  title: 'Ses odası engeli',
+                  message: `${target.displayName} bu odadan engellensin mi?`,
+                  confirmLabel: 'Engelle',
+                  destructive: true,
+                }).then((ok) => {
+                  if (!ok) return;
+                  void client
+                    .denyVoiceUser(chForDeny, target.id)
+                    .then(() => {
+                      if (guildId) void client.getGuildChannels(guildId).then(setChannels);
+                      void noticeDialog('Engellendi', target.displayName);
+                    })
+                    .catch((e) =>
+                      noticeDialog('Hata', e instanceof Error ? e.message : 'Engellenemedi'),
+                    );
+                });
+              },
+            });
+          }
+        }
+      }
+
+      if (!isSelf && canMoveMembers && !isPlatformAdmin) {
+        actions.push({
+          id: 'move-voice',
+          icon: 'swap_horiz',
+          label: 'Ses kanalına taşı…',
+          onSelect: () =>
+            setMoveTargetUser({ id: target.id, displayName: target.displayName }),
+        });
+        if (inVoice && voiceChId) {
+          actions.push({
+            id: 'disconnect-voice',
+            icon: 'call_end',
+            label: 'Odadan ayır',
+            onSelect: () => {
+              void client
+                .disconnectVoiceUser(voiceChId, target.id)
+                .then(() => {
+                  if (guildId) void client.getGuildChannels(guildId).then(setChannels);
+                  void noticeDialog('Ayrıldı', `${target.displayName} odadan çıkarıldı`);
+                })
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Odadan ayrılamadı'),
+                );
+            },
+          });
+        }
+      }
+
+      if (guildId && canKick && !isBot && !isPlatformAdmin) {
         actions.push({
           id: 'kick',
+          icon: 'person_remove',
           label: 'Sunucudan at',
           danger: true,
           onSelect: () => {
@@ -506,9 +636,10 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           },
         });
       }
-      if (guildId && canBan && !isBot) {
+      if (guildId && canBan && !isBot && !isPlatformAdmin) {
         actions.push({
           id: 'ban',
+          icon: 'gavel',
           label: 'Yasakla',
           danger: true,
           onSelect: () => {
@@ -529,9 +660,10 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           },
         });
       }
-      if (guildId && canModerate && !isBot) {
+      if (guildId && canModerate && !isBot && !isPlatformAdmin) {
         actions.push({
           id: 'timeout',
+          icon: 'timer',
           label: 'Timeout (10 dk)',
           danger: true,
           onSelect: () => {
@@ -545,16 +677,48 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      if (guildId && canManageRoles && !isBot) {
+        for (const role of guildRoles.filter((r) => r.name !== '@everyone')) {
+          const has = (target.roles ?? []).some((r) => r.id === role.id);
+          actions.push({
+            id: `role-${role.id}`,
+            icon: has ? 'remove_circle' : 'add_circle',
+            label: has ? `Rol kaldır: ${role.name}` : `Rol ver: ${role.name}`,
+            onSelect: () => {
+              void (has
+                ? client.removeMemberRole(guildId, target.id, role.id)
+                : client.addMemberRole(guildId, target.id, role.id)
+              )
+                .then(() => void refreshMembers())
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Rol güncellenemedi'),
+                );
+            },
+          });
+        }
+      }
+
       actions.push({
         id: 'copy-id',
+        icon: 'content_copy',
         label: 'Kullanıcı ID’sini kopyala',
         onSelect: () => void copyUserId(target.id),
       });
 
-      void opts;
       return actions;
     },
-    [user?.id, guildPermissions, guildId, client, router, refreshMembers],
+    [
+      user?.id,
+      guildPermissions,
+      guildId,
+      client,
+      router,
+      refreshMembers,
+      findMemberVoiceChannelId,
+      channels,
+      voice?.voiceChannelId,
+      guildRoles,
+    ],
   );
 
   const openProfileForUser = useCallback(
@@ -564,6 +728,32 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       setProfileActions(buildMemberActions(u, { joinedAt: opts?.joinedAt }));
     },
     [buildMemberActions],
+  );
+
+  const openMemberMenu = useCallback(
+    (target: PublicUser, opts?: { voiceChannelId?: string | null; joinedAt?: string | null }) => {
+      const actions: ActionSheetItem[] = [
+        {
+          id: 'profile',
+          icon: 'account_circle',
+          label: 'Profili gör',
+          onSelect: () => openProfileForUser(target, { joinedAt: opts?.joinedAt }),
+        },
+        ...buildMemberActions(target, opts).map((a) => ({
+          id: a.id,
+          icon: a.icon,
+          label: a.label,
+          danger: a.danger,
+          onSelect: a.onSelect,
+        })),
+      ];
+      setMemberMenu({
+        title: target.displayName,
+        subtitle: `@${target.username}`,
+        actions,
+      });
+    },
+    [buildMemberActions, openProfileForUser],
   );
 
   const openVoiceMember = useCallback(
@@ -597,17 +787,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           status: 'ONLINE',
           isBot: member.isBot,
         } as PublicUser);
-      const actions = buildMemberActions(asUser, { voiceChannelId: channel?.id });
-      presentMemberActions(member.displayName, [
-        {
-          id: 'profile',
-          label: 'Profili gör',
-          onSelect: () => openVoiceMember(member, channel),
-        },
-        ...actions,
-      ]);
+      openMemberMenu(asUser, {
+        voiceChannelId: channel?.id,
+        joinedAt: member.joinedAt,
+      });
     },
-    [members, buildMemberActions, openVoiceMember],
+    [members, openMemberMenu],
   );
 
   const reloadChannels = useCallback(() => {
@@ -1293,18 +1478,63 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           openProfileForUser(m);
         }}
         onMemberLongPress={(m) => {
-          presentMemberActions(m.displayName, [
-            {
-              id: 'profile',
-              label: 'Profili gör',
-              onSelect: () => {
-                setMembersOpen(false);
-                openProfileForUser(m);
-              },
-            },
-            ...buildMemberActions(m),
-          ]);
+          setMembersOpen(false);
+          openMemberMenu(m);
         }}
+      />
+
+      <ActionsSheet
+        open={Boolean(memberMenu)}
+        title={memberMenu?.title ?? ''}
+        subtitle={memberMenu?.subtitle}
+        actions={memberMenu?.actions ?? []}
+        onClose={() => setMemberMenu(null)}
+      />
+
+      <ActionsSheet
+        open={Boolean(moveTargetUser)}
+        title="Ses kanalına taşı"
+        subtitle={moveTargetUser ? moveTargetUser.displayName : undefined}
+        actions={(() => {
+          const voiceChannels = channels.filter(
+            (c) => c.type === 'VOICE' || c.type === 'GAME' || c.type === 'WATCH_PARTY',
+          );
+          if (voiceChannels.length === 0) {
+            return [
+              {
+                id: 'empty',
+                icon: 'info',
+                label: 'Taşınacak ses kanalı yok',
+                muted: true,
+                onSelect: () => undefined,
+              },
+            ];
+          }
+          return voiceChannels.map((c) => ({
+            id: c.id,
+            icon:
+              c.type === 'GAME'
+                ? 'sports_esports'
+                : c.type === 'WATCH_PARTY'
+                  ? 'movie'
+                  : 'volume_up',
+            label: c.name,
+            onSelect: () => {
+              const target = moveTargetUser;
+              if (!target) return;
+              void client
+                .moveVoiceUser(target.id, c.id)
+                .then(() => {
+                  if (guildId) void client.getGuildChannels(guildId).then(setChannels);
+                  void noticeDialog('Taşındı', `${target.displayName} → #${c.name}`);
+                })
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Taşınamadı'),
+                );
+            },
+          }));
+        })()}
+        onClose={() => setMoveTargetUser(null)}
       />
 
       <ServerMenu

@@ -1,9 +1,14 @@
-import { FlatList, Modal, Pressable, Text, View } from 'react-native';
+import { memo, useCallback, useMemo } from 'react';
+import { FlatList, Modal, Pressable, Text, View, type ListRenderItemInfo } from 'react-native';
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { isOnlinePresence, normalizePresence, presenceLabelTr } from '../lib/presence';
 import { UserAvatar } from './UserAvatar';
 import { Icon } from './Icon';
+
+type Row =
+  | { type: 'header'; key: string; label: string }
+  | { type: 'member'; key: string; user: PublicUser };
 
 export function MemberSheet({
   open,
@@ -20,12 +25,49 @@ export function MemberSheet({
   onSelectMember?: (user: PublicUser) => void;
   onMemberLongPress?: (user: PublicUser) => void;
 }) {
-  const online = members.filter((m) => isOnlinePresence(m.status));
-  const offline = members.filter((m) => !isOnlinePresence(m.status));
-  const sections = [
-    { key: 'on', label: `Çevrimiçi — ${online.length}`, data: online },
-    { key: 'off', label: `Çevrimdışı — ${offline.length}`, data: offline },
-  ].filter((s) => s.data.length > 0);
+  const rows = useMemo<Row[]>(() => {
+    const online = members.filter((m) => isOnlinePresence(m.status));
+    const offline = members.filter((m) => !isOnlinePresence(m.status));
+    const out: Row[] = [];
+    if (online.length) {
+      out.push({ type: 'header', key: 'on', label: `Çevrimiçi — ${online.length}` });
+      for (const m of online) out.push({ type: 'member', key: m.id, user: m });
+    }
+    if (offline.length) {
+      out.push({ type: 'header', key: 'off', label: `Çevrimdışı — ${offline.length}` });
+      for (const m of offline) out.push({ type: 'member', key: m.id, user: m });
+    }
+    return out;
+  }, [members]);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<Row>) => {
+      if (item.type === 'header') {
+        return (
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: 11,
+              fontWeight: '700',
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: 4,
+            }}
+          >
+            {item.label}
+          </Text>
+        );
+      }
+      return (
+        <MemberRow
+          user={item.user}
+          onPress={onSelectMember ? () => onSelectMember(item.user) : undefined}
+          onLongPress={onMemberLongPress ? () => onMemberLongPress(item.user) : undefined}
+        />
+      );
+    },
+    [onSelectMember, onMemberLongPress],
+  );
 
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
@@ -61,32 +103,14 @@ export function MemberSheet({
             </Pressable>
           </View>
           <FlatList
-            data={sections}
-            keyExtractor={(s) => s.key}
-            renderItem={({ item: section }) => (
-              <View>
-                <Text
-                  style={{
-                    color: colors.textMuted,
-                    fontSize: 11,
-                    fontWeight: '700',
-                    paddingHorizontal: 16,
-                    paddingTop: 12,
-                    paddingBottom: 4,
-                  }}
-                >
-                  {section.label}
-                </Text>
-                {section.data.map((m) => (
-                  <MemberRow
-                    key={m.id}
-                    user={m}
-                    onPress={onSelectMember ? () => onSelectMember(m) : undefined}
-                    onLongPress={onMemberLongPress ? () => onMemberLongPress(m) : undefined}
-                  />
-                ))}
-              </View>
-            )}
+            data={rows}
+            keyExtractor={(row) => row.key}
+            renderItem={renderItem}
+            initialNumToRender={18}
+            maxToRenderPerBatch={12}
+            windowSize={7}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews
           />
         </Pressable>
       </Pressable>
@@ -94,7 +118,7 @@ export function MemberSheet({
   );
 }
 
-function MemberRow({
+const MemberRow = memo(function MemberRow({
   user,
   onPress,
   onLongPress,
@@ -148,4 +172,4 @@ function MemberRow({
       ) : null}
     </Pressable>
   );
-}
+});

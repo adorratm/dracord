@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 import type { PresenceStatus } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { statusColor } from '../lib/ui';
 import { resolveMediaUrl } from '../lib/mediaUrl';
 
-export function UserAvatar({
+export const UserAvatar = memo(function UserAvatar({
   displayName,
   imageUrl,
   size = 36,
@@ -74,4 +74,4 @@ export function UserAvatar({
       ) : null}
     </View>
   );
-}
+});

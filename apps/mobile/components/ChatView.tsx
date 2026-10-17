@@ -41,6 +41,7 @@ import {
 import { resolveMediaUrl } from '../lib/mediaUrl';
 import { uploadImageFromUri } from '../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
+import { ActionsSheet } from './ActionsSheet';
 import { Icon } from './Icon';
 import { LinkifiedText } from './LinkifiedText';
 import { UserAvatar } from './UserAvatar';
@@ -49,10 +50,14 @@ import {
   MessageActionsSheet,
   type MessageActionId,
 } from './MessageActionsSheet';
+import { confirmDialog, noticeDialog } from './ConfirmModal';
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '🔥', '😮', '😢', '🎉', '👀'];
 
 type ChatRow = { m: MessageDto; showDay: boolean; day: string };
+
+const chatKeyExtractor = (row: ChatRow) => row.m.id;
+const chatListContentStyle = { flexGrow: 1, paddingTop: 8, paddingBottom: 4 } as const;
 
 function isStickerOnly(content: string): boolean {
   const t = content.trim();
@@ -110,6 +115,7 @@ export function ChatView({
   const [emojiDraft, setEmojiDraft] = useState('');
   const [emojiModal, setEmojiModal] = useState(false);
   const [menuMessage, setMenuMessage] = useState<MessageDto | null>(null);
+  const [stickerMenuId, setStickerMenuId] = useState<string | null>(null);
   const [forwardMessage, setForwardMessage] = useState<MessageDto | null>(null);
   const [forwardChannels, setForwardChannels] = useState<Array<{ id: string; name: string }>>(
     [],
@@ -521,64 +527,48 @@ export function ChatView({
     ],
   );
 
+  const peerAvatarUrl = channel.peerAvatarUrl;
+  const peerUserId = channel.peerUserId;
+
   const renderMessage = useCallback(
     ({ item }: ListRenderItemInfo<ChatRow>) => (
-      <View
-        style={{
-          paddingHorizontal: 12,
-          borderRadius: 10,
-          backgroundColor:
-            highlightId === item.m.id ? 'rgba(189,147,249,0.18)' : 'transparent',
-        }}
-      >
-        <MessageRow
-          m={item.m}
-          mine={item.m.author?.id === userId}
-          avatarFallback={
-            channel.peerUserId && item.m.author?.id === channel.peerUserId
-              ? channel.peerAvatarUrl
-              : null
-          }
-          onReply={onReplyMsg}
-          onEdit={onEditMsg}
-          onDelete={onDeleteMsg}
-          onPin={onPinMsg}
-          onReact={onReactMsg}
-          onThread={onThreadMsg}
-          onVote={onVoteMsg}
-          onEmbedAction={onEmbedAction}
-          onLongPress={openMessageMenu}
-        />
-        {item.showDay ? (
-          <Text
-            style={{
-              textAlign: 'center',
-              color: colors.textMuted,
-              fontSize: 12,
-              marginVertical: 12,
-            }}
-          >
-            {item.day}
-          </Text>
-        ) : null}
-      </View>
+      <ChatMessageCell
+        row={item}
+        highlighted={highlightId === item.m.id}
+        mine={item.m.author?.id === userId}
+        avatarFallback={
+          peerUserId && item.m.author?.id === peerUserId ? peerAvatarUrl : null
+        }
+        onReply={onReplyMsg}
+        onEdit={onEditMsg}
+        onReact={onReactMsg}
+        onVote={onVoteMsg}
+        onEmbedAction={onEmbedAction}
+        onLongPress={openMessageMenu}
+      />
     ),
     [
       userId,
-      channel.peerUserId,
-      channel.peerAvatarUrl,
+      peerUserId,
+      peerAvatarUrl,
       highlightId,
       onReplyMsg,
       onEditMsg,
-      onDeleteMsg,
-      onPinMsg,
       onReactMsg,
-      onThreadMsg,
       onVoteMsg,
       onEmbedAction,
       openMessageMenu,
     ],
   );
+
+  const onListScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const away = y > 72;
+    if (away !== scrolledAwayRef.current) {
+      setScrolledAway(away);
+      if (!away) setPendingNewCount(0);
+    }
+  }, []);
 
   const send = async (content: string, attachments?: MessageAttachment[]) => {
     setBusy(true);
@@ -841,31 +831,20 @@ export function ChatView({
           ref={listRef}
           style={{ flex: 1 }}
           data={chatRows}
-          keyExtractor={(row) => row.m.id}
+          keyExtractor={chatKeyExtractor}
           inverted
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingTop: 8,
-            paddingBottom: 4,
-          }}
+          contentContainerStyle={chatListContentStyle}
           renderItem={renderMessage}
+          extraData={highlightId}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          removeClippedSubviews={Platform.OS === 'android'}
-          initialNumToRender={16}
-          maxToRenderPerBatch={8}
-          updateCellsBatchingPeriod={50}
-          windowSize={9}
-          onScroll={(e) => {
-            // inverted: offset 0 = canlı kenar (en yeni)
-            const y = e.nativeEvent.contentOffset.y;
-            const away = y > 72;
-            if (away !== scrolledAwayRef.current) {
-              setScrolledAway(away);
-              if (!away) setPendingNewCount(0);
-            }
-          }}
-          scrollEventThrottle={100}
+          removeClippedSubviews
+          initialNumToRender={10}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={60}
+          windowSize={7}
+          onScroll={onListScroll}
+          scrollEventThrottle={120}
           onScrollToIndexFailed={(info) => {
             listRef.current?.scrollToOffset({
               offset: Math.max(0, info.averageItemLength * info.index),
@@ -1046,16 +1025,7 @@ export function ChatView({
                 <Pressable
                   key={s.id}
                   onPress={() => void sendSticker(s)}
-                  onLongPress={() => {
-                    Alert.alert('Sticker', s.label, [
-                      { text: 'İptal', style: 'cancel' },
-                      {
-                        text: 'Sil',
-                        style: 'destructive',
-                        onPress: () => void removeCustomSticker(client, s.id).then(setStickers),
-                      },
-                    ]);
-                  }}
+                  onLongPress={() => setStickerMenuId(s.id)}
                   style={stickerCell}
                 >
                   {s.kind === 'image' ? (
@@ -1335,20 +1305,48 @@ export function ChatView({
           if (!forwardMessage) return;
           void client
             .forwardMessage(forwardMessage.id, targetChannelId, note)
-            .then(() => Alert.alert('İletildi', 'Mesaj seçilen kanala iletildi'))
-            .catch((e) => Alert.alert('İlet', e instanceof Error ? e.message : 'İletilemedi'));
+            .then(() => noticeDialog('İletildi', 'Mesaj seçilen kanala iletildi'))
+            .catch((e) =>
+              noticeDialog('İlet', e instanceof Error ? e.message : 'İletilemedi'),
+            );
         }}
+      />
+      <ActionsSheet
+        open={Boolean(stickerMenuId)}
+        title={stickers.find((s) => s.id === stickerMenuId)?.label ?? 'Sticker'}
+        actions={[
+          {
+            id: 'delete',
+            icon: 'delete',
+            label: 'Sticker’ı sil',
+            danger: true,
+            onSelect: () => {
+              const id = stickerMenuId;
+              if (!id) return;
+              void confirmDialog({
+                title: 'Sticker sil',
+                message: 'Bu sticker kaldırılsın mı?',
+                confirmLabel: 'Sil',
+                destructive: true,
+              }).then((ok) => {
+                if (!ok) return;
+                void removeCustomSticker(client, id).then(setStickers);
+              });
+            },
+          },
+        ]}
+        onClose={() => setStickerMenuId(null)}
       />
     </KeyboardAvoidingView>
   );
 }
 
-function RemoteImage({
+const RemoteImage = memo(function RemoteImage({
   uri,
   style,
 }: {
   uri: string;
-  style: { width: number; height: number; borderRadius?: number };
+  style: { width: number; height: number; borderRadius?: number; marginTop?: number };
 }) {
   const [failed, setFailed] = useState(false);
   const resolved = resolveMediaUrl(uri);
@@ -1374,7 +1372,65 @@ function RemoteImage({
       onError={() => setFailed(true)}
     />
   );
-}
+});
+
+const ChatMessageCell = memo(function ChatMessageCell({
+  row,
+  highlighted,
+  mine,
+  avatarFallback,
+  onReply,
+  onEdit,
+  onReact,
+  onVote,
+  onEmbedAction,
+  onLongPress,
+}: {
+  row: ChatRow;
+  highlighted: boolean;
+  mine: boolean;
+  avatarFallback?: string | null;
+  onReply: (m: MessageDto) => void;
+  onEdit: (m: MessageDto) => void;
+  onReact: (m: MessageDto, emoji: string) => void;
+  onVote: (m: MessageDto, optionId: string) => void;
+  onEmbedAction: (m: MessageDto, action: MessageEmbedAction, embed: MessageEmbed) => void;
+  onLongPress: (m: MessageDto) => void;
+}) {
+  return (
+    <View
+      style={{
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        backgroundColor: highlighted ? 'rgba(189,147,249,0.18)' : 'transparent',
+      }}
+    >
+      <MessageRow
+        m={row.m}
+        mine={mine}
+        avatarFallback={avatarFallback}
+        onReply={onReply}
+        onEdit={onEdit}
+        onReact={onReact}
+        onVote={onVote}
+        onEmbedAction={onEmbedAction}
+        onLongPress={onLongPress}
+      />
+      {row.showDay ? (
+        <Text
+          style={{
+            textAlign: 'center',
+            color: colors.textMuted,
+            fontSize: 12,
+            marginVertical: 12,
+          }}
+        >
+          {row.day}
+        </Text>
+      ) : null}
+    </View>
+  );
+});
 
 const MessageRow = memo(function MessageRow({
   m,
@@ -1382,45 +1438,43 @@ const MessageRow = memo(function MessageRow({
   avatarFallback,
   onReply,
   onEdit,
-  onDelete,
-  onPin,
   onReact,
-  onThread,
   onVote,
   onEmbedAction,
   onLongPress,
-  compact,
 }: {
   m: MessageDto;
   mine: boolean;
-  /** DM peer avatar — author.avatarUrl boşsa */
   avatarFallback?: string | null;
   onReply?: (m: MessageDto) => void;
   onEdit?: (m: MessageDto) => void;
-  onDelete?: (m: MessageDto) => void;
-  onPin?: (m: MessageDto) => void;
   onReact?: (m: MessageDto, emoji: string) => void;
-  onThread?: (m: MessageDto) => void;
   onVote?: (m: MessageDto, optionId: string) => void;
   onEmbedAction?: (m: MessageDto, action: MessageEmbedAction, embed: MessageEmbed) => void;
   onLongPress?: (m: MessageDto) => void;
-  compact?: boolean;
 }) {
   const sticker = isStickerOnly(m.content);
   const glyph = sticker ? stickerGlyph(m.content) : '';
   const stickerMedia = sticker && isMediaUrl(glyph);
-  const gap = compact ? 8 : 12;
+  const timeLabel = useMemo(
+    () =>
+      new Date(m.createdAt).toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [m.createdAt],
+  );
 
   return (
     <Pressable
       onLongPress={() => onLongPress?.(m)}
       delayLongPress={280}
-      style={{ marginTop: gap, flexDirection: 'row', gap: 10, opacity: m.viewerHide ? 0.45 : 1 }}
+      style={{ marginTop: 10, flexDirection: 'row', gap: 10, opacity: m.viewerHide ? 0.45 : 1 }}
     >
       <UserAvatar
         displayName={m.author?.displayName ?? '?'}
         imageUrl={m.author?.avatarUrl || avatarFallback}
-        size={compact ? 28 : 36}
+        size={32}
         statusRing={false}
       />
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -1430,10 +1484,7 @@ const MessageRow = memo(function MessageRow({
             {mine ? ' (sen)' : ''}
           </Text>
           <Text style={{ color: colors.textMuted, fontWeight: '400', fontSize: 11 }}>
-            {new Date(m.createdAt).toLocaleTimeString('tr-TR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {timeLabel}
           </Text>
           {m.pinnedAt ? <Icon name="push_pin" size={12} color={colors.textMuted} /> : null}
           {m.bookmarked ? <Icon name="bookmark" size={12} color={colors.primary} /> : null}
@@ -1454,9 +1505,9 @@ const MessageRow = memo(function MessageRow({
 
         {sticker ? (
           stickerMedia ? (
-            <RemoteImage uri={glyph} style={{ width: 160, height: 160, borderRadius: 12 }} />
+            <RemoteImage uri={glyph} style={{ width: 140, height: 140, borderRadius: 12 }} />
           ) : (
-            <Text style={{ fontSize: 48, marginTop: 4 }}>{glyph}</Text>
+            <Text style={{ fontSize: 44, marginTop: 4 }}>{glyph}</Text>
           )
         ) : m.content ? (
           <LinkifiedText content={m.content} />
@@ -1468,9 +1519,10 @@ const MessageRow = memo(function MessageRow({
               key={a.id}
               uri={a.url}
               style={{
-                width: a.contentType === 'image/gif' ? 240 : 280,
-                height: a.contentType === 'image/gif' ? 160 : 180,
+                width: a.contentType === 'image/gif' ? 220 : 260,
+                height: a.contentType === 'image/gif' ? 140 : 160,
                 borderRadius: 8,
+                marginTop: 4,
               }}
             />
           ) : (
@@ -1541,41 +1593,17 @@ const MessageRow = memo(function MessageRow({
           </View>
         ) : null}
 
-        {!compact ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 2,
-              marginTop: 4,
-              alignItems: 'center',
-            }}
-          >
-            {QUICK_EMOJI.slice(0, 3).map((e) => (
-              <Mini key={e} onPress={() => onReact?.(m, e)}>
-                {e}
-              </Mini>
-            ))}
-            <MiniIcon name="reply" onPress={() => onReply?.(m)} accessibilityLabel="Yanıt" />
-            <MiniIcon name="forum" onPress={() => onThread?.(m)} accessibilityLabel="Thread" />
-            <MiniIcon name="push_pin" onPress={() => onPin?.(m)} accessibilityLabel="Pin" />
-            <MiniIcon
-              name="more_horiz"
-              onPress={() => onLongPress?.(m)}
-              accessibilityLabel="Daha fazla"
-            />
-            {mine ? (
-              <MiniIcon name="edit" onPress={() => onEdit?.(m)} accessibilityLabel="Düzenle" />
-            ) : null}
-            {mine ? (
-              <MiniIcon name="delete" onPress={() => onDelete?.(m)} accessibilityLabel="Sil" danger />
-            ) : null}
-          </View>
-        ) : (
-          <Pressable onPress={() => onLongPress?.(m)} hitSlop={8} style={{ marginTop: 4 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>Basılı tut · menü</Text>
-          </Pressable>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <MiniIcon name="reply" onPress={() => onReply?.(m)} accessibilityLabel="Yanıt" />
+          <MiniIcon
+            name="more_horiz"
+            onPress={() => onLongPress?.(m)}
+            accessibilityLabel="Daha fazla"
+          />
+          {mine ? (
+            <MiniIcon name="edit" onPress={() => onEdit?.(m)} accessibilityLabel="Düzenle" />
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -1696,14 +1724,6 @@ function ToolBtn({
       }}
     >
       <Icon name={icon} size={20} color={active ? colors.primaryOn : colors.text} />
-    </Pressable>
-  );
-}
-
-function Mini({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) {
-  return (
-    <Pressable onPress={onPress}>
-      <Text style={{ color: colors.textMuted, fontSize: 11, paddingHorizontal: 4 }}>{children}</Text>
     </Pressable>
   );
 }

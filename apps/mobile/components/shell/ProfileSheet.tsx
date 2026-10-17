@@ -1,17 +1,9 @@
-import {
-  ActionSheetIOS,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
+import { noticeDialog } from '../ConfirmModal';
+import { Icon } from '../Icon';
 import { UserAvatar } from '../UserAvatar';
 import { useElapsedLabel } from '../../lib/formatElapsed';
 import { resolveMediaUrl } from '../../lib/mediaUrl';
@@ -20,6 +12,7 @@ import { normalizePresence, presenceLabelTr } from '../../lib/presence';
 export type ProfileAction = {
   id: string;
   label: string;
+  icon?: string;
   danger?: boolean;
   onSelect: () => void;
 };
@@ -40,8 +33,6 @@ export function ProfileSheet({
   const elapsed = useElapsedLabel(joinedAt);
   if (!user) return null;
   const st = normalizePresence(user.status);
-  const primary = actions.filter((a) => !a.danger);
-  const danger = actions.filter((a) => a.danger);
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -118,21 +109,19 @@ export function ProfileSheet({
           </View>
 
           <ScrollView style={{ marginTop: 16, maxHeight: 280 }} contentContainerStyle={{ paddingHorizontal: 12, gap: 4 }}>
-            {primary.map((a) => (
-              <ActionRow key={a.id} label={a.label} onPress={() => { a.onSelect(); onClose(); }} />
-            ))}
-            {danger.map((a) => (
+            {actions.map((a) => (
               <ActionRow
                 key={a.id}
+                icon={a.icon}
                 label={a.label}
-                danger
+                danger={a.danger}
                 onPress={() => {
                   a.onSelect();
                   onClose();
                 }}
               />
             ))}
-            <ActionRow label="Kapat" muted onPress={onClose} />
+            <ActionRow icon="close" label="Kapat" muted onPress={onClose} />
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -145,12 +134,15 @@ function ActionRow({
   onPress,
   danger,
   muted,
+  icon,
 }: {
   label: string;
   onPress: () => void;
   danger?: boolean;
   muted?: boolean;
+  icon?: string;
 }) {
+  const color = danger ? colors.danger : muted ? colors.textMuted : colors.text;
   return (
     <Pressable
       onPress={onPress}
@@ -159,67 +151,22 @@ function ActionRow({
         paddingHorizontal: 12,
         borderRadius: 10,
         backgroundColor: colors.surfaceHigh,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
       }}
     >
-      <Text
-        style={{
-          color: danger ? colors.danger : muted ? colors.textMuted : colors.text,
-          fontWeight: '700',
-        }}
-      >
-        {label}
-      </Text>
+      {icon ? <Icon name={icon} size={20} color={color} /> : null}
+      <Text style={{ color, fontWeight: '700', flex: 1 }}>{label}</Text>
     </Pressable>
-  );
-}
-
-/** Uzun basma / sağ tık benzeri aksiyon listesi */
-export function presentMemberActions(
-  title: string,
-  actions: ProfileAction[],
-  onCancel?: () => void,
-) {
-  if (Platform.OS === 'ios') {
-    const labels = [...actions.map((a) => a.label), 'İptal'];
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title,
-        options: labels,
-        cancelButtonIndex: labels.length - 1,
-        destructiveButtonIndex: actions
-          .map((a, i) => (a.danger ? i : -1))
-          .filter((i) => i >= 0)[0],
-      },
-      (idx) => {
-        if (idx === undefined || idx >= actions.length) {
-          onCancel?.();
-          return;
-        }
-        actions[idx]?.onSelect();
-      },
-    );
-    return;
-  }
-  Alert.alert(
-    title,
-    undefined,
-    [
-      ...actions.map((a) => ({
-        text: a.label,
-        style: a.danger ? ('destructive' as const) : ('default' as const),
-        onPress: a.onSelect,
-      })),
-      { text: 'İptal', style: 'cancel' as const, onPress: onCancel },
-    ],
-    { cancelable: true },
   );
 }
 
 export async function copyUserId(id: string) {
   try {
     await Clipboard.setStringAsync(id);
-    Alert.alert('Kopyalandı', 'Kullanıcı ID panoya alındı');
+    await noticeDialog('Kopyalandı', 'Kullanıcı ID panoya alındı');
   } catch {
-    Alert.alert('ID', id);
+    await noticeDialog('ID', id);
   }
 }

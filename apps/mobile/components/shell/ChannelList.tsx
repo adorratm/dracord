@@ -327,14 +327,9 @@ const ChannelRow = memo(function ChannelRow({
             <VoiceMemberRow
               key={m.id}
               member={m}
-              onPress={
-                onVoiceMemberPress ? () => onVoiceMemberPress(m, channel) : undefined
-              }
-              onLongPress={
-                onVoiceMemberLongPress
-                  ? () => onVoiceMemberLongPress(m, channel)
-                  : undefined
-              }
+              channel={channel}
+              onPress={onVoiceMemberPress}
+              onLongPress={onVoiceMemberLongPress}
             />
           ))
         : null}
@@ -344,18 +339,20 @@ const ChannelRow = memo(function ChannelRow({
 
 const VoiceMemberRow = memo(function VoiceMemberRow({
   member,
+  channel,
   onPress,
   onLongPress,
 }: {
   member: VoiceMemberSummary;
-  onPress?: () => void;
-  onLongPress?: () => void;
+  channel: ChannelSummary;
+  onPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
+  onLongPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
 }) {
   const elapsed = useElapsedLabel(member.joinedAt);
   return (
     <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
+      onPress={onPress ? () => onPress(member, channel) : undefined}
+      onLongPress={onLongPress ? () => onLongPress(member, channel) : undefined}
       delayLongPress={280}
       style={{
         marginLeft: 36,
