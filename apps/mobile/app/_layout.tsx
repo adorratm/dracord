@@ -1,15 +1,17 @@
 import 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { colors } from '@dracord/app-theme';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { ThemeProvider } from '../lib/theme';
+import { useThemeRevision } from '../lib/theme-revision';
 import { useAppFonts } from '../lib/useAppFonts';
 
 function RootNav() {
   const { ready } = useAuth();
   const [fontsLoaded] = useAppFonts();
+  useThemeRevision();
 
   if (!ready || !fontsLoaded) {
     return (
@@ -19,15 +21,12 @@ function RootNav() {
     );
   }
   return (
-    <>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      />
-    </>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
+      }}
+    />
   );
 }
 
@@ -35,7 +34,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <RootNav />
+        <ThemeProvider>
+          <RootNav />
+        </ThemeProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

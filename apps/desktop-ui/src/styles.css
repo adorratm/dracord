@@ -38,6 +38,41 @@ html.dark {
   --color-outline-variant: #4a4451;
 }
 
+html.light {
+  color-scheme: light;
+  --color-background: #f2f3f5;
+  --color-surface: #ffffff;
+  --color-surface-dim: #e3e5e8;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2f3f5;
+  --color-surface-container: #ebedef;
+  --color-surface-container-high: #e3e5e8;
+  --color-surface-container-highest: #dcdfe3;
+  --color-surface-variant: #e3e5e8;
+  --color-on-surface: #060607;
+  --color-on-surface-variant: #4e5058;
+  --color-on-background: #060607;
+  --color-primary: #5865f2;
+  --color-primary-container: #4752c4;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #ffffff;
+  --color-secondary: #4e5058;
+  --color-secondary-container: #e3e5e8;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #2e3338;
+  --color-tertiary: #eb459e;
+  --color-tertiary-container: #c23a85;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #ffffff;
+  --color-error: #da373c;
+  --color-error-container: #fde2e3;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #5c0005;
+  --color-outline: #80848e;
+  --color-outline-variant: #c4c9ce;
+}
+
 @layer base {
   html,
   body,

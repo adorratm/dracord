@@ -22,8 +22,9 @@ import type {
   PresenceStatus,
   SocialLinks,
 } from '@dracord/types';
-import { colors } from '@dracord/app-theme';
+import { colors, setThemeMode } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { useTheme } from '../../lib/theme';
 import { resolveMediaUrl } from '../../lib/mediaUrl';
 import { uploadImageFromUri } from '../../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../../lib/ui';
@@ -236,11 +237,21 @@ export default function SettingsScreen() {
       .catch(() => setBookmarks([]));
   }, [tab, client]);
 
+  const { setMode: applyTheme } = useTheme();
+
   const patchSettings = (patch: Partial<ClientSettings>) => {
+    if (patch.appearance?.theme === 'light' || patch.appearance?.theme === 'dark') {
+      applyTheme(patch.appearance.theme);
+      setThemeMode(patch.appearance.theme);
+    }
     void client
       .updateClientSettings(patch)
       .then((next) => {
         setSettings(next);
+        if (next.appearance?.theme === 'light' || next.appearance?.theme === 'dark') {
+          applyTheme(next.appearance.theme);
+          setThemeMode(next.appearance.theme);
+        }
         if (patch.notifications) {
           configureUiTones({
             enabled: next.notifications.soundEnabled !== false,
@@ -1046,7 +1057,7 @@ export default function SettingsScreen() {
               />
             </View>
             <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 8 }}>
-              Mobil istemci şu an koyu temayı kullanır; tercih diğer platformlarla senkron tutulur.
+              Tema tüm istemcilerde senkron tutulur (web, masaüstü, mobil).
             </Text>
             <ToggleRow
               label="Kompakt mesaj yoğunluğu"

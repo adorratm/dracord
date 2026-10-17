@@ -5,6 +5,7 @@ import { colors } from '@dracord/app-theme';
 import { isOnlinePresence, normalizePresence, presenceLabelTr } from '../lib/presence';
 import { UserAvatar } from './UserAvatar';
 import { Icon } from './Icon';
+import { useThemeRevision } from '../lib/theme-revision';
 
 type Row =
   | { type: 'header'; key: string; label: string }
@@ -127,6 +128,7 @@ const MemberRow = memo(function MemberRow({
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
+  useThemeRevision();
   const st = normalizePresence(user.status);
   const offline = st === 'OFFLINE';
   const subtitle = presenceLabelTr(st, user.customStatus);

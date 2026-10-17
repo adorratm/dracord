@@ -3,6 +3,7 @@ import { Text, type TextProps, type TextStyle } from 'react-native';
 import * as Linking from 'expo-linking';
 import { colors } from '@dracord/app-theme';
 import { tokenizeMessageContent } from '../lib/tokenizeMessageContent';
+import { useThemeRevision } from '../lib/theme-revision';
 
 type Props = {
   content: string;
@@ -20,6 +21,7 @@ export const LinkifiedText = memo(function LinkifiedText({
   channelNames,
   onPress,
 }: Props) {
+  useThemeRevision();
   const tokens = useMemo(
     () => tokenizeMessageContent(content, { mentionNames, channelNames }),
     [content, mentionNames, channelNames],
@@ -36,7 +38,7 @@ export const LinkifiedText = memo(function LinkifiedText({
           return (
             <Text
               key={i}
-              style={urlStyle}
+              style={{ color: colors.primary, textDecorationLine: 'underline' }}
               onPress={(e) => {
                 e.stopPropagation?.();
                 void Linking.openURL(t.value);
@@ -48,14 +50,28 @@ export const LinkifiedText = memo(function LinkifiedText({
         }
         if (t.type === 'mention' || t.type === 'channel') {
           return (
-            <Text key={i} style={mentionStyle}>
+            <Text
+              key={i}
+              style={{
+                color: colors.primary,
+                backgroundColor: 'rgba(189,147,249,0.18)',
+                fontWeight: '600',
+              }}
+            >
               {t.value}
             </Text>
           );
         }
         if (t.type === 'slash') {
           return (
-            <Text key={i} style={slashStyle}>
+            <Text
+              key={i}
+              style={{
+                color: '#8be9fd',
+                backgroundColor: 'rgba(139,233,253,0.12)',
+                fontWeight: '600',
+              }}
+            >
               {t.value}
             </Text>
           );
@@ -65,15 +81,3 @@ export const LinkifiedText = memo(function LinkifiedText({
     </Text>
   );
 });
-
-const urlStyle = { color: colors.primary, textDecorationLine: 'underline' as const };
-const mentionStyle = {
-  color: colors.primary,
-  backgroundColor: 'rgba(189,147,249,0.18)',
-  fontWeight: '600' as const,
-};
-const slashStyle = {
-  color: '#8be9fd',
-  backgroundColor: 'rgba(139,233,253,0.12)',
-  fontWeight: '600' as const,
-};

@@ -1,5 +1,8 @@
 /** Dracord istemci renkleri (web / desktop / mobile) */
-export const colors = {
+
+export type ThemeMode = 'dark' | 'light';
+
+const dark = {
   bg: '#11131e',
   surface: '#1a1c2c',
   surfaceHigh: '#282a36',
@@ -17,6 +20,63 @@ export const colors = {
   /** Web/desktop `bg-outline` (#968e9c) — Dracula comment mavisi değil */
   offline: '#968e9c',
 } as const;
+
+/** Web `html.light` ile uyumlu açık palet */
+const light = {
+  bg: '#f2f3f5',
+  surface: '#ffffff',
+  surfaceHigh: '#e3e5e8',
+  primary: '#5865f2',
+  primaryOn: '#ffffff',
+  success: '#23a559',
+  danger: '#da373c',
+  text: '#060607',
+  textMuted: '#4e5058',
+  outline: '#80848e',
+  rail: '#e3e5e8',
+  online: '#23a559',
+  idle: '#f0b232',
+  dnd: '#f23f43',
+  offline: '#80848e',
+} as const;
+
+export const palettes = { dark, light } as const;
+export type AppColors = { readonly [K in keyof typeof dark]: string };
+
+let mode: ThemeMode = 'dark';
+const listeners = new Set<() => void>();
+
+export function getThemeMode(): ThemeMode {
+  return mode;
+}
+
+export function setThemeMode(next: ThemeMode) {
+  if (mode === next) return;
+  mode = next;
+  for (const l of listeners) l();
+}
+
+export function subscribeTheme(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Aktif temaya göre canlı renkler (Proxy — her okumada güncel palet) */
+export const colors: AppColors = new Proxy({} as AppColors, {
+  get(_target, prop: string | symbol) {
+    if (typeof prop !== 'string') return undefined;
+    return palettes[mode][prop as keyof typeof dark];
+  },
+  ownKeys() {
+    return Object.keys(palettes[mode]);
+  },
+  getOwnPropertyDescriptor(_t, prop) {
+    if (typeof prop !== 'string' || !(prop in palettes[mode])) return undefined;
+    return { enumerable: true, configurable: true, value: palettes[mode][prop as keyof typeof dark] };
+  },
+});
 
 export const space = {
   xs: 4,

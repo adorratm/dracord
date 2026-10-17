@@ -4,6 +4,7 @@ import type { PresenceStatus } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { statusColor } from '../lib/ui';
 import { resolveMediaUrl } from '../lib/mediaUrl';
+import { useThemeRevision } from '../lib/theme-revision';
 
 export const UserAvatar = memo(function UserAvatar({
   displayName,
@@ -20,6 +21,7 @@ export const UserAvatar = memo(function UserAvatar({
   speaking?: boolean;
   statusRing?: boolean;
 }) {
+  useThemeRevision();
   const initials = (displayName || '?').slice(0, 2).toUpperCase();
   const r = size / 2;
   const dot = Math.max(10, Math.round(size * 0.32));

@@ -29,6 +29,7 @@ import type {
 import { SocketEvents } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
+import { useThemeRevision } from '../lib/theme-revision';
 import {
   addCustomSticker,
   getLocalStickers,
@@ -1397,6 +1398,7 @@ const ChatMessageCell = memo(function ChatMessageCell({
   onEmbedAction: (m: MessageDto, action: MessageEmbedAction, embed: MessageEmbed) => void;
   onLongPress: (m: MessageDto) => void;
 }) {
+  useThemeRevision();
   return (
     <View
       style={{
@@ -1453,6 +1455,7 @@ const MessageRow = memo(function MessageRow({
   onEmbedAction?: (m: MessageDto, action: MessageEmbedAction, embed: MessageEmbed) => void;
   onLongPress?: (m: MessageDto) => void;
 }) {
+  useThemeRevision();
   const sticker = isStickerOnly(m.content);
   const glyph = sticker ? stickerGlyph(m.content) : '';
   const stickerMedia = sticker && isMediaUrl(glyph);
@@ -1749,7 +1752,9 @@ function MiniIcon({
 const chipBtn = {
   paddingHorizontal: 10,
   paddingVertical: 6,
-  backgroundColor: colors.surfaceHigh,
+  get backgroundColor() {
+    return colors.surfaceHigh;
+  },
   borderRadius: 8,
 };
 
@@ -1757,7 +1762,9 @@ const stickerCell = {
   width: 72,
   height: 72,
   borderRadius: 12,
-  backgroundColor: colors.surfaceHigh,
+  get backgroundColor() {
+    return colors.surfaceHigh;
+  },
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
   overflow: 'hidden' as const,
@@ -1765,17 +1772,25 @@ const stickerCell = {
 
 const mediaPanel = {
   borderTopWidth: 1,
-  borderTopColor: colors.surfaceHigh,
-  backgroundColor: colors.surface,
+  get borderTopColor() {
+    return colors.surfaceHigh;
+  },
+  get backgroundColor() {
+    return colors.surface;
+  },
   padding: 10,
   maxHeight: 140,
 };
 
 const composerBanner = {
   padding: 10,
-  backgroundColor: colors.surface,
+  get backgroundColor() {
+    return colors.surface;
+  },
   borderTopWidth: 1,
-  borderTopColor: colors.surfaceHigh,
+  get borderTopColor() {
+    return colors.surfaceHigh;
+  },
   flexDirection: 'row' as const,
   alignItems: 'center' as const,
   gap: 8,
@@ -1783,8 +1798,12 @@ const composerBanner = {
 
 const composerBar = {
   borderTopWidth: 1,
-  borderTopColor: colors.surfaceHigh,
-  backgroundColor: colors.surface,
+  get borderTopColor() {
+    return colors.surfaceHigh;
+  },
+  get backgroundColor() {
+    return colors.surface;
+  },
   paddingHorizontal: 10,
   paddingTop: 8,
   paddingBottom: 4,
@@ -1796,6 +1815,8 @@ const composerInputRow = {
   paddingHorizontal: 10,
   paddingBottom: 10,
   paddingTop: 4,
-  backgroundColor: colors.surface,
+  get backgroundColor() {
+    return colors.surface;
+  },
   alignItems: 'flex-end' as const,
 };

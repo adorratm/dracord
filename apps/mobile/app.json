@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "default",
     "scheme": "dracord",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "runtimeVersion": "0.1.0",
     "updates": {
       "url": "https://u.expo.dev/replace-with-eas-project-id",

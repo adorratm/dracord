@@ -2,9 +2,10 @@ import { memo, useCallback, useMemo } from 'react';
 import { FlatList, Pressable, Text, View, type ListRenderItemInfo } from 'react-native';
 import type { CategoryDto, ChannelSummary, VoiceMemberSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
+import { useElapsedLabel } from '../../lib/formatElapsed';
+import { useThemeRevision } from '../../lib/theme-revision';
 import { Icon } from '../Icon';
 import { UserAvatar } from '../UserAvatar';
-import { useElapsedLabel } from '../../lib/formatElapsed';
 
 function channelIconName(c: ChannelSummary) {
   if (c.type === 'VOICE') return 'volume_up';
@@ -237,6 +238,7 @@ const ChannelRow = memo(function ChannelRow({
   onVoiceMemberPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
   onVoiceMemberLongPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
 }) {
+  useThemeRevision();
   const unread = (channel.unreadCount ?? 0) > 0 || channel.unread;
   // Ses bağlıysa yalnızca o kanalda self göster (oyun sesi hayaleti kalmasın)
   const selfLiveHere = activeVoiceChannelId
@@ -348,6 +350,7 @@ const VoiceMemberRow = memo(function VoiceMemberRow({
   onPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
   onLongPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
 }) {
+  useThemeRevision();
   const elapsed = useElapsedLabel(member.joinedAt);
   return (
     <Pressable

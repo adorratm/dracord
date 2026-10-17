@@ -1305,7 +1305,7 @@ export function ChatInput({
 
       <div
         className={cn(
-          'flex gap-space-xs w-full bg-dracula-current rounded-lg px-space-sm',
+          'flex gap-space-xs w-full bg-surface-container-highest rounded-lg px-space-sm',
           expanded ? 'items-end py-1.5 min-h-[44px]' : 'items-center h-11',
         )}
       >
@@ -1448,7 +1448,7 @@ export function ChatInput({
             <div
               aria-hidden
               id="chat-input-highlight"
-              className="pointer-events-none absolute inset-0 overflow-y-auto font-body-md text-body-md leading-6 whitespace-pre-wrap break-words text-dracula-fg [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              className="pointer-events-none absolute inset-0 overflow-y-auto font-body-md text-body-md leading-6 whitespace-pre-wrap break-words text-on-surface [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
               style={{ maxHeight: MAX_TEXTAREA_PX }}
             >
               {highlightNodes}
@@ -1477,8 +1477,8 @@ export function ChatInput({
             rows={1}
             placeholder={resolvedPlaceholder}
             className={cn(
-              'relative block w-full m-0 border-0 bg-transparent placeholder:text-dracula-comment font-body-md text-body-md leading-6 resize-none outline-none overflow-y-auto whitespace-pre-wrap break-words min-h-[24px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
-              touchUi ? 'text-dracula-fg' : 'text-transparent',
+              'relative block w-full m-0 border-0 bg-transparent placeholder:text-on-surface-variant font-body-md text-body-md leading-6 resize-none outline-none overflow-y-auto whitespace-pre-wrap break-words min-h-[24px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+              touchUi ? 'text-on-surface' : 'text-transparent',
             )}
             style={{
               maxHeight: MAX_TEXTAREA_PX,
