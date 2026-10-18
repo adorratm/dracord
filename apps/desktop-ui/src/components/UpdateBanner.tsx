@@ -12,6 +12,7 @@ type UpdaterStatus = {
   currentVersion?: string;
   percent?: number;
   message?: string;
+  manual?: boolean;
 };
 
 /**

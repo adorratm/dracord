@@ -34,6 +34,8 @@ type DracordDesktopUpdaterStatus = {
   currentVersion?: string;
   percent?: number;
   message?: string;
+  manual?: boolean;
+  dev?: boolean;
 };
 
 type DracordRegisteredGame = {
@@ -65,7 +67,12 @@ type DracordDesktopApi = {
   clearDisplayMediaSelection: () => Promise<{ ok: boolean }>;
   synthesizeDealerTts?: (text: string) => Promise<DracordDesktopDealerTtsResult>;
   getAppVersion?: () => Promise<string>;
-  checkForUpdates?: () => Promise<{ ok: boolean; dev?: boolean }>;
+  checkForUpdates?: () => Promise<{
+    ok: boolean;
+    dev?: boolean;
+    currentVersion?: string;
+    error?: string;
+  }>;
   downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
   installUpdate?: () => Promise<{ ok: boolean; error?: string }>;
   onUpdaterStatus?: (

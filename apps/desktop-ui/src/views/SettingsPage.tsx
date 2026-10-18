@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ClientSettings,
   GuildSummary,
@@ -2070,33 +2070,91 @@ export function SettingsPage({
 function DesktopUpdateControls() {
   const [version, setVersion] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const versionRef = useRef(version);
+  const userCheckRef = useRef(false);
   const desktop = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+  versionRef.current = version;
 
   useEffect(() => {
-    if (!desktop?.getAppVersion) return;
-    void desktop.getAppVersion().then(setVersion).catch(() => setVersion(null));
+    if (!desktop?.getAppVersion) {
+      setVersion(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void desktop
+        .getAppVersion!()
+        .then((v) => {
+          if (cancelled) return;
+          const s = String(v || '').trim();
+          setVersion(s || null);
+        })
+        .catch(() => {
+          if (!cancelled) setVersion(null);
+        });
+    };
+    load();
+    const t = window.setTimeout(load, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [desktop]);
 
   useEffect(() => {
     if (!desktop?.onUpdaterStatus) return;
     return desktop.onUpdaterStatus((payload) => {
-      const cur = payload.currentVersion ?? version ?? '?';
+      if (payload.currentVersion) {
+        setVersion(String(payload.currentVersion));
+      }
+      const cur =
+        payload.currentVersion ?? versionRef.current ?? '?';
       const next = payload.version ?? '?';
+      const fromUser = Boolean(payload.manual || userCheckRef.current);
+
       if (payload.status === 'checking') {
-        setNote('Güncellemeler kontrol ediliyor…');
-      } else if (payload.status === 'not-available') {
-        setNote(`Uygulama güncel (v${cur}). Yeni sürüm yok.`);
-      } else if (payload.status === 'available') {
+        if (fromUser) setNote('Güncellemeler kontrol ediliyor…');
+        return;
+      }
+
+      if (payload.status === 'not-available') {
+        userCheckRef.current = false;
+        setChecking(false);
+        if (payload.dev) {
+          setNote(
+            `Geliştirme sürümü (v${cur}) — güncelleme kontrolü yalnızca kurulu uygulamada çalışır.`,
+          );
+        } else if (fromUser) {
+          setNote(`Uygulama güncel (v${cur}). Yeni sürüm yok.`);
+        }
+        return;
+      }
+
+      if (payload.status === 'available') {
+        userCheckRef.current = false;
+        setChecking(false);
         setNote(`Yeni sürüm v${next} mevcut (şimdi: v${cur}).`);
-      } else if (payload.status === 'downloading') {
+        return;
+      }
+      if (payload.status === 'downloading') {
         setNote(`İndiriliyor… %${Math.round(payload.percent ?? 0)}`);
-      } else if (payload.status === 'downloaded') {
+        return;
+      }
+      if (payload.status === 'downloaded') {
+        userCheckRef.current = false;
+        setChecking(false);
         setNote(`v${next} indirildi — yeniden başlatarak kur.`);
-      } else if (payload.status === 'error') {
-        setNote(`Hata: ${payload.message ?? 'bilinmiyor'}`);
+        return;
+      }
+      if (payload.status === 'error') {
+        const wasUser = fromUser;
+        userCheckRef.current = false;
+        setChecking(false);
+        if (wasUser) setNote(`Hata: ${payload.message ?? 'bilinmiyor'}`);
       }
     });
-  }, [desktop, version]);
+  }, [desktop]);
 
   if (!desktop?.isElectron) return null;
 
@@ -2105,24 +2163,55 @@ function DesktopUpdateControls() {
       <p className="font-body-sm text-on-surface">
         Uygulama sürümü:{' '}
         <span className="font-label-sm tabular-nums text-outline">
-          {version ? `v${version}` : '…'}
+          {version ? `v${version}` : 'yükleniyor…'}
         </span>
       </p>
       <button
         type="button"
-        className="h-8 rounded-lg bg-surface-container-high px-3 font-label-sm text-on-surface hover:bg-surface-container-highest"
+        disabled={checking}
+        className="h-8 rounded-lg bg-surface-container-high px-3 font-label-sm text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
         onClick={() => {
+          userCheckRef.current = true;
+          setChecking(true);
           setNote('Güncellemeler kontrol ediliyor…');
-          void desktop.checkForUpdates?.().then((r) => {
-            if (r?.dev) {
-              setNote(
-                'Geliştirme / paketlenmemiş sürüm — güncelleme kontrolü yalnızca kurulu (installer) uygulamada çalışır.',
-              );
-            }
-          });
+          void desktop
+            .checkForUpdates?.()
+            .then((r) => {
+              if (r?.currentVersion) setVersion(String(r.currentVersion));
+              if (r?.dev) {
+                setNote(
+                  `Geliştirme / paketlenmemiş sürüm (v${r.currentVersion || versionRef.current || '?'}) — güncelleme kontrolü yalnızca kurulu (installer) uygulamada çalışır.`,
+                );
+                userCheckRef.current = false;
+                setChecking(false);
+                return;
+              }
+              if (r && r.ok === false) {
+                setNote(`Hata: ${r.error ?? 'kontrol başarısız'}`);
+                userCheckRef.current = false;
+                setChecking(false);
+                return;
+              }
+              // Event gelmezse not takılı kalmasın
+              window.setTimeout(() => {
+                if (!userCheckRef.current) return;
+                userCheckRef.current = false;
+                setChecking(false);
+                setNote((prev) =>
+                  prev === 'Güncellemeler kontrol ediliyor…'
+                    ? `Kontrol tamamlandı (v${versionRef.current || r?.currentVersion || '?'})`
+                    : prev,
+                );
+              }, 28_000);
+            })
+            .catch(() => {
+              setNote('Güncelleme kontrolü başarısız');
+              userCheckRef.current = false;
+              setChecking(false);
+            });
         }}
       >
-        Şimdi güncelleme kontrol et
+        {checking ? 'Kontrol ediliyor…' : 'Şimdi güncelleme kontrol et'}
       </button>
       {note ? <p className="font-body-sm text-on-surface-variant">{note}</p> : null}
     </div>

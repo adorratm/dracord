@@ -354,34 +354,76 @@ function applySystemPrefs(partial = {}) {
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let updateCheckTimer = null;
+/** Son manuel kontrol mü — UI “checking” notunu buna bağlar */
+let lastUpdateCheckManual = false;
+
+function getAppVersionString() {
+  try {
+    const v = app.getVersion();
+    if (v && String(v).trim()) return String(v).trim();
+  } catch {
+    /* fallback */
+  }
+  try {
+    return String(require('./package.json').version || '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
 
 function sendUpdateEvent(channel, payload) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send(channel, payload);
+  mainWindow.webContents.send(channel, {
+    ...payload,
+    currentVersion: payload.currentVersion || getAppVersionString(),
+    manual: Boolean(payload.manual ?? lastUpdateCheckManual),
+  });
 }
 
 function setupAutoUpdater() {
-  ipcMain.handle('updater:get-version', () => app.getVersion());
+  // Sürüm her zaman yanıt versin (updater yüklenmese bile)
+  try {
+    ipcMain.removeHandler('updater:get-version');
+  } catch {
+    /* ignore */
+  }
+  ipcMain.handle('updater:get-version', () => getAppVersionString());
 
   if (!app.isPackaged) {
     console.log('[updater] skipped (dev / unpackaged)');
     ipcMain.handle('updater:check', () => {
+      const ver = getAppVersionString();
       sendUpdateEvent('updater:status', {
         status: 'not-available',
-        currentVersion: app.getVersion(),
-        version: app.getVersion(),
+        currentVersion: ver,
+        version: ver,
+        manual: true,
+        dev: true,
       });
-      return { ok: true, dev: true };
+      return { ok: true, dev: true, currentVersion: ver };
     });
     ipcMain.handle('updater:download', () => ({ ok: false, error: 'dev' }));
     ipcMain.handle('updater:install', () => ({ ok: false, error: 'dev' }));
     return;
   }
+
   let autoUpdater;
   try {
     ({ autoUpdater } = require('electron-updater'));
   } catch (err) {
     console.warn('[updater] electron-updater load failed', err);
+    ipcMain.handle('updater:check', () => {
+      const ver = getAppVersionString();
+      sendUpdateEvent('updater:status', {
+        status: 'error',
+        message: 'Güncelleyici yüklenemedi',
+        currentVersion: ver,
+        manual: true,
+      });
+      return { ok: false, error: 'updater_missing', currentVersion: ver };
+    });
+    ipcMain.handle('updater:download', () => ({ ok: false, error: 'updater_missing' }));
+    ipcMain.handle('updater:install', () => ({ ok: false, error: 'updater_missing' }));
     return;
   }
 
@@ -395,14 +437,19 @@ function setupAutoUpdater() {
   }
 
   autoUpdater.on('checking-for-update', () => {
-    sendUpdateEvent('updater:status', { status: 'checking' });
+    sendUpdateEvent('updater:status', {
+      status: 'checking',
+      currentVersion: getAppVersionString(),
+      manual: lastUpdateCheckManual,
+    });
   });
   autoUpdater.on('update-available', (info) => {
     sendUpdateEvent('updater:status', {
       status: 'available',
       version: info.version,
       releaseNotes: info.releaseNotes ?? null,
-      currentVersion: app.getVersion(),
+      currentVersion: getAppVersionString(),
+      manual: lastUpdateCheckManual,
     });
     const prefs = readStoredSystemPrefs();
     if (prefs.autoUpdate) {
@@ -410,6 +457,8 @@ function setupAutoUpdater() {
         sendUpdateEvent('updater:status', {
           status: 'error',
           message: err instanceof Error ? err.message : String(err),
+          currentVersion: getAppVersionString(),
+          manual: lastUpdateCheckManual,
         });
       });
     }
@@ -417,8 +466,9 @@ function setupAutoUpdater() {
   autoUpdater.on('update-not-available', (info) => {
     sendUpdateEvent('updater:status', {
       status: 'not-available',
-      version: info.version,
-      currentVersion: app.getVersion(),
+      version: info?.version || getAppVersionString(),
+      currentVersion: getAppVersionString(),
+      manual: lastUpdateCheckManual,
     });
   });
   autoUpdater.on('download-progress', (progress) => {
@@ -427,39 +477,66 @@ function setupAutoUpdater() {
       percent: progress.percent,
       transferred: progress.transferred,
       total: progress.total,
-      currentVersion: app.getVersion(),
+      currentVersion: getAppVersionString(),
+      manual: lastUpdateCheckManual,
     });
   });
   autoUpdater.on('update-downloaded', (info) => {
     sendUpdateEvent('updater:status', {
       status: 'downloaded',
       version: info.version,
-      currentVersion: app.getVersion(),
+      currentVersion: getAppVersionString(),
+      manual: lastUpdateCheckManual,
     });
   });
   autoUpdater.on('error', (err) => {
     sendUpdateEvent('updater:status', {
       status: 'error',
       message: err instanceof Error ? err.message : String(err),
-      currentVersion: app.getVersion(),
+      currentVersion: getAppVersionString(),
+      manual: lastUpdateCheckManual,
     });
   });
 
-  const check = (manual = false) => {
-    void autoUpdater.checkForUpdates().catch((err) => {
+  const CHECK_TIMEOUT_MS = 25_000;
+
+  const check = async (manual = false) => {
+    lastUpdateCheckManual = Boolean(manual);
+    const ver = getAppVersionString();
+    try {
+      const result = await Promise.race([
+        autoUpdater.checkForUpdates(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Güncelleme kontrolü zaman aşımı')),
+            CHECK_TIMEOUT_MS,
+          ),
+        ),
+      ]);
+      return { ok: true, currentVersion: ver, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       if (manual) {
         sendUpdateEvent('updater:status', {
           status: 'error',
-          message: err instanceof Error ? err.message : String(err),
-          currentVersion: app.getVersion(),
+          message,
+          currentVersion: ver,
+          manual: true,
         });
       }
-    });
+      return { ok: false, error: message, currentVersion: ver };
+    } finally {
+      if (!manual) lastUpdateCheckManual = false;
+    }
   };
 
-  ipcMain.handle('updater:check', () => {
-    check(true);
-    return { ok: true };
+  ipcMain.handle('updater:check', async () => {
+    const r = await check(true);
+    return {
+      ok: r.ok !== false,
+      currentVersion: r.currentVersion || getAppVersionString(),
+      error: r.error,
+    };
   });
   ipcMain.handle('updater:download', async () => {
     try {
@@ -480,9 +557,13 @@ function setupAutoUpdater() {
   });
 
   // İlk kontrol (pencere hazır olduktan biraz sonra)
-  setTimeout(() => check(false), 8_000);
+  setTimeout(() => {
+    void check(false);
+  }, 8_000);
   if (updateCheckTimer) clearInterval(updateCheckTimer);
-  updateCheckTimer = setInterval(() => check(false), 4 * 60 * 60 * 1000);
+  updateCheckTimer = setInterval(() => {
+    void check(false);
+  }, 4 * 60 * 60 * 1000);
 }
 
 function resolveAppIconPath() {
@@ -1109,8 +1190,9 @@ if (!gotLock) {
     registerDealerTtsIpc();
     registerProtocol();
     registerWindowIpc();
-    createWindow();
+    // Sürüm IPC’sini pencere açılmadan kaydet (UI “…” takılı kalmasın)
     setupAutoUpdater();
+    createWindow();
 
     app.on('activate', () => {
       if (!mainWindow || mainWindow.isDestroyed()) {
