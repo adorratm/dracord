@@ -380,6 +380,56 @@ function sendUpdateEvent(channel, payload) {
   });
 }
 
+/**
+ * GitHub “latest” asset URL — eski release silinse bile en güncel latest.yml’ye gider.
+ * Atom feed / desktop-v* tag semver sorunlarını atlar.
+ */
+function resolveUpdateFeedUrl() {
+  try {
+    const pkg = require('./package.json');
+    const pub = pkg.build?.publish;
+    const conf = Array.isArray(pub) ? pub.find((p) => p && p.provider) || pub[0] : pub;
+    if (conf?.provider === 'generic' && conf.url) {
+      return String(conf.url).replace(/\/?$/, '/');
+    }
+    const owner = conf?.owner || 'adorratm';
+    const repo = conf?.repo || 'dracord';
+    return `https://github.com/${owner}/${repo}/releases/latest/download/`;
+  } catch {
+    return 'https://github.com/adorratm/dracord/releases/latest/download/';
+  }
+}
+
+function friendlyUpdateError(err) {
+  const msg = err instanceof Error ? err.message : String(err || '');
+  const code = err && typeof err === 'object' ? String(err.code || '') : '';
+  if (
+    code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' ||
+    /Cannot find latest\.yml/i.test(msg)
+  ) {
+    return 'En güncel release’de latest.yml yok. Yeni bir desktop release yayınla (eski silmek sorun değil).';
+  }
+  if (
+    code === 'ERR_UPDATER_LATEST_VERSION_NOT_FOUND' ||
+    /Unable to find latest version|No published versions/i.test(msg)
+  ) {
+    return 'GitHub’da yayınlanmış release bulunamadı.';
+  }
+  if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|net::ERR|getaddrinfo/i.test(msg)) {
+    return 'Güncelleme sunucusuna ulaşılamadı. İnternet bağlantını kontrol et.';
+  }
+  if (/403|rate limit|API rate/i.test(msg)) {
+    return 'GitHub istek limiti. Biraz sonra tekrar dene.';
+  }
+  if (/404/.test(msg)) {
+    return 'Güncelleme dosyası bulunamadı (404). Son release’de Setup + latest.yml olmalı.';
+  }
+  if (/zaman aşımı|timed? ?out/i.test(msg)) {
+    return 'Güncelleme kontrolü zaman aşımına uğradı. Tekrar dene.';
+  }
+  return msg.split('\n')[0].slice(0, 220) || 'Güncelleme kontrolü başarısız';
+}
+
 function setupAutoUpdater() {
   // Sürüm her zaman yanıt versin (updater yüklenmese bile)
   try {
@@ -427,8 +477,19 @@ function setupAutoUpdater() {
     return;
   }
 
+  const feedUrl = resolveUpdateFeedUrl();
+  console.log('[updater] feed', feedUrl);
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.requestHeaders = {
+    'User-Agent': `Dracord-Desktop/${getAppVersionString()}`,
+  };
+  // Generic + /releases/latest/download → silinen eski release’lerden etkilenmez
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: feedUrl,
+  });
   // CSC_LINK yokken Windows installer imzasız kalır. publisherName doğrulaması
   // "not signed by the application owner" ile güncellemeyi düşürür.
   // Dosya bütünlüğü latest.yml içindeki sha512 ile kontrol edilir.
@@ -456,7 +517,7 @@ function setupAutoUpdater() {
       void autoUpdater.downloadUpdate().catch((err) => {
         sendUpdateEvent('updater:status', {
           status: 'error',
-          message: err instanceof Error ? err.message : String(err),
+          message: friendlyUpdateError(err),
           currentVersion: getAppVersionString(),
           manual: lastUpdateCheckManual,
         });
@@ -490,32 +551,41 @@ function setupAutoUpdater() {
     });
   });
   autoUpdater.on('error', (err) => {
+    // Arka plan kontrolünde UI’yi korkutma; manuel kontrolde göster
+    if (!lastUpdateCheckManual) {
+      console.warn('[updater] background error', err);
+      return;
+    }
     sendUpdateEvent('updater:status', {
       status: 'error',
-      message: err instanceof Error ? err.message : String(err),
+      message: friendlyUpdateError(err),
       currentVersion: getAppVersionString(),
-      manual: lastUpdateCheckManual,
+      manual: true,
     });
   });
 
-  const CHECK_TIMEOUT_MS = 25_000;
+  const CHECK_TIMEOUT_MS = 45_000;
 
   const check = async (manual = false) => {
     lastUpdateCheckManual = Boolean(manual);
     const ver = getAppVersionString();
+    let settled = false;
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => {
+        if (!settled) reject(new Error('Güncelleme kontrolü zaman aşımı'));
+      }, CHECK_TIMEOUT_MS);
+    });
     try {
       const result = await Promise.race([
-        autoUpdater.checkForUpdates(),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Güncelleme kontrolü zaman aşımı')),
-            CHECK_TIMEOUT_MS,
-          ),
-        ),
+        autoUpdater.checkForUpdates().finally(() => {
+          settled = true;
+        }),
+        timeout,
       ]);
-      return { ok: true, currentVersion: ver, result };
+      const remote = result?.updateInfo?.version || null;
+      return { ok: true, currentVersion: ver, version: remote };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = friendlyUpdateError(err);
       if (manual) {
         sendUpdateEvent('updater:status', {
           status: 'error',
@@ -523,6 +593,8 @@ function setupAutoUpdater() {
           currentVersion: ver,
           manual: true,
         });
+      } else {
+        console.warn('[updater] check failed', message);
       }
       return { ok: false, error: message, currentVersion: ver };
     } finally {
@@ -535,6 +607,7 @@ function setupAutoUpdater() {
     return {
       ok: r.ok !== false,
       currentVersion: r.currentVersion || getAppVersionString(),
+      version: r.version,
       error: r.error,
     };
   });
@@ -545,7 +618,7 @@ function setupAutoUpdater() {
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: friendlyUpdateError(err),
       };
     }
   });

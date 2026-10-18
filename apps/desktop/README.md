@@ -56,6 +56,12 @@ CSC yoksa installer **imzasız** üretilir. Bu durumda `verifyUpdateCodeSignatur
 
 **Not:** Eski kurulumda `publisherName: Dracord` varken imzasız 0.1.1 reddedilir. Bu düzeltmeyi içeren Setup’ı **bir kez elle** kurun; sonraki auto-update’ler çalışır.
 
+### Güncelleme kontrolü (electron-updater)
+
+Uygulama runtime’da GitHub Atom feed yerine  
+`https://github.com/<owner>/<repo>/releases/latest/download/latest.yml`  
+adresini kullanır. Eski release’leri silmek sorun değildir; **en güncel** release’de `latest.yml` + Setup dosyası kalsın yeter. Tag öneki (`desktop-v0.1.x`) semver karşılaştırmasını bozmaz çünkü sürüm `latest.yml` içindeki `version` alanından okunur.
+
 ### macOS (Developer ID + Notarize)
 
 | Değişken | Açıklama |

@@ -2187,7 +2187,7 @@ function DesktopUpdateControls() {
                 return;
               }
               if (r && r.ok === false) {
-                setNote(`Hata: ${r.error ?? 'kontrol başarısız'}`);
+                setNote(r.error || 'Güncelleme kontrolü başarısız');
                 userCheckRef.current = false;
                 setChecking(false);
                 return;
@@ -2199,13 +2199,17 @@ function DesktopUpdateControls() {
                 setChecking(false);
                 setNote((prev) =>
                   prev === 'Güncellemeler kontrol ediliyor…'
-                    ? `Kontrol tamamlandı (v${versionRef.current || r?.currentVersion || '?'})`
+                    ? `Uygulama güncel (v${versionRef.current || r?.currentVersion || '?'})`
                     : prev,
                 );
-              }, 28_000);
+              }, 20_000);
             })
-            .catch(() => {
-              setNote('Güncelleme kontrolü başarısız');
+            .catch((err) => {
+              setNote(
+                err instanceof Error
+                  ? err.message
+                  : 'Güncelleme kontrolü başarısız',
+              );
               userCheckRef.current = false;
               setChecking(false);
             });
