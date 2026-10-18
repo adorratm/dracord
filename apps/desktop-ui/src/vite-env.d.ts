@@ -63,6 +63,9 @@ type DracordDesktopApi = {
     games: Array<{ appId: string; name: string }>;
     error?: string;
   }>;
+  onSpotifyOAuthDone?: (
+    callback: (payload: { status?: string }) => void,
+  ) => () => void;
 };
 
 interface Window {

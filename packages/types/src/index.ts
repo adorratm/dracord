@@ -44,6 +44,13 @@ export interface SocialLinks {
   facebook?: string;
 }
 
+export {
+  DESKTOP_GAME_BY_APP_ID,
+  desktopGameImageUrl,
+  desktopGameName,
+} from './desktop-games';
+export type { DesktopGameEntry } from './desktop-games';
+
 /** Discord tarzı canlı aktivite (oyun / dinleme / izleme) */
 export type UserActivityType = 'playing' | 'watching' | 'listening' | 'custom';
 export type UserActivitySource = 'dracord' | 'spotify' | 'desktop' | 'manual';

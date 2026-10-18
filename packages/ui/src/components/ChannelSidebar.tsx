@@ -1,12 +1,13 @@
 'use client';
 
-import type { PresenceStatus } from '@dracord/types';
+import type { PresenceStatus, UserActivity } from '@dracord/types';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
-import { presenceDotClass, presenceLabelTr } from '../lib/presence';
+import { ActivityLine } from './ActivityLine';
+import { activityLineTr, presenceDotClass, presenceLabelTr } from '../lib/presence';
 import { Tooltip } from './Tooltip';
 import { VolumeSlider } from './VolumeSlider';
 
@@ -121,6 +122,8 @@ export interface UserPanelProps {
   avatarUrl?: string | null;
   status?: PresenceStatus;
   customStatus?: string | null;
+  /** Canlı aktivite (Spotify / masaüstü oyun / Dracord) */
+  activity?: UserActivity | null;
   muted?: boolean;
   deafened?: boolean;
   noiseCancellation?: boolean;
@@ -299,6 +302,7 @@ export function UserPanel({
   avatarUrl,
   status = 'ONLINE',
   customStatus = null,
+  activity = null,
   muted,
   deafened,
   noiseCancellation,
@@ -413,9 +417,11 @@ export function UserPanel({
   };
 
   const statusOptions: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
+  const activityLine = !voiceConnected ? activityLineTr(activity) : null;
   const handleLine = voiceConnected
     ? 'Sesli aramada'
-    : customStatus?.trim() ||
+    : activityLine ||
+      customStatus?.trim() ||
       (username ? `@${username.replace(/^@/, '')}` : presenceLabelTr(status));
   const inputLabel =
     inputDevices.find((d) => d.deviceId === inputDeviceId)?.label || 'Sistem varsayılanı';
@@ -636,19 +642,27 @@ export function UserPanel({
               <span className="font-label-md text-on-surface truncate font-semibold">
                 {displayName}
               </span>
-              <span
-                className={cn(
-                  'font-label-sm truncate text-[11px]',
-                  voiceConnected ? 'text-dracula-green' : 'text-on-surface-variant',
-                )}
-              >
-                {voiceConnected && (
-                  <span className="material-symbols-outlined text-[12px] align-[-2px] mr-0.5">
-                    volume_up
-                  </span>
-                )}
-                {handleLine}
-              </span>
+              {activityLine && activity ? (
+                <ActivityLine
+                  activity={activity}
+                  className="font-label-sm text-[11px] text-secondary"
+                  textClassName="font-label-sm text-[11px] text-secondary"
+                />
+              ) : (
+                <span
+                  className={cn(
+                    'font-label-sm truncate text-[11px]',
+                    voiceConnected ? 'text-dracula-green' : 'text-on-surface-variant',
+                  )}
+                >
+                  {voiceConnected && (
+                    <span className="material-symbols-outlined text-[12px] align-[-2px] mr-0.5">
+                      volume_up
+                    </span>
+                  )}
+                  {handleLine}
+                </span>
+              )}
             </div>
           </button>
           <PortalMenu

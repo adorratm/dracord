@@ -1,10 +1,11 @@
 'use client';
 
-import type { PresenceStatus } from '@dracord/types';
+import type { PresenceStatus, UserActivity } from '@dracord/types';
 import { useState, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
-import { presenceLabelTr } from '../lib/presence';
+import { ActivityLine } from './ActivityLine';
+import { activityLineTr, presenceLabelTr } from '../lib/presence';
 
 export type FriendsTab = 'online' | 'offline' | 'pending' | 'blocked';
 
@@ -14,6 +15,7 @@ export interface FriendRow {
   avatarUrl?: string | null;
   status?: PresenceStatus;
   subtitle?: string;
+  activity?: UserActivity | null;
   pendingIncoming?: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
@@ -62,14 +64,23 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
         />
         <div className="flex flex-col min-w-0">
           <span className="font-headline-md text-headline-md text-on-surface truncate">{friend.displayName}</span>
-          <span className="font-body-sm text-body-sm text-on-surface-variant truncate">
-            {friend.subtitle ??
-              (friend.status
-                ? presenceLabelTr(friend.status)
-                : tab === 'pending'
-                  ? 'Arkadaşlık isteği'
-                  : '')}
-          </span>
+          {activityLineTr(friend.activity) ? (
+            <ActivityLine
+              activity={friend.activity}
+              size="md"
+              className="font-body-sm text-body-sm text-secondary"
+              textClassName="font-body-sm text-body-sm text-secondary"
+            />
+          ) : (
+            <span className="font-body-sm text-body-sm text-on-surface-variant truncate">
+              {friend.subtitle ??
+                (friend.status
+                  ? presenceLabelTr(friend.status)
+                  : tab === 'pending'
+                    ? 'Arkadaşlık isteği'
+                    : '')}
+            </span>
+          )}
         </div>
       </button>
       {tab === 'pending' && friend.pendingIncoming && (

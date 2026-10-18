@@ -12,6 +12,7 @@ import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
 import { UserHoverCard } from './UserHoverCard';
+import { ActivityLine } from './ActivityLine';
 import { activityLineTr } from '../lib/presence';
 
 export interface MemberListAction {
@@ -237,9 +238,11 @@ export function MemberList({ groups, className }: MemberListProps) {
                             ))}
                         </span>
                         {activityLineTr(member.activity) ? (
-                          <span className="font-label-sm text-label-sm text-secondary truncate">
-                            {activityLineTr(member.activity)}
-                          </span>
+                          <ActivityLine
+                            activity={member.activity}
+                            className="font-label-sm text-label-sm text-secondary"
+                            textClassName="font-label-sm text-label-sm text-secondary"
+                          />
                         ) : member.subtitle ? (
                           <span className="font-label-sm text-label-sm text-outline truncate">
                             {member.subtitle}

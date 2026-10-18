@@ -62,6 +62,11 @@ export function ActivityRoom({
   /** Ayrıldıktan sonra enterRoom / voice auto-join etmesin */
   const leftRef = useRef(false);
   const voiceDeclinedRef = useRef(false);
+  /** Bu ekranın oturumu — browsingOther iken context sessionId'ye düşme (yanlış leave) */
+  const sessionIdRef = useRef<string | null>(null);
+  sessionIdRef.current = session?.id ?? null;
+  const channelIdRef = useRef(channel.id);
+  channelIdRef.current = channel.id;
 
   const browsingOther =
     Boolean(activityChannelId) && activityChannelId !== channel.id;
@@ -119,6 +124,28 @@ export function ActivityRoom({
     };
   }, [client, channel.id, browsingOther]);
 
+  // Ekrandan çıkınca "Oynuyor" presence kalsın diye leave (web/desktop parity)
+  const clearActiveRef = useRef(clearActiveActivity);
+  clearActiveRef.current = clearActiveActivity;
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+  useEffect(() => {
+    return () => {
+      if (leftRef.current) return;
+      const sid = sessionIdRef.current;
+      const chId = channelIdRef.current;
+      if (!sid) return;
+      sessionIdRef.current = null;
+      void leaveActivityFully({
+        client,
+        sessionId: sid,
+        channelId: chId,
+        clearActiveActivity: clearActiveRef.current,
+        voice: voiceRef.current,
+      });
+    };
+  }, [client, channel.id]);
+
   const refresh = useCallback(async () => {
     const s = await client.getChannelActivity(guildId, channel.id);
     setSession(s);
@@ -150,6 +177,7 @@ export function ActivityRoom({
     voiceDeclinedRef.current = true;
     const sid = session?.id ?? activitySessionId;
     const chId = session?.channelId ?? activityChannelId ?? channel.id;
+    sessionIdRef.current = null;
     setSession(null);
     // Watch party sesi: önce native leave (join yarışını connectGen ile öldürür)
     if (voice) {

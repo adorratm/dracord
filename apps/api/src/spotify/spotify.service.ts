@@ -57,7 +57,19 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
       redirect_uri: this.getRedirectUri(),
     });
     await this.upsertConnection(userId, token);
+    // Bağlantı sonrası hemen Currently Playing çek
+    void this.refreshListening(userId).catch(() => undefined);
     return { ok: true };
+  }
+
+  /** Oyundan çıkınca / bağlanınca dinleme durumunu yenile */
+  async refreshListening(userId: string): Promise<void> {
+    if (!this.isConfigured()) return;
+    const row = await this.em.findOne(OauthConnection, {
+      where: { userId, provider: 'spotify' },
+    });
+    if (!row) return;
+    await this.pollUser(row);
   }
 
   async disconnect(userId: string): Promise<{ ok: true }> {
@@ -145,7 +157,10 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
       item?: {
         name?: string;
         artists?: Array<{ name: string }>;
-        album?: { name?: string; images?: Array<{ url: string }> };
+        album?: {
+          name?: string;
+          images?: Array<{ url: string; width?: number; height?: number }>;
+        };
         external_urls?: { spotify?: string };
       };
     };
@@ -154,12 +169,19 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     const artists = (data.item.artists ?? []).map((a) => a.name).join(', ');
+    const albumImages = data.item.album?.images ?? [];
+    // ~300px tercih (liste + profil); yoksa en büyüğü
+    const art =
+      albumImages.find((i) => (i.width ?? 0) >= 200 && (i.width ?? 0) <= 400)?.url ??
+      albumImages[Math.min(1, Math.max(0, albumImages.length - 1))]?.url ??
+      albumImages[0]?.url ??
+      null;
     const activity: UserActivity = {
       type: 'listening',
       name: artists ? `${artists} — ${data.item.name}` : data.item.name,
       details: data.item.album?.name ?? 'Spotify',
       source: 'spotify',
-      imageUrl: data.item.album?.images?.[0]?.url ?? null,
+      imageUrl: art,
       url: data.item.external_urls?.spotify ?? null,
       startedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),

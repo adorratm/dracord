@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Patch, Put, UseGuards } from '@nestjs/common';
-import type { UserActivity } from '@dracord/types';
+import { desktopGameImageUrl, type UserActivity } from '@dracord/types';
 import {
   CurrentUser,
   type JwtPayloadUser,
@@ -47,14 +47,18 @@ export class PresenceController {
       return this.presenceService.putManualActivity(user.sub, null);
     }
     const expiresIn = Math.min(Math.max(body.expiresInSec ?? 90, 30), 600);
+    const desktopAppId = body.desktopAppId ?? null;
     const activity: UserActivity = {
       type: body.type ?? 'playing',
       name: String(body.name).slice(0, 128),
       details: body.details?.slice(0, 256) ?? null,
       source: body.source === 'desktop' ? 'desktop' : 'manual',
-      imageUrl: body.imageUrl ?? null,
+      imageUrl:
+        body.imageUrl?.trim() ||
+        (body.source === 'desktop' ? desktopGameImageUrl(desktopAppId) : null) ||
+        null,
       url: body.url ?? null,
-      desktopAppId: body.desktopAppId ?? null,
+      desktopAppId,
       startedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
     };

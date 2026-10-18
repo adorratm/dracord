@@ -12,7 +12,8 @@ import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { SocialLinksRow } from './SocialLinksRow';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
-import { activityLineTr, presenceLabelTr } from '../lib/presence';
+import { ActivityLine } from './ActivityLine';
+import { presenceLabelTr } from '../lib/presence';
 
 export interface UserHoverCardUser {
   id: string;
@@ -168,11 +169,14 @@ export function UserHoverCard({
                   {user.customStatus ? ` · ${user.customStatus}` : ''}
                 </p>
               )}
-              {activityLineTr(user.activity) && (
-                <p className="mt-0.5 font-label-sm text-secondary truncate">
-                  {activityLineTr(user.activity)}
-                </p>
-              )}
+              {user.activity ? (
+                <ActivityLine
+                  activity={user.activity}
+                  size="md"
+                  className="mt-0.5 font-label-sm text-secondary"
+                  textClassName="font-label-sm text-secondary"
+                />
+              ) : null}
               {user.bio && (
                 <p className="mt-2 font-body-sm text-on-surface-variant line-clamp-3 whitespace-pre-wrap">
                   {user.bio}

@@ -1,5 +1,7 @@
 /** Çok oyunculu trivia — ActivitySession.state */
 
+import { TRIVIA_BANK, triviaGenerateQuestion } from './trivia-content';
+
 export type TriviaQuestion = {
   id: string;
   q: string;
@@ -15,6 +17,9 @@ export type TriviaState = {
   kind: 'trivia';
   round: number;
   questionId: string | null;
+  /** Üretilmiş / seçilmiş soru (inline — bankaya bağımlı değil) */
+  question: TriviaQuestion | null;
+  usedQuestionIds: string[];
   /** userId → seçilen şık index */
   answers: Record<string, number>;
   scores: TriviaPlayerScore[];
@@ -22,68 +27,7 @@ export type TriviaState = {
   revealAt?: string | null;
 };
 
-export const TRIVIA_BANK: TriviaQuestion[] = [
-  {
-    id: 't1',
-    q: 'Türkiye’nin başkenti neresidir?',
-    options: ['İstanbul', 'Ankara', 'İzmir', 'Bursa'],
-    correct: 1,
-  },
-  {
-    id: 't2',
-    q: 'HTML’de sayfa başlığı hangi etiketle yazılır?',
-    options: ['<head>', '<title>', '<header>', '<h1>'],
-    correct: 1,
-  },
-  {
-    id: 't3',
-    q: 'Bir yılda kaç ay vardır?',
-    options: ['10', '11', '12', '13'],
-    correct: 2,
-  },
-  {
-    id: 't4',
-    q: '“NaCl” hangi bileşiğin formülüdür?',
-    options: ['Şeker', 'Sofra tuzu', 'Karbonat', 'Sirke'],
-    correct: 1,
-  },
-  {
-    id: 't5',
-    q: 'Futbolda bir takım kaç oyuncuyla sahada başlar?',
-    options: ['9', '10', '11', '12'],
-    correct: 2,
-  },
-  {
-    id: 't6',
-    q: 'JavaScript’te dizi uzunluğu hangi özelliktedir?',
-    options: ['size', 'count', 'length', 'len'],
-    correct: 2,
-  },
-  {
-    id: 't7',
-    q: 'Ay’ın Dünya etrafındaki turuna ne denir?',
-    options: ['Rotasyon', 'Revölüsyon', 'Translasyon', 'Orbitasyon'],
-    correct: 1,
-  },
-  {
-    id: 't8',
-    q: '“Mona Lisa” hangi sanatçıya aittir?',
-    options: ['Van Gogh', 'Picasso', 'Da Vinci', 'Rembrandt'],
-    correct: 2,
-  },
-  {
-    id: 't9',
-    q: 'HTTP’de başarılı yanıt kodu hangisidir?',
-    options: ['301', '404', '500', '200'],
-    correct: 3,
-  },
-  {
-    id: 't10',
-    q: 'En büyük okyanus hangisidir?',
-    options: ['Atlas', 'Hint', 'Pasifik', 'Arktik'],
-    correct: 2,
-  },
-];
+export { TRIVIA_BANK, triviaGenerateQuestion } from './trivia-content';
 
 export function triviaEmptyState(): TriviaState {
   return {
@@ -91,6 +35,8 @@ export function triviaEmptyState(): TriviaState {
     kind: 'trivia',
     round: 0,
     questionId: null,
+    question: null,
+    usedQuestionIds: [],
     answers: {},
     scores: [],
     phase: 'lobby',
@@ -103,11 +49,33 @@ export function triviaParseState(raw: unknown): TriviaState {
   const o = raw as Record<string, unknown>;
   if (o.kind !== 'trivia') return triviaEmptyState();
   const phase = o.phase;
+  let question: TriviaQuestion | null = null;
+  if (o.question && typeof o.question === 'object') {
+    const q = o.question as Record<string, unknown>;
+    if (
+      typeof q.id === 'string' &&
+      typeof q.q === 'string' &&
+      Array.isArray(q.options) &&
+      q.options.length === 4 &&
+      typeof q.correct === 'number'
+    ) {
+      question = {
+        id: q.id,
+        q: q.q,
+        options: q.options as [string, string, string, string],
+        correct: q.correct,
+      };
+    }
+  }
   return {
     v: 1,
     kind: 'trivia',
     round: typeof o.round === 'number' ? o.round : 0,
     questionId: typeof o.questionId === 'string' ? o.questionId : null,
+    question,
+    usedQuestionIds: Array.isArray(o.usedQuestionIds)
+      ? o.usedQuestionIds.filter((x): x is string => typeof x === 'string')
+      : [],
     answers:
       o.answers && typeof o.answers === 'object'
         ? (o.answers as Record<string, number>)
@@ -125,15 +93,18 @@ export function triviaParseState(raw: unknown): TriviaState {
   };
 }
 
-export function triviaQuestionById(id: string | null): TriviaQuestion | null {
+export function triviaQuestionById(
+  id: string | null,
+  inline?: TriviaQuestion | null,
+): TriviaQuestion | null {
   if (!id) return null;
+  if (inline && inline.id === id) return inline;
   return TRIVIA_BANK.find((q) => q.id === id) ?? null;
 }
 
+/** Banka + ücretsiz prosedürel üretici */
 export function triviaPickNext(usedIds: string[]): TriviaQuestion {
-  const pool = TRIVIA_BANK.filter((q) => !usedIds.includes(q.id));
-  const list = pool.length ? pool : TRIVIA_BANK;
-  return list[Math.floor(Math.random() * list.length)]!;
+  return triviaGenerateQuestion(usedIds);
 }
 
 export function triviaEnsureScore(
@@ -142,4 +113,8 @@ export function triviaEnsureScore(
 ): TriviaPlayerScore[] {
   if (scores.some((s) => s.userId === userId)) return scores;
   return [...scores, { userId, score: 0 }];
+}
+
+export function triviaCurrentQuestion(state: TriviaState): TriviaQuestion | null {
+  return triviaQuestionById(state.questionId, state.question);
 }

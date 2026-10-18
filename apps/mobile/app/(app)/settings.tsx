@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
+  AppState,
   Image,
   Linking,
   Modal,
@@ -2007,6 +2008,7 @@ function SpotifyConnectBlock({
     connected: boolean;
     authorizeUrl: string | null;
   } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     void client
@@ -2021,11 +2023,38 @@ function SpotifyConnectBlock({
     refresh();
   }, [refresh]);
 
+  // Tarayıcıdan dönünce bağlantı durumunu yenile
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => sub.remove();
+  }, [refresh]);
+
+  // spotify-done deep link (web oauth sayfası → dracord://spotify-done)
+  useEffect(() => {
+    const onUrl = (url: string) => {
+      if (!url.includes('spotify-done')) return;
+      refresh();
+      setMsg(
+        /[?&]status=error\b/.test(url)
+          ? 'Spotify bağlantısı başarısız'
+          : 'Spotify bağlandı',
+      );
+    };
+    const sub = Linking.addEventListener('url', ({ url }) => onUrl(url));
+    void Linking.getInitialURL().then((url) => {
+      if (url) onUrl(url);
+    });
+    return () => sub.remove();
+  }, [refresh]);
+
   if (!spotify) return null;
 
   return (
     <View style={{ marginTop: 16, gap: 8 }}>
       <H1>Spotify</H1>
+      {msg ? <Text style={{ color: colors.success, fontSize: 13 }}>{msg}</Text> : null}
       {!spotify.configured ? (
         <Text style={{ color: colors.textMuted, fontSize: 13 }}>
           Spotify API anahtarları sunucuda yapılandırılmamış.
@@ -2034,11 +2063,15 @@ function SpotifyConnectBlock({
         <>
           <Text style={{ color: colors.text }}>Spotify bağlı</Text>
           <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-            Çalan parçan profilinde “Dinliyor” olarak görünür.
+            Çalan parçan profilinde “Dinliyor” olarak görünür. Spotify’da bir şey
+            çalıyor olmalı.
           </Text>
           <Pressable
             onPress={() => {
-              void client.disconnectSpotify().then(refresh);
+              void client.disconnectSpotify().then(() => {
+                refresh();
+                setMsg('Spotify bağlantısı kesildi');
+              });
             }}
             style={{ paddingVertical: 10 }}
           >
@@ -2048,7 +2081,8 @@ function SpotifyConnectBlock({
       ) : (
         <>
           <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-            Hesabını bağla; dinlediğin şarkı profilde görünür.
+            Hesabını bağla; dinlediğin şarkı profilde görünür. Girişten sonra bu
+            uygulamaya dön.
           </Text>
           <Pressable
             disabled={!spotify.authorizeUrl}

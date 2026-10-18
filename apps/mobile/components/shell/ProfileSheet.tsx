@@ -107,17 +107,29 @@ export function ProfileSheet({
                   padding: 8,
                 }}
               >
-                <Icon
-                  name={
-                    user.activity.type === 'listening'
-                      ? 'headphones'
-                      : user.activity.type === 'watching'
-                        ? 'live_tv'
-                        : 'sports_esports'
-                  }
-                  size={20}
-                  color={colors.success}
-                />
+                {user.activity.imageUrl ? (
+                  <Image
+                    source={{ uri: user.activity.imageUrl }}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 6,
+                      backgroundColor: colors.surface,
+                    }}
+                  />
+                ) : (
+                  <Icon
+                    name={
+                      user.activity.type === 'listening'
+                        ? 'headphones'
+                        : user.activity.type === 'watching'
+                          ? 'live_tv'
+                          : 'sports_esports'
+                    }
+                    size={20}
+                    color={colors.success}
+                  />
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>
                     {activityLabel(user.activity)}

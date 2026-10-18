@@ -2569,6 +2569,7 @@ export function GuildChannelView({
         avatarUrl: user?.avatarUrl,
         status: liveMemberStatus(user?.id ?? '', user?.status) || user?.status || 'ONLINE',
         customStatus: user?.customStatus ?? null,
+        activity: user?.activity ?? null,
         muted: inVoice ? voice.muted : undefined,
         deafened: inVoice ? voice.deafened : undefined,
         noiseCancellation: voice.noiseCancellation,

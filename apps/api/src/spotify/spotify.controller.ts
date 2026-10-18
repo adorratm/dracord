@@ -52,15 +52,18 @@ export class SpotifyController {
     const web =
       this.config.get<string>('WEB_PUBLIC_URL')?.replace(/\/$/, '') ||
       'http://localhost:3000';
+    // Popup / Electron OAuth penceresi bu sayfada kapanır
+    const done = (status: 'ok' | 'error') =>
+      res.redirect(`${web}/oauth/spotify-done?status=${status}`);
     if (error || !code || !state?.startsWith('u:')) {
-      return res.redirect(`${web}/settings/connections?spotify=error`);
+      return done('error');
     }
     const userId = state.slice(2);
     try {
       await this.spotify.exchangeCode(code, userId);
-      return res.redirect(`${web}/settings/connections?spotify=ok`);
+      return done('ok');
     } catch {
-      return res.redirect(`${web}/settings/connections?spotify=error`);
+      return done('error');
     }
   }
 }

@@ -177,6 +177,15 @@ export function ActivityPanel({
     };
   }, [client, channelId]);
 
+  // Kanaldan / ekrandan çıkınca "Oynuyor" presence kalsın diye leave (web parity)
+  useEffect(() => {
+    return () => {
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      void client.leaveActivity(sid).catch(() => undefined);
+    };
+  }, [client, channelId]);
+
   const kind: ActivityKind =
     session?.kind ??
     (channel.type === 'WATCH_PARTY' ? 'watch_party' : channel.gameKind) ??
@@ -231,6 +240,7 @@ export function ActivityPanel({
     setBusy(true);
     try {
       const chId = channelId;
+      sessionIdRef.current = null;
       await client.leaveActivity(session.id);
       await leaveVoiceAndNavigate(chId);
     } catch (e) {
@@ -245,6 +255,7 @@ export function ActivityPanel({
     setBusy(true);
     try {
       const chId = channelId;
+      sessionIdRef.current = null;
       await client.endActivity(session.id);
       setSession(null);
       await leaveVoiceAndNavigate(chId);

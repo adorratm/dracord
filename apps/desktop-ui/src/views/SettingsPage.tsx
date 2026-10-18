@@ -2153,6 +2153,36 @@ function SpotifyConnectionsSection({
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const unsub = window.dracordDesktop?.onSpotifyOAuthDone?.((payload) => {
+      refresh();
+      setMsg(
+        payload?.status === 'error'
+          ? 'Spotify bağlantısı başarısız'
+          : 'Spotify bağlandı',
+      );
+    });
+    return () => {
+      unsub?.();
+    };
+  }, [refresh]);
+
+  // Tarayıcı popup yolu (Electron dışı / window.open) — oauth sayfası ayrı origin olabilir
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const data = e.data as { type?: string; status?: string } | null;
+      if (data?.type !== 'dracord-spotify-oauth') return;
+      refresh();
+      setMsg(
+        data.status === 'error'
+          ? 'Spotify bağlantısı başarısız'
+          : 'Spotify bağlandı',
+      );
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [refresh]);
+
   return (
     <SettingsSection title="Spotify">
       <div className="px-space-md py-space-md space-y-2">
@@ -2195,7 +2225,14 @@ function SpotifyConnectionsSection({
                 if (!spotify.authorizeUrl) return;
                 const desktop = window.dracordDesktop;
                 if (desktop?.openOAuth) void desktop.openOAuth(spotify.authorizeUrl);
-                else window.open(spotify.authorizeUrl, '_blank');
+                else {
+                  const w = window.open(
+                    spotify.authorizeUrl,
+                    'dracord-spotify',
+                    'width=560,height=740',
+                  );
+                  if (!w) window.location.href = spotify.authorizeUrl;
+                }
               }}
             >
               Spotify bağla

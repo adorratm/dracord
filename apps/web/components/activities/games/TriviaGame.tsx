@@ -2,18 +2,19 @@
 
 import { useMemo, useState } from 'react';
 import {
+  triviaCurrentQuestion,
   triviaEnsureScore,
   triviaParseState,
   triviaPickNext,
-  triviaQuestionById,
   type TriviaState,
 } from '@dracord/game-core';
 import type { GameProps } from '../three/sceneUtils';
+import { ActivityScoreboard } from './ActivityScoreboard';
 
 export function TriviaGame({ session, userId, canPlay, onPatch, nameByUserId }: GameProps) {
   const state = useMemo(() => triviaParseState(session.state), [session.state]);
   const [busy, setBusy] = useState(false);
-  const q = triviaQuestionById(state.questionId);
+  const q = triviaCurrentQuestion(state);
   const myAnswer = userId ? state.answers[userId] : undefined;
   const isHost = Boolean(userId && session.hostUserId === userId);
 
@@ -28,7 +29,11 @@ export function TriviaGame({ session, userId, canPlay, onPatch, nameByUserId }: 
 
   const startRound = async () => {
     if (!canPlay || !isHost) return;
-    const used = state.questionId ? [state.questionId] : [];
+    const used = state.usedQuestionIds.length
+      ? state.usedQuestionIds
+      : state.questionId
+        ? [state.questionId]
+        : [];
     const nextQ = triviaPickNext(used);
     let scores = state.scores;
     for (const id of session.playerIds) scores = triviaEnsureScore(scores, id);
@@ -36,6 +41,8 @@ export function TriviaGame({ session, userId, canPlay, onPatch, nameByUserId }: 
       ...state,
       round: state.round + 1,
       questionId: nextQ.id,
+      question: nextQ,
+      usedQuestionIds: [...used, nextQ.id].slice(-120),
       answers: {},
       scores,
       phase: 'question',
@@ -78,7 +85,8 @@ export function TriviaGame({ session, userId, canPlay, onPatch, nameByUserId }: 
         {state.phase === 'lobby' && (
           <div className="space-y-3">
             <p className="font-body-sm text-on-surface-variant">
-              Bilgi yarışması — host soruyu açar, herkes şık seçer, doğru cevap +1 puan.
+              Bilgi yarışması — sorular yerel banka + ücretsiz üreticiden gelir (API anahtarı
+              yok). Host soruyu açar, doğru cevap +1 puan.
             </p>
             {isHost ? (
               <button
@@ -106,7 +114,7 @@ export function TriviaGame({ session, userId, canPlay, onPatch, nameByUserId }: 
                   state.phase === 'reveal' && selected && i !== q.correct;
                 return (
                   <button
-                    key={opt}
+                    key={`${q.id}-${i}`}
                     type="button"
                     disabled={busy || !canPlay || state.phase !== 'question' || myAnswer != null}
                     onClick={() => void answer(i)}
@@ -148,21 +156,11 @@ export function TriviaGame({ session, userId, canPlay, onPatch, nameByUserId }: 
           </div>
         )}
 
-        {state.scores.length > 0 && (
-          <ul className="mt-4 space-y-1 border-t border-surface-container-highest pt-3">
-            {[...state.scores]
-              .sort((a, b) => b.score - a.score)
-              .map((s) => (
-                <li
-                  key={s.userId}
-                  className="flex justify-between font-label-sm text-on-surface-variant"
-                >
-                  <span>{nameByUserId?.[s.userId] ?? s.userId.slice(0, 6)}</span>
-                  <span className="tabular-nums text-secondary">{s.score} puan</span>
-                </li>
-              ))}
-          </ul>
-        )}
+        <ActivityScoreboard
+          scores={state.scores}
+          nameByUserId={nameByUserId}
+          highlightUserId={userId}
+        />
       </div>
     </div>
   );

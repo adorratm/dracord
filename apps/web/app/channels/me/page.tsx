@@ -59,6 +59,7 @@ export default function FriendsHubPage() {
           displayName: f.displayName,
           avatarUrl: f.avatarUrl,
           status: f.status,
+          activity: f.activity,
           onMessage: () => {
             void openDm(f.id);
           },

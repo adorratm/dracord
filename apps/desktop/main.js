@@ -606,6 +606,23 @@ function finishOAuthFromUrl(urlString) {
       return true;
     }
     const u = new URL(urlString);
+    // Spotify OAuth tamamlandı — pencereyi kapat, ayarlar yenilesin
+    if (
+      u.pathname.includes('/oauth/spotify-done') ||
+      (u.pathname.includes('/settings/connections') &&
+        (u.searchParams.get('spotify') === 'ok' ||
+          u.searchParams.get('spotify') === 'error'))
+    ) {
+      closeOAuthWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('oauth:spotify-done', {
+          status: u.searchParams.get('status') || u.searchParams.get('spotify') || 'ok',
+        });
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+      return true;
+    }
     if (!u.pathname.includes('/auth/desktop-done')) return false;
     const q = new URLSearchParams();
     for (const key of [
@@ -666,13 +683,22 @@ function openOAuthWindow(rawUrl) {
     if (finishOAuthFromUrl(url)) return;
   };
   wc.on('will-redirect', (event, url) => {
-    if (url.startsWith('dracord://') || url.includes('/auth/desktop-done')) {
+    if (
+      url.startsWith('dracord://') ||
+      url.includes('/auth/desktop-done') ||
+      url.includes('/oauth/spotify-done')
+    ) {
       event.preventDefault();
       finishOAuthFromUrl(url);
     }
   });
   wc.on('will-navigate', (event, url) => {
     if (url.startsWith('dracord://')) {
+      event.preventDefault();
+      finishOAuthFromUrl(url);
+      return;
+    }
+    if (url.includes('/oauth/spotify-done')) {
       event.preventDefault();
       finishOAuthFromUrl(url);
       return;

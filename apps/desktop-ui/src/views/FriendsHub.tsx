@@ -116,6 +116,7 @@ export function FriendsHubView({
         displayName: u.displayName,
         avatarUrl: u.avatarUrl,
         status: u.status,
+        activity: u.activity,
         subtitle: `@${u.username}`,
         onMessage: () => void openDm(u.id),
         onClick: () => void openDm(u.id),

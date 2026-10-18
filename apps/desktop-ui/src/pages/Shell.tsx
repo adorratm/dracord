@@ -1266,6 +1266,7 @@ export function Shell() {
                 avatarUrl: user?.avatarUrl,
                 status: selfStatus,
                 customStatus: user?.customStatus,
+                activity: user?.activity ?? null,
                 muted: inVoiceInThisGuild ? voice.muted : undefined,
                 deafened: inVoiceInThisGuild ? voice.deafened : undefined,
                 voiceConnected: inVoiceInThisGuild,

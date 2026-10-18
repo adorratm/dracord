@@ -12,6 +12,7 @@ import { Channel } from '@/database/entities/channel.entity';
 import { ChannelsService } from '@/channels/channels.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { UserActivityService } from '@/presence/user-activity.service';
+import { SpotifyService } from '@/spotify/spotify.service';
 import { SocketEvents } from '@dracord/types';
 
 const KIND_LABELS: Record<ActivityKind, string> = {
@@ -56,7 +57,18 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
     'pendingBets',
     'resultUntil',
   ],
-  trivia: ['v', 'kind', 'round', 'questionId', 'answers', 'scores', 'phase', 'revealAt'],
+  trivia: [
+    'v',
+    'kind',
+    'round',
+    'questionId',
+    'question',
+    'usedQuestionIds',
+    'answers',
+    'scores',
+    'phase',
+    'revealAt',
+  ],
   words: [
     'v',
     'kind',
@@ -67,6 +79,9 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
     'maxWrong',
     'hostUserId',
     'winnerId',
+    'lastGuesserId',
+    'scores',
+    'usedWords',
     'phase',
   ],
   watch_party: ['mediaUrl', 'playing', 'at'],
@@ -90,6 +105,7 @@ export class ActivitiesService {
     private readonly broadcast: SocketBroadcastService,
     private readonly channels: ChannelsService,
     private readonly userActivity: UserActivityService,
+    private readonly spotify: SpotifyService,
   ) {}
 
   private async publishDracordActivity(
@@ -110,6 +126,21 @@ export class ActivitiesService {
         sessionId: s.id,
       },
     });
+  }
+
+  /** Oyun presence temizle; Spotify dinleme varsa hemen geri yükle */
+  private async clearDracordActivity(userId: string) {
+    await this.userActivity.clearActivity(userId, 'dracord');
+    void this.spotify.refreshListening(userId).catch(() => undefined);
+  }
+
+  private async clearAllSessionActivities(s: ActivitySession) {
+    const ids = [
+      ...new Set([...(s.playerIds ?? []), ...(s.spectatorIds ?? [])]),
+    ];
+    for (const id of ids) {
+      await this.clearDracordActivity(id);
+    }
   }
 
   private toDto(s: ActivitySession): ActivitySessionDto {
@@ -258,8 +289,8 @@ export class ActivitiesService {
     return s ? this.toDto(s) : null;
   }
 
-  /** Oyuncu listesinden çıkar; yetersiz oyuncu / boş oda → oturumu bitir */
-  private finalizeAfterLeave(s: ActivitySession, userId: string) {
+  /** Oyuncu listesinden çıkar; yetersiz oyuncu / boş oda → oturumu bitir. true = ended */
+  private finalizeAfterLeave(s: ActivitySession, userId: string): boolean {
     s.playerIds = (s.playerIds ?? []).filter((id) => id !== userId);
     s.spectatorIds = (s.spectatorIds ?? []).filter((id) => id !== userId);
     if (s.hostUserId === userId) {
@@ -300,7 +331,9 @@ export class ActivitiesService {
       s.kind !== 'watch_party' && s.playerIds.length < s.minPlayers;
     if (empty || underMin) {
       s.status = 'ended';
+      return true;
     }
+    return s.status === 'ended';
   }
 
   private async persistAndBroadcast(s: ActivitySession): Promise<ActivitySessionDto> {
@@ -320,20 +353,29 @@ export class ActivitiesService {
       .createQueryBuilder(ActivitySession, 'a')
       .where('a.status IN (:...st)', { st: ['lobby', 'playing'] })
       .getMany();
+    let removed = false;
     for (const s of sessions) {
       if (exceptSessionId && s.id === exceptSessionId) continue;
       const inSession =
         (s.playerIds ?? []).includes(userId) ||
         (s.spectatorIds ?? []).includes(userId);
       if (!inSession) continue;
+      removed = true;
       const prevState = (s.state ?? {}) as Record<string, unknown>;
       const joinedMap = {
         ...((prevState.memberJoinedAt as Record<string, string> | undefined) ?? {}),
       };
       delete joinedMap[userId];
       s.state = { ...prevState, memberJoinedAt: joinedMap };
-      this.finalizeAfterLeave(s, userId);
+      const ended = this.finalizeAfterLeave(s, userId);
       await this.persistAndBroadcast(s);
+      // Oturum min altına düşüp bittiyse kalanların "Oynuyor" kalmasın
+      if (ended) {
+        await this.clearAllSessionActivities(s);
+      }
+    }
+    if (removed) {
+      await this.clearDracordActivity(userId);
     }
   }
 
@@ -441,9 +483,14 @@ export class ActivitiesService {
     };
     delete joinedMap[userId];
     s.state = { ...prevState, memberJoinedAt: joinedMap };
-    this.finalizeAfterLeave(s, userId);
-    await this.userActivity.clearActivity(userId, 'dracord');
-    return this.persistAndBroadcast(s);
+    const ended = this.finalizeAfterLeave(s, userId);
+    const dto = await this.persistAndBroadcast(s);
+    // Ayrılan her zaman temizlenir; oturum bittiyse kalanlar da
+    await this.clearDracordActivity(userId);
+    if (ended) {
+      await this.clearAllSessionActivities(s);
+    }
+    return dto;
   }
 
   async patchState(
@@ -499,6 +546,7 @@ export class ActivitiesService {
     }
     s.status = 'ended';
     await this.em.save(s);
+    await this.clearAllSessionActivities(s);
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_LEAVE, dto);
     return dto;

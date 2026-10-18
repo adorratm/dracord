@@ -34,4 +34,10 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   },
   /** Bilinen oyun süreçlerini tara (opt-in rich presence) */
   detectGames: () => ipcRenderer.invoke('presence:detect-games'),
+  /** Spotify OAuth penceresi kapandı */
+  onSpotifyOAuthDone: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('oauth:spotify-done', handler);
+    return () => ipcRenderer.removeListener('oauth:spotify-done', handler);
+  },
 });

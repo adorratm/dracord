@@ -248,6 +248,15 @@ export function ActivityChannelView({
     };
   }, [client, channelId]);
 
+  // Kanaldan / ekrandan çıkınca "Oynuyor" presence kalsın diye leave
+  useEffect(() => {
+    return () => {
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      void client.leaveActivity(sid).catch(() => undefined);
+    };
+  }, [client, channelId]);
+
   const join = async (spectator: boolean) => {
     if (!session) return;
     setBusy(true);

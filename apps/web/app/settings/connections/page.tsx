@@ -43,6 +43,22 @@ export default function ConnectionsPage() {
     if (q.get('spotify') === 'error') setMsg('Spotify bağlantısı başarısız');
   }, [refreshSpotify]);
 
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const data = e.data as { type?: string; status?: string } | null;
+      if (data?.type !== 'dracord-spotify-oauth') return;
+      refreshSpotify();
+      setMsg(
+        data.status === 'error'
+          ? 'Spotify bağlantısı başarısız'
+          : 'Spotify bağlandı',
+      );
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [refreshSpotify]);
+
   const connect = (name: string) => {
     if (prefs.connections.apps.some((a) => a.name === name)) return;
     setSection('connections', {
@@ -104,7 +120,22 @@ export default function ConnectionsPage() {
                 type="button"
                 disabled={!spotify.authorizeUrl}
                 onClick={() => {
-                  if (spotify.authorizeUrl) window.location.href = spotify.authorizeUrl;
+                  if (!spotify.authorizeUrl) return;
+                  const w = window.open(
+                    spotify.authorizeUrl,
+                    'dracord-spotify',
+                    'width=560,height=740,menubar=no,toolbar=no',
+                  );
+                  if (!w) {
+                    window.location.href = spotify.authorizeUrl;
+                    return;
+                  }
+                  const timer = window.setInterval(() => {
+                    if (w.closed) {
+                      window.clearInterval(timer);
+                      refreshSpotify();
+                    }
+                  }, 800);
                 }}
                 className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-40"
               >
