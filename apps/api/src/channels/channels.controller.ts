@@ -14,6 +14,7 @@ import {
 } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { ChannelsService } from './channels.service';
+import { CreateChannelDto } from './dto/create-channel.dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -32,14 +33,7 @@ export class ChannelsController {
   create(
     @Param('guildId') guildId: string,
     @CurrentUser() user: JwtPayloadUser,
-    @Body()
-    body: {
-      name: string;
-      type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
-      categoryId?: string | null;
-      topic?: string | null;
-      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | null;
-    },
+    @Body() body: CreateChannelDto,
   ) {
     return this.channelsService.createChannel(guildId, user.sub, body);
   }

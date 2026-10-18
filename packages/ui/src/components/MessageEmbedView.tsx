@@ -11,6 +11,17 @@ export interface MessageEmbedViewProps {
   onAction?: (action: MessageEmbedAction, embed: MessageEmbed) => void;
 }
 
+function isHttpUrl(s: string | null | undefined): boolean {
+  return Boolean(s && /^https?:\/\//i.test(s.trim()));
+}
+
+function safeOpenUrl(raw: string | null | undefined, title?: string | null): string | null {
+  if (isHttpUrl(raw)) return raw!.trim();
+  const q = (raw || title || '').replace(/^ytsearch\d*:/i, '').trim();
+  if (!q) return null;
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+}
+
 export function MessageEmbedView({
   embed,
   censored = false,
@@ -20,6 +31,7 @@ export function MessageEmbedView({
   const [revealed, setRevealed] = useState(false);
   const showContent = !censored || revealed;
   const actions = embed.actions ?? [];
+  const embedHref = safeOpenUrl(embed.url, embed.title);
 
   return (
     <div
@@ -29,7 +41,7 @@ export function MessageEmbedView({
       )}
     >
       <a
-        href={embed.url}
+        href={embedHref ?? undefined}
         target="_blank"
         rel="noopener noreferrer"
         className="block hover:bg-surface-container transition-colors"
@@ -37,7 +49,9 @@ export function MessageEmbedView({
           if (censored && !revealed) {
             e.preventDefault();
             setRevealed(true);
+            return;
           }
+          if (!embedHref) e.preventDefault();
         }}
       >
         <div className="p-space-sm flex gap-3 min-w-0">
@@ -84,8 +98,16 @@ export function MessageEmbedView({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (a.url && (a.action === 'open' || !a.action)) {
-                  window.open(a.url, '_blank', 'noopener,noreferrer');
+                // replay / lyrics her zaman parent’a; open yalnızca http(s)
+                if (a.action === 'replay' || a.action === 'lyrics') {
+                  onAction?.(a, embed);
+                  return;
+                }
+                if (a.action === 'open' || !a.action) {
+                  const href = safeOpenUrl(a.url || embed.url, embed.title);
+                  if (href) window.open(href, '_blank', 'noopener,noreferrer');
+                  onAction?.(a, embed);
+                  return;
                 }
                 onAction?.(a, embed);
               }}

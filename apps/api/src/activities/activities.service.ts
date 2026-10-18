@@ -11,7 +11,19 @@ import { ActivitySession } from '@/database/entities/activity-session.entity';
 import { Channel } from '@/database/entities/channel.entity';
 import { ChannelsService } from '@/channels/channels.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
+import { UserActivityService } from '@/presence/user-activity.service';
 import { SocketEvents } from '@dracord/types';
+
+const KIND_LABELS: Record<ActivityKind, string> = {
+  billiards: 'Bilardo',
+  okey: 'Okey',
+  bowling: 'Bowling',
+  tavla: 'Tavla',
+  blackjack: 'Blackjack',
+  trivia: 'Trivia',
+  words: 'Kelime',
+  watch_party: 'Watch Party',
+};
 
 const CAPACITY: Record<
   ActivityKind,
@@ -22,6 +34,8 @@ const CAPACITY: Record<
   bowling: { min: 2, max: 8, spectatorCap: 32 },
   tavla: { min: 2, max: 2, spectatorCap: 32 },
   blackjack: { min: 1, max: 4, spectatorCap: 32 },
+  trivia: { min: 1, max: 16, spectatorCap: 32 },
+  words: { min: 1, max: 12, spectatorCap: 32 },
   watch_party: { min: 1, max: 50, spectatorCap: 200 },
 };
 
@@ -42,11 +56,32 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
     'pendingBets',
     'resultUntil',
   ],
+  trivia: ['v', 'kind', 'round', 'questionId', 'answers', 'scores', 'phase', 'revealAt'],
+  words: [
+    'v',
+    'kind',
+    'word',
+    'masked',
+    'guessed',
+    'wrong',
+    'maxWrong',
+    'hostUserId',
+    'winnerId',
+    'phase',
+  ],
   watch_party: ['mediaUrl', 'playing', 'at'],
 };
 
 const MAX_STATE_JSON_BYTES = 48_000;
-const GAME_KINDS = new Set(['billiards', 'okey', 'bowling', 'tavla', 'blackjack']);
+const GAME_KINDS = new Set([
+  'billiards',
+  'okey',
+  'bowling',
+  'tavla',
+  'blackjack',
+  'trivia',
+  'words',
+]);
 
 @Injectable()
 export class ActivitiesService {
@@ -54,7 +89,28 @@ export class ActivitiesService {
     private readonly em: EntityManager,
     private readonly broadcast: SocketBroadcastService,
     private readonly channels: ChannelsService,
+    private readonly userActivity: UserActivityService,
   ) {}
+
+  private async publishDracordActivity(
+    userId: string,
+    s: ActivitySession,
+    channelName?: string | null,
+  ) {
+    const name = KIND_LABELS[s.kind] ?? s.kind;
+    await this.userActivity.setActivity(userId, {
+      type: s.kind === 'watch_party' ? 'watching' : 'playing',
+      name,
+      details: channelName ? `#${channelName}` : null,
+      source: 'dracord',
+      startedAt: new Date().toISOString(),
+      join: {
+        guildId: s.guildId,
+        channelId: s.channelId,
+        sessionId: s.id,
+      },
+    });
+  }
 
   private toDto(s: ActivitySession): ActivitySessionDto {
     return {
@@ -321,6 +377,8 @@ export class ActivitiesService {
       state: { ...baseState, memberJoinedAt: { [userId]: joinedAt } },
     });
     await this.em.save(s);
+    const ch = await this.em.findOne(Channel, { where: { id: channelId } });
+    await this.publishDracordActivity(userId, s, ch?.name);
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(channelId, SocketEvents.ACTIVITY_UPSERT, dto);
     return dto;
@@ -367,6 +425,8 @@ export class ActivitiesService {
       s.status = 'playing';
     }
     await this.em.save(s);
+    const ch = await this.em.findOne(Channel, { where: { id: s.channelId } });
+    await this.publishDracordActivity(userId, s, ch?.name);
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_UPSERT, dto);
     return dto;
@@ -382,6 +442,7 @@ export class ActivitiesService {
     delete joinedMap[userId];
     s.state = { ...prevState, memberJoinedAt: joinedMap };
     this.finalizeAfterLeave(s, userId);
+    await this.userActivity.clearActivity(userId, 'dracord');
     return this.persistAndBroadcast(s);
   }
 

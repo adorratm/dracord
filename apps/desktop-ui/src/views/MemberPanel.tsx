@@ -96,6 +96,7 @@ export function MemberPanel({
         bio: m.bio,
         status,
         customStatus: m.customStatus,
+        activity: m.activity,
         socialLinks: m.socialLinks,
         isBot,
         roles: m.roles,

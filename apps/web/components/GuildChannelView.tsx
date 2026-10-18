@@ -32,6 +32,7 @@ import {
 import type { RoleDto } from '@dracord/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ActivitiesPicker } from '@/components/ActivitiesPicker';
 import { AppShell, rememberChannel } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
 import { DracoEmpty } from '@/components/Draco';
@@ -190,9 +191,10 @@ export function GuildChannelView({
     'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY'
   >('TEXT');
   const [gameKind, setGameKind] = useState<
-    'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack'
+    'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | 'trivia' | 'words'
   >('billiards');
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
+  const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [serverNameDraft, setServerNameDraft] = useState('');
   const [serverError, setServerError] = useState<string | null>(null);
@@ -365,6 +367,7 @@ export function GuildChannelView({
       userId: string;
       status: PublicUser['status'];
       customStatus?: string | null;
+      activity?: PublicUser['activity'];
     }) => {
       // Kendi oturumun bağlıyken gelen OFFLINE (reconnect grace) yok say
       if (
@@ -387,9 +390,22 @@ export function GuildChannelView({
                 status: nextStatus,
                 customStatus:
                   payload.customStatus !== undefined ? payload.customStatus : m.customStatus,
+                activity:
+                  payload.activity !== undefined ? payload.activity : m.activity,
               }
             : m,
         ),
+      );
+      setProfileUser((cur) =>
+        cur && cur.id === payload.userId
+          ? {
+              ...cur,
+              status: nextStatus,
+              customStatus:
+                payload.customStatus !== undefined ? payload.customStatus : cur.customStatus,
+              activity: payload.activity !== undefined ? payload.activity : cur.activity,
+            }
+          : cur,
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
@@ -1963,6 +1979,7 @@ export function GuildChannelView({
               guildMembers.find((g) => g.id === p.id)?.status,
             ),
             customStatus: guildMembers.find((g) => g.id === p.id)?.customStatus,
+            activity: guildMembers.find((g) => g.id === p.id)?.activity,
             isBot,
             subtitle: presenceLabelTr(
               liveMemberStatus(p.id, guildMembers.find((g) => g.id === p.id)?.status),
@@ -2158,6 +2175,7 @@ export function GuildChannelView({
             roles: m.roles,
             status: liveMemberStatus(m.id, m.status),
             customStatus: m.customStatus,
+            activity: m.activity,
             isBot,
             roleColor: prefs.accessibility.roleColors ? topRole?.color : undefined,
             badges: (m.roles ?? [])
@@ -2264,14 +2282,20 @@ export function GuildChannelView({
 
   const saveChannel = useCallback(async () => {
     if (!channelModal) return;
+    const trimmed = channelName.trim();
+    if (!trimmed) {
+      setDmError('Kanal adı gerekli');
+      return;
+    }
     setBusy(true);
+    setDmError(null);
     try {
       if (channelModal.mode === 'create') {
         const created = await client.createChannel(guildId, {
-          name: channelName,
+          name: trimmed,
           type: channelType,
           categoryId: channelModal.categoryId,
-          gameKind: channelType === 'GAME' ? gameKind : null,
+          gameKind: channelType === 'GAME' ? gameKind || 'billiards' : null,
         });
         if (channelType === 'VOICE' && (channelLocked || channelPasswordDraft.trim())) {
           await client.updateChannel(created.id, {
@@ -2294,7 +2318,7 @@ export function GuildChannelView({
             allow: string[];
             deny: string[];
           }> | null;
-        } = { name: channelName };
+        } = { name: trimmed };
         if (channelModal.channel.type === 'VOICE') {
           patch.locked = channelLocked;
           if (channelPasswordDraft.trim()) {
@@ -2310,6 +2334,8 @@ export function GuildChannelView({
         await reload();
         setChannelModal(null);
       }
+    } catch (err) {
+      setDmError(err instanceof Error ? err.message : 'Kanal kaydedilemedi');
     } finally {
       setBusy(false);
     }
@@ -2593,10 +2619,7 @@ export function GuildChannelView({
             ? () => void voice.toggleScreenShare()
             : undefined,
         onActivitiesClick: inVoice
-          ? () => {
-              const game = channels.find((c) => c.type === 'GAME');
-              if (game) router.push(`/channels/${guildId}/${game.id}`);
-            }
+          ? () => setActivitiesPickerOpen(true)
           : undefined,
         screenShareViewControl:
           inVoice &&
@@ -3414,6 +3437,9 @@ export function GuildChannelView({
                       void refreshPins();
                     });
                   },
+                  onRemind: (m, remindAt) => {
+                    void client.createReminder(m.id, remindAt).catch(() => undefined);
+                  },
                   onBookmark: (m, bookmark) => {
                     void bookmarkMessage(m.id, bookmark).then((msg) => {
                       if (!msg) return;
@@ -3528,16 +3554,51 @@ export function GuildChannelView({
                     },
                     onVotePoll: (m, optionId) => void votePoll(m.id, optionId),
                     onEmbedAction: (m, action, embed) => {
+                      const http = (u?: string | null) =>
+                        Boolean(u && /^https?:\/\//i.test(u.trim()));
+                      const qFrom = (u?: string | null) =>
+                        (u || '').replace(/^ytsearch\d*:/i, '').trim();
                       void import('@/lib/toast').then(({ toast }) => {
-                        if (action.action === 'replay' && embed.url) {
-                          void sendMessage(`/oynat ${embed.url}`);
+                        if (action.action === 'replay') {
+                          const play =
+                            (http(action.url) && action.url!.trim()) ||
+                            (http(embed.url) && embed.url!.trim()) ||
+                            qFrom(action.url) ||
+                            qFrom(embed.url) ||
+                            embed.title?.trim() ||
+                            '';
+                          if (!play) {
+                            toast.error('Tekrar oynatılacak kaynak yok');
+                            return;
+                          }
+                          void sendMessage(`/oynat ${play}`);
                           toast.success('Tekrar kuyruğa eklendi');
                           return;
                         }
                         if (action.action === 'lyrics') {
-                          toast.info(
-                            'Şarkı sözleri yakında — şimdilik YouTube üzerinden bakabilirsin.',
+                          const title =
+                            embed.title?.trim() ||
+                            qFrom(action.url) ||
+                            qFrom(embed.url);
+                          if (!title) {
+                            toast.error('Parça adı yok');
+                            return;
+                          }
+                          window.open(
+                            `https://www.google.com/search?q=${encodeURIComponent(`${title} lyrics`)}`,
+                            '_blank',
+                            'noopener,noreferrer',
                           );
+                          return;
+                        }
+                        if (action.action === 'open' || !action.action) {
+                          const raw = action.url || embed.url;
+                          const href = http(raw)
+                            ? raw!.trim()
+                            : `https://www.youtube.com/results?search_query=${encodeURIComponent(
+                                qFrom(raw) || embed.title || 'music',
+                              )}`;
+                          window.open(href, '_blank', 'noopener,noreferrer');
                         }
                       });
                     },
@@ -3563,6 +3624,9 @@ export function GuildChannelView({
                       void pinMessage(m.id, pin).then(() => void refreshPins());
                     },
                     onBookmark: (m, bookmark) => void bookmarkMessage(m.id, bookmark),
+                    onRemind: (m, remindAt) => {
+                      void client.createReminder(m.id, remindAt).catch(() => undefined);
+                    },
                     onOpenThread: (m) => setThreadRoot(m),
                     onCreateHeading: isForumView
                       ? undefined
@@ -3665,18 +3729,41 @@ export function GuildChannelView({
             İnsanları davet et
           </button>
           {canManageChannels && (
-            <button
-              type="button"
-              className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
-              onClick={() => {
-                setServerMenuOpen(false);
-                setCategoryName('');
-                setCategoryModal({ mode: 'create' });
-              }}
-            >
-              <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
-              Kategori oluştur
-            </button>
+            <>
+              <button
+                type="button"
+                className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
+                onClick={() => {
+                  setServerMenuOpen(false);
+                  setChannelName('');
+                  setChannelType('TEXT');
+                  setGameKind('billiards');
+                  setChannelLocked(false);
+                  setChannelPasswordDraft('');
+                  setChannelDeniedIds([]);
+                  setChannelOverwrites([]);
+                  setShowOverwriteEditor(false);
+                  setDmError(null);
+                  setChannelModal({ mode: 'create', categoryId: null });
+                }}
+              >
+                <span className="material-symbols-outlined text-[18px]">tag</span>
+                Kanal oluştur
+              </button>
+              <button
+                type="button"
+                className="h-10 px-space-sm rounded-lg text-left hover:bg-surface-container-high font-body-sm flex items-center gap-space-sm"
+                onClick={() => {
+                  setServerMenuOpen(false);
+                  setCategoryName('');
+                  setDmError(null);
+                  setCategoryModal({ mode: 'create' });
+                }}
+              >
+                <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
+                Kategori oluştur
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -3869,6 +3956,9 @@ export function GuildChannelView({
           </div>
         }
       >
+        {dmError ? (
+          <p className="font-body-sm text-error mb-space-sm">{dmError}</p>
+        ) : null}
         <label className="flex flex-col gap-space-xs mb-space-md">
           <span className="font-label-sm text-on-surface-variant">Kanal adı</span>
           <input
@@ -3915,7 +4005,9 @@ export function GuildChannelView({
                         | 'okey'
                         | 'bowling'
                         | 'tavla'
-                        | 'blackjack',
+                        | 'blackjack'
+                        | 'trivia'
+                        | 'words',
                     )
                   }
                   className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
@@ -3925,6 +4017,8 @@ export function GuildChannelView({
                   <option value="bowling">Bowling</option>
                   <option value="tavla">Tavla</option>
                   <option value="blackjack">21 Blackjack</option>
+                  <option value="trivia">Trivia</option>
+                  <option value="words">Kelime</option>
                 </select>
               </label>
             )}
@@ -4092,6 +4186,9 @@ export function GuildChannelView({
           </div>
         }
       >
+        {dmError ? (
+          <p className="font-body-sm text-error mb-space-sm">{dmError}</p>
+        ) : null}
         <label className="flex flex-col gap-space-xs">
           <span className="font-label-sm text-on-surface-variant">Kategori adı</span>
           <input
@@ -4628,10 +4725,17 @@ export function GuildChannelView({
           bio: profileUser?.bio,
           status: profileUser?.status,
           customStatus: profileUser?.customStatus,
+          activity: profileUser?.activity,
           isBot: profileUser?.isBot,
           roles: profileUser?.roles,
           socialLinks: profileUser?.socialLinks,
           accentColor: profileUser?.accentColor,
+        }}
+        onJoinActivity={(act) => {
+          if (act.join?.guildId && act.join.channelId) {
+            setProfileUser(null);
+            router.push(`/channels/${act.join.guildId}/${act.join.channelId}`);
+          }
         }}
         actions={
           profileUser && profileUser.id !== user?.id
@@ -4660,6 +4764,12 @@ export function GuildChannelView({
               ]
             : []
         }
+      />
+      <ActivitiesPicker
+        open={activitiesPickerOpen}
+        onClose={() => setActivitiesPickerOpen(false)}
+        guildId={guildId}
+        channels={channels}
       />
       </div>
     </AppShell>

@@ -45,6 +45,8 @@ export interface MessageItemActions {
   onForward?: (message: MessageDto) => void;
   onPin?: (message: MessageDto, pin: boolean) => void;
   onBookmark?: (message: MessageDto, bookmark: boolean) => void;
+  /** Hatırlat — preset dakika (60 / 1440 / …) veya özel ISO */
+  onRemind?: (message: MessageDto, remindAt: string) => void;
   onOpenThread?: (message: MessageDto) => void;
   onCreateHeading?: (message: MessageDto) => void;
   onMarkUnread?: (message: MessageDto) => void;
@@ -304,7 +306,9 @@ export function MessageItem({
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactPickerOpen, setReactPickerOpen] = useState(false);
-  const [submenu, setSubmenu] = useState<'react' | 'apps' | 'interaction' | null>(null);
+  const [submenu, setSubmenu] = useState<
+    'react' | 'apps' | 'interaction' | 'remind' | null
+  >(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
   const [contentCopied, setContentCopied] = useState(false);
@@ -898,6 +902,44 @@ export function MessageItem({
                       actions.onBookmark?.(message, !message.bookmarked);
                     }}
                   />
+                )}
+                {actions.onRemind && !isHeading && (
+                  <div className="relative">
+                    <MenuRow
+                      icon="schedule"
+                      label="Hatırlat"
+                      chevron
+                      onClick={() =>
+                        setSubmenu((s) => (s === 'remind' ? null : 'remind'))
+                      }
+                    />
+                    {submenu === 'remind' && (
+                      <div className="absolute right-full top-0 mr-1 w-52 py-1.5 rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float z-[70]">
+                        {(
+                          [
+                            [60, '1 saat sonra'],
+                            [60 * 3, '3 saat sonra'],
+                            [60 * 24, 'Yarın'],
+                            [60 * 24 * 3, '3 gün sonra'],
+                            [60 * 24 * 7, '1 hafta sonra'],
+                          ] as const
+                        ).map(([mins, label]) => (
+                          <MenuRow
+                            key={mins}
+                            icon="alarm"
+                            label={label}
+                            onClick={() => {
+                              closeAllMenus();
+                              actions.onRemind?.(
+                                message,
+                                new Date(Date.now() + mins * 60_000).toISOString(),
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {!isHeading && (
                   <div className="relative">

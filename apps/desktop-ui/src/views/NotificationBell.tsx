@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ClientSettings, MessageBookmarkDto, NotificationDto } from '@dracord/types';
+import type {
+  ClientSettings,
+  MessageBookmarkDto,
+  MessageReminderDto,
+  NotificationDto,
+} from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { useAuth } from '../auth';
 import { DEFAULT_CLIENT_SETTINGS, mergeClientSettings } from '../lib/client-settings';
@@ -35,6 +40,8 @@ function typeIcon(type: NotificationDto['type']): string {
       return 'person_add';
     case 'DM':
       return 'mail';
+    case 'REMINDER':
+      return 'schedule';
     default:
       return 'notifications';
   }
@@ -91,6 +98,7 @@ export function NotificationBell({
   const [tab, setTab] = useState<InboxTab>('unreads');
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [bookmarks, setBookmarks] = useState<MessageBookmarkDto[]>([]);
+  const [reminders, setReminders] = useState<MessageReminderDto[]>([]);
   const [unread, setUnread] = useState(0);
   const [prefs, setPrefs] = useState(loadPrefs);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -98,14 +106,16 @@ export function NotificationBell({
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      const [list, count, marks] = await Promise.all([
+      const [list, count, marks, rems] = await Promise.all([
         client.listNotifications({ limit: 40 }),
         client.notificationsUnreadCount(),
         client.listBookmarks(40).catch(() => [] as MessageBookmarkDto[]),
+        client.listReminders({ limit: 40 }).catch(() => [] as MessageReminderDto[]),
       ]);
       setItems(list);
       setUnread(count.count);
       setBookmarks(marks);
+      setReminders(rems);
     } catch {
       /* ignore */
     }
@@ -280,15 +290,62 @@ export function NotificationBell({
 
           <div className="overflow-y-auto flex-1 min-h-0">
             {tab === 'reminders' ? (
-              <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-                <span className="material-symbols-outlined text-[40px] text-outline mb-3">
-                  schedule
-                </span>
-                <p className="font-headline-md text-on-surface">Hatırlatmalar yakında</p>
-                <p className="mt-2 font-body-sm text-on-surface-variant max-w-xs">
-                  Mesaj hatırlatmaları henüz kullanıma açılmadı.
-                </p>
-              </div>
+              reminders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                  <span className="material-symbols-outlined text-[40px] text-outline mb-3">
+                    schedule
+                  </span>
+                  <p className="font-headline-md text-on-surface">Hatırlatma yok</p>
+                  <p className="mt-2 font-body-sm text-on-surface-variant max-w-xs">
+                    Bir mesaja sağ tıklayıp Hatırlat seçtiğinde burada görünür.
+                  </p>
+                </div>
+              ) : (
+                reminders.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-start gap-2 px-3 py-2.5 border-b border-surface-container-highest/60 hover:bg-surface-container"
+                  >
+                    <button
+                      type="button"
+                      className="flex-1 text-left min-w-0"
+                      onClick={() => {
+                        setOpen(false);
+                        if (r.guildId && r.channelId) {
+                          onNavigateLink?.(
+                            `/channels/${r.guildId}/${r.channelId}?around=${r.messageId}`,
+                          );
+                        } else if (r.channelId) {
+                          onNavigateLink?.(
+                            `/channels/me/${r.channelId}?around=${r.messageId}`,
+                          );
+                        }
+                      }}
+                    >
+                      <p className="font-label-sm text-primary-container">
+                        {formatTime(
+                          r.remindAt,
+                          prefs.language.hour24,
+                          prefs.language.locale === 'en' ? 'en-US' : 'tr-TR',
+                        )}
+                        {r.channelName ? ` · #${r.channelName}` : ''}
+                      </p>
+                      <p className="font-body-sm text-on-surface line-clamp-2 mt-0.5">
+                        {r.message?.content?.trim() || 'Mesaj'}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[11px] font-label-sm text-error shrink-0"
+                      onClick={() => {
+                        void client.cancelReminder(r.id).then(() => void refresh());
+                      }}
+                    >
+                      İptal
+                    </button>
+                  </div>
+                ))
+              )
             ) : tab === 'bookmarks' ? (
               bookmarks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-6 py-12 text-center">

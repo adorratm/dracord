@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import type { ClientSettings, MessageBookmarkDto, NotificationDto } from '@dracord/types';
+import type {
+  ClientSettings,
+  MessageBookmarkDto,
+  MessageReminderDto,
+  NotificationDto,
+} from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
@@ -28,6 +33,8 @@ function typeIcon(type: NotificationDto['type']): string {
       return 'person_add';
     case 'DM':
       return 'mail';
+    case 'REMINDER':
+      return 'schedule';
     default:
       return 'notifications';
   }
@@ -52,18 +59,21 @@ export default function NotificationsScreen() {
   const [tab, setTab] = useState<InboxTab>('unreads');
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [bookmarks, setBookmarks] = useState<MessageBookmarkDto[]>([]);
+  const [reminders, setReminders] = useState<MessageReminderDto[]>([]);
   const [settings, setSettings] = useState<ClientSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const [list, marks, prefs] = await Promise.all([
+      const [list, marks, rems, prefs] = await Promise.all([
         client.listNotifications({ limit: 50 }),
         client.listBookmarks(40).catch(() => [] as MessageBookmarkDto[]),
+        client.listReminders({ limit: 40 }).catch(() => [] as MessageReminderDto[]),
         client.getClientSettings().catch(() => null),
       ]);
       setItems(list);
       setBookmarks(marks);
+      setReminders(rems);
       if (prefs) setSettings(prefs);
       setError(null);
     } catch (e) {
@@ -195,10 +205,60 @@ export default function NotificationsScreen() {
       {error ? <Text style={{ color: colors.danger, padding: 16 }}>{error}</Text> : null}
 
       {tab === 'reminders' ? (
-        <EmptyState
-          icon="schedule"
-          title="Hatırlatmalar yakında"
-          body="Mesaj hatırlatmaları henüz kullanıma açılmadı."
+        <FlatList
+          data={reminders}
+          keyExtractor={(r) => r.id}
+          contentContainerStyle={{ padding: 12, flexGrow: 1 }}
+          ListEmptyComponent={
+            <EmptyState
+              icon="schedule"
+              title="Hatırlatma yok"
+              body="Bir mesaja uzun basıp Hatırlat seçtiğinde burada görünür."
+            />
+          }
+          renderItem={({ item: r }) => (
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 10,
+                padding: 12,
+                marginBottom: 8,
+                borderRadius: 10,
+                backgroundColor: colors.surface,
+                alignItems: 'center',
+              }}
+            >
+              <Pressable
+                style={{ flex: 1 }}
+                onPress={() => {
+                  if (r.guildId && r.channelId) {
+                    router.push(
+                      `/(app)/channels/${r.guildId}/${r.channelId}?around=${r.messageId}`,
+                    );
+                  } else {
+                    router.push('/(app)/dms');
+                  }
+                }}
+              >
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
+                  {formatTime(r.remindAt)}
+                  {r.channelName ? ` · #${r.channelName}` : ''}
+                </Text>
+                <Text style={{ color: colors.text, marginTop: 4 }} numberOfLines={2}>
+                  {r.message?.content?.trim() || 'Mesaj'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  void client.cancelReminder(r.id).then(() => void reload());
+                }}
+              >
+                <Text style={{ color: colors.danger, fontWeight: '700', fontSize: 12 }}>
+                  İptal
+                </Text>
+              </Pressable>
+            </View>
+          )}
         />
       ) : tab === 'bookmarks' ? (
         <FlatList
@@ -257,7 +317,7 @@ export default function NotificationsScreen() {
                 title="Güncele yetiştin!"
                 body="Okunmamış bildirim yok. Üstteki çift onay ile tümünü okundu yapabilirsin."
               />
-            ) : null
+            ) : undefined
           }
           renderItem={({ item: n }) => (
             <Pressable

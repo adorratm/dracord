@@ -18,7 +18,14 @@
       "@/lib/dealer-voice": ["../web/lib/dealer-voice.ts"],
       "@/lib/dealer-lines": ["../web/lib/dealer-lines.ts"],
       "@/lib/watch-party-media": ["../web/lib/watch-party-media.ts"],
+      "@/lib/sounds": ["../web/lib/sounds.ts"],
+      "@/lib/voice-settings": ["../web/lib/voice-settings.ts"],
+      "@/lib/participant-volumes": ["../web/lib/participant-volumes.ts"],
+      "@/lib/nsfw-screen-guard": ["../web/lib/nsfw-screen-guard.ts"],
       "@/lib/analytics": ["src/lib/analytics-stub.ts"],
+      "@/components/AuthProvider": ["src/shims/AuthProvider.ts"],
+      "@/components/VoiceSessionProvider": ["src/shims/VoiceSessionProvider.ts"],
+      "@/components/MusicPlayerBar": ["../web/components/MusicPlayerBar.tsx"],
       "@/components/activities/games/WatchEmbedPlayer": [
         "../web/components/activities/games/WatchEmbedPlayer.tsx"
       ],

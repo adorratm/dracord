@@ -1,4 +1,4 @@
-import type { PresenceStatus } from '@dracord/types';
+import type { PresenceStatus, UserActivity } from '@dracord/types';
 
 /** Görüntüleme etiketi — OFFLINE her zaman Çevrimdışı (Görünmez yalnızca kendi seçicide) */
 export function presenceLabelTr(
@@ -17,6 +17,21 @@ export function presenceLabelTr(
     case 'OFFLINE':
     default:
       return 'Çevrimdışı';
+  }
+}
+
+export function activityLineTr(activity?: UserActivity | null): string | null {
+  if (!activity?.name?.trim()) return null;
+  switch (activity.type) {
+    case 'listening':
+      return `Dinliyor · ${activity.name}`;
+    case 'watching':
+      return `İzliyor · ${activity.name}`;
+    case 'custom':
+      return activity.name;
+    case 'playing':
+    default:
+      return `Oynuyor · ${activity.name}`;
   }
 }
 

@@ -143,6 +143,11 @@ export default function GuildsScreen() {
             categories={shell.categories}
             activeChannelId={shell.activeChannelId}
             onOpenChannel={(c) => void shell.openChannel(c)}
+            onAddChannel={
+              shell.canManageChannels
+                ? (categoryId) => shell.openCreateChannel(categoryId)
+                : undefined
+            }
             serverName={activeGuild?.name}
             onOpenServerMenu={shell.openServerMenu}
             onOpenMembers={() => {

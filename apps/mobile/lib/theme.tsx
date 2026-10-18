@@ -14,6 +14,7 @@ import {
   type ThemeMode,
 } from '@dracord/app-theme';
 import { useAuth } from './auth';
+import { setAppLocale } from './i18n';
 import { useThemeRevision } from './theme-revision';
 
 type ThemeCtxValue = {
@@ -42,6 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       .getClientSettings()
       .then((s) => {
         setThemeMode(s.appearance?.theme === 'light' ? 'light' : 'dark');
+        setAppLocale(s.language?.locale === 'en' ? 'en' : 'tr');
       })
       .catch(() => undefined);
   }, [client, user?.id]);

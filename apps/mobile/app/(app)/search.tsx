@@ -378,7 +378,7 @@ export default function SearchScreen() {
                 Sunucu, kanal, kullanıcı veya mesaj ara
               </Text>
             </View>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item: hit }) => (
           <HitRow hit={hit} onPress={() => void openHit(hit)} />

@@ -30,9 +30,9 @@ async function readTourDone(userId?: string | null): Promise<boolean> {
 async function writeTourDone(userId?: string | null): Promise<void> {
   try {
     await AsyncStorage.setItem(APP_TOUR_STORAGE_KEY, serializeAppTourCompleted(userId));
-    await AsyncStorage.multiRemove([
-      APP_TOUR_STORAGE_KEY_LEGACY,
-      APP_TOUR_STORAGE_KEY_LEGACY_DESKTOP,
+    await Promise.all([
+      AsyncStorage.removeItem(APP_TOUR_STORAGE_KEY_LEGACY),
+      AsyncStorage.removeItem(APP_TOUR_STORAGE_KEY_LEGACY_DESKTOP),
     ]);
   } catch {
     /* ignore */
@@ -41,10 +41,10 @@ async function writeTourDone(userId?: string | null): Promise<void> {
 
 export async function resetMobileAppTour(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([
-      APP_TOUR_STORAGE_KEY,
-      APP_TOUR_STORAGE_KEY_LEGACY,
-      APP_TOUR_STORAGE_KEY_LEGACY_DESKTOP,
+    await Promise.all([
+      AsyncStorage.removeItem(APP_TOUR_STORAGE_KEY),
+      AsyncStorage.removeItem(APP_TOUR_STORAGE_KEY_LEGACY),
+      AsyncStorage.removeItem(APP_TOUR_STORAGE_KEY_LEGACY_DESKTOP),
     ]);
   } catch {
     /* ignore */

@@ -8,6 +8,8 @@ import { BlackjackGame } from '../../../web/components/activities/games/Blackjac
 import { BowlingGame } from '../../../web/components/activities/games/BowlingGame';
 import { OkeyGame } from '../../../web/components/activities/games/OkeyGame';
 import { TavlaGame } from '../../../web/components/activities/games/TavlaGame';
+import { TriviaGame } from '../../../web/components/activities/games/TriviaGame';
+import { WordsGame } from '../../../web/components/activities/games/WordsGame';
 import { WatchPartyRoom } from '../../../web/components/activities/games/WatchPartyRoom';
 import { ActivityStageShell } from '../../../web/components/activities/ActivityStageShell';
 import { GameAudio } from '@/lib/game-audio';
@@ -21,6 +23,8 @@ const KIND_LABEL: Record<ActivityKind, string> = {
   bowling: 'Bowling',
   tavla: 'Tavla',
   blackjack: '21 Blackjack',
+  trivia: 'Trivia',
+  words: 'Kelime',
   watch_party: 'Watch Party',
 };
 
@@ -30,6 +34,8 @@ const KIND_ICON: Record<ActivityKind, string> = {
   bowling: 'sports_baseball',
   tavla: 'casino',
   blackjack: 'style',
+  trivia: 'quiz',
+  words: 'spellcheck',
   watch_party: 'live_tv',
 };
 
@@ -606,6 +612,26 @@ export function ActivityPanel({
                 canPlay={isPlayer}
                 onPatch={patch}
                 onLeave={() => void leave()}
+                nameByUserId={nameByUserId}
+              />
+            )}
+            {session.kind === 'trivia' && me && (
+              <TriviaGame
+                key={session.id}
+                session={session}
+                userId={me}
+                canPlay={isPlayer}
+                onPatch={patch}
+                nameByUserId={nameByUserId}
+              />
+            )}
+            {session.kind === 'words' && me && (
+              <WordsGame
+                key={session.id}
+                session={session}
+                userId={me}
+                canPlay={isPlayer}
+                onPatch={patch}
                 nameByUserId={nameByUserId}
               />
             )}

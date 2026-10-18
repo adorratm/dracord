@@ -1007,6 +1007,35 @@ export function SettingsPage({
               onChange={(v) => setSection('privacy', { shareActivityStatus: v })}
             />
           </SettingsSection>
+          <SettingsSection title="Aktivite gizliliği">
+            <SettingsToggle
+              label="Aktiviteyi profilde göster"
+              checked={prefs.activity.displayActivity !== false}
+              onChange={(v) => setSection('activity', { displayActivity: v })}
+            />
+            <SettingsToggle
+              label="Dracord oyunlarını paylaş"
+              checked={prefs.activity.shareGames !== false}
+              onChange={(v) => setSection('activity', { shareGames: v })}
+            />
+            <SettingsToggle
+              label="Spotify dinlemeyi paylaş"
+              checked={prefs.activity.shareSpotify !== false}
+              onChange={(v) => setSection('activity', { shareSpotify: v })}
+            />
+            <SettingsToggle
+              label="Masaüstü oyun algılama"
+              description="Bilinen oyun süreçlerini tara ve “Oynuyor” olarak yayınla (opt-in)."
+              checked={prefs.activity.shareDesktopActivity === true}
+              onChange={(v) => setSection('activity', { shareDesktopActivity: v })}
+            />
+            <SettingsToggle
+              label="Katılma isteklerine izin ver"
+              checked={prefs.activity.allowJoinRequests !== false}
+              onChange={(v) => setSection('activity', { allowJoinRequests: v })}
+            />
+          </SettingsSection>
+          <SpotifyConnectionsSection client={client} />
         </SettingsPageBody>
       )}
 
@@ -2096,5 +2125,84 @@ function DesktopUpdateControls() {
       </button>
       {note ? <p className="font-body-sm text-on-surface-variant">{note}</p> : null}
     </div>
+  );
+}
+
+function SpotifyConnectionsSection({
+  client,
+}: {
+  client: { getSpotifyStatus: () => Promise<{ configured: boolean; connected: boolean; authorizeUrl: string | null }>; startSpotifyOAuth: () => Promise<{ url: string | null; configured: boolean }>; disconnectSpotify: () => Promise<{ ok: true }> };
+}) {
+  const [spotify, setSpotify] = useState<{
+    configured: boolean;
+    connected: boolean;
+    authorizeUrl: string | null;
+  } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    void client
+      .getSpotifyStatus()
+      .then(setSpotify)
+      .catch(() =>
+        setSpotify({ configured: false, connected: false, authorizeUrl: null }),
+      );
+  }, [client]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return (
+    <SettingsSection title="Spotify">
+      <div className="px-space-md py-space-md space-y-2">
+        {msg ? <p className="font-body-sm text-secondary">{msg}</p> : null}
+        {!spotify?.configured ? (
+          <SettingsNote>
+            Spotify API anahtarları yapılandırılmamış (SPOTIFY_CLIENT_ID /
+            SPOTIFY_CLIENT_SECRET).
+          </SettingsNote>
+        ) : spotify.connected ? (
+          <>
+            <p className="font-body-md text-on-surface">Spotify bağlı</p>
+            <p className="font-body-sm text-on-surface-variant">
+              Çalan parçan profilinde “Dinliyor” olarak görünür.
+            </p>
+            <button
+              type="button"
+              className="font-label-sm text-error hover:underline"
+              onClick={() => {
+                void client.disconnectSpotify().then(() => {
+                  refresh();
+                  setMsg('Spotify bağlantısı kesildi');
+                });
+              }}
+            >
+              Bağlantıyı kes
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="font-body-sm text-on-surface-variant">
+              Hesabını bağla; Currently Playing ile dinlediğin şarkı profilde
+              görünür.
+            </p>
+            <button
+              type="button"
+              disabled={!spotify.authorizeUrl}
+              className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-40"
+              onClick={() => {
+                if (!spotify.authorizeUrl) return;
+                const desktop = window.dracordDesktop;
+                if (desktop?.openOAuth) void desktop.openOAuth(spotify.authorizeUrl);
+                else window.open(spotify.authorizeUrl, '_blank');
+              }}
+            >
+              Spotify bağla
+            </button>
+          </>
+        )}
+      </div>
+    </SettingsSection>
   );
 }

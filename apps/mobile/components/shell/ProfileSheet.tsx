@@ -1,6 +1,6 @@
 import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import type { PublicUser } from '@dracord/types';
+import type { PublicUser, UserActivity } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { noticeDialog } from '../ConfirmModal';
 import { Icon } from '../Icon';
@@ -8,6 +8,18 @@ import { UserAvatar } from '../UserAvatar';
 import { useElapsedLabel } from '../../lib/formatElapsed';
 import { resolveMediaUrl } from '../../lib/mediaUrl';
 import { normalizePresence, presenceLabelTr } from '../../lib/presence';
+
+function activityLabel(a: UserActivity): string {
+  const prefix =
+    a.type === 'listening'
+      ? 'Dinliyor'
+      : a.type === 'watching'
+        ? 'İzliyor'
+        : a.type === 'custom'
+          ? ''
+          : 'Oynuyor';
+  return prefix ? `${prefix} · ${a.name}` : a.name;
+}
 
 export type ProfileAction = {
   id: string;
@@ -22,6 +34,7 @@ export function ProfileSheet({
   onClose,
   actions = [],
   joinedAt,
+  onJoinActivity,
 }: {
   user: PublicUser | null;
   onClose: () => void;
@@ -29,6 +42,7 @@ export function ProfileSheet({
   actions?: ProfileAction[];
   /** Ses kanalına katılım zamanı — süre sayacı */
   joinedAt?: string | null;
+  onJoinActivity?: (activity: UserActivity) => void;
 }) {
   const elapsed = useElapsedLabel(joinedAt);
   if (!user) return null;
@@ -81,6 +95,51 @@ export function ProfileSheet({
             <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
               {presenceLabelTr(st, user.customStatus)}
             </Text>
+            {user.activity ? (
+              <View
+                style={{
+                  marginTop: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: colors.surfaceHigh,
+                  borderRadius: 10,
+                  padding: 8,
+                }}
+              >
+                <Icon
+                  name={
+                    user.activity.type === 'listening'
+                      ? 'headphones'
+                      : user.activity.type === 'watching'
+                        ? 'live_tv'
+                        : 'sports_esports'
+                  }
+                  size={20}
+                  color={colors.success}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>
+                    {activityLabel(user.activity)}
+                  </Text>
+                  {user.activity.details ? (
+                    <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+                      {user.activity.details}
+                    </Text>
+                  ) : null}
+                  {user.activity.join && onJoinActivity ? (
+                    <Pressable
+                      onPress={() => onJoinActivity(user.activity!)}
+                      style={{ marginTop: 4 }}
+                    >
+                      <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>
+                        Katıl
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
             {elapsed ? (
               <Text style={{ color: colors.primary, fontSize: 12, marginTop: 4, fontWeight: '700' }}>
                 Seste · {elapsed}
@@ -116,8 +175,9 @@ export function ProfileSheet({
                 label={a.label}
                 danger={a.danger}
                 onPress={() => {
-                  a.onSelect();
                   onClose();
+                  const run = a.onSelect;
+                  setTimeout(() => run(), 120);
                 }}
               />
             ))}

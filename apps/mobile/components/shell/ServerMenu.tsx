@@ -12,6 +12,8 @@ export function ServerMenu({
   onEvents,
   onBoost,
   onSettings,
+  onCreateChannel,
+  onCreateCategory,
   onLeave,
 }: {
   open: boolean;
@@ -23,6 +25,8 @@ export function ServerMenu({
   onEvents?: () => void;
   onBoost?: () => void;
   onSettings?: () => void;
+  onCreateChannel?: () => void;
+  onCreateCategory?: () => void;
   onLeave?: () => void;
 }) {
   return (
@@ -67,6 +71,16 @@ export function ServerMenu({
           ) : null}
           {onBoost ? (
             <MenuItem icon="rocket_launch" label="Sunucu takviyesi" onPress={onBoost} />
+          ) : null}
+          {onCreateChannel ? (
+            <MenuItem icon="tag" label="Kanal oluştur" onPress={onCreateChannel} />
+          ) : null}
+          {onCreateCategory ? (
+            <MenuItem
+              icon="create_new_folder"
+              label="Kategori oluştur"
+              onPress={onCreateCategory}
+            />
           ) : null}
           {onSettings ? (
             <MenuItem icon="settings" label="Sunucu ayarları" onPress={onSettings} />

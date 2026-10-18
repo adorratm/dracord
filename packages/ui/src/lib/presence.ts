@@ -32,3 +32,29 @@ export function presenceLabelTr(
       return 'Çevrimdışı';
   }
 }
+
+/** Üye listesi / hover alt satırı — aktivite varsa öncelikli */
+export function activityLineTr(
+  activity?: { type: string; name: string } | null,
+): string | null {
+  if (!activity?.name?.trim()) return null;
+  switch (activity.type) {
+    case 'listening':
+      return `Dinliyor · ${activity.name}`;
+    case 'watching':
+      return `İzliyor · ${activity.name}`;
+    case 'custom':
+      return activity.name;
+    case 'playing':
+    default:
+      return `Oynuyor · ${activity.name}`;
+  }
+}
+
+export function memberSubtitleTr(
+  status: PresenceStatus,
+  customStatus?: string | null,
+  activity?: { type: string; name: string } | null,
+): string {
+  return activityLineTr(activity) ?? presenceLabelTr(status, customStatus);
+}

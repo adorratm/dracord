@@ -1,13 +1,18 @@
 'use client';
 
-import type { MemberRoleSummary, PresenceStatus, SocialLinks } from '@dracord/types';
+import type {
+  MemberRoleSummary,
+  PresenceStatus,
+  SocialLinks,
+  UserActivity,
+} from '@dracord/types';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { SocialLinksRow } from './SocialLinksRow';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
-import { presenceLabelTr } from '../lib/presence';
+import { activityLineTr, presenceLabelTr } from '../lib/presence';
 
 export interface UserHoverCardUser {
   id: string;
@@ -19,6 +24,7 @@ export interface UserHoverCardUser {
   bio?: string | null;
   status?: PresenceStatus;
   customStatus?: string | null;
+  activity?: UserActivity | null;
   isBot?: boolean;
   socialLinks?: SocialLinks | null;
   roles?: MemberRoleSummary[];
@@ -160,6 +166,11 @@ export function UserHoverCard({
                 <p className="mt-0.5 font-label-sm text-outline">
                   {presenceLabelTr(user.status)}
                   {user.customStatus ? ` · ${user.customStatus}` : ''}
+                </p>
+              )}
+              {activityLineTr(user.activity) && (
+                <p className="mt-0.5 font-label-sm text-secondary truncate">
+                  {activityLineTr(user.activity)}
                 </p>
               )}
               {user.bio && (

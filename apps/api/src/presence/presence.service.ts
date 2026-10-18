@@ -1,13 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import type { PublicUser } from '@dracord/types';
+import type { PublicUser, UserActivity } from '@dracord/types';
 import { toPublicUser } from '@/common/user.mapper';
 import { User } from '@/database/entities/user.entity';
 import { UserStatus } from '@/database/enums';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
+import { UserActivityService } from './user-activity.service';
 
 @Injectable()
 export class PresenceService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly broadcast: SocketBroadcastService,
+    private readonly activities: UserActivityService,
+  ) {}
 
   async updateStatus(
     userId: string,
@@ -26,7 +32,22 @@ export class PresenceService {
       user.customStatus = trimmed;
     }
     const updated = await this.em.save(User, user);
-    return toPublicUser(updated);
+    const pub = toPublicUser(updated);
+    this.broadcast.broadcastPresence({
+      userId,
+      status: updated.status,
+      customStatus: updated.customStatus,
+      activity: pub.activity ?? null,
+    });
+    return pub;
+  }
+
+  async putManualActivity(
+    userId: string,
+    activity: UserActivity | null,
+  ): Promise<PublicUser> {
+    await this.activities.setActivity(userId, activity, { force: true });
+    return this.getStatus(userId);
   }
 
   /** Socket bağlandığında: tercih edilen durum veya ONLINE. */

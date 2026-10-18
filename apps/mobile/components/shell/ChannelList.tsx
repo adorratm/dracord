@@ -107,9 +107,11 @@ export function ChannelList({
   categories = [],
   activeChannelId,
   onOpenChannel,
+  onAddChannel,
   serverName,
   onOpenServerMenu,
   onOpenMembers,
+  onActivitiesPress,
   onVoiceMemberPress,
   onVoiceMemberLongPress,
   selfUserId,
@@ -120,9 +122,12 @@ export function ChannelList({
   categories?: CategoryDto[];
   activeChannelId?: string | null;
   onOpenChannel: (c: ChannelSummary) => void;
+  /** categoryId: gerçek kategori id | null (kategorisiz) | '__games__' | '__watch__' */
+  onAddChannel?: (categoryId: string | null) => void;
   serverName?: string;
   onOpenServerMenu?: () => void;
   onOpenMembers?: () => void;
+  onActivitiesPress?: () => void;
   onVoiceMemberPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
   onVoiceMemberLongPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
   selfUserId?: string | null;
@@ -130,23 +135,45 @@ export function ChannelList({
   activeActivityChannelId?: string | null;
 }) {
   const listData = useMemo(() => buildRows(channels, categories), [channels, categories]);
+  const hasCatRows = useMemo(() => listData.some((r) => r.type === 'cat'), [listData]);
 
   const renderItem = useCallback(
     ({ item: row }: ListRenderItemInfo<Row>) =>
       row.type === 'cat' ? (
-        <Text
+        <View
           style={{
-            color: colors.textMuted,
-            fontSize: 11,
-            fontWeight: '800',
+            flexDirection: 'row',
+            alignItems: 'center',
             paddingHorizontal: 14,
             paddingTop: 14,
             paddingBottom: 4,
-            letterSpacing: 0.4,
           }}
         >
-          {row.label.toUpperCase()}
-        </Text>
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: 11,
+              fontWeight: '800',
+              letterSpacing: 0.4,
+              flex: 1,
+            }}
+          >
+            {row.label.toUpperCase()}
+          </Text>
+          {onAddChannel ? (
+            <Pressable
+              onPress={() =>
+                onAddChannel(
+                  row.id === 'uncategorized' ? null : row.id,
+                )
+              }
+              hitSlop={8}
+              accessibilityLabel="Kanal ekle"
+            >
+              <Icon name="add" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
       ) : (
         <ChannelRow
           channel={row.ch}
@@ -163,6 +190,7 @@ export function ChannelList({
       activeChannelId,
       activeVoiceChannelId,
       activeActivityChannelId,
+      onAddChannel,
       onOpenChannel,
       selfUserId,
       onVoiceMemberPress,
@@ -188,6 +216,11 @@ export function ChannelList({
           <Text style={{ color: colors.text, fontWeight: '800', flex: 1, fontSize: 15 }} numberOfLines={1}>
             {serverName}
           </Text>
+          {onActivitiesPress ? (
+            <Pressable onPress={onActivitiesPress} hitSlop={8} accessibilityLabel="Aktiviteler">
+              <Icon name="rocket_launch" size={20} color={colors.primary} />
+            </Pressable>
+          ) : null}
           {onOpenMembers ? (
             <Pressable onPress={onOpenMembers} hitSlop={8}>
               <Icon name="group" size={20} color={colors.primary} />
@@ -206,8 +239,40 @@ export function ChannelList({
         windowSize={5}
         updateCellsBatchingPeriod={80}
         removeClippedSubviews
-        extraData={`${activeChannelId ?? ''}:${activeVoiceChannelId ?? ''}:${activeActivityChannelId ?? ''}`}
+        extraData={`${activeChannelId ?? ''}:${activeVoiceChannelId ?? ''}:${activeActivityChannelId ?? ''}:${hasCatRows}`}
         contentContainerStyle={{ paddingBottom: 12, flexGrow: 1 }}
+        ListHeaderComponent={
+          onAddChannel && !hasCatRows ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 14,
+                paddingTop: 14,
+                paddingBottom: 4,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: '800',
+                  letterSpacing: 0.4,
+                  flex: 1,
+                }}
+              >
+                KANALLAR
+              </Text>
+              <Pressable
+                onPress={() => onAddChannel(null)}
+                hitSlop={8}
+                accessibilityLabel="Kanal ekle"
+              >
+                <Icon name="add" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ) : undefined
+        }
         ListEmptyComponent={
           <Text style={{ color: colors.textMuted, padding: 16, textAlign: 'center' }}>
             Bu sunucuda kanal yok

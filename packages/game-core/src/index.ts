@@ -4,4 +4,6 @@ export * from './bowling';
 export * from './tavla';
 export * from './billiards';
 export * from './watchParty';
+export * from './trivia';
+export * from './words';
 export * from './kinds';

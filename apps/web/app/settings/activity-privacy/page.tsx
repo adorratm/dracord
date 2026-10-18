@@ -27,8 +27,21 @@ export default function ActivityPrivacyPage() {
         />
         <SettingsToggle
           label="Oyunları paylaş"
+          description="Dracord oyun / Watch Party oturumunu profilde göster."
           checked={prefs.activity.shareGames}
           onChange={(v) => setSection('activity', { shareGames: v })}
+        />
+        <SettingsToggle
+          label="Spotify dinlemeyi paylaş"
+          description="Bağlı Spotify’da çalan parçayı profilde göster."
+          checked={prefs.activity.shareSpotify !== false}
+          onChange={(v) => setSection('activity', { shareSpotify: v })}
+        />
+        <SettingsToggle
+          label="Masaüstü oyun algılamayı paylaş"
+          description="Dracord masaüstü istemcisinin algıladığı oyunları paylaş (opt-in)."
+          checked={prefs.activity.shareDesktopActivity === true}
+          onChange={(v) => setSection('activity', { shareDesktopActivity: v })}
         />
         <SettingsToggle
           label="Katılma isteklerine izin ver"

@@ -4,6 +4,7 @@ import type {
   CategoryDto,
   ChannelSummary,
   ClientSettings,
+  GameChannelKind,
   GuildEventDto,
   GuildInviteDto,
   GuildSummary,
@@ -11,6 +12,7 @@ import type {
   MessageBookmarkDto,
   MessageDto,
   MessagePage,
+  MessageReminderDto,
   PresignUploadResponse,
   PublicUser,
   SearchResponse,
@@ -576,7 +578,7 @@ export class DracordClient {
       type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
-      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | null;
+      gameKind?: GameChannelKind | null;
     },
   ): Promise<ChannelSummary> {
     return this.request(`/guilds/${guildId}/channels`, {
@@ -836,6 +838,75 @@ export class DracordClient {
 
   async listBookmarks(limit = 50): Promise<MessageBookmarkDto[]> {
     return this.request(`/users/me/bookmarks?limit=${limit}`);
+  }
+
+  async createReminder(messageId: string, remindAt: string): Promise<MessageReminderDto> {
+    return this.request(`/messages/${messageId}/remind`, {
+      method: 'POST',
+      body: JSON.stringify({ remindAt }),
+    });
+  }
+
+  async listReminders(opts?: {
+    status?: string;
+    limit?: number;
+  }): Promise<MessageReminderDto[]> {
+    const q = new URLSearchParams();
+    if (opts?.status) q.set('status', opts.status);
+    if (opts?.limit) q.set('limit', String(opts.limit));
+    const qs = q.toString();
+    return this.request(`/users/me/reminders${qs ? `?${qs}` : ''}`);
+  }
+
+  async updateReminder(
+    reminderId: string,
+    patch: { remindAt?: string; snoozeMinutes?: number; cancel?: boolean },
+  ): Promise<MessageReminderDto> {
+    return this.request(`/users/me/reminders/${reminderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async cancelReminder(reminderId: string): Promise<{ ok: true }> {
+    return this.request(`/users/me/reminders/${reminderId}`, { method: 'DELETE' });
+  }
+
+  async putUserActivity(body: {
+    type?: string;
+    name?: string;
+    details?: string | null;
+    source?: string;
+    imageUrl?: string | null;
+    url?: string | null;
+    desktopAppId?: string | null;
+    expiresInSec?: number;
+    clear?: boolean;
+  }): Promise<PublicUser> {
+    return this.request(`/users/me/activity`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async clearUserActivity(): Promise<PublicUser> {
+    return this.request(`/users/me/activity`, { method: 'DELETE' });
+  }
+
+  async getSpotifyStatus(): Promise<{
+    configured: boolean;
+    connected: boolean;
+    authorizeUrl: string | null;
+  }> {
+    return this.request(`/oauth/spotify/status`);
+  }
+
+  async startSpotifyOAuth(): Promise<{ url: string | null; configured: boolean }> {
+    return this.request(`/oauth/spotify/start`);
+  }
+
+  async disconnectSpotify(): Promise<{ ok: true }> {
+    return this.request(`/oauth/spotify`, { method: 'DELETE' });
   }
 
   async listPinnedMessages(channelId: string): Promise<MessageDto[]> {

@@ -328,20 +328,59 @@ export function ChatView({
 
   const onEmbedAction = useCallback(
     (m: MessageDto, action: MessageEmbedAction, embed: MessageEmbed) => {
-      if (action.action === 'replay' && (embed.url || action.url)) {
-        const url = action.url || embed.url;
+      const http = (u?: string | null) =>
+        Boolean(u && /^https?:\/\//i.test(u.trim()));
+      const ytSearch = (q: string) =>
+        `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+      const lyricsSearch = (title: string) =>
+        `https://www.google.com/search?q=${encodeURIComponent(`${title} lyrics`)}`;
+      const queryFrom = (raw?: string | null) =>
+        (raw || '').replace(/^ytsearch\d*:/i, '').trim();
+
+      if (action.action === 'replay') {
+        const q =
+          queryFrom(action.url) ||
+          queryFrom(embed.url) ||
+          embed.title?.trim() ||
+          '';
+        if (!q) {
+          Alert.alert('Müzik', 'Tekrar oynatılacak kaynak bulunamadı');
+          return;
+        }
+        const playArg = http(action.url)
+          ? action.url!.trim()
+          : http(embed.url)
+            ? embed.url!.trim()
+            : q;
         void client
-          .sendMessage(channel.id, `/oynat ${url}`)
+          .sendMessage(channel.id, `/oynat ${playArg}`)
           .then(() => Alert.alert('Müzik', 'Tekrar kuyruğa eklendi'))
-          .catch((e) => Alert.alert('Müzik', e instanceof Error ? e.message : 'Başarısız'));
+          .catch((e) =>
+            Alert.alert('Müzik', e instanceof Error ? e.message : 'Başarısız'),
+          );
         return;
       }
       if (action.action === 'lyrics') {
-        Alert.alert('Şarkı sözleri', 'Şarkı sözleri yakında.');
+        const title =
+          embed.title?.trim() || queryFrom(action.url) || queryFrom(embed.url);
+        if (!title) {
+          Alert.alert('Şarkı sözleri', 'Parça adı bulunamadı');
+          return;
+        }
+        void Linking.openURL(lyricsSearch(title)).catch(() =>
+          Alert.alert('Şarkı sözleri', 'Bağlantı açılamadı'),
+        );
         return;
       }
-      const openUrl = action.url || embed.url;
-      if (openUrl) void Linking.openURL(openUrl);
+      if (action.action === 'open' || !action.action) {
+        const raw = action.url || embed.url;
+        const href = http(raw)
+          ? raw!.trim()
+          : ytSearch(queryFrom(raw) || embed.title || 'music');
+        void Linking.openURL(href).catch(() =>
+          Alert.alert('Bağlantı', 'URL açılamadı'),
+        );
+      }
     },
     [client, channel.id],
   );
@@ -399,6 +438,26 @@ export function ChatView({
         case 'pin':
           onPinMsg(m);
           break;
+        case 'remind-1h':
+        case 'remind-1d':
+        case 'remind-3d':
+        case 'remind-1w': {
+          const mins =
+            id === 'remind-1h'
+              ? 60
+              : id === 'remind-1d'
+                ? 60 * 24
+                : id === 'remind-3d'
+                  ? 60 * 24 * 3
+                  : 60 * 24 * 7;
+          void client
+            .createReminder(m.id, new Date(Date.now() + mins * 60_000).toISOString())
+            .then(() => Alert.alert('Hatırlatma', 'Hatırlatma ayarlandı'))
+            .catch((e) =>
+              Alert.alert('Hatırlatma', e instanceof Error ? e.message : 'Başarısız'),
+            );
+          break;
+        }
         case 'bookmark':
           void (m.bookmarked
             ? client.unbookmarkMessage(m.id)
@@ -1438,6 +1497,7 @@ const MessageRow = memo(function MessageRow({
   m,
   mine,
   avatarFallback,
+  compact: _compact,
   onReply,
   onEdit,
   onReact,
@@ -1448,6 +1508,8 @@ const MessageRow = memo(function MessageRow({
   m: MessageDto;
   mine: boolean;
   avatarFallback?: string | null;
+  /** Thread özeti satırı — görsel sıkılık için ayrıldı (şu an stil farkı yok) */
+  compact?: boolean;
   onReply?: (m: MessageDto) => void;
   onEdit?: (m: MessageDto) => void;
   onReact?: (m: MessageDto, emoji: string) => void;
@@ -1634,7 +1696,17 @@ function EmbedCard({
     >
       <Pressable
         onPress={() => {
-          if (embed.url) void Linking.openURL(embed.url);
+          const raw = embed.url;
+          if (raw && /^https?:\/\//i.test(raw.trim())) {
+            void Linking.openURL(raw.trim());
+            return;
+          }
+          const q = (raw || embed.title || '').replace(/^ytsearch\d*:/i, '').trim();
+          if (q) {
+            void Linking.openURL(
+              `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+            );
+          }
         }}
         style={{ flexDirection: 'row', gap: 10, padding: 10 }}
       >
@@ -1666,9 +1738,7 @@ function EmbedCard({
             <Pressable
               key={a.id}
               onPress={() => {
-                if (a.url && (a.action === 'open' || !a.action)) {
-                  void Linking.openURL(a.url);
-                }
+                // replay / lyrics asla ham metni Intent’e verme — parent halleder
                 onAction?.(a);
               }}
               style={{

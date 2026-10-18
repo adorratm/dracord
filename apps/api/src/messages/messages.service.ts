@@ -4,7 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EntityManager, In, IsNull, LessThan, MoreThan, Not } from 'typeorm';
+import {
+  EntityManager,
+  In,
+  IsNull,
+  LessThan,
+  LessThanOrEqual,
+  MoreThan,
+  Not,
+} from 'typeorm';
 import { createId } from '@paralleldrive/cuid2';
 import { Channel } from '@/database/entities/channel.entity';
 import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
@@ -14,6 +22,7 @@ import { GuildMember } from '@/database/entities/guild-member.entity';
 import { Message } from '@/database/entities/message.entity';
 import { MessageHide } from '@/database/entities/message-hide.entity';
 import { MessageBookmark } from '@/database/entities/message-bookmark.entity';
+import { MessageReminder } from '@/database/entities/message-reminder.entity';
 import { Reaction } from '@/database/entities/reaction.entity';
 import { User } from '@/database/entities/user.entity';
 import type {
@@ -25,6 +34,7 @@ import type {
   MessagePage,
   MessagePollDto,
   MessageReactionDto,
+  MessageReminderDto,
   MessageReplyRef,
   MessageType,
   NotificationDto,
@@ -930,6 +940,228 @@ export class MessagesService {
     });
   }
 
+  async createReminder(
+    messageId: string,
+    userId: string,
+    remindAtIso: string,
+  ): Promise<MessageReminderDto> {
+    const remindAt = new Date(remindAtIso);
+    if (!Number.isFinite(remindAt.getTime()) || remindAt.getTime() <= Date.now() + 30_000) {
+      throw new BadRequestException('Hatırlatma zamanı en az 30 sn sonra olmalı');
+    }
+    if (remindAt.getTime() > Date.now() + 1000 * 60 * 60 * 24 * 365) {
+      throw new BadRequestException('Hatırlatma en fazla 1 yıl sonra olabilir');
+    }
+    const message = await this.em.findOne(Message, {
+      where: { id: messageId },
+      relations: { author: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Mesaj bulunamadı');
+    await this.channels.getChannel(message.channelId, userId);
+    const ch = await this.em.findOne(Channel, { where: { id: message.channelId } });
+
+    // Aynı mesaj için bekleyen hatırlatmayı güncelle
+    const existing = await this.em.find(MessageReminder, {
+      where: [
+        { userId, messageId, status: 'pending' },
+        { userId, messageId, status: 'snoozed' },
+      ],
+      take: 1,
+    });
+    let row = existing[0];
+    if (!row) {
+      row = this.em.create(MessageReminder, {
+        userId,
+        messageId,
+        channelId: message.channelId,
+        guildId: ch?.guildId ?? null,
+        remindAt,
+        status: 'pending',
+        snoozedUntil: null,
+      });
+    } else {
+      row.remindAt = remindAt;
+      row.status = 'pending';
+      row.snoozedUntil = null;
+      row.channelId = message.channelId;
+      row.guildId = ch?.guildId ?? null;
+    }
+    const saved = await this.em.save(MessageReminder, row);
+    return this.toReminderDto(saved, message, ch?.name ?? null, userId);
+  }
+
+  async listReminders(
+    userId: string,
+    opts?: { status?: string; limit?: number },
+  ): Promise<MessageReminderDto[]> {
+    const take = Math.min(Math.max(opts?.limit ?? 40, 1), 100);
+    const where: Record<string, unknown> = { userId };
+    if (opts?.status === 'pending') {
+      where.status = In(['pending', 'snoozed']);
+    } else if (opts?.status) {
+      where.status = opts.status;
+    } else {
+      where.status = In(['pending', 'snoozed']);
+    }
+    const rows = await this.em.find(MessageReminder, {
+      where: where as never,
+      order: { remindAt: 'ASC' },
+      take,
+    });
+    if (!rows.length) return [];
+    const messages = await this.em.find(Message, {
+      where: { id: In(rows.map((r) => r.messageId)) },
+      relations: { author: true },
+    });
+    const msgById = new Map(messages.map((m) => [m.id, m]));
+    const channelIds = [
+      ...new Set(rows.map((r) => r.channelId).filter(Boolean) as string[]),
+    ];
+    const channels = channelIds.length
+      ? await this.em.find(Channel, { where: { id: In(channelIds) } })
+      : [];
+    const chById = new Map(channels.map((c) => [c.id, c]));
+    const out: MessageReminderDto[] = [];
+    for (const row of rows) {
+      const msg = msgById.get(row.messageId) ?? null;
+      const ch = row.channelId ? chById.get(row.channelId) : undefined;
+      out.push(await this.toReminderDto(row, msg, ch?.name ?? null, userId));
+    }
+    return out;
+  }
+
+  async updateReminder(
+    reminderId: string,
+    userId: string,
+    patch: { remindAt?: string; snoozeMinutes?: number; cancel?: boolean },
+  ): Promise<MessageReminderDto> {
+    const row = await this.em.findOne(MessageReminder, {
+      where: { id: reminderId, userId },
+    });
+    if (!row) throw new NotFoundException('Hatırlatma bulunamadı');
+    if (patch.cancel) {
+      row.status = 'cancelled';
+      await this.em.save(MessageReminder, row);
+      return this.toReminderDto(row, null, null, userId);
+    }
+    if (patch.snoozeMinutes != null) {
+      const mins = Math.min(Math.max(Number(patch.snoozeMinutes) || 15, 5), 24 * 60);
+      const next = new Date(Date.now() + mins * 60_000);
+      row.remindAt = next;
+      row.snoozedUntil = next;
+      row.status = 'snoozed';
+    } else if (patch.remindAt) {
+      const remindAt = new Date(patch.remindAt);
+      if (!Number.isFinite(remindAt.getTime()) || remindAt.getTime() <= Date.now()) {
+        throw new BadRequestException('Geçersiz hatırlatma zamanı');
+      }
+      row.remindAt = remindAt;
+      row.status = 'pending';
+      row.snoozedUntil = null;
+    }
+    await this.em.save(MessageReminder, row);
+    const msg = await this.em.findOne(Message, {
+      where: { id: row.messageId },
+      relations: { author: true },
+    });
+    const ch = row.channelId
+      ? await this.em.findOne(Channel, { where: { id: row.channelId } })
+      : null;
+    return this.toReminderDto(row, msg, ch?.name ?? null, userId);
+  }
+
+  async cancelReminder(reminderId: string, userId: string): Promise<{ ok: true }> {
+    const row = await this.em.findOne(MessageReminder, {
+      where: { id: reminderId, userId },
+    });
+    if (!row) throw new NotFoundException('Hatırlatma bulunamadı');
+    row.status = 'cancelled';
+    await this.em.save(MessageReminder, row);
+    return { ok: true };
+  }
+
+  /** Scheduler — süresi dolan hatırlatmaları bildirime çevir */
+  async fireDueReminders(): Promise<number> {
+    const now = new Date();
+    const due = await this.em.find(MessageReminder, {
+      where: [
+        { status: 'pending', remindAt: LessThanOrEqual(now) },
+        { status: 'snoozed', remindAt: LessThanOrEqual(now) },
+      ],
+      take: 50,
+    });
+    if (!due.length) return 0;
+    let fired = 0;
+    for (const row of due) {
+      const message = await this.em.findOne(Message, {
+        where: { id: row.messageId },
+        relations: { author: true },
+      });
+      const ch = row.channelId
+        ? await this.em.findOne(Channel, { where: { id: row.channelId } })
+        : null;
+      const snippet = message?.deletedAt
+        ? 'Mesaj artık yok'
+        : (message?.content ?? '').trim().slice(0, 120) || 'Mesaj hatırlatması';
+      const link =
+        row.guildId && row.channelId
+          ? `/channels/${row.guildId}/${row.channelId}?around=${row.messageId}`
+          : row.channelId
+            ? `/channels/me/${row.channelId}?around=${row.messageId}`
+            : null;
+      const created = await this.notifications.createMany([
+        {
+          userId: row.userId,
+          type: 'REMINDER',
+          title: 'Hatırlatma',
+          body: snippet,
+          link,
+          guildId: row.guildId,
+          channelId: row.channelId,
+          messageId: row.messageId,
+          actorId: message?.authorId ?? null,
+        },
+      ]);
+      this.notificationsRealtime.emitMany(created);
+      row.status = 'fired';
+      await this.em.save(MessageReminder, row);
+      fired += 1;
+    }
+    return fired;
+  }
+
+  private async toReminderDto(
+    row: MessageReminder,
+    message: Message | null,
+    channelName: string | null,
+    viewerId: string,
+  ): Promise<MessageReminderDto> {
+    let msgDto: MessageDto | null = null;
+    if (message && !message.deletedAt) {
+      const reactions = await this.em.find(Reaction, {
+        where: { messageId: message.id },
+        relations: { user: true },
+      });
+      msgDto = await this.toDtoResolved(message, {
+        viewerId,
+        reactions,
+        reminderAt: row.remindAt.toISOString(),
+      });
+    }
+    return {
+      id: row.id,
+      messageId: row.messageId,
+      channelId: row.channelId,
+      channelName,
+      guildId: row.guildId,
+      remindAt: row.remindAt.toISOString(),
+      status: row.status,
+      snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
+      message: msgDto,
+    };
+  }
+
   async listBookmarks(userId: string, limit = 50): Promise<MessageBookmarkDto[]> {
     const take = Math.min(Math.max(limit, 1), 100);
     const rows = await this.em.find(MessageBookmark, {
@@ -1211,6 +1443,7 @@ export class MessagesService {
       viewerId?: string;
       hideMode?: 'hidden' | null;
       bookmarked?: boolean;
+      reminderAt?: string | null;
       reactions?: Reaction[];
       replyTo?: MessageReplyRef | null;
       pollVoters?: Map<string, User>;
@@ -1242,6 +1475,7 @@ export class MessagesService {
       viewerHide: hidden ? 'hidden' : null,
       // Viewer-specific — yalnızca bilinçli set edildiğinde gönder (socket broadcast’te yok)
       ...(opts.bookmarked !== undefined ? { bookmarked: Boolean(opts.bookmarked) } : {}),
+      ...(opts.reminderAt !== undefined ? { reminderAt: opts.reminderAt } : {}),
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt?.toISOString() ?? null,
     };
@@ -1253,6 +1487,7 @@ export class MessagesService {
       viewerId?: string;
       hideMode?: 'hidden' | null;
       bookmarked?: boolean;
+      reminderAt?: string | null;
       reactions?: Reaction[];
       replyTo?: MessageReplyRef | null;
       threadReplyCount?: number;

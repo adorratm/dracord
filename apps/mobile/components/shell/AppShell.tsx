@@ -41,6 +41,8 @@ import { TitleBar } from './TitleBar';
 import { useVoiceSessionOptional } from '../voice/VoiceSession';
 import { useActivitySessionOptional } from '../activity/ActivitySession';
 import { confirmDialog, noticeDialog } from '../ConfirmModal';
+import { ActivitiesPicker } from '../ActivitiesPicker';
+import { CreateCategorySheet, CreateChannelSheet } from '../CreateChannelSheet';
 
 type MemberMenuState = {
   title: string;
@@ -77,6 +79,8 @@ type AppShellCtx = {
   openCreateGuild: () => void;
   openJoinInvite: () => void;
   openServerMenu: () => void;
+  openCreateChannel: (categoryId?: string | null) => void;
+  canManageChannels: boolean;
   guildPermissions: GuildPermissionsDto | null;
 };
 
@@ -124,6 +128,15 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   const [serversOpen, setServersOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
+  const [createChannelOpen, setCreateChannelOpen] = useState(false);
+  const [createChannelInitialType, setCreateChannelInitialType] = useState<
+    'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY'
+  >('TEXT');
+  const [createChannelInitialCategoryId, setCreateChannelInitialCategoryId] = useState<
+    string | null
+  >(null);
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
@@ -131,6 +144,26 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   const [extrasTab, setExtrasTab] = useState<'events' | 'boost'>('events');
   const [favoriteGuildIds, setFavoriteGuildIds] = useState<string[]>([]);
   const [guildOrderIds, setGuildOrderIds] = useState<string[]>([]);
+
+  const openCreateChannel = useCallback((categoryId: string | null = null) => {
+    const type =
+      categoryId === '__games__'
+        ? ('GAME' as const)
+        : categoryId === '__watch__'
+          ? ('WATCH_PARTY' as const)
+          : ('TEXT' as const);
+    const real =
+      categoryId === '__games__' || categoryId === '__watch__' ? null : categoryId;
+    setCreateChannelInitialType(type);
+    setCreateChannelInitialCategoryId(real);
+    setCreateChannelOpen(true);
+  }, []);
+
+  const canManageChannels = Boolean(
+    guildPermissions?.owner ||
+      guildPermissions?.platformAdmin ||
+      (guildPermissions?.permissions ?? []).includes('MANAGE_CHANNELS'),
+  );
 
   const reloadGuilds = useCallback(async () => {
     const g = await client.listGuilds();
@@ -459,19 +492,22 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
             id: 'settings-profile',
             icon: 'person',
             label: 'Profil ayarları',
-            onSelect: () => router.push('/(app)/settings'),
+            onSelect: () =>
+              router.push({ pathname: '/(app)/settings', params: { tab: 'profile' } }),
           },
           {
             id: 'settings',
             icon: 'settings',
             label: 'Kullanıcı ayarları',
-            onSelect: () => router.push('/(app)/settings'),
+            onSelect: () =>
+              router.push({ pathname: '/(app)/settings', params: { tab: 'account' } }),
           },
           {
             id: 'voice-settings',
             icon: 'headphones',
             label: 'Ses ve görüntü ayarları',
-            onSelect: () => router.push('/(app)/settings'),
+            onSelect: () =>
+              router.push({ pathname: '/(app)/settings', params: { tab: 'voice' } }),
           },
           {
             id: 'copy-id',
@@ -491,7 +527,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           onSelect: () => {
             void client
               .openDm(target.id)
-              .then(() => router.push('/(app)/dms'))
+              .then((ch) =>
+                router.push({
+                  pathname: '/(app)/dms',
+                  params: { channelId: ch.id },
+                }),
+              )
               .catch((e) =>
                 noticeDialog('Hata', e instanceof Error ? e.message : 'DM açılamadı'),
               );
@@ -628,7 +669,10 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
               if (!ok) return;
               void client
                 .kickGuildMember(guildId, target.id)
-                .then(() => void refreshMembers())
+                .then(() => {
+                  void refreshMembers();
+                  void noticeDialog('Atıldı', `${target.displayName} sunucudan atıldı`);
+                })
                 .catch((e) =>
                   noticeDialog('Hata', e instanceof Error ? e.message : 'Atılamadı'),
                 );
@@ -652,7 +696,10 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
               if (!ok) return;
               void client
                 .banGuildMember(guildId, target.id)
-                .then(() => void refreshMembers())
+                .then(() => {
+                  void refreshMembers();
+                  void noticeDialog('Yasaklandı', `${target.displayName} yasaklandı`);
+                })
                 .catch((e) =>
                   noticeDialog('Hata', e instanceof Error ? e.message : 'Yasaklanamadı'),
                 );
@@ -667,12 +714,20 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           label: 'Timeout (10 dk)',
           danger: true,
           onSelect: () => {
-            void client
-              .timeoutGuildMember(guildId, target.id, 10)
-              .then(() => noticeDialog('Timeout', '10 dakika uygulandı'))
-              .catch((e) =>
-                noticeDialog('Hata', e instanceof Error ? e.message : 'Timeout uygulanamadı'),
-              );
+            void confirmDialog({
+              title: 'Timeout',
+              message: `${target.displayName} 10 dakika timeout alsın mı?`,
+              confirmLabel: 'Uygula',
+              destructive: true,
+            }).then((ok) => {
+              if (!ok) return;
+              void client
+                .timeoutGuildMember(guildId, target.id, 10)
+                .then(() => noticeDialog('Timeout', '10 dakika uygulandı'))
+                .catch((e) =>
+                  noticeDialog('Hata', e instanceof Error ? e.message : 'Timeout uygulanamadı'),
+                );
+            });
           },
         });
       }
@@ -1053,6 +1108,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       userId: string;
       status: PresenceStatus;
       customStatus?: string | null;
+      activity?: PublicUser['activity'];
     }) => {
       setMembers((prev) => {
         if (!prev.some((m) => m.id === payload.userId)) return prev;
@@ -1065,10 +1121,26 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
                   payload.customStatus !== undefined
                     ? payload.customStatus
                     : m.customStatus,
+                activity:
+                  payload.activity !== undefined ? payload.activity : m.activity,
               }
             : m,
         );
       });
+      setProfileUser((cur) =>
+        cur && cur.id === payload.userId
+          ? {
+              ...cur,
+              status: payload.status,
+              customStatus:
+                payload.customStatus !== undefined
+                  ? payload.customStatus
+                  : cur.customStatus,
+              activity:
+                payload.activity !== undefined ? payload.activity : cur.activity,
+            }
+          : cur,
+      );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
     return () => {
@@ -1333,6 +1405,8 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       openCreateGuild: () => setCreateOpen(true),
       openJoinInvite: () => setJoinOpen(true),
       openServerMenu: () => setServerMenuOpen(true),
+      openCreateChannel,
+      canManageChannels,
       guildPermissions,
     }),
     [
@@ -1355,6 +1429,8 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       openProfileForUser,
       openVoiceMember,
       showVoiceMemberMenu,
+      openCreateChannel,
+      canManageChannels,
       guildPermissions,
     ],
   );
@@ -1410,12 +1486,24 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
                   categories={categories}
                   activeChannelId={activeChannelId}
                   onOpenChannel={(c) => void openChannel(c)}
+                  onAddChannel={
+                    canManageChannels
+                      ? (categoryId) => {
+                          closeNav();
+                          openCreateChannel(categoryId);
+                        }
+                      : undefined
+                  }
                   serverName={activeGuild?.name}
                   onOpenServerMenu={() => setServerMenuOpen(true)}
                   onOpenMembers={() => {
                     closeNav();
                     void refreshMembers();
                     setMembersOpen(true);
+                  }}
+                  onActivitiesPress={() => {
+                    closeNav();
+                    setActivitiesPickerOpen(true);
                   }}
                   selfUserId={user?.id}
                   activeVoiceChannelId={voice?.voiceChannelId}
@@ -1475,11 +1563,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         members={members}
         onSelectMember={(m) => {
           setMembersOpen(false);
-          openProfileForUser(m);
+          setTimeout(() => openProfileForUser(m), 120);
         }}
         onMemberLongPress={(m) => {
           setMembersOpen(false);
-          openMemberMenu(m);
+          // MemberSheet Modal kapansın, sonra ActionsSheet açılsın
+          setTimeout(() => openMemberMenu(m), 120);
         }}
       />
 
@@ -1558,6 +1647,22 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
           setExtrasTab('boost');
           setExtrasOpen(true);
         }}
+        onCreateChannel={
+          canManageChannels
+            ? () => {
+                setServerMenuOpen(false);
+                openCreateChannel(null);
+              }
+            : undefined
+        }
+        onCreateCategory={
+          canManageChannels
+            ? () => {
+                setServerMenuOpen(false);
+                setCreateCategoryOpen(true);
+              }
+            : undefined
+        }
         onSettings={() => {
           setServerMenuOpen(false);
           if (guildId) router.push(`/(app)/guild-settings/${guildId}`);
@@ -1580,6 +1685,17 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         user={profileUser}
         joinedAt={profileJoinedAt}
         actions={profileActions}
+        onJoinActivity={(act) => {
+          if (!act.join?.guildId || !act.join.channelId) return;
+          const { guildId: gId, channelId: cId } = act.join;
+          setProfileUser(null);
+          void (async () => {
+            if (guildId !== gId) await selectGuild(gId, { openFirst: false });
+            const chs = await client.getGuildChannels(gId);
+            const found = chs.find((c) => c.id === cId);
+            if (found) await openChannel(found);
+          })();
+        }}
         onClose={() => {
           setProfileUser(null);
           setProfileJoinedAt(null);
@@ -1596,6 +1712,48 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         open={joinOpen}
         onClose={() => setJoinOpen(false)}
         onJoined={(id) => void selectGuild(id)}
+      />
+
+      <ActivitiesPicker
+        open={activitiesPickerOpen}
+        onClose={() => setActivitiesPickerOpen(false)}
+        channels={channelsForList}
+        onSelectChannel={(c) => void openChannel(c)}
+        onOpenDiscover={() => router.push('/(app)/discover')}
+      />
+
+      <CreateChannelSheet
+        open={createChannelOpen}
+        onClose={() => setCreateChannelOpen(false)}
+        categories={categories}
+        initialType={createChannelInitialType}
+        initialCategoryId={createChannelInitialCategoryId}
+        onSubmit={async (data) => {
+          if (!guildId) throw new Error('Sunucu seçili değil');
+          const created = await client.createChannel(guildId, {
+            name: data.name,
+            type: data.type,
+            categoryId: data.categoryId,
+            gameKind: data.gameKind,
+          });
+          const [chs, cats] = await Promise.all([
+            client.getGuildChannels(guildId),
+            client.listGuildCategories(guildId).catch(() => [] as CategoryDto[]),
+          ]);
+          setChannels(chs);
+          setCategories(cats);
+          await openChannel(created);
+        }}
+      />
+      <CreateCategorySheet
+        open={createCategoryOpen}
+        onClose={() => setCreateCategoryOpen(false)}
+        onSubmit={async (name) => {
+          if (!guildId) throw new Error('Sunucu seçili değil');
+          await client.createGuildCategory(guildId, name);
+          const cats = await client.listGuildCategories(guildId);
+          setCategories(cats);
+        }}
       />
     </Ctx.Provider>
   );

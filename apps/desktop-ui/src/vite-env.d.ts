@@ -58,6 +58,11 @@ type DracordDesktopApi = {
   onUpdaterStatus?: (
     callback: (payload: DracordDesktopUpdaterStatus) => void,
   ) => () => void;
+  detectGames?: () => Promise<{
+    ok: boolean;
+    games: Array<{ appId: string; name: string }>;
+    error?: string;
+  }>;
 };
 
 interface Window {

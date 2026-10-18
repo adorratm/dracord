@@ -14,7 +14,8 @@ export type NotificationType =
   | 'ANNOUNCEMENT'
   | 'SYSTEM'
   | 'FRIEND'
-  | 'DM';
+  | 'DM'
+  | 'REMINDER';
 
 @Entity('notifications')
 export class Notification extends CuidEntity {

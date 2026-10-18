@@ -25,6 +25,7 @@ import { NotificationsModule } from '@/notifications/notifications.module';
 import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 import { ActivitiesModule } from '@/activities/activities.module';
 import { GuildEventsModule } from '@/guild-events/guild-events.module';
+import { SpotifyModule } from '@/spotify/spotify.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { GuildEventsModule } from '@/guild-events/guild-events.module';
     NotificationsModule,
     ActivitiesModule,
     GuildEventsModule,
+    SpotifyModule,
   ],
 })
 export class AppModule {}

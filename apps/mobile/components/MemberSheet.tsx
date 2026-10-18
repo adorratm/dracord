@@ -2,7 +2,12 @@ import { memo, useCallback, useMemo } from 'react';
 import { FlatList, Modal, Pressable, Text, View, type ListRenderItemInfo } from 'react-native';
 import type { PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
-import { isOnlinePresence, normalizePresence, presenceLabelTr } from '../lib/presence';
+import {
+  activityLineTr,
+  isOnlinePresence,
+  normalizePresence,
+  presenceLabelTr,
+} from '../lib/presence';
 import { UserAvatar } from './UserAvatar';
 import { Icon } from './Icon';
 import { useThemeRevision } from '../lib/theme-revision';
@@ -131,7 +136,8 @@ const MemberRow = memo(function MemberRow({
   useThemeRevision();
   const st = normalizePresence(user.status);
   const offline = st === 'OFFLINE';
-  const subtitle = presenceLabelTr(st, user.customStatus);
+  const activityLine = activityLineTr(user.activity);
+  const subtitle = activityLine ?? presenceLabelTr(st, user.customStatus);
   return (
     <Pressable
       onPress={onPress}
@@ -152,7 +158,13 @@ const MemberRow = memo(function MemberRow({
         <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
           {user.displayName}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+        <Text
+          style={{
+            color: activityLine ? colors.success : colors.textMuted,
+            fontSize: 12,
+          }}
+          numberOfLines={1}
+        >
           {subtitle}
         </Text>
       </View>

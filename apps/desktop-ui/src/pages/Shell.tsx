@@ -3,6 +3,7 @@ import type {
   CategoryDto,
   ChannelSummary,
   ClientSettings,
+  GameChannelKind,
   GuildSummary,
   PublicUser,
 } from '@dracord/types';
@@ -36,6 +37,7 @@ import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from '../views/ChatPanel';
 import { VoicePanel } from '../views/VoicePanel';
 import { ActivityPanel } from '../views/ActivityPanel';
+import { ActivitiesPicker } from '../views/ActivitiesPicker';
 import { DmPanel } from '../views/DmPanel';
 import { DmSidebar } from '../views/DmSidebar';
 import { AppTour } from '../components/AppTour';
@@ -47,6 +49,7 @@ import { SearchOverlay } from '../views/SearchOverlay';
 import { NotificationsPanel } from '../views/NotificationsPanel';
 import { GuildSettingsPage } from '../views/GuildSettingsPage';
 import { GuildEventsModal } from '../views/GuildEventsModal';
+import { useDesktopGamePresence } from '../hooks/useDesktopGamePresence';
 import { GuildBoostPage } from '../views/GuildBoostPage';
 import { MemberPanel } from '../views/MemberPanel';
 import { NotificationBell } from '../views/NotificationBell';
@@ -99,7 +102,9 @@ export function Shell() {
     }
   });
   const [prefs, setPrefs] = useState<ClientSettings>(loadLocalPrefs);
+  useDesktopGamePresence(prefs);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
+  const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
   const [canManageChannels, setCanManageChannels] = useState(false);
@@ -110,10 +115,15 @@ export function Shell() {
   const [canModerateMembers, setCanModerateMembers] = useState(false);
   const [channelModal, setChannelModal] = useState<
     | null
-    | { mode: 'create'; categoryId: string | null; type: ChannelSummary['type'] }
+    | {
+        mode: 'create';
+        categoryId: string | null;
+        type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
+      }
     | { mode: 'edit'; channel: ChannelSummary }
   >(null);
   const [channelNameDraft, setChannelNameDraft] = useState('');
+  const [channelGameKind, setChannelGameKind] = useState<GameChannelKind>('billiards');
   const [categoryModal, setCategoryModal] = useState<
     null | { mode: 'create' } | { mode: 'edit'; category: CategoryDto }
   >(null);
@@ -176,13 +186,16 @@ export function Shell() {
     return set;
   }, [members]);
 
+  const activeIsVoiceChannel =
+    activeChannel?.type === 'VOICE' ||
+    activeChannel?.type === 'GAME' ||
+    activeChannel?.type === 'WATCH_PARTY';
   const titleNav: TitleBarNavId =
     view.kind === 'dms' || view.kind === 'friends' || view.kind === 'home'
       ? 'direct-messages'
       : view.kind === 'settings'
         ? 'settings'
-        : activeChannel?.type === 'VOICE' ||
-            (inVoiceInThisGuild && activeChannel?.type !== 'VOICE')
+        : activeIsVoiceChannel || inVoiceInThisGuild
           ? 'voice'
           : 'servers';
 
@@ -309,6 +322,7 @@ export function Shell() {
       userId: string;
       status: PublicUser['status'];
       customStatus?: string | null;
+      activity?: PublicUser['activity'];
     }) => {
       if (
         payload.userId === user.id &&
@@ -328,9 +342,22 @@ export function Shell() {
                 status: nextStatus,
                 customStatus:
                   payload.customStatus !== undefined ? payload.customStatus : m.customStatus,
+                activity:
+                  payload.activity !== undefined ? payload.activity : m.activity,
               }
             : m,
         ),
+      );
+      setProfileUser((cur) =>
+        cur && cur.id === payload.userId
+          ? {
+              ...cur,
+              status: nextStatus,
+              customStatus:
+                payload.customStatus !== undefined ? payload.customStatus : cur.customStatus,
+              activity: payload.activity !== undefined ? payload.activity : cur.activity,
+            }
+          : cur,
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
@@ -796,15 +823,17 @@ export function Shell() {
             : undefined,
         onAddChannel: canManageChannels
           ? (categoryId) => {
-              const type: ChannelSummary['type'] =
+              const type =
                 categoryId === '__games__'
-                  ? 'GAME'
+                  ? ('GAME' as const)
                   : categoryId === '__watch__'
-                    ? 'WATCH_PARTY'
-                    : 'TEXT';
+                    ? ('WATCH_PARTY' as const)
+                    : ('TEXT' as const);
               const real =
                 categoryId === '__games__' || categoryId === '__watch__' ? null : categoryId;
               setChannelNameDraft('');
+              setChannelGameKind('billiards');
+              setModalError(null);
               setChannelModal({ mode: 'create', categoryId: real, type });
             }
           : undefined,
@@ -1275,12 +1304,7 @@ export function Shell() {
                     ? () => void voice.toggleScreenShare()
                     : undefined,
                 onActivitiesClick: inVoiceInThisGuild
-                  ? () => {
-                      const game = channels.find((c) => c.type === 'GAME');
-                      if (game && activeGuildId) {
-                        void joinVoiceChannel(activeGuildId, game);
-                      }
-                    }
+                  ? () => setActivitiesPickerOpen(true)
                   : undefined,
                 screenShareViewControl:
                   inVoiceInThisGuild &&
@@ -1600,18 +1624,35 @@ export function Shell() {
             İnsanları davet et
           </button>
           {canManageChannels && (
-            <button
-              type="button"
-              className="h-10 px-3 rounded-lg text-left hover:bg-surface-container-high text-sm flex items-center gap-2"
-              onClick={() => {
-                setServerMenuOpen(false);
-                setCategoryNameDraft('');
-                setCategoryModal({ mode: 'create' });
-              }}
-            >
-              <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
-              Kategori oluştur
-            </button>
+            <>
+              <button
+                type="button"
+                className="h-10 px-3 rounded-lg text-left hover:bg-surface-container-high text-sm flex items-center gap-2"
+                onClick={() => {
+                  setServerMenuOpen(false);
+                  setChannelNameDraft('');
+                  setChannelGameKind('billiards');
+                  setModalError(null);
+                  setChannelModal({ mode: 'create', categoryId: null, type: 'TEXT' });
+                }}
+              >
+                <span className="material-symbols-outlined text-[18px]">tag</span>
+                Kanal oluştur
+              </button>
+              <button
+                type="button"
+                className="h-10 px-3 rounded-lg text-left hover:bg-surface-container-high text-sm flex items-center gap-2"
+                onClick={() => {
+                  setServerMenuOpen(false);
+                  setCategoryNameDraft('');
+                  setModalError(null);
+                  setCategoryModal({ mode: 'create' });
+                }}
+              >
+                <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
+                Kategori oluştur
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -1657,40 +1698,98 @@ export function Shell() {
       <Modal
         open={Boolean(channelModal)}
         title={channelModal?.mode === 'edit' ? 'Kanalı düzenle' : 'Kanal oluştur'}
-        onClose={() => setChannelModal(null)}
+        onClose={() => {
+          setChannelModal(null);
+          setModalError(null);
+        }}
       >
+        {modalError ? <p className="text-error text-sm mb-2">{modalError}</p> : null}
         <input
           value={channelNameDraft}
           onChange={(e) => setChannelNameDraft(e.target.value)}
           placeholder="Kanal adı"
           className="w-full h-10 px-3 rounded-lg bg-surface-container-highest outline-none mb-3"
         />
+        {channelModal?.mode === 'create' ? (
+          <div className="mb-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { id: 'TEXT' as const, label: 'Metin' },
+                  { id: 'VOICE' as const, label: 'Ses' },
+                  { id: 'FORUM' as const, label: 'Forum' },
+                  { id: 'GAME' as const, label: 'Oyun' },
+                  { id: 'WATCH_PARTY' as const, label: 'Watch Party' },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`h-9 rounded-lg text-sm font-semibold ${
+                    channelModal.type === opt.id
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'bg-surface-container-high'
+                  }`}
+                  onClick={() =>
+                    setChannelModal({
+                      mode: 'create',
+                      categoryId: channelModal.categoryId,
+                      type: opt.id,
+                    })
+                  }
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {channelModal.type === 'GAME' ? (
+              <select
+                value={channelGameKind}
+                onChange={(e) => setChannelGameKind(e.target.value as GameChannelKind)}
+                className="w-full h-10 px-3 rounded-lg bg-surface-container-highest outline-none"
+              >
+                <option value="billiards">Bilardo</option>
+                <option value="okey">Okey</option>
+                <option value="bowling">Bowling</option>
+                <option value="tavla">Tavla</option>
+                <option value="blackjack">Blackjack</option>
+                <option value="trivia">Trivia</option>
+                <option value="words">Kelime</option>
+              </select>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
           disabled={!channelNameDraft.trim() || !activeGuildId}
           className="w-full h-10 rounded-lg bg-primary-container text-on-primary-container font-bold disabled:opacity-50"
           onClick={() => {
             if (!activeGuildId || !channelModal) return;
+            setModalError(null);
             if (channelModal.mode === 'create') {
               void client
                 .createChannel(activeGuildId, {
                   name: channelNameDraft.trim(),
-                  type: channelModal.type as 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY',
+                  type: channelModal.type,
                   categoryId: channelModal.categoryId,
-                  gameKind: channelModal.type === 'GAME' ? 'billiards' : undefined,
+                  gameKind:
+                    channelModal.type === 'GAME'
+                      ? channelGameKind || 'billiards'
+                      : null,
                 })
                 .then(() => {
                   setChannelModal(null);
                   reloadChannels(activeGuildId);
                 })
-                .catch((e) => setModalError(e instanceof Error ? e.message : 'Hata'));
+                .catch((e) => setModalError(e instanceof Error ? e.message : 'Kanal oluşturulamadı'));
             } else {
               void client
                 .updateChannel(channelModal.channel.id, { name: channelNameDraft.trim() })
                 .then(() => {
                   setChannelModal(null);
                   reloadChannels(activeGuildId);
-                });
+                })
+                .catch((e) => setModalError(e instanceof Error ? e.message : 'Kanal güncellenemedi'));
             }
           }}
         >
@@ -1701,8 +1800,12 @@ export function Shell() {
       <Modal
         open={Boolean(categoryModal)}
         title={categoryModal?.mode === 'edit' ? 'Kategori düzenle' : 'Kategori oluştur'}
-        onClose={() => setCategoryModal(null)}
+        onClose={() => {
+          setCategoryModal(null);
+          setModalError(null);
+        }}
       >
+        {modalError ? <p className="text-error text-sm mb-2">{modalError}</p> : null}
         <input
           value={categoryNameDraft}
           onChange={(e) => setCategoryNameDraft(e.target.value)}
@@ -1715,13 +1818,17 @@ export function Shell() {
           className="w-full h-10 rounded-lg bg-primary-container text-on-primary-container font-bold disabled:opacity-50"
           onClick={() => {
             if (!activeGuildId || !categoryModal) return;
+            setModalError(null);
             if (categoryModal.mode === 'create') {
               void client
                 .createGuildCategory(activeGuildId, categoryNameDraft.trim())
                 .then(() => {
                   setCategoryModal(null);
                   reloadChannels(activeGuildId);
-                });
+                })
+                .catch((e) =>
+                  setModalError(e instanceof Error ? e.message : 'Kategori oluşturulamadı'),
+                );
             } else {
               void client
                 .updateGuildCategory(activeGuildId, categoryModal.category.id, {
@@ -1730,7 +1837,10 @@ export function Shell() {
                 .then(() => {
                   setCategoryModal(null);
                   reloadChannels(activeGuildId);
-                });
+                })
+                .catch((e) =>
+                  setModalError(e instanceof Error ? e.message : 'Kategori güncellenemedi'),
+                );
             }
           }}
         >
@@ -2149,10 +2259,17 @@ export function Shell() {
           bio: profileUser?.bio,
           status: profileUser?.status,
           customStatus: profileUser?.customStatus,
+          activity: profileUser?.activity,
           isBot: profileUser?.isBot,
           roles: profileUser?.roles,
           socialLinks: profileUser?.socialLinks,
           accentColor: profileUser?.accentColor,
+        }}
+        onJoinActivity={(act) => {
+          if (act.join?.guildId && act.join.channelId) {
+            setProfileUser(null);
+            openChannel(act.join.guildId, act.join.channelId);
+          }
         }}
         actions={
           profileUser && profileUser.id !== user?.id
@@ -2196,6 +2313,17 @@ export function Shell() {
               ]
             : []
         }
+      />
+
+      <ActivitiesPicker
+        open={activitiesPickerOpen}
+        onClose={() => setActivitiesPickerOpen(false)}
+        channels={channels}
+        onSelectChannel={(c) => {
+          if (!activeGuildId) return;
+          void joinVoiceChannel(activeGuildId, c);
+        }}
+        onOpenDiscover={() => setView({ kind: 'discover' })}
       />
 
       <AppTour />

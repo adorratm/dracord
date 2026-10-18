@@ -1,5 +1,10 @@
 export { cn } from './lib/cn';
-export { presenceDotClass, presenceLabelTr } from './lib/presence';
+export {
+  presenceDotClass,
+  presenceLabelTr,
+  activityLineTr,
+  memberSubtitleTr,
+} from './lib/presence';
 export {
   APP_TOUR_STEPS,
   APP_TOUR_STORAGE_KEY,

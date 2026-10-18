@@ -228,4 +228,48 @@ export class MessagesController {
       Number.isFinite(parsed) ? parsed : 50,
     );
   }
+
+  @Post('messages/:messageId/remind')
+  createReminder(
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { remindAt?: string },
+  ) {
+    if (!body?.remindAt) {
+      return this.messagesService.createReminder(
+        messageId,
+        user.sub,
+        new Date(Date.now() + 60 * 60_000).toISOString(),
+      );
+    }
+    return this.messagesService.createReminder(messageId, user.sub, body.remindAt);
+  }
+
+  @Get('users/me/reminders')
+  listReminders(
+    @CurrentUser() user: JwtPayloadUser,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? Number(limit) : 40;
+    return this.messagesService.listReminders(user.sub, {
+      status,
+      limit: Number.isFinite(parsed) ? parsed : 40,
+    });
+  }
+
+  @Patch('users/me/reminders/:id')
+  updateReminder(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body()
+    body: { remindAt?: string; snoozeMinutes?: number; cancel?: boolean },
+  ) {
+    return this.messagesService.updateReminder(id, user.sub, body ?? {});
+  }
+
+  @Delete('users/me/reminders/:id')
+  cancelReminder(@Param('id') id: string, @CurrentUser() user: JwtPayloadUser) {
+    return this.messagesService.cancelReminder(id, user.sub);
+  }
 }

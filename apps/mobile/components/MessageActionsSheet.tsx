@@ -40,6 +40,10 @@ export type MessageActionId =
   | 'thread'
   | 'pin'
   | 'bookmark'
+  | 'remind-1h'
+  | 'remind-1d'
+  | 'remind-3d'
+  | 'remind-1w'
   | 'copy-content'
   | 'copy-attach'
   | 'copy-poll'
@@ -149,6 +153,35 @@ export function MessageActionsSheet({
         onClose();
       },
     });
+    if (!isHeading) {
+      list.push({
+        id: 'remind-1h',
+        icon: 'schedule',
+        label: 'Hatırlat · 1 saat',
+        onPress: () => {
+          onAction('remind-1h', message);
+          onClose();
+        },
+      });
+      list.push({
+        id: 'remind-1d',
+        icon: 'alarm',
+        label: 'Hatırlat · yarın',
+        onPress: () => {
+          onAction('remind-1d', message);
+          onClose();
+        },
+      });
+      list.push({
+        id: 'remind-1w',
+        icon: 'event',
+        label: 'Hatırlat · 1 hafta',
+        onPress: () => {
+          onAction('remind-1w', message);
+          onClose();
+        },
+      });
+    }
     if (!isHeading) {
       list.push({
         id: 'apps',

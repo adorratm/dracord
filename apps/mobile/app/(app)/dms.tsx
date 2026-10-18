@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Room, RoomEvent, Track, type RemoteTrack } from 'livekit-client';
 import { registerGlobals } from '@livekit/react-native';
 import type { ChannelSummary } from '@dracord/types';
@@ -22,6 +22,7 @@ function ensureLiveKit() {
 export default function DmsScreen() {
   const { client } = useAuth();
   const router = useRouter();
+  const { channelId } = useLocalSearchParams<{ channelId?: string }>();
   const [dms, setDms] = useState<ChannelSummary[]>([]);
   const [active, setActive] = useState<ChannelSummary | null>(null);
   const [callStatus, setCallStatus] = useState<string | null>(null);
@@ -30,7 +31,13 @@ export default function DmsScreen() {
   const reload = () =>
     client.listDms().then((list) => {
       setDms(list);
-      setActive((cur) => cur ?? list[0] ?? null);
+      setActive((cur) => {
+        if (channelId) {
+          const hit = list.find((c) => c.id === channelId);
+          if (hit) return hit;
+        }
+        return cur ?? list[0] ?? null;
+      });
     });
 
   useEffect(() => {
@@ -39,6 +46,12 @@ export default function DmsScreen() {
       void endCall();
     };
   }, [client]);
+
+  useEffect(() => {
+    if (!channelId || dms.length === 0) return;
+    const hit = dms.find((c) => c.id === channelId);
+    if (hit) setActive(hit);
+  }, [channelId, dms]);
 
   const endCall = async () => {
     const room = roomRef.current;

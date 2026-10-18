@@ -9,6 +9,7 @@ import { CustomSlashService } from './custom-slash.service';
 import { MessagesController } from './messages.controller';
 import { MessagesRealtimeService } from './messages-realtime.service';
 import { MessagesService } from './messages.service';
+import { ReminderSchedulerService } from './reminder-scheduler.service';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MessagesService } from './messages.service';
     LinkPreviewService,
     MessagesRealtimeService,
     CustomSlashService,
+    ReminderSchedulerService,
   ],
   exports: [MessagesService, MessagesRealtimeService],
 })

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   SocketEvents,
   type DmCallPayload,
+  type UserActivity,
   type VoiceStatePayload,
   type VoiceTakeoverPayload,
 } from '@dracord/types';
@@ -39,6 +40,7 @@ export class SocketBroadcastService {
     userId: string;
     status: string;
     customStatus?: string | null;
+    activity?: UserActivity | null;
   }) {
     this.server?.emit(SocketEvents.PRESENCE_UPDATE, payload);
   }

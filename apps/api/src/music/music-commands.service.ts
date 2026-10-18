@@ -10,6 +10,7 @@ import { toPublicUser } from '@/common/user.mapper';
 import { MessagesRealtimeService } from '@/messages/messages-realtime.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { MusicJobsService } from './music-jobs.service';
+import { musicOpenUrl, musicReplayQuery } from './music-public-url';
 import { MusicResolveService } from './music-resolve.service';
 import { MusicStateService } from './music-state.service';
 
@@ -132,17 +133,19 @@ export class MusicCommandsService {
       (await this.state.emptyState(ctx.guildId, ctx.voiceChannelId, textChannelId));
     state.textChannelId = textChannelId;
 
-    const tracks: MusicTrack[] = resolvedList.map((r) =>
-      this.state.makeTrack({
+    const tracks: MusicTrack[] = resolvedList.map((r) => {
+      const openUrl = musicOpenUrl({ title: r.title, url: arg, source: r.source });
+      return this.state.makeTrack({
         title: r.title,
-        url: arg,
+        // Embed / tekrar için her zaman http veya anlamlı arama metni
+        url: openUrl.startsWith('http') ? openUrl : musicReplayQuery({ title: r.title, url: arg, source: r.source }),
         source: r.source,
         requestedById: authorId,
         requestedByName: author.displayName,
         durationSec: r.durationSec ?? null,
         thumbnailUrl: r.thumbnailUrl ?? null,
-      }),
-    );
+      });
+    });
 
     const wasIdle = !state.nowPlaying;
     if (wasIdle && tracks[0]) {
@@ -166,12 +169,14 @@ export class MusicCommandsService {
         t.durationSec != null
           ? `${Math.floor(t.durationSec / 60)} dk ${t.durationSec % 60} sn`
           : null;
+      const openUrl = musicOpenUrl(t);
+      const replayQ = musicReplayQuery(t);
       await this.reply(
         textChannelId,
         `[PLAY] **Çalıyor:** ${t.title}`,
         [
           {
-            url: t.source.startsWith('http') ? t.source : t.url || 'https://youtube.com',
+            url: openUrl,
             title: t.title,
             description: [dur, `DJ: ${author.displayName}`].filter(Boolean).join(' · '),
             imageUrl: t.thumbnailUrl ?? null,
@@ -180,11 +185,21 @@ export class MusicCommandsService {
               {
                 id: 'yt',
                 label: "YouTube'da aç",
-                url: t.source.startsWith('http') ? t.source : t.url,
+                url: openUrl,
                 action: 'open',
               },
-              { id: 'replay', label: 'Tekrar oynat', action: 'replay' },
-              { id: 'lyrics', label: 'Şarkı sözleri', action: 'lyrics' },
+              {
+                id: 'replay',
+                label: 'Tekrar oynat',
+                url: replayQ,
+                action: 'replay',
+              },
+              {
+                id: 'lyrics',
+                label: 'Şarkı sözleri',
+                url: t.title,
+                action: 'lyrics',
+              },
             ],
           },
         ],

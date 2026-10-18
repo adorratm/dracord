@@ -70,6 +70,13 @@ export class User extends CuidEntity {
   @Column({ type: 'jsonb', nullable: true })
   clientSettings!: Record<string, unknown> | null;
 
+  /**
+   * Canlı aktivite (oyun / dinleme / izleme).
+   * Kaynak: dracord activity, spotify, desktop process, manual.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  liveActivity!: Record<string, unknown> | null;
+
   /** Hesap devre dışı (giriş engeli) */
   @Column({ type: 'timestamptz', nullable: true })
   disabledAt!: Date | null;

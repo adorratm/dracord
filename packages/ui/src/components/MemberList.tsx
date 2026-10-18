@@ -1,12 +1,18 @@
 'use client';
 
-import type { PresenceStatus, SocialLinks, MemberRoleSummary } from '@dracord/types';
+import type {
+  PresenceStatus,
+  SocialLinks,
+  MemberRoleSummary,
+  UserActivity,
+} from '@dracord/types';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
 import { UserHoverCard } from './UserHoverCard';
+import { activityLineTr } from '../lib/presence';
 
 export interface MemberListAction {
   id: string;
@@ -25,6 +31,7 @@ export interface MemberListMember {
   bio?: string | null;
   status: PresenceStatus;
   customStatus?: string | null;
+  activity?: UserActivity | null;
   socialLinks?: SocialLinks | null;
   roleColor?: string;
   subtitle?: string;
@@ -167,6 +174,7 @@ export function MemberList({ groups, className }: MemberListProps) {
                       bio: member.bio,
                       status: member.status,
                       customStatus: member.customStatus,
+                      activity: member.activity,
                       isBot: member.isBot,
                       socialLinks: member.socialLinks,
                       roles: member.roles,
@@ -228,11 +236,15 @@ export function MemberList({ groups, className }: MemberListProps) {
                               />
                             ))}
                         </span>
-                        {member.subtitle && (
+                        {activityLineTr(member.activity) ? (
+                          <span className="font-label-sm text-label-sm text-secondary truncate">
+                            {activityLineTr(member.activity)}
+                          </span>
+                        ) : member.subtitle ? (
                           <span className="font-label-sm text-label-sm text-outline truncate">
                             {member.subtitle}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                     </button>
                   </UserHoverCard>

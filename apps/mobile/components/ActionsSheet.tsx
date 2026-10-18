@@ -93,8 +93,10 @@ export function ActionsSheet({
                 danger={a.danger}
                 muted={a.muted}
                 onPress={() => {
-                  a.onSelect();
+                  // Modal üst üste binmesin: önce kapat, sonra aksiyon (confirm/profil)
                   onClose();
+                  const run = a.onSelect;
+                  setTimeout(() => run(), 120);
                 }}
               />
             ))}

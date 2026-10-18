@@ -9,7 +9,25 @@ export type ChannelType =
   | 'WATCH_PARTY';
 
 /** GAME kanalı alt türü (WATCH_PARTY ayrı ChannelType) */
-export type GameChannelKind = 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack';
+export type GameChannelKind =
+  | 'billiards'
+  | 'okey'
+  | 'bowling'
+  | 'tavla'
+  | 'blackjack'
+  | 'trivia'
+  | 'words';
+
+/** API + istemciler için tek kaynak — GAME createChannel allowlist */
+export const GAME_CHANNEL_KINDS: readonly GameChannelKind[] = [
+  'billiards',
+  'okey',
+  'bowling',
+  'tavla',
+  'blackjack',
+  'trivia',
+  'words',
+] as const;
 
 export interface SocialLinks {
   website?: string;
@@ -26,6 +44,31 @@ export interface SocialLinks {
   facebook?: string;
 }
 
+/** Discord tarzı canlı aktivite (oyun / dinleme / izleme) */
+export type UserActivityType = 'playing' | 'watching' | 'listening' | 'custom';
+export type UserActivitySource = 'dracord' | 'spotify' | 'desktop' | 'manual';
+
+export interface UserActivity {
+  type: UserActivityType;
+  name: string;
+  details?: string | null;
+  startedAt?: string | null;
+  source: UserActivitySource;
+  /** Kapak / ikon URL (Spotify albüm vb.) */
+  imageUrl?: string | null;
+  /** Spotify / harici deep link */
+  url?: string | null;
+  join?: {
+    guildId: string;
+    channelId: string;
+    sessionId?: string;
+  } | null;
+  /** Masaüstü algılama için exe adı (gizli tutulabilir) */
+  desktopAppId?: string | null;
+  /** Bu aktivitenin geçerlilik sonu (ISO) — TTL */
+  expiresAt?: string | null;
+}
+
 export interface PublicUser {
   id: string;
   username: string;
@@ -33,6 +76,8 @@ export interface PublicUser {
   avatarUrl: string | null;
   status: PresenceStatus;
   customStatus?: string | null;
+  /** Canlı aktivite — gizlilik ayarına göre null olabilir */
+  activity?: UserActivity | null;
   usernameConfirmed?: boolean;
   bannerColor?: string | null;
   bannerUrl?: string | null;
@@ -221,6 +266,17 @@ export const DISCOVER_CURATED_APPS: DiscoverCuratedApp[] = [
     accent: '#0284c7',
   },
   {
+    id: 'tavla',
+    name: 'Tavla',
+    tagline: 'Klasik ikili masa',
+    description: 'İki kişilik tavla — oyun kanalından Başlat.',
+    icon: 'casino',
+    kind: 'game',
+    gameChannelHint: 'tavla',
+    gradient: 'from-rose-700/70 via-red-950/40 to-surface-container-high',
+    accent: '#e11d48',
+  },
+  {
     id: 'watch',
     name: 'Watch Party',
     tagline: 'Birlikte izle',
@@ -229,6 +285,28 @@ export const DISCOVER_CURATED_APPS: DiscoverCuratedApp[] = [
     kind: 'utility',
     gradient: 'from-indigo-700/70 via-violet-900/40 to-surface-container-high',
     accent: '#6366f1',
+  },
+  {
+    id: 'trivia',
+    name: 'Trivia',
+    tagline: 'Bilgi yarışması',
+    description: 'Çoktan seçmeli sorular — arkadaşlarınla puan kapışması.',
+    icon: 'quiz',
+    kind: 'game',
+    gameChannelHint: 'trivia',
+    gradient: 'from-fuchsia-700/70 via-purple-950/40 to-surface-container-high',
+    accent: '#c026d3',
+  },
+  {
+    id: 'words',
+    name: 'Kelime',
+    tagline: 'Harf tahmin',
+    description: 'Gizli kelimeyi harf harf bul — adam asmaca tarzı.',
+    icon: 'spellcheck',
+    kind: 'game',
+    gameChannelHint: 'words',
+    gradient: 'from-lime-700/70 via-green-950/40 to-surface-container-high',
+    accent: '#65a30d',
   },
 ];
 
@@ -407,6 +485,8 @@ export interface MessageDto {
   viewerHide?: MessageViewerHide;
   /** Görüntüleyen yer imine eklediyse */
   bookmarked?: boolean;
+  /** Görüntüleyen için bekleyen hatırlatma varsa */
+  reminderAt?: string | null;
   createdAt: string;
   updatedAt: string | null;
 }
@@ -419,6 +499,21 @@ export interface MessageBookmarkDto {
   guildId: string | null;
   createdAt: string;
   message: MessageDto;
+}
+
+export type MessageReminderStatus = 'pending' | 'fired' | 'cancelled' | 'snoozed';
+
+export interface MessageReminderDto {
+  id: string;
+  messageId: string;
+  channelId: string | null;
+  channelName: string | null;
+  guildId: string | null;
+  remindAt: string;
+  status: MessageReminderStatus;
+  snoozedUntil: string | null;
+  createdAt: string;
+  message: MessageDto | null;
 }
 
 export type GuildPermission =
@@ -544,7 +639,13 @@ export interface VoiceSyncPayload {
   membersByChannel: Record<string, VoiceMemberSummary[]>;
 }
 
-export type NotificationType = 'MENTION' | 'ANNOUNCEMENT' | 'SYSTEM' | 'FRIEND' | 'DM';
+export type NotificationType =
+  | 'MENTION'
+  | 'ANNOUNCEMENT'
+  | 'SYSTEM'
+  | 'FRIEND'
+  | 'DM'
+  | 'REMINDER';
 
 export interface NotificationDto {
   id: string;
@@ -601,6 +702,8 @@ export type ActivityKind =
   | 'bowling'
   | 'tavla'
   | 'blackjack'
+  | 'trivia'
+  | 'words'
   | 'watch_party';
 
 export type ActivityStatus = 'lobby' | 'playing' | 'ended';
@@ -723,6 +826,10 @@ export interface ClientSettings {
     displayActivity: boolean;
     shareGames: boolean;
     allowJoinRequests: boolean;
+    /** Spotify dinleme durumunu profilde göster */
+    shareSpotify?: boolean;
+    /** Masaüstü oyun algılamayı paylaş */
+    shareDesktopActivity?: boolean;
   };
   developer: {
     developerMode: boolean;

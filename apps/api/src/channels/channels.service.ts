@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { EntityManager, In } from 'typeorm';
-import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
+import {
+  GAME_CHANNEL_KINDS,
+  type ChannelSummary,
+  type VoiceMemberSummary,
+} from '@dracord/types';
 import {
   GuildsService,
   type MemberPermContext,
@@ -140,7 +144,7 @@ export class ChannelsService {
       type: 'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY';
       categoryId?: string | null;
       topic?: string | null;
-      gameKind?: 'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | null;
+      gameKind?: string | null;
     },
   ): Promise<ChannelSummary> {
     await this.guilds.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
@@ -164,11 +168,15 @@ export class ChannelsService {
 
     let gameKind: string | null = null;
     if (channelType === ChannelType.GAME) {
-      const allowed = new Set(['billiards', 'okey', 'bowling', 'tavla', 'blackjack']);
-      if (!data.gameKind || !allowed.has(data.gameKind)) {
-        throw new BadRequestException('Oyun türü gerekli (billiards/okey/bowling/tavla/blackjack)');
+      const normalized =
+        typeof data.gameKind === 'string' ? data.gameKind.trim().toLowerCase() : '';
+      const allowed = new Set<string>(GAME_CHANNEL_KINDS);
+      if (!normalized || !allowed.has(normalized)) {
+        throw new BadRequestException(
+          `Oyun türü gerekli (${GAME_CHANNEL_KINDS.join('/')})`,
+        );
       }
-      gameKind = data.gameKind;
+      gameKind = normalized;
     }
 
     const last = await this.em.findOne(Channel, {

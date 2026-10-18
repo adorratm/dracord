@@ -150,7 +150,7 @@ export function FriendsHub({
           ListHeaderComponent={
             incoming.length > 0 ? (
               <Text style={{ color: colors.textMuted, fontWeight: '700', marginBottom: 8 }}>Gelen</Text>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item: row }) =>
             row.kind === 'in' ? (

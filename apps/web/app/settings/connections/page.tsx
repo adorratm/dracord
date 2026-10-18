@@ -1,15 +1,16 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import {
   SettingsPage,
   SettingsSection,
   SettingsNote,
 } from '@/components/settings/SettingsControls';
+import { useAuth } from '@/components/AuthProvider';
 import { useUserPreferences } from '@/lib/user-preferences';
 import { newId } from '@/lib/totp';
 
 const CATALOG = [
-  { id: 'spotify', name: 'Spotify' },
   { id: 'github', name: 'GitHub' },
   { id: 'youtube', name: 'YouTube' },
   { id: 'twitch', name: 'Twitch' },
@@ -17,7 +18,30 @@ const CATALOG = [
 ];
 
 export default function ConnectionsPage() {
+  const { client } = useAuth();
   const { prefs, setSection } = useUserPreferences();
+  const [spotify, setSpotify] = useState<{
+    configured: boolean;
+    connected: boolean;
+    authorizeUrl: string | null;
+  } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const refreshSpotify = useCallback(() => {
+    void client
+      .getSpotifyStatus()
+      .then(setSpotify)
+      .catch(() =>
+        setSpotify({ configured: false, connected: false, authorizeUrl: null }),
+      );
+  }, [client]);
+
+  useEffect(() => {
+    refreshSpotify();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('spotify') === 'ok') setMsg('Spotify bağlandı');
+    if (q.get('spotify') === 'error') setMsg('Spotify bağlantısı başarısız');
+  }, [refreshSpotify]);
 
   const connect = (name: string) => {
     if (prefs.connections.apps.some((a) => a.name === name)) return;
@@ -38,9 +62,59 @@ export default function ConnectionsPage() {
   return (
     <SettingsPage
       title="Bağlı Uygulamalar"
-      description="Hesabına uygulama bağla veya bağlantıyı kaldır (demo OAuth)."
+      description="Spotify dinleme durumunu paylaş veya diğer uygulamaları bağla."
     >
-      <SettingsSection title="Uygulama ekle">
+      {msg && (
+        <p className="px-space-md font-body-sm text-secondary mb-2">{msg}</p>
+      )}
+      <SettingsSection title="Spotify">
+        <div className="px-space-md py-space-md space-y-2">
+          {!spotify?.configured ? (
+            <SettingsNote>
+              Spotify API anahtarları yapılandırılmamış (SPOTIFY_CLIENT_ID /
+              SPOTIFY_CLIENT_SECRET).
+            </SettingsNote>
+          ) : spotify.connected ? (
+            <>
+              <p className="font-body-md text-on-surface">Spotify bağlı</p>
+              <p className="font-body-sm text-on-surface-variant">
+                Çalan parçan profilinde “Dinliyor” olarak görünür (gizlilik
+                ayarına bağlı).
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void client.disconnectSpotify().then(() => {
+                    refreshSpotify();
+                    setMsg('Spotify bağlantısı kesildi');
+                  });
+                }}
+                className="font-label-sm text-error hover:underline"
+              >
+                Bağlantıyı kes
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="font-body-sm text-on-surface-variant">
+                Hesabını bağla; Currently Playing API ile dinlediğin şarkı
+                profilde görünür.
+              </p>
+              <button
+                type="button"
+                disabled={!spotify.authorizeUrl}
+                onClick={() => {
+                  if (spotify.authorizeUrl) window.location.href = spotify.authorizeUrl;
+                }}
+                className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-40"
+              >
+                Spotify bağla
+              </button>
+            </>
+          )}
+        </div>
+      </SettingsSection>
+      <SettingsSection title="Diğer uygulamalar (demo)">
         <div className="px-space-md py-space-md flex flex-wrap gap-2">
           {CATALOG.map((c) => (
             <button
@@ -55,9 +129,9 @@ export default function ConnectionsPage() {
           ))}
         </div>
       </SettingsSection>
-      <SettingsSection title="Bağlı">
+      <SettingsSection title="Bağlı (demo)">
         {prefs.connections.apps.length === 0 ? (
-          <SettingsNote>Bağlı uygulama yok.</SettingsNote>
+          <SettingsNote>Demo bağlı uygulama yok.</SettingsNote>
         ) : (
           <ul className="divide-y divide-surface-container-high">
             {prefs.connections.apps.map((a) => (

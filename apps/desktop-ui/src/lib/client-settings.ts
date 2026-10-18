@@ -61,6 +61,8 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     displayActivity: true,
     shareGames: true,
     allowJoinRequests: true,
+    shareSpotify: true,
+    shareDesktopActivity: false,
   },
   developer: {
     developerMode: false,

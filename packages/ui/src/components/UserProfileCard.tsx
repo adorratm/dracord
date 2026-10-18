@@ -1,12 +1,30 @@
 'use client';
 
-import type { MemberRoleSummary, PresenceStatus, RoleProfileBgKey, SocialLinks } from '@dracord/types';
+import type {
+  MemberRoleSummary,
+  PresenceStatus,
+  RoleProfileBgKey,
+  SocialLinks,
+  UserActivity,
+} from '@dracord/types';
 import { useEffect } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
 import { SocialLinksRow } from './SocialLinksRow';
 import { presenceLabelTr } from '../lib/presence';
+
+function activityLabel(a: UserActivity): string {
+  const prefix =
+    a.type === 'listening'
+      ? 'Dinliyor'
+      : a.type === 'watching'
+        ? 'İzliyor'
+        : a.type === 'custom'
+          ? ''
+          : 'Oynuyor';
+  return prefix ? `${prefix} · ${a.name}` : a.name;
+}
 
 export interface UserProfileCardProps {
   open: boolean;
@@ -24,11 +42,13 @@ export interface UserProfileCardProps {
     bio?: string | null;
     status?: PresenceStatus;
     customStatus?: string | null;
+    activity?: UserActivity | null;
     isBot?: boolean;
     roles?: MemberRoleSummary[];
     socialLinks?: SocialLinks | null;
   };
   actions?: Array<{ id: string; label: string; danger?: boolean; onClick: () => void }>;
+  onJoinActivity?: (activity: UserActivity) => void;
 }
 
 function pickBg(roles?: MemberRoleSummary[]): RoleProfileBgKey {
@@ -44,6 +64,7 @@ export function UserProfileCard({
   user,
   actions = [],
   variant = 'modal',
+  onJoinActivity,
 }: UserProfileCardProps) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -154,6 +175,52 @@ export function UserProfileCard({
             )}
             {!user.status && user.customStatus && (
               <p className="mt-2 font-body-sm text-on-surface-variant">{user.customStatus}</p>
+            )}
+            {user.activity && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg bg-surface-container px-2.5 py-2">
+                {user.activity.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.activity.imageUrl}
+                    alt=""
+                    className="w-10 h-10 rounded object-cover shrink-0"
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-secondary text-[22px] shrink-0">
+                    {user.activity.type === 'listening'
+                      ? 'headphones'
+                      : user.activity.type === 'watching'
+                        ? 'live_tv'
+                        : 'sports_esports'}
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-label-md text-secondary">{activityLabel(user.activity)}</p>
+                  {user.activity.details ? (
+                    <p className="font-body-sm text-on-surface-variant truncate">
+                      {user.activity.details}
+                    </p>
+                  ) : null}
+                  {user.activity.join && onJoinActivity ? (
+                    <button
+                      type="button"
+                      className="mt-1 font-label-sm text-primary-container hover:underline"
+                      onClick={() => onJoinActivity(user.activity!)}
+                    >
+                      Katıl
+                    </button>
+                  ) : user.activity.url ? (
+                    <a
+                      href={user.activity.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-block font-label-sm text-primary-container hover:underline"
+                    >
+                      Aç
+                    </a>
+                  ) : null}
+                </div>
+              </div>
             )}
             {user.bio && (
               <p className="mt-space-md font-body-md text-on-surface-variant whitespace-pre-wrap leading-relaxed">

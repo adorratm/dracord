@@ -32,6 +32,52 @@ function mergeMessageUpdate(prev: MessageDto, next: MessageDto): MessageDto {
   };
 }
 
+function isHttpUrl(u?: string | null) {
+  return Boolean(u && /^https?:\/\//i.test(u.trim()));
+}
+
+function queryFrom(u?: string | null) {
+  return (u || '').replace(/^ytsearch\d*:/i, '').trim();
+}
+
+function handleMusicEmbedAction(
+  action: { action?: string | null; url?: string | null },
+  embed: { url?: string | null; title?: string | null },
+  sendPlay: (arg: string) => void,
+) {
+  if (action.action === 'replay') {
+    const play =
+      (isHttpUrl(action.url) && action.url!.trim()) ||
+      (isHttpUrl(embed.url) && embed.url!.trim()) ||
+      queryFrom(action.url) ||
+      queryFrom(embed.url) ||
+      embed.title?.trim() ||
+      '';
+    if (play) sendPlay(play);
+    return;
+  }
+  if (action.action === 'lyrics') {
+    const title =
+      embed.title?.trim() || queryFrom(action.url) || queryFrom(embed.url);
+    if (!title) return;
+    window.open(
+      `https://www.google.com/search?q=${encodeURIComponent(`${title} lyrics`)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+    return;
+  }
+  if (action.action === 'open' || !action.action) {
+    const raw = action.url || embed.url;
+    const href = isHttpUrl(raw)
+      ? raw!.trim()
+      : `https://www.youtube.com/results?search_query=${encodeURIComponent(
+          queryFrom(raw) || embed.title || 'music',
+        )}`;
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }
+}
+
 export function ChatPanel({
   guildId,
   channel,
@@ -669,6 +715,14 @@ export function ChatPanel({
                     : client.unbookmarkMessage(m.id)
                   ).then(patchThreadMsg);
                 },
+                onRemind: (m, remindAt) => {
+                  void client.createReminder(m.id, remindAt).catch(() => undefined);
+                },
+                onEmbedAction: (_m, action, embed) => {
+                  handleMusicEmbedAction(action, embed, (arg) => {
+                    void sendText(`/oynat ${arg}`);
+                  });
+                },
                 onVotePoll: (m, optionId) => {
                   void client.votePoll(m.id, optionId).then(patchThreadMsg);
                 },
@@ -773,6 +827,14 @@ export function ChatPanel({
                     )
                       .then(patchMessage)
                       .catch(() => undefined);
+                  },
+                  onRemind: (m, remindAt) => {
+                    void client.createReminder(m.id, remindAt).catch(() => undefined);
+                  },
+                  onEmbedAction: (_m, action, embed) => {
+                    handleMusicEmbedAction(action, embed, (arg) => {
+                      void sendText(`/oynat ${arg}`);
+                    });
                   },
                   onOpenThread: (m) => openThread(m),
                   onVotePoll: (m, optionId) => void client.votePoll(m.id, optionId),

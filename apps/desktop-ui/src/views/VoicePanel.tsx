@@ -148,11 +148,15 @@ export function VoicePanel({
     const voiceList = voice.peers.map((p) => {
       const m = members.find((x) => x.id === p.id);
       const status = liveStatus(m?.status);
+      const peerIsBot = Boolean(m?.isBot);
       const contextActions = actionsFor(m, {
         id: p.id,
         displayName: p.displayName,
-        isBot: Boolean(m?.isBot),
+        isBot: peerIsBot,
       });
+      const dmTarget = m
+        ? { id: m.id, isBot: m.isBot }
+        : { id: p.id, isBot: peerIsBot };
       return {
         id: p.id,
         displayName: p.displayName,
@@ -164,12 +168,10 @@ export function VoicePanel({
         socialLinks: m?.socialLinks,
         status,
         customStatus: m?.customStatus,
-        isBot: Boolean(m?.isBot),
+        isBot: peerIsBot,
         ...memberRoleExtras(m, roleColors),
         subtitle: presenceLabelTr(status, m?.customStatus),
-        onClick: canDmUser(m ?? { id: p.id, isBot: Boolean(m?.isBot) })
-          ? () => openDmWith(p.id)
-          : undefined,
+        onClick: canDmUser(dmTarget) ? () => openDmWith(p.id) : undefined,
         contextActions,
       };
     });

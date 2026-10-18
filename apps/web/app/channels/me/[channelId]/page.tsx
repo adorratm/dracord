@@ -408,6 +408,9 @@ function DmChatInner({
                 void pinMessage(m.id, pin).then(() => void refreshPins());
               },
               onBookmark: (m, bookmark) => void bookmarkMessage(m.id, bookmark),
+              onRemind: (m, remindAt) => {
+                void client.createReminder(m.id, remindAt).catch(() => undefined);
+              },
               onOpenThread: (m) => setThreadRoot(m),
               onCreateHeading: (m) => {
                 setHeadingText(m.content.slice(0, 120));

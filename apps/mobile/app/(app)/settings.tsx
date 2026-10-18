@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
   Image,
@@ -6,7 +6,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   View,
@@ -14,17 +13,20 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type {
   ClientSettings,
   DmPrivacyLevel,
+  GuildSummary,
   MessageBookmarkDto,
   PresenceStatus,
   SocialLinks,
 } from '@dracord/types';
+import { guildBoostLevel } from '@dracord/types';
 import { colors, setThemeMode } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
+import { getAppLocale, setAppLocale, subscribeLocale, t, type AppLocale } from '../../lib/i18n';
 import { resolveMediaUrl } from '../../lib/mediaUrl';
 import { uploadImageFromUri } from '../../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../../lib/ui';
@@ -33,6 +35,8 @@ import { confirmDialog } from '../../components/ConfirmModal';
 import { ShellHeader } from '../../components/shell/AppShell';
 import { Icon } from '../../components/Icon';
 import { UserAvatar } from '../../components/UserAvatar';
+import { ThemedSwitch } from '../../components/ThemedSwitch';
+import { useVoiceSessionOptional } from '../../components/voice/VoiceSession';
 import { configureUiTones } from '../../lib/sounds';
 import {
   checkAppUpdates,
@@ -81,65 +85,84 @@ type Tab =
   | 'kvkk'
   | 'cookies';
 
-type NavItem = { id: Tab; label: string; icon: string };
-type NavSection = { id: string; title?: string; items: NavItem[] };
+type NavItem = { id: Tab; labelKey: string; icon: string };
+type NavSection = { id: string; titleKey?: string; items: NavItem[] };
 
 const NAV: NavSection[] = [
   {
     id: 'account',
-    title: 'Hesap',
+    titleKey: 'nav.account',
     items: [
-      { id: 'account', label: 'Hesap Bilgileri', icon: 'person' },
-      { id: 'profile', label: 'Profil', icon: 'badge' },
-      { id: 'password', label: 'Şifre', icon: 'lock' },
-      { id: 'account-status', label: 'Hesap Durumu', icon: 'manage_accounts' },
-      { id: 'privacy', label: 'Gizlilik', icon: 'shield' },
-      { id: 'messaging', label: 'Mesajlaşma', icon: 'forum' },
-      { id: 'bookmarks', label: 'Yer İmleri', icon: 'bookmark' },
-      { id: 'notifications', label: 'Bildirimler', icon: 'notifications' },
+      { id: 'account', labelKey: 'nav.accountInfo', icon: 'person' },
+      { id: 'profile', labelKey: 'nav.profile', icon: 'badge' },
+      { id: 'password', labelKey: 'nav.password', icon: 'lock' },
+      { id: 'account-status', labelKey: 'nav.accountStatus', icon: 'manage_accounts' },
+      { id: 'privacy', labelKey: 'nav.privacy', icon: 'shield' },
+      { id: 'messaging', labelKey: 'nav.messaging', icon: 'forum' },
+      { id: 'bookmarks', labelKey: 'nav.bookmarks', icon: 'bookmark' },
+      { id: 'notifications', labelKey: 'nav.notifications', icon: 'notifications' },
     ],
   },
   {
     id: 'billing',
-    title: 'Faturalandırma',
+    titleKey: 'nav.billing',
     items: [
-      { id: 'nitro', label: 'Nitro', icon: 'workspace_premium' },
-      { id: 'boost', label: 'Sunucu Takviyesi', icon: 'diamond' },
-      { id: 'subscriptions', label: 'Abonelikler', icon: 'receipt_long' },
-      { id: 'gifts', label: 'Hediyeler', icon: 'card_giftcard' },
+      { id: 'nitro', labelKey: 'nav.nitro', icon: 'workspace_premium' },
+      { id: 'boost', labelKey: 'nav.boost', icon: 'diamond' },
+      { id: 'subscriptions', labelKey: 'nav.subscriptions', icon: 'receipt_long' },
+      { id: 'gifts', labelKey: 'nav.gifts', icon: 'card_giftcard' },
     ],
   },
   {
     id: 'experience',
-    title: 'Deneyim',
+    titleKey: 'nav.experience',
     items: [
-      { id: 'voice', label: 'Ses', icon: 'mic' },
-      { id: 'appearance', label: 'Görünüm', icon: 'palette' },
-      { id: 'accessibility', label: 'Erişilebilirlik', icon: 'accessibility_new' },
-      { id: 'system', label: 'Sistem', icon: 'dns' },
-      { id: 'language', label: 'Dil', icon: 'language' },
+      { id: 'voice', labelKey: 'nav.voice', icon: 'mic' },
+      { id: 'appearance', labelKey: 'nav.appearance', icon: 'palette' },
+      { id: 'accessibility', labelKey: 'nav.accessibility', icon: 'accessibility_new' },
+      { id: 'system', labelKey: 'nav.system', icon: 'dns' },
+      { id: 'language', labelKey: 'nav.language', icon: 'language' },
     ],
   },
   {
     id: 'developer',
-    title: 'Geliştirici',
-    items: [{ id: 'developer', label: 'Gelişmiş', icon: 'code' }],
+    titleKey: 'nav.developer',
+    items: [{ id: 'developer', labelKey: 'nav.advanced', icon: 'code' }],
   },
   {
     id: 'other',
     items: [
-      { id: 'privacy-policy', label: 'Gizlilik Politikası', icon: 'policy' },
-      { id: 'terms', label: 'Kullanım Şartları', icon: 'gavel' },
-      { id: 'kvkk', label: 'KVKK', icon: 'verified_user' },
-      { id: 'cookies', label: 'Çerezler', icon: 'cookie' },
+      { id: 'privacy-policy', labelKey: 'nav.privacyPolicy', icon: 'policy' },
+      { id: 'terms', labelKey: 'nav.terms', icon: 'gavel' },
+      { id: 'kvkk', labelKey: 'nav.kvkk', icon: 'verified_user' },
+      { id: 'cookies', labelKey: 'nav.cookies', icon: 'cookie' },
     ],
   },
 ];
 
 const STARTUP_KEY = 'dracord.mobile.startup';
-const TAB_LABEL = Object.fromEntries(
-  NAV.flatMap((s) => s.items.map((i) => [i.id, i.label])),
-) as Record<Tab, string>;
+const VALID_TABS = new Set<string>(NAV.flatMap((s) => s.items.map((i) => i.id)));
+
+function tabLabel(id: Tab, locale: AppLocale): string {
+  const item = NAV.flatMap((s) => s.items).find((i) => i.id === id);
+  return item ? t(item.labelKey, locale) : id;
+}
+
+function newLocalId(prefix: string) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function makeGiftCode() {
+  const part = () => Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${part()}-${part()}-${part()}`;
+}
+
+function addMonths(isoOrNow: string | null, months: number): string {
+  const d = isoOrNow ? new Date(isoOrNow) : new Date();
+  if (d.getTime() < Date.now()) d.setTime(Date.now());
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
 
 const DM_OPTIONS: { value: DmPrivacyLevel; label: string }[] = [
   { value: 'everyone', label: 'Herkes' },
@@ -157,8 +180,14 @@ const STATUS_OPTIONS: { value: PresenceStatus; label: string }[] = [
 export default function SettingsScreen() {
   const { user, logout, client, refreshUser } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const voice = useVoiceSessionOptional();
+  const locale = useSyncExternalStore(subscribeLocale, getAppLocale, getAppLocale);
   const [tab, setTab] = useState<Tab>('account');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [guilds, setGuilds] = useState<GuildSummary[]>([]);
+  const [giftCode, setGiftCode] = useState('');
+  const [boostBusy, setBoostBusy] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
   const [usernameOk, setUsernameOk] = useState<boolean | null>(null);
@@ -183,17 +212,24 @@ export default function SettingsScreen() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
+    const raw = typeof params.tab === 'string' ? params.tab : Array.isArray(params.tab) ? params.tab[0] : undefined;
+    if (raw && VALID_TABS.has(raw)) setTab(raw as Tab);
+  }, [params.tab]);
+
+  useEffect(() => {
     void AsyncStorage.getItem(STARTUP_KEY).then((v) => setStartup(v === '1'));
     void client
       .getClientSettings()
       .then((s) => {
         setSettings(s);
+        setAppLocale(s.language?.locale === 'en' ? 'en' : 'tr');
         configureUiTones({
           enabled: s.notifications.soundEnabled !== false,
           volume: s.notifications.uiToneVolume ?? 0.85,
         });
       })
       .catch(() => undefined);
+    void client.listGuilds().then(setGuilds).catch(() => setGuilds([]));
   }, [client]);
 
   useEffect(() => {
@@ -244,6 +280,9 @@ export default function SettingsScreen() {
       applyTheme(patch.appearance.theme);
       setThemeMode(patch.appearance.theme);
     }
+    if (patch.language?.locale === 'en' || patch.language?.locale === 'tr') {
+      setAppLocale(patch.language.locale);
+    }
     void client
       .updateClientSettings(patch)
       .then((next) => {
@@ -252,16 +291,37 @@ export default function SettingsScreen() {
           applyTheme(next.appearance.theme);
           setThemeMode(next.appearance.theme);
         }
+        if (next.language?.locale === 'en' || next.language?.locale === 'tr') {
+          setAppLocale(next.language.locale);
+        }
         if (patch.notifications) {
           configureUiTones({
             enabled: next.notifications.soundEnabled !== false,
             volume: next.notifications.uiToneVolume ?? 0.85,
           });
         }
-        setMsg('Ayarlar kaydedildi');
+        setMsg(patch.language ? t('lang.saved', next.language?.locale === 'en' ? 'en' : 'tr') : 'Ayarlar kaydedildi');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Kayıt başarısız'));
   };
+
+  const patchBilling = (billing: Partial<ClientSettings['billing']>) => {
+    if (!settings) return;
+    patchSettings({ billing: { ...settings.billing, ...billing } });
+  };
+
+  const navSections = useMemo(
+    () =>
+      NAV.map((section) => ({
+        ...section,
+        title: section.titleKey ? t(section.titleKey, locale) : undefined,
+        items: section.items.map((item) => ({
+          ...item,
+          label: t(item.labelKey, locale),
+        })),
+      })),
+    [locale],
+  );
 
   const selectTab = (id: Tab) => {
     setTab(id);
@@ -340,7 +400,7 @@ export default function SettingsScreen() {
           <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Menü</Text>
         </Pressable>
         <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16, flex: 1 }} numberOfLines={1}>
-          {TAB_LABEL[tab] ?? 'Ayarlar'}
+          {tabLabel(tab, locale)}
         </Text>
         <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Kapat">
           <Icon name="close" size={22} color={colors.textMuted} />
@@ -365,7 +425,7 @@ export default function SettingsScreen() {
               2FA: {user?.twoFactorEnabled ? 'Açık' : 'Kapalı — web’den etkinleştirilebilir'}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 }}>
-              <Switch
+              <ThemedSwitch
                 value={startup}
                 onValueChange={(v) => {
                   setStartup(v);
@@ -800,12 +860,20 @@ export default function SettingsScreen() {
                   }
                 />
                 <ToggleRow
+                  label="Spotify dinlemeyi paylaş"
+                  value={settings.activity.shareSpotify !== false}
+                  onChange={(v) =>
+                    patchSettings({ activity: { ...settings.activity, shareSpotify: v } })
+                  }
+                />
+                <ToggleRow
                   label="Katılma isteklerine izin ver"
                   value={settings.activity.allowJoinRequests}
                   onChange={(v) =>
                     patchSettings({ activity: { ...settings.activity, allowJoinRequests: v } })
                   }
                 />
+                <SpotifyConnectBlock client={client} />
               </>
             ) : null}
           </>
@@ -1002,36 +1070,474 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {(tab === 'nitro' || tab === 'boost' || tab === 'subscriptions' || tab === 'gifts') && (
+        {tab === 'nitro' && settings && (
           <>
-            <H1>{TAB_LABEL[tab]}</H1>
-            <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 12 }}>
-              Abonelik ve hediye yönetimi web istemcisinden yapılır.
+            <H1>{tabLabel('nitro', locale)}</H1>
+            <Text style={{ color: colors.textMuted, marginBottom: 12, lineHeight: 20 }}>
+              Demo abonelik — gerçek ödeme alınmaz; hesabına kaydedilir.
+            </Text>
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 4 }}>
+              Plan:{' '}
+              {settings.billing.nitroPlan === 'none'
+                ? 'Yok'
+                : settings.billing.nitroPlan === 'basic'
+                  ? 'Nitro Basic'
+                  : 'Nitro'}
+            </Text>
+            {settings.billing.nitroExpiresAt ? (
+              <Text style={{ color: colors.textMuted, marginBottom: 12 }}>
+                Bitiş: {new Date(settings.billing.nitroExpiresAt).toLocaleDateString(locale === 'en' ? 'en-US' : 'tr-TR')}
+              </Text>
+            ) : null}
+            {settings.billing.nitroPlan !== 'none' ? (
+              <Pressable
+                style={{ ...primaryBtn, backgroundColor: colors.surfaceHigh, marginBottom: 12 }}
+                onPress={() => patchBilling({ nitroPlan: 'none', nitroExpiresAt: null })}
+              >
+                <Text style={{ ...primaryBtnText, color: colors.text }}>Aboneliği iptal et</Text>
+              </Pressable>
+            ) : null}
+            <View style={{ gap: 10 }}>
+              <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.surfaceHigh }}>
+                <Text style={{ color: colors.text, fontWeight: '800' }}>Nitro Basic</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6, lineHeight: 18 }}>
+                  Özel emoji · daha büyük yükleme · animasyonlu avatar
+                </Text>
+                <Pressable
+                  style={{ ...primaryBtn, marginTop: 10, opacity: settings.billing.nitroPlan === 'basic' ? 0.5 : 1 }}
+                  disabled={settings.billing.nitroPlan === 'basic'}
+                  onPress={() =>
+                    patchBilling({
+                      nitroPlan: 'basic',
+                      nitroExpiresAt: addMonths(settings.billing.nitroExpiresAt, 1),
+                      invoices: [
+                        {
+                          id: newLocalId('inv'),
+                          label: 'Nitro Basic (demo)',
+                          amount: '₺49',
+                          at: new Date().toISOString(),
+                        },
+                        ...settings.billing.invoices,
+                      ].slice(0, 20),
+                    })
+                  }
+                >
+                  <Text style={primaryBtnText}>
+                    {settings.billing.nitroPlan === 'basic' ? 'Aktif' : 'Etkinleştir (demo)'}
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.primary }}>
+                <Text style={{ color: colors.text, fontWeight: '800' }}>Nitro</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6, lineHeight: 18 }}>
+                  Basic + profil teması · +2 takviye kredisi · sticker · uzun mesaj
+                </Text>
+                <Pressable
+                  style={{ ...primaryBtn, marginTop: 10, opacity: settings.billing.nitroPlan === 'nitro' ? 0.5 : 1 }}
+                  disabled={settings.billing.nitroPlan === 'nitro'}
+                  onPress={() =>
+                    patchBilling({
+                      nitroPlan: 'nitro',
+                      nitroExpiresAt: addMonths(settings.billing.nitroExpiresAt, 1),
+                      boostCredits: settings.billing.boostCredits + (settings.billing.nitroPlan === 'nitro' ? 0 : 2),
+                      invoices: [
+                        {
+                          id: newLocalId('inv'),
+                          label: 'Nitro (demo)',
+                          amount: '₺99',
+                          at: new Date().toISOString(),
+                        },
+                        ...settings.billing.invoices,
+                      ].slice(0, 20),
+                    })
+                  }
+                >
+                  <Text style={primaryBtnText}>
+                    {settings.billing.nitroPlan === 'nitro' ? 'Aktif' : 'Etkinleştir (demo)'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </>
+        )}
+
+        {tab === 'boost' && settings && (
+          <>
+            <H1>{tabLabel('boost', locale)}</H1>
+            <Text style={{ color: colors.textMuted, marginBottom: 8 }}>
+              Kredi: {settings.billing.boostCredits}
             </Text>
             <Pressable
-              style={primaryBtn}
+              style={{ ...primaryBtn, marginBottom: 16 }}
               onPress={() =>
-                void Linking.openURL(
-                  `https://dracord.com.tr/settings/${tab === 'boost' ? 'boost' : tab}`,
-                )
+                patchBilling({
+                  boostCredits: settings.billing.boostCredits + 1,
+                  invoices: [
+                    {
+                      id: newLocalId('inv'),
+                      label: 'Sunucu takviyesi (demo)',
+                      amount: '₺49',
+                      at: new Date().toISOString(),
+                    },
+                    ...settings.billing.invoices,
+                  ].slice(0, 20),
+                })
               }
             >
-              <Text style={primaryBtnText}>Web’de yönet</Text>
+              <Text style={primaryBtnText}>+1 kredi satın al (demo)</Text>
             </Pressable>
+            {settings.billing.boostAssignments.length > 0 ? (
+              <View style={{ marginBottom: 16, gap: 8 }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>Atanan takviyeler</Text>
+                {settings.billing.boostAssignments.map((a) => (
+                  <View
+                    key={a.guildId}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      backgroundColor: colors.surface,
+                      padding: 12,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, flex: 1 }}>{a.guildName}</Text>
+                    <Pressable
+                      onPress={() => {
+                        void client
+                          .unboostGuild(a.guildId)
+                          .then(async () => {
+                            const s = await client.getClientSettings();
+                            setSettings(s);
+                            setGuilds(await client.listGuilds());
+                            setMsg('Takviye kaldırıldı');
+                          })
+                          .catch((e) =>
+                            setError(e instanceof Error ? e.message : 'Kaldırılamadı'),
+                          );
+                      }}
+                    >
+                      <Text style={{ color: colors.danger, fontWeight: '700' }}>Kaldır</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 8 }}>Sunucular</Text>
+            {guilds.length === 0 ? (
+              <Text style={{ color: colors.textMuted }}>Sunucu yok</Text>
+            ) : (
+              guilds.map((g) => {
+                const assigned = settings.billing.boostAssignments.some((a) => a.guildId === g.id);
+                const count = g.boostCount ?? 0;
+                const level = g.boostLevel ?? guildBoostLevel(count);
+                return (
+                  <View
+                    key={g.id}
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 8,
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{g.name}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                      Seviye {level} · {count} takviye
+                    </Text>
+                    <Pressable
+                      style={{
+                        ...primaryBtn,
+                        opacity: assigned || boostBusy === g.id ? 0.5 : 1,
+                        height: 36,
+                      }}
+                      disabled={assigned || boostBusy === g.id}
+                      onPress={() => {
+                        setBoostBusy(g.id);
+                        void client
+                          .boostGuild(g.id)
+                          .then(async () => {
+                            const s = await client.getClientSettings();
+                            setSettings(s);
+                            setGuilds(await client.listGuilds());
+                            setMsg('Takviye uygulandı');
+                          })
+                          .catch((e) =>
+                            setError(e instanceof Error ? e.message : 'Takviye yapılamadı'),
+                          )
+                          .finally(() => setBoostBusy(null));
+                      }}
+                    >
+                      <Text style={primaryBtnText}>
+                        {assigned ? 'Takviye aktif' : 'Bu sunucuya takviye yap'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })
+            )}
+          </>
+        )}
+
+        {tab === 'subscriptions' && settings && (
+          <>
+            <H1>{tabLabel('subscriptions', locale)}</H1>
+            {settings.billing.nitroPlan === 'none' &&
+            settings.billing.boostAssignments.length === 0 ? (
+              <Text style={{ color: colors.textMuted, lineHeight: 20 }}>
+                Aktif aboneliğin yok. Nitro veya takviye ekle.
+              </Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {settings.billing.nitroPlan !== 'none' ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: colors.surface,
+                      padding: 12,
+                      borderRadius: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, flex: 1 }}>
+                      Nitro {settings.billing.nitroPlan === 'basic' ? 'Basic' : ''} · bitiş{' '}
+                      {settings.billing.nitroExpiresAt
+                        ? new Date(settings.billing.nitroExpiresAt).toLocaleDateString(
+                            locale === 'en' ? 'en-US' : 'tr-TR',
+                          )
+                        : '—'}
+                    </Text>
+                    <Pressable
+                      onPress={() => patchBilling({ nitroPlan: 'none', nitroExpiresAt: null })}
+                    >
+                      <Text style={{ color: colors.danger, fontWeight: '700' }}>İptal</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {settings.billing.boostAssignments.map((a) => (
+                  <View
+                    key={a.guildId}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: colors.surface,
+                      padding: 12,
+                      borderRadius: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, flex: 1 }}>Takviye · {a.guildName}</Text>
+                    <Pressable
+                      onPress={() => {
+                        void client
+                          .unboostGuild(a.guildId)
+                          .then(async () => {
+                            setSettings(await client.getClientSettings());
+                            setGuilds(await client.listGuilds());
+                          })
+                          .catch((e) =>
+                            setError(e instanceof Error ? e.message : 'İptal edilemedi'),
+                          );
+                      }}
+                    >
+                      <Text style={{ color: colors.danger, fontWeight: '700' }}>İptal</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            {settings.billing.invoices.length > 0 ? (
+              <View style={{ marginTop: 20, gap: 6 }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>Faturalar</Text>
+                {settings.billing.invoices.slice(0, 8).map((inv) => (
+                  <Text key={inv.id} style={{ color: colors.textMuted, fontSize: 12 }}>
+                    {inv.label} · {inv.amount} ·{' '}
+                    {new Date(inv.at).toLocaleDateString(locale === 'en' ? 'en-US' : 'tr-TR')}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </>
+        )}
+
+        {tab === 'gifts' && settings && (
+          <>
+            <H1>{tabLabel('gifts', locale)}</H1>
+            <Label>Kod kullan</Label>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              <TextInput
+                value={giftCode}
+                onChangeText={setGiftCode}
+                placeholder="XXXX-XXXX veya DRACORD-NITRO"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <Pressable
+                style={{ ...primaryBtn, paddingHorizontal: 14, height: 44 }}
+                onPress={() => {
+                  const normalized = giftCode.trim().toUpperCase();
+                  const gift = settings.billing.gifts.find(
+                    (g) => g.code === normalized && !g.redeemed,
+                  );
+                  if (gift) {
+                    const gifts = settings.billing.gifts.map((g) =>
+                      g.id === gift.id ? { ...g, redeemed: true } : g,
+                    );
+                    if (gift.kind === 'nitro') {
+                      patchBilling({
+                        gifts,
+                        nitroPlan: 'basic',
+                        nitroExpiresAt: addMonths(null, 1),
+                      });
+                    } else {
+                      patchBilling({
+                        gifts,
+                        boostCredits: settings.billing.boostCredits + 1,
+                      });
+                    }
+                    setGiftCode('');
+                    setMsg('Hediye kullanıldı');
+                    return;
+                  }
+                  if (normalized === 'DRACORD-NITRO') {
+                    patchBilling({
+                      nitroPlan: 'nitro',
+                      nitroExpiresAt: addMonths(null, 1),
+                    });
+                    setGiftCode('');
+                    setMsg('Nitro kodu kullanıldı');
+                    return;
+                  }
+                  if (normalized === 'DRACORD-BOOST') {
+                    patchBilling({ boostCredits: settings.billing.boostCredits + 1 });
+                    setGiftCode('');
+                    setMsg('Takviye kodu kullanıldı');
+                    return;
+                  }
+                  setError('Geçersiz veya kullanılmış kod');
+                }}
+              >
+                <Text style={primaryBtnText}>Kullan</Text>
+              </Pressable>
+            </View>
+            <Label>Hediye oluştur</Label>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              <Pressable
+                style={{ ...primaryBtn, backgroundColor: colors.surfaceHigh }}
+                onPress={() => {
+                  const gift = {
+                    id: newLocalId('gift'),
+                    kind: 'nitro' as const,
+                    label: 'Nitro hediyesi',
+                    code: makeGiftCode(),
+                    redeemed: false,
+                  };
+                  patchBilling({ gifts: [gift, ...settings.billing.gifts] });
+                }}
+              >
+                <Text style={{ ...primaryBtnText, color: colors.text }}>Nitro hediyesi</Text>
+              </Pressable>
+              <Pressable
+                style={{ ...primaryBtn, backgroundColor: colors.surfaceHigh }}
+                onPress={() => {
+                  const gift = {
+                    id: newLocalId('gift'),
+                    kind: 'boost' as const,
+                    label: 'Takviye hediyesi',
+                    code: makeGiftCode(),
+                    redeemed: false,
+                  };
+                  patchBilling({ gifts: [gift, ...settings.billing.gifts] });
+                }}
+              >
+                <Text style={{ ...primaryBtnText, color: colors.text }}>Takviye hediyesi</Text>
+              </Pressable>
+            </View>
+            <Label>Envanter</Label>
+            {settings.billing.gifts.length === 0 ? (
+              <Text style={{ color: colors.textMuted }}>Hediye yok</Text>
+            ) : (
+              settings.billing.gifts.map((g) => (
+                <View
+                  key={g.id}
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 10,
+                    padding: 12,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {g.label}
+                    {g.redeemed ? ' (kullanıldı)' : ''}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      void Clipboard.setStringAsync(g.code).then(() => setMsg('Kod kopyalandı'))
+                    }
+                  >
+                    <Text style={{ color: colors.primary, fontFamily: PlatformFont, marginTop: 4 }}>
+                      {g.code}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))
+            )}
           </>
         )}
 
         {tab === 'voice' && (
           <>
-            <H1>Ses</H1>
+            <H1>{tabLabel('voice', locale)}</H1>
             <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 12 }}>
-              Mikrofon, sağırlaştırma, kamera, kamera döndürme ve ekran paylaşımı ses odası alt
-              şeridinden yönetilir. Uygulama arka plana alındığında ses oturumu bildirim /
-              foreground service ile sürdürülür.
+              Mikrofon, sağırlaştırma ve kamera burada veya ses odası alt şeridinden yönetilir.
+              Uygulama arka plandayken oturum foreground service ile sürer.
             </Text>
-            <Text style={{ color: colors.textMuted, lineHeight: 20 }}>
-              Aynı anda yalnızca bir istemciden ses yayınlanır. Başka sunuculara göz gezdirirken
-              mevcut ses bağlantın korunur; yeni bir ses kanalına katılana kadar ayrılmazsın.
+            {voice?.connected ? (
+              <>
+                <Text style={{ color: colors.success, fontWeight: '700', marginBottom: 8 }}>
+                  Bağlı: {voice.voiceChannelName ?? 'Ses kanalı'}
+                </Text>
+                <ToggleRow
+                  label="Mikrofon kapalı (mute)"
+                  value={voice.muted}
+                  onChange={(v) => voice.setMuted(v)}
+                />
+                <ToggleRow
+                  label="Sağırlaştır (deafen)"
+                  value={voice.deafened}
+                  onChange={(v) => voice.setDeafened(v)}
+                />
+                <ToggleRow
+                  label="Kamera açık"
+                  value={voice.camOn}
+                  onChange={() => void voice.toggleCamera()}
+                />
+                <Pressable
+                  style={{ ...primaryBtn, backgroundColor: colors.surfaceHigh, marginTop: 12 }}
+                  onPress={() => void voice.flipCamera()}
+                >
+                  <Text style={{ ...primaryBtnText, color: colors.text }}>Kamerayı çevir</Text>
+                </Pressable>
+                <Pressable
+                  style={{ ...primaryBtn, backgroundColor: colors.danger, marginTop: 8 }}
+                  onPress={() => void voice.leave()}
+                >
+                  <Text style={{ ...primaryBtnText, color: '#fff' }}>Sesten ayrıl</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={{ color: colors.textMuted, lineHeight: 20 }}>
+                Şu an bir ses kanalında değilsin. Bir odaya katıldığında mute / deafen / kamera
+                burada da görünür.
+              </Text>
+            )}
+            <Text style={{ color: colors.textMuted, lineHeight: 20, marginTop: 16 }}>
+              Aynı anda yalnızca bir istemciden ses yayınlanır. Başka sunuculara göz atarken mevcut
+              bağlantın korunur.
             </Text>
           </>
         )}
@@ -1199,25 +1705,37 @@ export default function SettingsScreen() {
 
         {tab === 'language' && settings && (
           <>
-            <H1>Dil</H1>
-            <Label>Arayüz dili</Label>
+            <H1>{t('lang.title', locale)}</H1>
+            <Text style={{ color: colors.textMuted, marginBottom: 12, lineHeight: 20 }}>
+              {t('lang.localeDesc', locale)}
+            </Text>
+            <Label>{t('lang.locale', locale)}</Label>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
               <Chip
                 label="Türkçe"
                 active={settings.language.locale === 'tr'}
-                onPress={() => patchSettings({ language: { ...settings.language, locale: 'tr' } })}
+                onPress={() => {
+                  setAppLocale('tr');
+                  patchSettings({ language: { ...settings.language, locale: 'tr' } });
+                }}
               />
               <Chip
                 label="English"
                 active={settings.language.locale === 'en'}
-                onPress={() => patchSettings({ language: { ...settings.language, locale: 'en' } })}
+                onPress={() => {
+                  setAppLocale('en');
+                  patchSettings({ language: { ...settings.language, locale: 'en' } });
+                }}
               />
             </View>
             <ToggleRow
-              label="24 saat formatı"
+              label={t('lang.hour24', locale)}
               value={settings.language.hour24}
               onChange={(v) => patchSettings({ language: { ...settings.language, hour24: v } })}
             />
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8, lineHeight: 18 }}>
+              {t('lang.note', locale)}
+            </Text>
           </>
         )}
 
@@ -1260,7 +1778,7 @@ export default function SettingsScreen() {
 
         {(tab === 'privacy-policy' || tab === 'terms' || tab === 'kvkk' || tab === 'cookies') && (
           <>
-            <H1>{TAB_LABEL[tab]}</H1>
+            <H1>{tabLabel(tab, locale)}</H1>
             <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 12 }}>
               Yasal metinler web’de yayınlanır.
             </Text>
@@ -1284,6 +1802,10 @@ export default function SettingsScreen() {
           'privacy',
           'messaging',
           'notifications',
+          'nitro',
+          'boost',
+          'subscriptions',
+          'gifts',
           'appearance',
           'accessibility',
           'language',
@@ -1326,7 +1848,7 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={{ padding: 12, gap: 4 }}>
-              {NAV.map((section) => (
+              {navSections.map((section) => (
                 <View key={section.id} style={{ marginBottom: 10 }}>
                   {section.title ? (
                     <Text
@@ -1463,7 +1985,82 @@ function ToggleRow({
       }}
     >
       <Text style={{ color: colors.text, flex: 1 }}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} />
+      <ThemedSwitch value={value} onValueChange={onChange} />
+    </View>
+  );
+}
+
+function SpotifyConnectBlock({
+  client,
+}: {
+  client: {
+    getSpotifyStatus: () => Promise<{
+      configured: boolean;
+      connected: boolean;
+      authorizeUrl: string | null;
+    }>;
+    disconnectSpotify: () => Promise<{ ok: true }>;
+  };
+}) {
+  const [spotify, setSpotify] = useState<{
+    configured: boolean;
+    connected: boolean;
+    authorizeUrl: string | null;
+  } | null>(null);
+
+  const refresh = useCallback(() => {
+    void client
+      .getSpotifyStatus()
+      .then(setSpotify)
+      .catch(() =>
+        setSpotify({ configured: false, connected: false, authorizeUrl: null }),
+      );
+  }, [client]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  if (!spotify) return null;
+
+  return (
+    <View style={{ marginTop: 16, gap: 8 }}>
+      <H1>Spotify</H1>
+      {!spotify.configured ? (
+        <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+          Spotify API anahtarları sunucuda yapılandırılmamış.
+        </Text>
+      ) : spotify.connected ? (
+        <>
+          <Text style={{ color: colors.text }}>Spotify bağlı</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+            Çalan parçan profilinde “Dinliyor” olarak görünür.
+          </Text>
+          <Pressable
+            onPress={() => {
+              void client.disconnectSpotify().then(refresh);
+            }}
+            style={{ paddingVertical: 10 }}
+          >
+            <Text style={{ color: colors.danger, fontWeight: '700' }}>Bağlantıyı kes</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+            Hesabını bağla; dinlediğin şarkı profilde görünür.
+          </Text>
+          <Pressable
+            disabled={!spotify.authorizeUrl}
+            onPress={() => {
+              if (spotify.authorizeUrl) void Linking.openURL(spotify.authorizeUrl);
+            }}
+            style={[primaryBtn, { opacity: spotify.authorizeUrl ? 1 : 0.4 }]}
+          >
+            <Text style={primaryBtnText}>Spotify bağla</Text>
+          </Pressable>
+        </>
+      )}
     </View>
   );
 }

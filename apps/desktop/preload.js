@@ -32,4 +32,6 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
     ipcRenderer.on('updater:status', handler);
     return () => ipcRenderer.removeListener('updater:status', handler);
   },
+  /** Bilinen oyun süreçlerini tara (opt-in rich presence) */
+  detectGames: () => ipcRenderer.invoke('presence:detect-games'),
 });
