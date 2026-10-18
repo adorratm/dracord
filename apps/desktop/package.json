@@ -1,6 +1,6 @@
 {
   "name": "@dracord/desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Dracord native masaüstü istemcisi (Electron + desktop-ui)",
   "author": "Dracord",
