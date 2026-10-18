@@ -29,6 +29,9 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Sesli odalarda konuşmak için mikrofon gerekir.",
         "NSCameraUsageDescription": "Kamera ile görüntülü katılım için kullanılır.",
+        "LSApplicationQueriesSchemes": [
+          "spotify"
+        ],
         "UIBackgroundModes": [
           "audio",
           "voip"

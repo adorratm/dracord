@@ -62,7 +62,8 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     shareGames: true,
     allowJoinRequests: true,
     shareSpotify: true,
-    shareDesktopActivity: false,
+    /** Desktop uygulamasında varsayılan açık — Steam/oyun “Oynuyor” */
+    shareDesktopActivity: true,
   },
   developer: {
     developerMode: false,

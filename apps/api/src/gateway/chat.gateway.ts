@@ -129,6 +129,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         userId: user.sub,
         status: pub.status,
         customStatus: pub.customStatus ?? null,
+        activity: pub.activity ?? null,
       });
     } catch {
       client.disconnect(true);
@@ -158,6 +159,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
               userId: user.sub,
               status: pub.status,
               customStatus: pub.customStatus ?? null,
+              activity: pub.activity ?? null,
             });
           })
           .catch((err: Error) => {
@@ -264,6 +266,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       userId: user.sub,
       status: pub.status,
       customStatus: pub.customStatus ?? null,
+      activity: pub.activity ?? null,
     });
     return { ok: true, user: pub };
   }

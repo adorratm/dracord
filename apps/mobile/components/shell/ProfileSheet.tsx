@@ -3,23 +3,13 @@ import * as Clipboard from 'expo-clipboard';
 import type { PublicUser, UserActivity } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { noticeDialog } from '../ConfirmModal';
+import { ActivityLine } from '../ActivityLine';
 import { Icon } from '../Icon';
 import { UserAvatar } from '../UserAvatar';
 import { useElapsedLabel } from '../../lib/formatElapsed';
 import { resolveMediaUrl } from '../../lib/mediaUrl';
+import { openActivityUrl } from '../../lib/openActivityUrl';
 import { normalizePresence, presenceLabelTr } from '../../lib/presence';
-
-function activityLabel(a: UserActivity): string {
-  const prefix =
-    a.type === 'listening'
-      ? 'Dinliyor'
-      : a.type === 'watching'
-        ? 'İzliyor'
-        : a.type === 'custom'
-          ? ''
-          : 'Oynuyor';
-  return prefix ? `${prefix} · ${a.name}` : a.name;
-}
 
 export type ProfileAction = {
   id: string;
@@ -111,29 +101,42 @@ export function ProfileSheet({
                   <Image
                     source={{ uri: user.activity.imageUrl }}
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 6,
+                      width: 72,
+                      height: 72,
+                      borderRadius: 10,
                       backgroundColor: colors.surface,
                     }}
                   />
                 ) : (
-                  <Icon
-                    name={
-                      user.activity.type === 'listening'
-                        ? 'headphones'
-                        : user.activity.type === 'watching'
-                          ? 'live_tv'
-                          : 'sports_esports'
-                    }
-                    size={20}
-                    color={colors.success}
-                  />
+                  <View
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 10,
+                      backgroundColor: colors.surface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon
+                      name={
+                        user.activity.type === 'listening'
+                          ? 'headphones'
+                          : user.activity.type === 'watching'
+                            ? 'live_tv'
+                            : 'sports_esports'
+                      }
+                      size={32}
+                      color={colors.success}
+                    />
+                  </View>
                 )}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>
-                    {activityLabel(user.activity)}
-                  </Text>
+                <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                  <ActivityLine
+                    activity={user.activity}
+                    showImage={false}
+                    textStyle={{ fontSize: 14, fontWeight: '700' }}
+                  />
                   {user.activity.details ? (
                     <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
                       {user.activity.details}
@@ -146,6 +149,21 @@ export function ProfileSheet({
                     >
                       <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>
                         Katıl
+                      </Text>
+                    </Pressable>
+                  ) : user.activity.url ? (
+                    <Pressable
+                      onPress={() => {
+                        void openActivityUrl(user.activity!.url!);
+                      }}
+                      style={{ marginTop: 4 }}
+                    >
+                      <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>
+                        {user.activity.source === 'spotify'
+                          ? "Spotify'da aç"
+                          : user.activity.source === 'desktop'
+                            ? 'Mağazada / sitede aç'
+                            : 'Aç'}
                       </Text>
                     </Pressable>
                   ) : null}

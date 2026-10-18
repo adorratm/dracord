@@ -372,10 +372,17 @@ export function Shell() {
       user.status === 'OFFLINE' && client.socket?.connected ? ('ONLINE' as const) : user.status;
     setMembers((prev) =>
       prev.map((m) =>
-        m.id === user.id ? { ...m, status: live, customStatus: user.customStatus } : m,
+        m.id === user.id
+          ? {
+              ...m,
+              status: live,
+              customStatus: user.customStatus,
+              activity: user.activity !== undefined ? user.activity : m.activity,
+            }
+          : m,
       ),
     );
-  }, [user?.id, user?.status, user?.customStatus, client]);
+  }, [user?.id, user?.status, user?.customStatus, user?.activity, client]);
 
   const liveMemberStatus = useCallback(
     (memberId: string, fallback?: PublicUser['status'] | null): PublicUser['status'] => {

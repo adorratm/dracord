@@ -424,11 +424,16 @@ export function GuildChannelView({
     setGuildMembers((prev) =>
       prev.map((m) =>
         m.id === user.id
-          ? { ...m, status: live, customStatus: user.customStatus }
+          ? {
+              ...m,
+              status: live,
+              customStatus: user.customStatus,
+              activity: user.activity !== undefined ? user.activity : m.activity,
+            }
           : m,
       ),
     );
-  }, [user?.id, user?.status, user?.customStatus, client]);
+  }, [user?.id, user?.status, user?.customStatus, user?.activity, client]);
 
   /** API OFFLINE döndürse bile: ses kanalındaysa veya kendi oturumun açıksa canlı durum */
   const liveMemberStatus = useCallback(

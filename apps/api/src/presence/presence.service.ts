@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import type { PublicUser, UserActivity } from '@dracord/types';
+import type { PublicUser, UserActivity, UserActivitySource } from '@dracord/types';
 import { toPublicUser } from '@/common/user.mapper';
 import { User } from '@/database/entities/user.entity';
 import { UserStatus } from '@/database/enums';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
+import { SpotifyService } from '@/spotify/spotify.service';
 import { UserActivityService } from './user-activity.service';
 
 @Injectable()
@@ -13,6 +14,8 @@ export class PresenceService {
     private readonly em: EntityManager,
     private readonly broadcast: SocketBroadcastService,
     private readonly activities: UserActivityService,
+    @Inject(forwardRef(() => SpotifyService))
+    private readonly spotify: SpotifyService,
   ) {}
 
   async updateStatus(
@@ -48,6 +51,14 @@ export class PresenceService {
   ): Promise<PublicUser> {
     await this.activities.setActivity(userId, activity, { force: true });
     return this.getStatus(userId);
+  }
+
+  async clearActivitySource(userId: string, source: UserActivitySource): Promise<void> {
+    await this.activities.clearActivity(userId, source);
+    // Masaüstü oyun bitince Spotify dinlemeyi hemen geri yükle
+    if (source === 'desktop' || source === 'dracord') {
+      void this.spotify.refreshListening(userId).catch(() => undefined);
+    }
   }
 
   /** Socket bağlandığında: tercih edilen durum veya ONLINE. */

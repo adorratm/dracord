@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import type { PresenceStatus, PublicUser } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { activityLineTr, presenceLabelTr } from '../../lib/presence';
+import { ActivityLine } from '../ActivityLine';
 import { Icon } from '../Icon';
 import { UserAvatar } from '../UserAvatar';
 
@@ -56,34 +57,17 @@ export function UserPanel({
           <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
             {user?.displayName ?? 'Kullanıcı'}
           </Text>
-          {(() => {
-            const act = activityLineTr(user?.activity);
-            if (act) {
-              return (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
-                  {user?.activity?.imageUrl ? (
-                    <Image
-                      source={{ uri: user.activity.imageUrl }}
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 2,
-                        backgroundColor: colors.surfaceHigh,
-                      }}
-                    />
-                  ) : null}
-                  <Text style={{ color: colors.success, fontSize: 11, flexShrink: 1 }} numberOfLines={1}>
-                    {act}
-                  </Text>
-                </View>
-              );
-            }
-            return (
-              <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-                {presenceLabelTr(status, user?.customStatus) || `@${user?.username ?? ''}`}
-              </Text>
-            );
-          })()}
+          {activityLineTr(user?.activity) ? (
+            <ActivityLine
+              activity={user?.activity}
+              imageSize={16}
+              textStyle={{ fontSize: 11 }}
+            />
+          ) : (
+            <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
+              {presenceLabelTr(status, user?.customStatus) || `@${user?.username ?? ''}`}
+            </Text>
+          )}
         </View>
         <Pressable onPress={onOpenSettings} hitSlop={8} style={{ padding: 6 }}>
           <Icon name="settings" size={20} color={colors.textMuted} />

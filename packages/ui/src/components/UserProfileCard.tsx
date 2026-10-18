@@ -12,19 +12,9 @@ import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
 import { SocialLinksRow } from './SocialLinksRow';
+import { ActivityLine } from './ActivityLine';
+import { openActivityUrl } from '../lib/open-activity-url';
 import { presenceLabelTr } from '../lib/presence';
-
-function activityLabel(a: UserActivity): string {
-  const prefix =
-    a.type === 'listening'
-      ? 'Dinliyor'
-      : a.type === 'watching'
-        ? 'İzliyor'
-        : a.type === 'custom'
-          ? ''
-          : 'Oynuyor';
-  return prefix ? `${prefix} · ${a.name}` : a.name;
-}
 
 export interface UserProfileCardProps {
   open: boolean;
@@ -177,16 +167,16 @@ export function UserProfileCard({
               <p className="mt-2 font-body-sm text-on-surface-variant">{user.customStatus}</p>
             )}
             {user.activity && (
-              <div className="mt-2 flex items-start gap-2 rounded-lg bg-surface-container px-2.5 py-2">
+              <div className="mt-3 flex items-start gap-3 rounded-xl bg-surface-container px-3 py-3 min-w-0">
                 {user.activity.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={user.activity.imageUrl}
                     alt=""
-                    className="w-10 h-10 rounded object-cover shrink-0"
+                    className="w-20 h-20 rounded-lg object-cover shrink-0 shadow-sm"
                   />
                 ) : (
-                  <span className="material-symbols-outlined text-secondary text-[22px] shrink-0">
+                  <span className="material-symbols-outlined text-secondary text-[36px] shrink-0 w-20 h-20 flex items-center justify-center rounded-lg bg-surface-container-high">
                     {user.activity.type === 'listening'
                       ? 'headphones'
                       : user.activity.type === 'watching'
@@ -194,10 +184,16 @@ export function UserProfileCard({
                         : 'sports_esports'}
                   </span>
                 )}
-                <div className="min-w-0 flex-1">
-                  <p className="font-label-md text-secondary">{activityLabel(user.activity)}</p>
+                <div className="min-w-0 flex-1 self-center">
+                  <ActivityLine
+                    activity={user.activity}
+                    size="md"
+                    showImage={false}
+                    className="font-label-md text-secondary w-full"
+                    textClassName="font-label-md text-secondary"
+                  />
                   {user.activity.details ? (
-                    <p className="font-body-sm text-on-surface-variant truncate">
+                    <p className="font-body-sm text-on-surface-variant truncate mt-0.5">
                       {user.activity.details}
                     </p>
                   ) : null}
@@ -215,8 +211,16 @@ export function UserProfileCard({
                       target="_blank"
                       rel="noreferrer"
                       className="mt-1 inline-block font-label-sm text-primary-container hover:underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openActivityUrl(user.activity!.url!);
+                      }}
                     >
-                      Aç
+                      {user.activity.source === 'spotify'
+                        ? 'Spotify’da aç'
+                        : user.activity.source === 'desktop'
+                          ? 'Mağazada / sitede aç'
+                          : 'Aç'}
                     </a>
                   ) : null}
                 </div>

@@ -839,6 +839,16 @@ function registerWindowIpc() {
     if (typeof rawUrl !== 'string' || rawUrl.length > 2048) {
       return { ok: false, error: 'invalid_url' };
     }
+    // Spotify native: spotify:track:… (URL ctor bazı ortamlarda garip parse eder)
+    if (/^spotify:[a-z]+:[a-zA-Z0-9]+/i.test(rawUrl.trim())) {
+      try {
+        await shell.openExternal(rawUrl.trim());
+        return { ok: true };
+      } catch (err) {
+        console.warn('[shell:open-external] spotify', err);
+        return { ok: false, error: 'open_failed' };
+      }
+    }
     let parsed;
     try {
       parsed = new URL(rawUrl);
@@ -905,52 +915,17 @@ function registerWindowIpc() {
     return { ok: true, ...applied };
   });
 
-  /** Allowlist — Discord tarzı masaüstü oyun algılama (exe → görünen ad) */
-  const GAME_PROCESS_ALLOWLIST = {
-    'league of legends.exe': 'League of Legends',
-    'valorant.exe': 'VALORANT',
-    'cs2.exe': 'Counter-Strike 2',
-    'csgo.exe': 'Counter-Strike',
-    'fortniteclient-win64-shipping.exe': 'Fortnite',
-    'gta5.exe': 'Grand Theft Auto V',
-    'rdr2.exe': 'Red Dead Redemption 2',
-    'minecraft.exe': 'Minecraft',
-    'javaw.exe': 'Minecraft',
-    'rocketleague.exe': 'Rocket League',
-    'overwatch.exe': 'Overwatch 2',
-    'dota2.exe': 'Dota 2',
-    'apex_legends.exe': 'Apex Legends',
-    'r5apex.exe': 'Apex Legends',
-    'wow.exe': 'World of Warcraft',
-    'spotify.exe': null, // Spotify ayrı OAuth ile
-  };
-
+  /** Steam appmanifest + path tarama (sabit allowlist yerine esnek) */
+  const { detectRunningGames } = require('./steam-games');
   ipcMain.handle('presence:detect-games', async () => {
     try {
-      const { execFile } = require('child_process');
-      const { promisify } = require('util');
-      const execFileAsync = promisify(execFile);
-      if (process.platform === 'win32') {
-        const { stdout } = await execFileAsync(
-          'tasklist',
-          ['/FO', 'CSV', '/NH'],
-          { windowsHide: true, maxBuffer: 2 * 1024 * 1024 },
-        );
-        const names = new Set();
-        for (const line of stdout.split(/\r?\n/)) {
-          const m = line.match(/^"([^"]+)"/);
-          if (m) names.add(m[1].toLowerCase());
-        }
-        const found = [];
-        for (const [exe, label] of Object.entries(GAME_PROCESS_ALLOWLIST)) {
-          if (!label) continue;
-          if (names.has(exe)) found.push({ appId: exe, name: label });
-        }
-        return { ok: true, games: found };
-      }
-      return { ok: true, games: [] };
+      return await detectRunningGames();
     } catch (e) {
-      return { ok: false, games: [], error: e instanceof Error ? e.message : String(e) };
+      return {
+        ok: false,
+        games: [],
+        error: e instanceof Error ? e.message : String(e),
+      };
     }
   });
 

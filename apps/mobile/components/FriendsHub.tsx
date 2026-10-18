@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   FlatList,
-  Image,
   Pressable,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
 import { activityLineTr, normalizePresence, presenceLabelTr } from '../lib/presence';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
+import { ActivityLine } from './ActivityLine';
 import { UserAvatar } from './UserAvatar';
 
 type Tab = 'friends' | 'pending' | 'blocked' | 'add';
@@ -258,37 +258,13 @@ function UserRow({ user, actions }: { user: PublicUser; actions: ReactNode }) {
         <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
           {user.displayName}
         </Text>
-        {(() => {
-          const act = activityLineTr(user.activity);
-          if (act) {
-            return (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                {user.activity?.imageUrl ? (
-                  <Image
-                    source={{ uri: user.activity.imageUrl }}
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 3,
-                      backgroundColor: colors.surfaceHigh,
-                    }}
-                  />
-                ) : null}
-                <Text
-                  style={{ color: colors.success, fontSize: 12, flexShrink: 1 }}
-                  numberOfLines={1}
-                >
-                  {act}
-                </Text>
-              </View>
-            );
-          }
-          return (
-            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-              {presenceLabelTr(user.status, user.customStatus)}
-            </Text>
-          );
-        })()}
+        {activityLineTr(user.activity) ? (
+          <ActivityLine activity={user.activity} imageSize={22} />
+        ) : (
+          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+            {presenceLabelTr(user.status, user.customStatus)}
+          </Text>
+        )}
       </View>
       {actions}
     </View>

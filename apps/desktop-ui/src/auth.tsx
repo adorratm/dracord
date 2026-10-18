@@ -175,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: string;
       status: PublicUser['status'];
       customStatus?: string | null;
+      activity?: PublicUser['activity'];
     }) => {
       if (payload.userId !== user.id) return;
       if (payload.status === 'OFFLINE' && sock.connected) return;
@@ -185,6 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               status: payload.status,
               customStatus:
                 payload.customStatus !== undefined ? payload.customStatus : prev.customStatus,
+              activity:
+                payload.activity !== undefined ? payload.activity : prev.activity,
             }
           : prev,
       );

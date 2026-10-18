@@ -60,7 +60,13 @@ type DracordDesktopApi = {
   ) => () => void;
   detectGames?: () => Promise<{
     ok: boolean;
-    games: Array<{ appId: string; name: string }>;
+    games: Array<{
+      appId: string;
+      name: string;
+      imageUrl?: string | null;
+      url?: string | null;
+      details?: string | null;
+    }>;
     error?: string;
   }>;
   onSpotifyOAuthDone?: (

@@ -645,6 +645,7 @@ export function UserPanel({
               {activityLine && activity ? (
                 <ActivityLine
                   activity={activity}
+                  size="sm"
                   className="font-label-sm text-[11px] text-secondary"
                   textClassName="font-label-sm text-[11px] text-secondary"
                 />

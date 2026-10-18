@@ -48,8 +48,15 @@ export {
   DESKTOP_GAME_BY_APP_ID,
   desktopGameImageUrl,
   desktopGameName,
+  desktopGameUrl,
 } from './desktop-games';
 export type { DesktopGameEntry } from './desktop-games';
+
+export {
+  toSpotifyAppUri,
+  toSpotifyWebUrl,
+  isSpotifyUrl,
+} from './spotify-link';
 
 /** Discord tarzı canlı aktivite (oyun / dinleme / izleme) */
 export type UserActivityType = 'playing' | 'watching' | 'listening' | 'custom';

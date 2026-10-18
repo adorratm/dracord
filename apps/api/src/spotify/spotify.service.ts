@@ -104,7 +104,9 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
       this.log.warn('SPOTIFY_CLIENT_ID/SECRET yok — Spotify presence kapalı');
       return;
     }
-    this.timer = setInterval(() => void this.pollAll(), 25_000);
+    // Şarkı değişimini hızlı yansıt; TTL 90s ile uyumlu
+    this.timer = setInterval(() => void this.pollAll(), 10_000);
+    void this.pollAll();
   }
 
   onModuleDestroy() {
@@ -117,16 +119,22 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
     try {
       const rows = await this.em.find(OauthConnection, {
         where: { provider: 'spotify' },
-        take: 100,
+        take: 200,
       });
-      for (const row of rows) {
-        try {
-          await this.pollUser(row);
-        } catch (e) {
-          this.log.debug(
-            `Spotify poll ${row.userId}: ${e instanceof Error ? e.message : e}`,
-          );
-        }
+      const concurrency = 8;
+      for (let i = 0; i < rows.length; i += concurrency) {
+        const chunk = rows.slice(i, i + concurrency);
+        await Promise.all(
+          chunk.map(async (row) => {
+            try {
+              await this.pollUser(row);
+            } catch (e) {
+              this.log.debug(
+                `Spotify poll ${row.userId}: ${e instanceof Error ? e.message : e}`,
+              );
+            }
+          }),
+        );
       }
     } finally {
       this.running = false;
@@ -176,15 +184,18 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
       albumImages[Math.min(1, Math.max(0, albumImages.length - 1))]?.url ??
       albumImages[0]?.url ??
       null;
+    const name = artists ? `${artists} — ${data.item.name}` : data.item.name;
+    const details = data.item.album?.name ?? 'Spotify';
+    const url = data.item.external_urls?.spotify ?? null;
     const activity: UserActivity = {
       type: 'listening',
-      name: artists ? `${artists} — ${data.item.name}` : data.item.name,
-      details: data.item.album?.name ?? 'Spotify',
+      name,
+      details,
       source: 'spotify',
       imageUrl: art,
-      url: data.item.external_urls?.spotify ?? null,
+      url,
       startedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 90_000).toISOString(),
     };
     await this.userActivity.setActivity(row.userId, activity);
   }

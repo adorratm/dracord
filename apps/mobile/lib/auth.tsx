@@ -146,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: string;
       status: PresenceStatus;
       customStatus?: string | null;
+      activity?: PublicUser['activity'];
     }) => {
       if (payload.userId !== userId) return;
       if (payload.status === 'OFFLINE') return;
@@ -158,6 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 payload.customStatus !== undefined
                   ? payload.customStatus
                   : prev.customStatus,
+              activity:
+                payload.activity !== undefined ? payload.activity : prev.activity,
             }
           : prev,
       );

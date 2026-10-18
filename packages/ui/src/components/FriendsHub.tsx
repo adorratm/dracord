@@ -68,7 +68,7 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
             <ActivityLine
               activity={friend.activity}
               size="md"
-              className="font-body-sm text-body-sm text-secondary"
+              className="font-body-sm text-body-sm text-secondary mt-0.5"
               textClassName="font-body-sm text-body-sm text-secondary"
             />
           ) : (

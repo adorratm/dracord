@@ -1,5 +1,19 @@
-import { Body, Controller, Delete, Get, Patch, Put, UseGuards } from '@nestjs/common';
-import { desktopGameImageUrl, type UserActivity } from '@dracord/types';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Patch,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  desktopGameImageUrl,
+  desktopGameUrl,
+  type UserActivity,
+  type UserActivitySource,
+} from '@dracord/types';
 import {
   CurrentUser,
   type JwtPayloadUser,
@@ -48,16 +62,20 @@ export class PresenceController {
     }
     const expiresIn = Math.min(Math.max(body.expiresInSec ?? 90, 30), 600);
     const desktopAppId = body.desktopAppId ?? null;
+    const isDesktop = body.source === 'desktop';
     const activity: UserActivity = {
       type: body.type ?? 'playing',
       name: String(body.name).slice(0, 128),
       details: body.details?.slice(0, 256) ?? null,
-      source: body.source === 'desktop' ? 'desktop' : 'manual',
+      source: isDesktop ? 'desktop' : 'manual',
       imageUrl:
         body.imageUrl?.trim() ||
-        (body.source === 'desktop' ? desktopGameImageUrl(desktopAppId) : null) ||
+        (isDesktop ? desktopGameImageUrl(desktopAppId) : null) ||
         null,
-      url: body.url ?? null,
+      url:
+        body.url?.trim() ||
+        (isDesktop ? desktopGameUrl(desktopAppId) : null) ||
+        null,
       desktopAppId,
       startedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
@@ -66,7 +84,20 @@ export class PresenceController {
   }
 
   @Delete('users/me/activity')
-  clearActivity(@CurrentUser() user: JwtPayloadUser) {
+  async clearActivity(
+    @CurrentUser() user: JwtPayloadUser,
+    @Query('source') source?: string,
+  ) {
+    const src = source as UserActivitySource | undefined;
+    if (
+      src === 'desktop' ||
+      src === 'spotify' ||
+      src === 'dracord' ||
+      src === 'manual'
+    ) {
+      await this.presenceService.clearActivitySource(user.sub, src);
+      return this.presenceService.getStatus(user.sub);
+    }
     return this.presenceService.putManualActivity(user.sub, null);
   }
 }

@@ -41,10 +41,44 @@ export class UserActivityService {
       return this.filterForPublic(user, current);
     }
 
-    user.liveActivity = activity as unknown as Record<string, unknown> | null;
+    // Aynı içerik: TTL uzat, gereksiz broadcast yok (şarkı sabit kalmasın diye
+    // track değişince aşağıdaki dal çalışır)
+    if (
+      activity &&
+      current &&
+      !this.isExpired(current) &&
+      current.source === activity.source &&
+      current.type === activity.type &&
+      current.name === activity.name &&
+      (current.details ?? null) === (activity.details ?? null) &&
+      (current.imageUrl ?? null) === (activity.imageUrl ?? null) &&
+      (current.url ?? null) === (activity.url ?? null)
+    ) {
+      const renewed: UserActivity = {
+        ...current,
+        expiresAt: activity.expiresAt ?? current.expiresAt,
+        startedAt: current.startedAt ?? activity.startedAt,
+      };
+      user.liveActivity = renewed as unknown as Record<string, unknown>;
+      await this.em.save(User, user);
+      return this.filterForPublic(user, renewed);
+    }
+
+    // Track değişimi: startedAt’i koruma (aynı oturum) — yeni isimde yeni startedAt
+    const next: UserActivity | null = activity
+      ? {
+          ...activity,
+          startedAt:
+            current?.source === activity.source && current.name === activity.name
+              ? current.startedAt ?? activity.startedAt
+              : activity.startedAt,
+        }
+      : null;
+
+    user.liveActivity = next as unknown as Record<string, unknown> | null;
     await this.em.save(User, user);
 
-    const publicActivity = this.filterForPublic(user, activity);
+    const publicActivity = this.filterForPublic(user, next);
     this.broadcast.broadcastPresence({
       userId,
       status: user.status,
@@ -75,7 +109,7 @@ export class UserActivityService {
     if (activity.source === 'spotify' && settings.activity.shareSpotify === false) return null;
     if (
       activity.source === 'desktop' &&
-      settings.activity.shareDesktopActivity !== true
+      settings.activity.shareDesktopActivity === false
     ) {
       return null;
     }

@@ -6,6 +6,7 @@ export {
   memberSubtitleTr,
 } from './lib/presence';
 export { ActivityLine } from './components/ActivityLine';
+export { openActivityUrl } from './lib/open-activity-url';
 export {
   APP_TOUR_STEPS,
   APP_TOUR_STORAGE_KEY,

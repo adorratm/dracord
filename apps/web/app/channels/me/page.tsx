@@ -171,9 +171,19 @@ export default function FriendsHubPage() {
     const onPresence = (payload: {
       userId: string;
       status: PublicUser['status'];
+      activity?: PublicUser['activity'];
     }) => {
       setFriends((prev) =>
-        prev.map((f) => (f.id === payload.userId ? { ...f, status: payload.status } : f)),
+        prev.map((f) =>
+          f.id === payload.userId
+            ? {
+                ...f,
+                status: payload.status,
+                activity:
+                  payload.activity !== undefined ? payload.activity : f.activity,
+              }
+            : f,
+        ),
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);

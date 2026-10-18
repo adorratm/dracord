@@ -889,8 +889,9 @@ export class DracordClient {
     });
   }
 
-  async clearUserActivity(): Promise<PublicUser> {
-    return this.request(`/users/me/activity`, { method: 'DELETE' });
+  async clearUserActivity(source?: string): Promise<PublicUser> {
+    const q = source ? `?source=${encodeURIComponent(source)}` : '';
+    return this.request(`/users/me/activity${q}`, { method: 'DELETE' });
   }
 
   async getSpotifyStatus(): Promise<{

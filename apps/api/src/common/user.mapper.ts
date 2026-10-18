@@ -26,7 +26,7 @@ export function filterUserActivity(
   }
   if (
     activity.source === 'desktop' &&
-    settings.activity.shareDesktopActivity !== true
+    settings.activity.shareDesktopActivity === false
   ) {
     return null;
   }

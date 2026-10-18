@@ -166,6 +166,10 @@ export function MemberPanel({
                   bio: user.bio,
                   status: user.status,
                   customStatus: user.customStatus,
+                  activity:
+                    user.activity ??
+                    members.find((m) => m.id === user.id)?.activity ??
+                    null,
                   socialLinks: user.socialLinks,
                   isBot: user.isBot,
                   roles: members.find((m) => m.id === user.id)?.roles,

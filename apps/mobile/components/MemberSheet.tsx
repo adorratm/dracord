@@ -1,7 +1,6 @@
 import { memo, useCallback, useMemo } from 'react';
 import {
   FlatList,
-  Image,
   Modal,
   Pressable,
   Text,
@@ -16,6 +15,7 @@ import {
   normalizePresence,
   presenceLabelTr,
 } from '../lib/presence';
+import { ActivityLine } from './ActivityLine';
 import { UserAvatar } from './UserAvatar';
 import { Icon } from './Icon';
 import { useThemeRevision } from '../lib/theme-revision';
@@ -166,24 +166,13 @@ const MemberRow = memo(function MemberRow({
         <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
           {user.displayName}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          {activityLine && user.activity?.imageUrl ? (
-            <Image
-              source={{ uri: user.activity.imageUrl }}
-              style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: colors.surfaceHigh }}
-            />
-          ) : null}
-          <Text
-            style={{
-              color: activityLine ? colors.success : colors.textMuted,
-              fontSize: 12,
-              flexShrink: 1,
-            }}
-            numberOfLines={1}
-          >
+        {activityLine ? (
+          <ActivityLine activity={user.activity} imageSize={18} />
+        ) : (
+          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
             {subtitle}
           </Text>
-        </View>
+        )}
       </View>
       {user.isBot ? (
         <Text
