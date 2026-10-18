@@ -6,6 +6,7 @@ const {
   Tray,
   Menu,
   nativeImage,
+  screen,
   session,
   desktopCapturer,
   systemPreferences,
@@ -581,9 +582,7 @@ function handleDeepLink(rawUrl) {
   const payload = rawUrl.replace(/^dracord:\/\//, '');
   const hash = `/auth/callback?electron=1&payload=${encodeURIComponent(payload)}`;
   if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    showMainWindow();
     void resolveUiEntry().then((entry) => {
       if (entry.type === 'file') {
         void mainWindow.loadFile(entry.value, { hash });
@@ -718,29 +717,83 @@ function openOAuthWindow(rawUrl) {
   return { ok: true };
 }
 
+/** Görünür tepsi ikonu — 1x1 şeffaf piksel Windows’ta “kaybolmuş” gibi durur */
+function trayNativeImage() {
+  const size = process.platform === 'darwin' ? 22 : 32;
+  const base = loadAppIcon();
+  if (base && !base.isEmpty()) {
+    return base.resize({ width: size, height: size });
+  }
+  // 16x16 mor kare (Dracord tonu) — en kötü ihtimal görünür kalsın
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAANElEQVQ4T2NkYGD4z0ABYBzVMKoBBg0MDAz/GdH5o5pGNcCgAQwMDIz/8enHBaMaRjXA0AAAijIEAWd7r7QAAAAASUVORK5CYII=',
+    'base64',
+  );
+  const img = nativeImage.createFromBuffer(png);
+  return img.isEmpty() ? nativeImage.createEmpty() : img.resize({ width: size, height: size });
+}
+
+/** Gizli / küçültülmüş / ekran dışı pencereyi görev çubuğuna + öne getir */
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  try {
+    // hide() görev çubuğundan düşürür — her zaman geri al
+    mainWindow.setSkipTaskbar(false);
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+
+    const bounds = mainWindow.getBounds();
+    const display = screen.getDisplayMatching(bounds);
+    const area = display?.workArea;
+    if (area) {
+      const onScreen =
+        bounds.x + bounds.width > area.x + 40 &&
+        bounds.y + bounds.height > area.y + 40 &&
+        bounds.x < area.x + area.width - 40 &&
+        bounds.y < area.y + area.height - 40;
+      if (!onScreen) mainWindow.center();
+    }
+
+    mainWindow.show();
+    mainWindow.focus();
+    if (process.platform === 'win32') {
+      // Windows bazen show() sonrası arkada bırakıyor
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.moveTop();
+      mainWindow.setAlwaysOnTop(false);
+      mainWindow.flashFrame(true);
+      setTimeout(() => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(false);
+        } catch {
+          /* ignore */
+        }
+      }, 1500);
+    }
+  } catch (err) {
+    console.warn('[showMainWindow]', err);
+    try {
+      mainWindow.setSkipTaskbar(false);
+      mainWindow.show();
+      mainWindow.focus();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function createTray() {
   if (tray) return;
-  const base = loadAppIcon() ?? nativeImage.createEmpty();
-  const trayImg = base.isEmpty()
-    ? nativeImage.createFromDataURL(
-        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-      )
-    : base.resize({
-        width: process.platform === 'darwin' ? 22 : 32,
-        height: process.platform === 'darwin' ? 22 : 32,
-      });
-  tray = new Tray(trayImg);
+  tray = new Tray(trayNativeImage());
   tray.setToolTip('Dracord');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
         label: 'Göster',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          } else createWindow();
-        },
+        click: () => showMainWindow(),
       },
       {
         label: 'Çıkış',
@@ -751,12 +804,9 @@ function createTray() {
       },
     ]),
   );
-  tray.on('double-click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
+  // Windows: tek tık da göster (çift tık her zaman güvenilir değil)
+  tray.on('click', () => showMainWindow());
+  tray.on('double-click', () => showMainWindow());
 }
 
 function createWindow() {
@@ -774,6 +824,9 @@ function createWindow() {
     autoHideMenuBar: true,
     backgroundColor: '#11131e',
     title: 'Dracord',
+    // Hemen göster → Windows görev çubuğunda anında ikon
+    show: true,
+    skipTaskbar: false,
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -786,6 +839,12 @@ function createWindow() {
   if (icon && process.platform === 'darwin') {
     app.dock?.setIcon(icon);
   }
+
+  // Odak / ekran-dışı düzeltme
+  mainWindow.once('ready-to-show', () => showMainWindow());
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
+  }, 800);
 
   loadUi(mainWindow);
 
@@ -810,8 +869,10 @@ function createWindow() {
 
   mainWindow.on('close', (e) => {
     if (trayEnabled && tray) {
+      // hide() görev çubuğundan siler — minimize ile çubukta kalsın
       e.preventDefault();
-      mainWindow.hide();
+      mainWindow.setSkipTaskbar(false);
+      mainWindow.minimize();
     }
   });
 
@@ -895,7 +956,9 @@ function registerWindowIpc() {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
     if (trayEnabled) {
-      win.hide();
+      // hide() görev çubuğunu düşürüyordu — minimize ile kalsın
+      win.setSkipTaskbar(false);
+      win.minimize();
     } else {
       win.close();
     }
@@ -958,11 +1021,7 @@ if (!gotLock) {
   app.on('second-instance', (_event, argv) => {
     const deepLink = argv.find((arg) => arg.startsWith('dracord://'));
     if (deepLink) handleDeepLink(deepLink);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 
   app.whenReady().then(() => {
@@ -986,10 +1045,10 @@ if (!gotLock) {
     setupAutoUpdater();
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (!mainWindow || mainWindow.isDestroyed()) {
         createWindow();
-      } else if (mainWindow) {
-        mainWindow.show();
+      } else {
+        showMainWindow();
       }
     });
   });
