@@ -41,22 +41,24 @@ function MarqueeLabel({
     if (!overflow) return;
 
     const distance = textW - boxW + 16;
-    const duration = Math.max(4000, Math.min(18000, distance * 45));
+    const duration = Math.max(2800, Math.min(9000, distance * 38));
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.delay(800),
+        Animated.delay(400),
         Animated.timing(tx, {
           toValue: -distance,
           duration,
-          easing: Easing.linear,
+          easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-        Animated.delay(900),
+        Animated.delay(350),
         Animated.timing(tx, {
           toValue: 0,
-          duration: 1,
+          duration,
+          easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
+        Animated.delay(400),
       ]),
     );
     loop.start();

@@ -17,24 +17,27 @@ const MARQUEE_STYLE_ID = 'dracord-activity-marquee-css';
 
 function ensureMarqueeCss() {
   if (typeof document === 'undefined') return;
-  if (document.getElementById(MARQUEE_STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = MARQUEE_STYLE_ID;
-  style.textContent = `
+  const css = `
 @keyframes dracord-activity-marquee {
-  0% { transform: translateX(0); }
-  15% { transform: translateX(0); }
-  85% { transform: translateX(var(--marquee-shift, -50%)); }
-  100% { transform: translateX(var(--marquee-shift, -50%)); }
+  /* Gidip-gelen: soldan → sağdan, kısa duraklama */
+  0%, 8% { transform: translateX(0); }
+  42%, 50% { transform: translateX(var(--marquee-shift, -50%)); }
+  84%, 100% { transform: translateX(0); }
 }
 .dracord-activity-marquee-run {
-  animation: dracord-activity-marquee var(--marquee-duration, 8s) linear infinite;
+  animation: dracord-activity-marquee var(--marquee-duration, 8s) ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .dracord-activity-marquee-run { animation: none !important; }
 }
 `;
-  document.head.appendChild(style);
+  let style = document.getElementById(MARQUEE_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement('style');
+    style.id = MARQUEE_STYLE_ID;
+    document.head.appendChild(style);
+  }
+  style.textContent = css;
 }
 
 function MarqueeText({
@@ -63,7 +66,8 @@ function MarqueeText({
     return () => ro?.disconnect();
   }, [text]);
 
-  const durationSec = Math.max(6, Math.min(18, shift / 28));
+  // Gidiş + dönüş bir tur — biraz daha hızlı, boş bekleme kısa
+  const durationSec = Math.max(5, Math.min(14, (shift / 22) * 2));
 
   return (
     <span ref={outerRef} className={cn('min-w-0 flex-1 overflow-hidden', className)}>
