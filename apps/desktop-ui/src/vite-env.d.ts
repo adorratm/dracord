@@ -36,6 +36,19 @@ type DracordDesktopUpdaterStatus = {
   message?: string;
 };
 
+type DracordRegisteredGame = {
+  appId: string;
+  name: string;
+  exePath?: string | null;
+  exeName?: string | null;
+  imageUrl?: string | null;
+  url?: string | null;
+  source?: string;
+  enabled?: boolean;
+  installPath?: string | null;
+  installDir?: string | null;
+};
+
 type DracordDesktopApi = {
   isElectron: true;
   setSystemPrefs: (
@@ -67,6 +80,44 @@ type DracordDesktopApi = {
       url?: string | null;
       details?: string | null;
     }>;
+    error?: string;
+  }>;
+  scanGameLibrary?: () => Promise<{
+    ok: boolean;
+    games: Array<DracordRegisteredGame>;
+    steamCount?: number;
+    epicCount?: number;
+    error?: string;
+  }>;
+  importGameScan?: () => Promise<{
+    ok: boolean;
+    games?: Array<DracordRegisteredGame>;
+    added?: number;
+    error?: string;
+  }>;
+  getRegisteredGames?: () => Promise<{
+    ok: boolean;
+    games: Array<DracordRegisteredGame>;
+    error?: string;
+  }>;
+  addManualGame?: (entry: {
+    exePath: string;
+    name?: string;
+    imageUrl?: string | null;
+    url?: string | null;
+  }) => Promise<{ ok: boolean; games?: Array<DracordRegisteredGame>; error?: string }>;
+  removeRegisteredGame?: (
+    appId: string,
+  ) => Promise<{ ok: boolean; games?: Array<DracordRegisteredGame>; error?: string }>;
+  setGameEnabled?: (
+    appId: string,
+    enabled: boolean,
+  ) => Promise<{ ok: boolean; games?: Array<DracordRegisteredGame>; error?: string }>;
+  pickGameExe?: () => Promise<{
+    ok: boolean;
+    canceled?: boolean;
+    exePath?: string;
+    name?: string;
     error?: string;
   }>;
   onSpotifyOAuthDone?: (

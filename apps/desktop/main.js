@@ -10,6 +10,7 @@ const {
   session,
   desktopCapturer,
   systemPreferences,
+  dialog,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -978,17 +979,84 @@ function registerWindowIpc() {
     return { ok: true, ...applied };
   });
 
-  /** Steam appmanifest + path tarama (sabit allowlist yerine esnek) */
-  const { detectRunningGames } = require('./steam-games');
+  /** Steam / Epic / manuel oyun algılama + kütüphane */
+  const desktopGames = require('./desktop-games');
   ipcMain.handle('presence:detect-games', async () => {
     try {
-      return await detectRunningGames();
+      return await desktopGames.detectRunningGames();
     } catch (e) {
       return {
         ok: false,
         games: [],
         error: e instanceof Error ? e.message : String(e),
       };
+    }
+  });
+  ipcMain.handle('games:scan-library', async () => {
+    try {
+      return await desktopGames.scanGameLibrary();
+    } catch (e) {
+      return {
+        ok: false,
+        games: [],
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+  });
+  ipcMain.handle('games:import-scan', async () => {
+    try {
+      return await desktopGames.importScanToRegistered();
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle('games:get-registered', () => {
+    try {
+      return desktopGames.getRegistered();
+    } catch (e) {
+      return { ok: false, games: [], error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle('games:add-manual', (_e, entry) => {
+    try {
+      return desktopGames.addManualGame(entry || {});
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle('games:remove', (_e, appId) => {
+    try {
+      return desktopGames.removeRegisteredGame(String(appId || ''));
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle('games:set-enabled', (_e, payload) => {
+    try {
+      return desktopGames.setGameEnabled(
+        String(payload?.appId || ''),
+        Boolean(payload?.enabled),
+      );
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle('games:pick-exe', async () => {
+    try {
+      const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+      const res = await dialog.showOpenDialog(win, {
+        title: 'Oyun exe seç',
+        filters: [{ name: 'Uygulama', extensions: ['exe'] }],
+        properties: ['openFile'],
+      });
+      if (res.canceled || !res.filePaths?.[0]) {
+        return { ok: false, canceled: true };
+      }
+      const exePath = res.filePaths[0];
+      const name = path.basename(exePath, path.extname(exePath));
+      return { ok: true, exePath, name };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
 

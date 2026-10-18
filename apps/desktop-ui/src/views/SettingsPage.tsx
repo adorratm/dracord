@@ -1025,8 +1025,8 @@ export function SettingsPage({
             />
             <SettingsToggle
               label="Masaüstü oyun algılama"
-              description="Bilinen oyun süreçlerini tara ve “Oynuyor” olarak yayınla (opt-in)."
-              checked={prefs.activity.shareDesktopActivity === true}
+              description="Steam, Epic ve kayıtlı oyun süreçlerini tara; oynadığın oyun profilde görünür."
+              checked={prefs.activity.shareDesktopActivity !== false}
               onChange={(v) => setSection('activity', { shareDesktopActivity: v })}
             />
             <SettingsToggle
@@ -1035,6 +1035,7 @@ export function SettingsPage({
               onChange={(v) => setSection('activity', { allowJoinRequests: v })}
             />
           </SettingsSection>
+          <DesktopGamesLibrarySection />
           <SpotifyConnectionsSection client={client} />
         </SettingsPageBody>
       )}
@@ -2125,6 +2126,203 @@ function DesktopUpdateControls() {
       </button>
       {note ? <p className="font-body-sm text-on-surface-variant">{note}</p> : null}
     </div>
+  );
+}
+
+function DesktopGamesLibrarySection() {
+  const desktop = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+  const canManage =
+    Boolean(desktop?.scanGameLibrary) && Boolean(desktop?.getRegisteredGames);
+
+  const [games, setGames] = useState<DracordRegisteredGame[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [manualName, setManualName] = useState('');
+  const [manualExe, setManualExe] = useState('');
+
+  const refresh = useCallback(async () => {
+    if (!desktop?.getRegisteredGames) return;
+    try {
+      const res = await desktop.getRegisteredGames();
+      if (res.ok) setGames(res.games || []);
+    } catch {
+      /* ignore */
+    }
+  }, [desktop]);
+
+  useEffect(() => {
+    if (!canManage) return;
+    void refresh();
+  }, [canManage, refresh]);
+
+  if (!canManage) return null;
+
+  return (
+    <SettingsSection title="Oyun kütüphanesi">
+      <div className="px-space-md py-space-md space-y-3">
+        <p className="font-body-sm text-on-surface-variant">
+          Steam ve Epic oyunlarını tara veya exe ile manuel ekle. Algılama açıkken
+          çalışan oyun “Oynuyor” olarak paylaşılır.
+        </p>
+        {msg ? <p className="font-body-sm text-secondary">{msg}</p> : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-40"
+            onClick={() => {
+              setBusy(true);
+              setMsg(null);
+              void desktop
+                ?.scanGameLibrary?.()
+                .then(async (scan) => {
+                  if (!scan.ok) {
+                    setMsg(scan.error || 'Tarama başarısız');
+                    return;
+                  }
+                  const imp = await desktop.importGameScan?.();
+                  if (imp?.ok) {
+                    setGames(imp.games || []);
+                    setMsg(
+                      `Tarama tamam: ${scan.steamCount ?? 0} Steam, ${scan.epicCount ?? 0} Epic` +
+                        (imp.added ? ` (+${imp.added} yeni)` : ''),
+                    );
+                  } else {
+                    setMsg(imp?.error || 'İçe aktarma başarısız');
+                  }
+                })
+                .finally(() => setBusy(false));
+            }}
+          >
+            {busy ? 'Taranıyor…' : 'Oyunları tara'}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            className="px-space-md py-space-sm rounded-lg bg-surface-container-high text-on-surface font-label-sm disabled:opacity-40"
+            onClick={() => {
+              void desktop?.pickGameExe?.().then((pick) => {
+                if (!pick.ok || pick.canceled || !pick.exePath) return;
+                setManualExe(pick.exePath);
+                if (!manualName.trim() && pick.name) setManualName(pick.name);
+              });
+            }}
+          >
+            Exe seç
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 items-end">
+          <label className="flex-1 min-w-[10rem] space-y-1">
+            <span className="font-label-sm text-on-surface-variant">Oyun adı</span>
+            <input
+              className="w-full rounded-lg bg-surface-container-lowest px-space-sm py-space-sm font-body-sm text-on-surface"
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+              placeholder="Örn. Cyberpunk 2077"
+            />
+          </label>
+          <label className="flex-[2] min-w-[12rem] space-y-1">
+            <span className="font-label-sm text-on-surface-variant">Exe yolu</span>
+            <input
+              className="w-full rounded-lg bg-surface-container-lowest px-space-sm py-space-sm font-body-sm text-on-surface"
+              value={manualExe}
+              onChange={(e) => setManualExe(e.target.value)}
+              placeholder="C:\\Games\\oyun.exe"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !manualExe.trim()}
+            className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-40"
+            onClick={() => {
+              setBusy(true);
+              setMsg(null);
+              void desktop
+                ?.addManualGame?.({
+                  exePath: manualExe.trim(),
+                  name: manualName.trim() || undefined,
+                })
+                .then((res) => {
+                  if (res.ok) {
+                    setGames(res.games || []);
+                    setManualName('');
+                    setManualExe('');
+                    setMsg('Oyun eklendi');
+                  } else {
+                    setMsg(res.error || 'Eklenemedi');
+                  }
+                })
+                .finally(() => setBusy(false));
+            }}
+          >
+            Manuel ekle
+          </button>
+        </div>
+        {games.length === 0 ? (
+          <SettingsNote>
+            Henüz kayıtlı oyun yok. “Oyunları tara” veya manuel ekle.
+          </SettingsNote>
+        ) : (
+          <ul className="max-h-64 overflow-y-auto divide-y divide-outline-variant/20 rounded-lg bg-surface-container-lowest">
+            {games.map((g) => (
+              <li
+                key={g.appId}
+                className="flex items-center gap-2 px-space-sm py-space-sm"
+              >
+                {g.imageUrl ? (
+                  <img
+                    src={g.imageUrl}
+                    alt=""
+                    className="h-10 w-7 object-cover rounded-sm shrink-0 bg-surface-container"
+                  />
+                ) : (
+                  <div className="h-10 w-7 rounded-sm shrink-0 bg-surface-container" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-body-sm text-on-surface truncate">{g.name}</p>
+                  <p className="font-label-sm text-on-surface-variant truncate">
+                    {g.source === 'steam'
+                      ? 'Steam'
+                      : g.source === 'epic'
+                        ? 'Epic'
+                        : g.source === 'manual'
+                          ? 'Manuel'
+                          : g.source || 'Oyun'}
+                    {g.exeName ? ` · ${g.exeName}` : ''}
+                  </p>
+                </div>
+                <label className="flex items-center gap-1 shrink-0 font-label-sm text-on-surface-variant">
+                  <input
+                    type="checkbox"
+                    checked={g.enabled !== false}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      void desktop
+                        ?.setGameEnabled?.(g.appId, enabled)
+                        .then((res) => {
+                          if (res.ok) setGames(res.games || []);
+                        });
+                    }}
+                  />
+                  Algıla
+                </label>
+                <button
+                  type="button"
+                  className="font-label-sm text-error hover:underline shrink-0"
+                  onClick={() => {
+                    void desktop?.removeRegisteredGame?.(g.appId).then((res) => {
+                      if (res.ok) setGames(res.games || []);
+                    });
+                  }}
+                >
+                  Sil
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </SettingsSection>
   );
 }
 

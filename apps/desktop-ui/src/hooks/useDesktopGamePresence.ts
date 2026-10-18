@@ -55,7 +55,8 @@ export function useDesktopGamePresence(prefs: ClientSettings | null) {
     };
 
     void tick();
-    const id = window.setInterval(() => void tick(), 12_000);
+    // İlk tarama biraz daha sık; sonra 10 sn
+    const id = window.setInterval(() => void tick(), 10_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);

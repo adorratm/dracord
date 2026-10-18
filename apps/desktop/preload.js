@@ -32,8 +32,18 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
     ipcRenderer.on('updater:status', handler);
     return () => ipcRenderer.removeListener('updater:status', handler);
   },
-  /** Bilinen oyun süreçlerini tara (opt-in rich presence) */
+  /** Çalışan oyunları algıla (Steam / Epic / manuel) */
   detectGames: () => ipcRenderer.invoke('presence:detect-games'),
+  /** Steam + Epic kütüphane taraması */
+  scanGameLibrary: () => ipcRenderer.invoke('games:scan-library'),
+  /** Taramayı kayıtlı listeye aktar */
+  importGameScan: () => ipcRenderer.invoke('games:import-scan'),
+  getRegisteredGames: () => ipcRenderer.invoke('games:get-registered'),
+  addManualGame: (entry) => ipcRenderer.invoke('games:add-manual', entry),
+  removeRegisteredGame: (appId) => ipcRenderer.invoke('games:remove', appId),
+  setGameEnabled: (appId, enabled) =>
+    ipcRenderer.invoke('games:set-enabled', { appId, enabled }),
+  pickGameExe: () => ipcRenderer.invoke('games:pick-exe'),
   /** Spotify OAuth penceresi kapandı */
   onSpotifyOAuthDone: (callback) => {
     const handler = (_event, payload) => callback(payload);
