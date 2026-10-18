@@ -1098,9 +1098,19 @@ function registerWindowIpc() {
       return { ok: false, games: [], error: e instanceof Error ? e.message : String(e) };
     }
   });
-  ipcMain.handle('games:add-manual', (_e, entry) => {
+  ipcMain.handle('games:add-manual', async (_e, entry) => {
     try {
-      return desktopGames.addManualGame(entry || {});
+      return await desktopGames.addManualGame(entry || {});
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle('games:rename', (_e, payload) => {
+    try {
+      return desktopGames.renameRegisteredGame(
+        String(payload?.appId || ''),
+        String(payload?.name || ''),
+      );
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
@@ -1134,8 +1144,20 @@ function registerWindowIpc() {
         return { ok: false, canceled: true };
       }
       const exePath = res.filePaths[0];
-      const name = path.basename(exePath, path.extname(exePath));
-      return { ok: true, exePath, name };
+      const suggestedName = path.basename(exePath, path.extname(exePath));
+      // Seçince doğrudan listeye ekle (ikon exe'den)
+      const added = await desktopGames.addManualGame({
+        exePath,
+        name: suggestedName,
+      });
+      return {
+        ok: Boolean(added?.ok),
+        canceled: false,
+        exePath,
+        name: suggestedName,
+        games: added?.games,
+        error: added?.error,
+      };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

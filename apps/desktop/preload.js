@@ -40,9 +40,12 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   importGameScan: () => ipcRenderer.invoke('games:import-scan'),
   getRegisteredGames: () => ipcRenderer.invoke('games:get-registered'),
   addManualGame: (entry) => ipcRenderer.invoke('games:add-manual', entry),
+  renameRegisteredGame: (appId, name) =>
+    ipcRenderer.invoke('games:rename', { appId, name }),
   removeRegisteredGame: (appId) => ipcRenderer.invoke('games:remove', appId),
   setGameEnabled: (appId, enabled) =>
     ipcRenderer.invoke('games:set-enabled', { appId, enabled }),
+  /** Exe seç → ikon çıkar → listeye ekle */
   pickGameExe: () => ipcRenderer.invoke('games:pick-exe'),
   /** Spotify OAuth penceresi kapandı */
   onSpotifyOAuthDone: (callback) => {

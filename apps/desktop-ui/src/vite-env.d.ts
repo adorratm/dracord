@@ -43,12 +43,14 @@ type DracordRegisteredGame = {
   name: string;
   exePath?: string | null;
   exeName?: string | null;
+  exeNames?: string[];
   imageUrl?: string | null;
   url?: string | null;
   source?: string;
   enabled?: boolean;
   installPath?: string | null;
   installDir?: string | null;
+  steamAppId?: string | null;
 };
 
 type DracordDesktopApi = {
@@ -94,12 +96,16 @@ type DracordDesktopApi = {
     games: Array<DracordRegisteredGame>;
     steamCount?: number;
     epicCount?: number;
+    steamRoot?: string | null;
     error?: string;
   }>;
   importGameScan?: () => Promise<{
     ok: boolean;
     games?: Array<DracordRegisteredGame>;
     added?: number;
+    steamCount?: number;
+    epicCount?: number;
+    steamRoot?: string | null;
     error?: string;
   }>;
   getRegisteredGames?: () => Promise<{
@@ -113,6 +119,10 @@ type DracordDesktopApi = {
     imageUrl?: string | null;
     url?: string | null;
   }) => Promise<{ ok: boolean; games?: Array<DracordRegisteredGame>; error?: string }>;
+  renameRegisteredGame?: (
+    appId: string,
+    name: string,
+  ) => Promise<{ ok: boolean; games?: Array<DracordRegisteredGame>; error?: string }>;
   removeRegisteredGame?: (
     appId: string,
   ) => Promise<{ ok: boolean; games?: Array<DracordRegisteredGame>; error?: string }>;
@@ -125,6 +135,7 @@ type DracordDesktopApi = {
     canceled?: boolean;
     exePath?: string;
     name?: string;
+    games?: Array<DracordRegisteredGame>;
     error?: string;
   }>;
   onSpotifyOAuthDone?: (

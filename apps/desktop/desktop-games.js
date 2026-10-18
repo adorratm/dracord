@@ -1,22 +1,25 @@
 /**
  * Masaüstü oyun algılama + kütüphane tarama + manuel kayıt.
- * Steam (appmanifest), Epic (.item), kullanıcı kayıtları (userData).
+ * Steam: RunningAppID (registry) + appmanifest + çalışan exe eşlemesi.
+ * Epic: .item manifests. Manuel: exe + ikon.
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { app } = require('electron');
+const { app, nativeImage } = require('electron');
 
 const execFileAsync = promisify(execFile);
 
-/** @typedef {{ appId: string, name: string, installDir?: string, imageUrl?: string|null, url?: string|null, exePath?: string|null, exeName?: string|null, source?: string, enabled?: boolean }} GameEntry */
+/** @typedef {{ appId: string, name: string, installDir?: string|null, installPath?: string|null, imageUrl?: string|null, url?: string|null, exePath?: string|null, exeName?: string|null, exeNames?: string[], source?: string, enabled?: boolean, steamAppId?: string|null }} GameEntry */
 
 const SKIP_EXE = new Set([
   'steam.exe',
   'steamwebhelper.exe',
   'steamerrorreporter.exe',
   'gameoverlayui.exe',
+  'gameoverlayui64.exe',
   'streaming_client.exe',
   'spotify.exe',
   'electron.exe',
@@ -55,12 +58,14 @@ const SKIP_EXE = new Set([
   'riotclientservices.exe',
   'leagueclient.exe',
   'leagueclientux.exe',
+  'installerscripts.exe',
+  'steamerrorreporter64.exe',
 ]);
 
 const SKIP_STEAM_APP_IDS = new Set([
-  '431960',
-  '250820',
-  '228980',
+  '431960', // Wallpaper Engine
+  '250820', // SteamVR
+  '228980', // Steamworks Common Redistributables
   '1070560',
   '1391110',
   '1493710',
@@ -74,11 +79,6 @@ const SKIP_DIR = new Set([
   'steamapps',
   'common',
   'bin',
-  'binaries',
-  'win64',
-  'win32',
-  'x64',
-  'x86',
   'redist',
   'directx',
   'dotnet',
@@ -88,6 +88,8 @@ const SKIP_DIR = new Set([
   'tools',
   '_commonredist',
   'engine',
+  '__installer',
+  'crashpad',
 ]);
 
 /** Bilinen Steam dışı exe → isim */
@@ -110,7 +112,6 @@ const NON_STEAM_ALLOWLIST = {
     name: 'Minecraft',
     url: 'https://www.minecraft.net/',
   },
-  'javaw.exe': { name: 'Minecraft / Java', url: null },
   'overwatch.exe': {
     name: 'Overwatch 2',
     url: 'https://overwatch.blizzard.com/',
@@ -131,22 +132,69 @@ const NON_STEAM_ALLOWLIST = {
   'gtav.exe': { name: 'Grand Theft Auto V', url: null },
   'rdr2.exe': { name: 'Red Dead Redemption 2', url: null },
   'rocketleague.exe': { name: 'Rocket League', url: null },
-  'cs2.exe': { name: 'Counter-Strike 2', url: null },
-  'dota2.exe': { name: 'Dota 2', url: null },
+  'cs2.exe': { name: 'Counter-Strike 2', url: 'https://store.steampowered.com/app/730' },
+  'dota2.exe': { name: 'Dota 2', url: 'https://store.steampowered.com/app/570' },
   'r5apex.exe': { name: 'Apex Legends', url: null },
   'apex_legends.exe': { name: 'Apex Legends', url: null },
 };
 
-/** @type {{ byInstallDir: Map<string, any>, byAppId: Map<string, any>, loadedAt: number } | null} */
+/** @type {{ byInstallDir: Map<string, any>, byAppId: Map<string, any>, byExeName: Map<string, any>, list: GameEntry[], steamRoot: string|null, loadedAt: number } | null} */
 let steamCache = null;
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 3 * 60 * 1000;
 let didAutoImport = false;
 
 function steamArt(appId) {
-  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`;
+  const id = String(appId).replace(/^steam:/, '');
+  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_600x900.jpg`;
+}
+function steamHeader(appId) {
+  const id = String(appId).replace(/^steam:/, '');
+  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`;
 }
 function steamStore(appId) {
-  return `https://store.steampowered.com/app/${appId}`;
+  const id = String(appId).replace(/^steam:/, '');
+  return `https://store.steampowered.com/app/${id}`;
+}
+
+/** @type {Map<string, string>} */
+const steamNameCache = new Map();
+
+/** Store API’den oyun adı (RunningAppID bilinmeyen oyunlar için) */
+function fetchSteamAppName(appId) {
+  const id = String(appId);
+  if (steamNameCache.has(id)) return Promise.resolve(steamNameCache.get(id) || null);
+  return new Promise((resolve) => {
+    try {
+      const https = require('https');
+      const req = https.get(
+        `https://store.steampowered.com/api/appdetails?appids=${id}&l=turkish`,
+        { timeout: 4000 },
+        (res) => {
+          let raw = '';
+          res.on('data', (c) => {
+            raw += c;
+          });
+          res.on('end', () => {
+            try {
+              const j = JSON.parse(raw);
+              const name = j?.[id]?.data?.name;
+              if (name) steamNameCache.set(id, name);
+              resolve(name || null);
+            } catch {
+              resolve(null);
+            }
+          });
+        },
+      );
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 function baseName(p) {
@@ -207,6 +255,12 @@ function registeredFile() {
   return path.join(app.getPath('userData'), 'registered-games.json');
 }
 
+function iconsDir() {
+  const dir = path.join(app.getPath('userData'), 'game-icons');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 /** @returns {GameEntry[]} */
 function loadRegistered() {
   try {
@@ -235,12 +289,13 @@ async function steamPathFromRegistry() {
   for (const args of [
     ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'],
     ['query', 'HKLM\\SOFTWARE\\WOW6432Node\\Valve\\Steam', '/v', 'InstallPath'],
+    ['query', 'HKLM\\SOFTWARE\\Valve\\Steam', '/v', 'InstallPath'],
   ]) {
     try {
       const { stdout } = await execFileAsync('reg', args, { windowsHide: true });
       const m = stdout.match(/(?:SteamPath|InstallPath)\s+REG_SZ\s+(.+)/i);
       if (m) {
-        const p = m[1].trim().replace(/\//g, '\\');
+        const p = path.normalize(m[1].trim().replace(/\//g, '\\'));
         if (fs.existsSync(p)) return p;
       }
     } catch {
@@ -252,45 +307,146 @@ async function steamPathFromRegistry() {
 
 function commonSteamPaths() {
   const out = [];
-  const pf = process.env['ProgramFiles(x86)'] || process.env.ProgramFiles;
+  const pf86 = process.env['ProgramFiles(x86)'];
+  const pf = process.env.ProgramFiles;
+  if (pf86) out.push(path.join(pf86, 'Steam'));
   if (pf) out.push(path.join(pf, 'Steam'));
-  if (process.env.ProgramFiles) out.push(path.join(process.env.ProgramFiles, 'Steam'));
-  return out.filter((p) => fs.existsSync(p));
+  out.push('C:\\Program Files (x86)\\Steam');
+  out.push('C:\\Program Files\\Steam');
+  out.push('D:\\Steam');
+  out.push('D:\\SteamLibrary');
+  return [...new Set(out)].filter((p) => fs.existsSync(p));
 }
 
 async function resolveSteamRoot() {
   return (await steamPathFromRegistry()) || commonSteamPaths()[0] || null;
 }
 
+/**
+ * Steam'in aktif oyun AppID'si (oyun açıkken REG_DWORD > 0).
+ */
+async function getSteamRunningAppId() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const { stdout } = await execFileAsync(
+      'reg',
+      ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'RunningAppID'],
+      { windowsHide: true },
+    );
+    const hex = stdout.match(/RunningAppID\s+REG_DWORD\s+0x([0-9a-fA-F]+)/);
+    if (hex) {
+      const n = parseInt(hex[1], 16);
+      return n > 0 ? String(n) : null;
+    }
+    const dec = stdout.match(/RunningAppID\s+REG_DWORD\s+(\d+)/);
+    if (dec) {
+      const n = parseInt(dec[1], 10);
+      return n > 0 ? String(n) : null;
+    }
+  } catch {
+    /* yok */
+  }
+  return null;
+}
+
 function collectLibrarySteamapps(steamRoot) {
   const roots = new Set();
   const defaultApps = path.join(steamRoot, 'steamapps');
   if (fs.existsSync(defaultApps)) roots.add(defaultApps);
-  for (const vdf of [
+
+  const vdfCandidates = [
     path.join(steamRoot, 'steamapps', 'libraryfolders.vdf'),
     path.join(steamRoot, 'config', 'libraryfolders.vdf'),
-  ]) {
+  ];
+  for (const vdf of vdfCandidates) {
     const text = readTextSafe(vdf);
     if (!text) continue;
     const parsed = parseVdfObject(text);
     const folders = parsed.libraryfolders || parsed.LibraryFolders || parsed;
     if (!folders || typeof folders !== 'object') continue;
     for (const [k, v] of Object.entries(folders)) {
-      if (k === 'contentstatsid') continue;
+      if (k === 'contentstatsid' || k === 'TimeNextStatsReport') continue;
       let libPath = typeof v === 'string' ? v : v?.path || v?.Path;
-      if (!libPath) continue;
-      const steamapps = path.join(String(libPath).replace(/\//g, '\\'), 'steamapps');
+      if (!libPath || typeof libPath !== 'string') continue;
+      libPath = libPath.replace(/\//g, '\\').replace(/\\\\/g, '\\');
+      const steamapps = path.join(libPath, 'steamapps');
       if (fs.existsSync(steamapps)) roots.add(steamapps);
+      // Bazen path doğrudan steam kökü
+      else if (fs.existsSync(path.join(libPath, 'steamapps', 'common'))) {
+        roots.add(path.join(libPath, 'steamapps'));
+      }
     }
   }
   return [...roots];
 }
 
+/** Kurulum klasöründeki aday oyun exe'leri (hızlı, sığ tarama) */
+function findGameExes(installPath, max = 16) {
+  /** @type {string[]} */
+  const found = [];
+  if (!installPath || !fs.existsSync(installPath)) return found;
+
+  const preferDirs = new Set([
+    'binaries',
+    'win64',
+    'win32',
+    'x64',
+    'x86',
+    'bin',
+    'game',
+    'shipping',
+  ]);
+
+  const visit = (dir, depth) => {
+    if (found.length >= max || depth > 3) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    // Önce exe'ler
+    for (const ent of entries) {
+      if (found.length >= max) break;
+      if (!ent.isFile() || !/\.exe$/i.test(ent.name)) continue;
+      const n = ent.name.toLowerCase();
+      if (SKIP_EXE.has(n)) continue;
+      if (!found.includes(n)) found.push(n);
+    }
+    if (depth >= 3) return;
+    // Öncelikli alt klasörler
+    const dirs = entries
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .filter((name) => {
+        const dn = name.toLowerCase();
+        if (dn.startsWith('.') || SKIP_DIR.has(dn)) return false;
+        if (/redistributable|directx|dotnet|vcredist|__installer/i.test(dn))
+          return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const pa = preferDirs.has(a.toLowerCase()) ? 0 : 1;
+        const pb = preferDirs.has(b.toLowerCase()) ? 0 : 1;
+        return pa - pb;
+      });
+    for (const name of dirs) {
+      if (found.length >= max) break;
+      visit(path.join(dir, name), depth + 1);
+    }
+  };
+
+  visit(installPath, 0);
+  return found;
+}
+
 function indexSteamManifests(steamappsDirs) {
   const byInstallDir = new Map();
   const byAppId = new Map();
+  const byExeName = new Map();
   /** @type {GameEntry[]} */
   const list = [];
+
   for (const steamapps of steamappsDirs) {
     let files = [];
     try {
@@ -310,15 +466,34 @@ function indexSteamManifests(steamappsDirs) {
       const name = String(appState.name || '').trim();
       const installDir = String(appState.installdir || '').trim();
       if (!appId || !name || SKIP_STEAM_APP_IDS.has(appId)) continue;
-      const installPath =
-        installDir && fs.existsSync(common)
-          ? path.join(common, installDir)
-          : null;
+
+      let installPath = null;
+      if (installDir && fs.existsSync(common)) {
+        const candidate = path.join(common, installDir);
+        if (fs.existsSync(candidate)) installPath = candidate;
+        else {
+          // Büyük/küçük harf farkı
+          try {
+            const dirs = fs.readdirSync(common);
+            const hit = dirs.find(
+              (d) => d.toLowerCase() === installDir.toLowerCase(),
+            );
+            if (hit) installPath = path.join(common, hit);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      const exeNames = installPath ? findGameExes(installPath) : [];
       const info = {
         appId: `steam:${appId}`,
+        steamAppId: appId,
         name,
         installDir,
         installPath,
+        exeNames,
+        exeName: exeNames[0] || null,
         imageUrl: steamArt(appId),
         url: steamStore(appId),
         source: 'steam',
@@ -326,10 +501,13 @@ function indexSteamManifests(steamappsDirs) {
       };
       byAppId.set(appId, info);
       if (installDir) byInstallDir.set(installDir.toLowerCase(), info);
+      for (const exe of exeNames) {
+        if (!byExeName.has(exe)) byExeName.set(exe, info);
+      }
       list.push(info);
     }
   }
-  return { byInstallDir, byAppId, list };
+  return { byInstallDir, byAppId, byExeName, list };
 }
 
 async function loadSteamLibrary(force = false) {
@@ -341,23 +519,29 @@ async function loadSteamLibrary(force = false) {
     steamCache = {
       byInstallDir: new Map(),
       byAppId: new Map(),
+      byExeName: new Map(),
       list: [],
+      steamRoot: null,
       loadedAt: Date.now(),
     };
     return steamCache;
   }
   const indexed = indexSteamManifests(collectLibrarySteamapps(root));
-  steamCache = { ...indexed, loadedAt: Date.now() };
+  steamCache = { ...indexed, steamRoot: root, loadedAt: Date.now() };
   return steamCache;
 }
 
-/** Epic Games Launcher .item manifests */
 function scanEpicGames() {
   /** @type {GameEntry[]} */
   const out = [];
   const roots = [
-    path.join(process.env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests'),
-    path.join(process.env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests'),
+    path.join(
+      process.env.ProgramData || 'C:\\ProgramData',
+      'Epic',
+      'EpicGamesLauncher',
+      'Data',
+      'Manifests',
+    ),
   ];
   const seen = new Set();
   for (const dir of roots) {
@@ -378,22 +562,27 @@ function scanEpicGames() {
         const id = `epic:${cat.toLowerCase()}`;
         if (seen.has(id)) continue;
         seen.add(id);
-        // Launch exe: LaunchExecutable
         const launch = String(raw.LaunchExecutable || '').trim();
         const exePath = launch ? path.join(install, launch) : null;
+        const exeNames = findGameExes(install, 8);
+        if (launch) {
+          const ln = baseName(launch);
+          if (ln && !exeNames.includes(ln)) exeNames.unshift(ln);
+        }
         out.push({
           appId: id,
           name,
           installPath: install,
           exePath: exePath && fs.existsSync(exePath) ? exePath : null,
-          exeName: launch ? baseName(launch) : null,
+          exeName: launch ? baseName(launch) : exeNames[0] || null,
+          exeNames,
           imageUrl: null,
           url: null,
           source: 'epic',
           enabled: true,
         });
       } catch {
-        /* skip bad item */
+        /* skip */
       }
     }
   }
@@ -415,45 +604,55 @@ function readSteamAppIdNearExe(exePath) {
   return null;
 }
 
-/** Tüm süreç ExecutablePath listesi */
+/** ExecutablePath + CommandLine'dan exe yolları */
 async function listProcessPaths() {
   if (process.platform !== 'win32') return [];
-  const parseLines = (stdout) =>
-    String(stdout || '')
-      .split(/\r?\n/)
-      .map((l) => l.trim().replace(/^"|"$/g, ''))
-      .filter((l) => l && /\.exe$/i.test(l));
+  const paths = new Set();
+
+  const addPath = (p) => {
+    if (!p || typeof p !== 'string') return;
+    let s = p.trim().replace(/^"|"$/g, '');
+    // CommandLine: "C:\...\game.exe" -args
+    const m = s.match(/^"([^"]+\.exe)"/i) || s.match(/^(\S+\.exe)/i);
+    if (m) s = m[1];
+    if (/\.exe$/i.test(s)) paths.add(s);
+  };
 
   try {
-    const ps =
-      "Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath } | Select-Object -ExpandProperty ExecutablePath";
+    const ps = [
+      '$ErrorActionPreference="SilentlyContinue";',
+      'Get-CimInstance Win32_Process | ForEach-Object {',
+      '  if ($_.ExecutablePath) { $_.ExecutablePath }',
+      '  elseif ($_.CommandLine) { $_.CommandLine }',
+      '}',
+    ].join(' ');
     const { stdout } = await execFileAsync(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', ps],
-      { windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+      { windowsHide: true, maxBuffer: 32 * 1024 * 1024 },
     );
-    const paths = parseLines(stdout);
-    if (paths.length) return paths;
+    for (const line of String(stdout).split(/\r?\n/)) addPath(line);
   } catch {
-    /* fallback below */
+    /* fallback */
   }
 
-  // Eski Windows / kısıtlı ortam: WMIC
-  try {
-    const { stdout } = await execFileAsync(
-      'wmic',
-      ['process', 'get', 'ExecutablePath', '/FORMAT:LIST'],
-      { windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
-    );
-    const paths = [];
-    for (const line of String(stdout).split(/\r?\n/)) {
-      const m = line.match(/^ExecutablePath=(.+)$/i);
-      if (m?.[1]?.trim()) paths.push(m[1].trim());
+  if (paths.size === 0) {
+    try {
+      const { stdout } = await execFileAsync(
+        'wmic',
+        ['process', 'get', 'ExecutablePath,CommandLine', '/FORMAT:LIST'],
+        { windowsHide: true, maxBuffer: 32 * 1024 * 1024 },
+      );
+      for (const line of String(stdout).split(/\r?\n/)) {
+        const m = line.match(/^(?:ExecutablePath|CommandLine)=(.*)$/i);
+        if (m?.[1]?.trim()) addPath(m[1]);
+      }
+    } catch {
+      /* ignore */
     }
-    return paths.filter((p) => /\.exe$/i.test(p));
-  } catch {
-    return [];
   }
+
+  return [...paths];
 }
 
 async function listRunningExeNames() {
@@ -462,7 +661,7 @@ async function listRunningExeNames() {
     const { stdout } = await execFileAsync(
       'tasklist',
       ['/FO', 'CSV', '/NH'],
-      { windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      { windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
     );
     for (const line of stdout.split(/\r?\n/)) {
       const m = line.match(/^"([^"]+)"/);
@@ -474,9 +673,27 @@ async function listRunningExeNames() {
   return names;
 }
 
-/**
- * Kütüphane taraması — Steam + Epic + kayıtlılar (UI listesi).
- */
+async function extractExeIconDataUrl(exePath) {
+  try {
+    const img = await app.getFileIcon(exePath, { size: 'large' });
+    if (!img || img.isEmpty()) return null;
+    const png = img.toPNG();
+    const hash = crypto
+      .createHash('sha1')
+      .update(exePath.toLowerCase())
+      .digest('hex')
+      .slice(0, 16);
+    const file = path.join(iconsDir(), `${hash}.png`);
+    fs.writeFileSync(file, png);
+    // Yerel gösterim + presence için data URL (küçük ikon)
+    const small = nativeImage.createFromBuffer(png);
+    const resized = small.resize({ width: 64, height: 64, quality: 'best' });
+    return resized.toDataURL();
+  } catch {
+    return null;
+  }
+}
+
 async function scanGameLibrary() {
   const steam = await loadSteamLibrary(true);
   const epic = scanEpicGames();
@@ -489,7 +706,6 @@ async function scanGameLibrary() {
   for (const g of epic) {
     if (!byId.has(g.appId)) byId.set(g.appId, g);
   }
-  // Kayıtlılar üzerine yaz (enabled tercihi korunur)
   for (const g of registered) {
     byId.set(g.appId, { ...byId.get(g.appId), ...g });
   }
@@ -497,27 +713,54 @@ async function scanGameLibrary() {
   const games = [...byId.values()].sort((a, b) =>
     String(a.name).localeCompare(String(b.name), 'tr'),
   );
-  return { ok: true, games, steamCount: steam.list?.length ?? 0, epicCount: epic.length };
+  return {
+    ok: true,
+    games,
+    steamCount: steam.list?.length ?? 0,
+    epicCount: epic.length,
+    steamRoot: steam.steamRoot || null,
+  };
 }
 
-/**
- * Tarama sonucunu kayıtlı listeye birleştir (yeni olanlar enabled).
- */
 async function importScanToRegistered() {
   const scan = await scanGameLibrary();
+  if (!scan.ok) return scan;
   const existing = loadRegistered();
   const map = new Map(existing.map((g) => [g.appId, g]));
+  let added = 0;
   for (const g of scan.games) {
     if (!map.has(g.appId)) {
       map.set(g.appId, { ...g, enabled: true });
+      added += 1;
+    } else {
+      // Exe listesini / kapak URL'ini güncelle, kullanıcı adını koru
+      const prev = map.get(g.appId);
+      map.set(g.appId, {
+        ...g,
+        ...prev,
+        exeNames: g.exeNames || prev.exeNames,
+        exeName: g.exeName || prev.exeName,
+        installPath: g.installPath || prev.installPath,
+        imageUrl: prev.imageUrl || g.imageUrl,
+        url: prev.url || g.url,
+        steamAppId: g.steamAppId || prev.steamAppId,
+        enabled: prev.enabled !== false,
+      });
     }
   }
   const games = [...map.values()];
   saveRegistered(games);
-  return { ok: true, games, added: games.length - existing.length };
+  return {
+    ok: true,
+    games,
+    added,
+    steamCount: scan.steamCount,
+    epicCount: scan.epicCount,
+    steamRoot: scan.steamRoot,
+  };
 }
 
-function addManualGame(entry) {
+async function addManualGame(entry) {
   const exePath = String(entry?.exePath || '').trim();
   if (!exePath || !fs.existsSync(exePath)) {
     return { ok: false, error: 'exe_not_found' };
@@ -529,18 +772,54 @@ function addManualGame(entry) {
   const name =
     String(entry?.name || '').trim() ||
     path.basename(exePath, path.extname(exePath));
-  const appId = `manual:${exePath.toLowerCase()}`;
+
+  // Steam klasöründeyse steam kaydı olarak bağla
+  const folder = folderFromSteamPath(exePath);
+  let steamMeta = null;
+  if (folder) {
+    const steam = await loadSteamLibrary();
+    steamMeta = steam.byInstallDir.get(folder.toLowerCase()) || null;
+    if (!steamMeta) {
+      const sid = readSteamAppIdNearExe(exePath);
+      if (sid && steam.byAppId.get(sid)) steamMeta = steam.byAppId.get(sid);
+    }
+  }
+
+  const appId = steamMeta?.appId || `manual:${exePath.toLowerCase()}`;
+  let imageUrl = entry?.imageUrl ?? null;
+  if (!imageUrl && steamMeta?.imageUrl) imageUrl = steamMeta.imageUrl;
+  if (!imageUrl) imageUrl = await extractExeIconDataUrl(exePath);
+
   const games = loadRegistered().filter((g) => g.appId !== appId);
   games.push({
     appId,
-    name,
+    name: steamMeta && !entry?.name ? steamMeta.name : name,
     exePath,
     exeName: exe,
-    imageUrl: entry?.imageUrl ?? null,
-    url: entry?.url ?? null,
-    source: 'manual',
+    exeNames: [exe],
+    imageUrl,
+    url: steamMeta?.url || entry?.url || null,
+    source: steamMeta ? 'steam' : 'manual',
+    steamAppId: steamMeta?.steamAppId || null,
+    installPath: steamMeta?.installPath || path.dirname(exePath),
     enabled: true,
   });
+  saveRegistered(games);
+  return { ok: true, games };
+}
+
+function renameRegisteredGame(appId, name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return { ok: false, error: 'empty_name', games: loadRegistered() };
+  const games = loadRegistered();
+  let found = false;
+  for (const g of games) {
+    if (g.appId === appId) {
+      g.name = trimmed;
+      found = true;
+    }
+  }
+  if (!found) return { ok: false, error: 'not_found', games };
   saveRegistered(games);
   return { ok: true, games };
 }
@@ -570,18 +849,19 @@ function getRegistered() {
 }
 
 /**
- * Çalışan oyunları bul — Steam path + Epic path + kayıtlı exe + allowlist.
+ * Çalışan oyunları bul.
+ * Öncelik: Steam RunningAppID → exe adı eşlemesi → path → allowlist.
  */
 async function detectRunningGames() {
   if (process.platform !== 'win32') {
     return { ok: true, games: [] };
   }
 
-  // İlk çalıştırmada kütüphaneyi sessizce kaydet (manuel tarama gerekmeden)
-  if (!didAutoImport && loadRegistered().length === 0) {
+  if (!didAutoImport) {
     didAutoImport = true;
     try {
-      await importScanToRegistered();
+      if (loadRegistered().length === 0) await importScanToRegistered();
+      else await loadSteamLibrary(true);
     } catch {
       /* ignore */
     }
@@ -589,8 +869,12 @@ async function detectRunningGames() {
 
   const steam = await loadSteamLibrary();
   const registered = loadRegistered().filter((g) => g.enabled !== false);
-  const paths = await listProcessPaths();
-  const runningNames = await listRunningExeNames();
+  const [paths, runningNames, runningSteamId] = await Promise.all([
+    listProcessPaths(),
+    listRunningExeNames(),
+    getSteamRunningAppId(),
+  ]);
+
   /** @type {GameEntry[]} */
   const found = [];
   const seen = new Set();
@@ -598,36 +882,89 @@ async function detectRunningGames() {
   const push = (game) => {
     const id = String(game.appId || '').toLowerCase();
     if (!id || !game.name || seen.has(id)) return;
-    const exe = baseName(game.exeName || game.appId);
-    if (SKIP_EXE.has(exe) || SKIP_EXE.has(id)) return;
+    const exe = baseName(game.exeName || '');
+    if (exe && SKIP_EXE.has(exe)) return;
     seen.add(id);
+    const steamId = String(game.steamAppId || id.replace(/^steam:/, ''));
     found.push({
       appId: game.appId,
       name: game.name,
       details: game.details || game.source || 'Masaüstü',
-      imageUrl: game.imageUrl ?? null,
-      url: game.url ?? null,
+      imageUrl: game.imageUrl || ( /^\d+$/.test(steamId) ? steamArt(steamId) : null),
+      url: game.url || ( /^\d+$/.test(steamId) ? steamStore(steamId) : null),
     });
   };
 
-  // 1) Allowlist (tasklist)
+  // 0) Steam RunningAppID — en güvenilir sinyal
+  if (runningSteamId && !SKIP_STEAM_APP_IDS.has(runningSteamId)) {
+    let info = steam.byAppId.get(runningSteamId);
+    if (!info) {
+      const reg = registered.find(
+        (g) =>
+          g.steamAppId === runningSteamId ||
+          g.appId === `steam:${runningSteamId}`,
+      );
+      if (reg) info = reg;
+    }
+    if (!info) {
+      const storeName = await fetchSteamAppName(runningSteamId);
+      info = {
+        appId: `steam:${runningSteamId}`,
+        steamAppId: runningSteamId,
+        name: storeName || `Steam App ${runningSteamId}`,
+        imageUrl: steamArt(runningSteamId),
+        url: steamStore(runningSteamId),
+        source: 'steam',
+      };
+    }
+    push({
+      ...info,
+      appId: `steam:${runningSteamId}`,
+      steamAppId: runningSteamId,
+      imageUrl: info.imageUrl || steamArt(runningSteamId),
+      url: info.url || steamStore(runningSteamId),
+      details: 'Steam',
+    });
+  }
+
+  // 1) Allowlist
   for (const [exe, meta] of Object.entries(NON_STEAM_ALLOWLIST)) {
     if (runningNames.has(exe)) {
-      push({
-        appId: exe,
-        name: meta.name,
-        details: 'Masaüstü',
-        url: meta.url,
-        source: 'allowlist',
-      });
+      // Steam'de varsa steam kaydını tercih et
+      const steamHit = steam.byExeName.get(exe);
+      if (steamHit) {
+        push({ ...steamHit, details: 'Steam' });
+      } else {
+        push({
+          appId: exe,
+          name: meta.name,
+          details: 'Masaüstü',
+          url: meta.url,
+          source: 'allowlist',
+        });
+      }
     }
   }
 
-  // 2) Kayıtlı oyunlar — install klasörü / exe yolu / exe adı
-  for (const g of registered) {
-    const exe = (g.exeName || baseName(g.exePath || '')).toLowerCase();
-    if (exe && SKIP_EXE.has(exe)) continue;
+  // 2) Steam / kayıtlı — çalışan exe adı ↔ oyun exe listesi
+  const matchByExeNames = (g) => {
+    const names = [
+      ...(Array.isArray(g.exeNames) ? g.exeNames : []),
+      g.exeName,
+      g.exePath ? baseName(g.exePath) : null,
+    ]
+      .filter(Boolean)
+      .map((n) => String(n).toLowerCase());
+    return names.some((n) => runningNames.has(n));
+  };
 
+  for (const g of steam.list || []) {
+    if (matchByExeNames(g)) {
+      push({ ...g, details: 'Steam' });
+    }
+  }
+
+  for (const g of registered) {
     const install = g.installPath
       ? String(g.installPath).replace(/\//g, '\\').toLowerCase()
       : '';
@@ -637,49 +974,43 @@ async function detectRunningGames() {
         const pl = p.toLowerCase();
         return pl === install || pl.startsWith(install + '\\');
       });
-
     const pathHit =
       !!g.exePath &&
       paths.some(
         (p) =>
           p.toLowerCase() === String(g.exePath).toLowerCase() ||
-          (exe && baseName(p) === exe),
+          baseName(p) === baseName(g.exePath),
       );
-
-    const nameHit = !!exe && runningNames.has(exe);
-    const hit =
-      underInstall ||
-      pathHit ||
-      (nameHit && (g.source === 'manual' || !!g.exePath));
-
-    if (!hit) continue;
-
-    push({
-      ...g,
-      details:
-        g.source === 'steam'
-          ? 'Steam'
-          : g.source === 'epic'
-            ? 'Epic'
-            : g.source === 'manual'
-              ? 'Manuel'
-              : 'Masaüstü',
-    });
+    if (underInstall || pathHit || matchByExeNames(g)) {
+      push({
+        ...g,
+        details:
+          g.source === 'steam'
+            ? 'Steam'
+            : g.source === 'epic'
+              ? 'Epic'
+              : g.source === 'manual'
+                ? 'Manuel'
+                : 'Masaüstü',
+      });
+    }
   }
 
-  // 3) Steam process paths
+  // 3) Process path → steamapps\common
   for (const exePath of paths) {
     const exe = baseName(exePath);
-    if (!exe || exe.endsWith('.dll') || SKIP_EXE.has(exe)) continue;
+    if (!exe || SKIP_EXE.has(exe)) continue;
 
     const folder = folderFromSteamPath(exePath);
     if (folder) {
       let info = steam.byInstallDir.get(folder.toLowerCase());
+      if (!info) info = steam.byExeName.get(exe);
       if (!info) {
         const sid = readSteamAppIdNearExe(exePath);
         if (sid && !SKIP_STEAM_APP_IDS.has(sid)) {
           info = steam.byAppId.get(sid) || {
             appId: `steam:${sid}`,
+            steamAppId: sid,
             name: folder,
             imageUrl: steamArt(sid),
             url: steamStore(sid),
@@ -687,17 +1018,9 @@ async function detectRunningGames() {
           };
         }
       }
-      if (info && !SKIP_STEAM_APP_IDS.has(String(info.appId).replace(/^steam:/, ''))) {
-        push({
-          ...info,
-          appId: String(info.appId).startsWith('steam:')
-            ? info.appId
-            : `steam:${info.appId}`,
-          details: 'Steam',
-        });
-        continue;
-      }
-      if (folder) {
+      if (info) {
+        push({ ...info, details: 'Steam' });
+      } else {
         push({
           appId: `steam-dir:${folder.toLowerCase()}`,
           name: folder,
@@ -708,15 +1031,20 @@ async function detectRunningGames() {
       continue;
     }
 
-    // Epic install path
     if (/\\epic games\\/i.test(exePath) || /\\epicgames\\/i.test(exePath)) {
       const parts = exePath.replace(/\//g, '\\').split('\\');
-      const eg = parts.findIndex((p) => /^epic games$/i.test(p) || /^epicgames$/i.test(p));
-      const folder = eg >= 0 ? parts[eg + 1] : null;
-      if (folder && !SKIP_DIR.has(folder.toLowerCase()) && !SKIP_EXE.has(exe)) {
+      const eg = parts.findIndex(
+        (p) => /^epic games$/i.test(p) || /^epicgames$/i.test(p),
+      );
+      const folderName = eg >= 0 ? parts[eg + 1] : null;
+      if (
+        folderName &&
+        !SKIP_DIR.has(folderName.toLowerCase()) &&
+        !SKIP_EXE.has(exe)
+      ) {
         push({
-          appId: `epic-dir:${folder.toLowerCase()}`,
-          name: folder,
+          appId: `epic-dir:${folderName.toLowerCase()}`,
+          name: folderName,
           details: 'Epic',
           source: 'epic',
           exeName: exe,
@@ -737,7 +1065,17 @@ async function detectRunningGames() {
     return score(a) - score(b);
   });
 
-  return { ok: true, games: found };
+  return {
+    ok: true,
+    games: found,
+    debug: {
+      steamRoot: steam.steamRoot,
+      steamGames: steam.list?.length ?? 0,
+      runningSteamId,
+      processPathCount: paths.length,
+      runningExeCount: runningNames.size,
+    },
+  };
 }
 
 module.exports = {
@@ -746,9 +1084,13 @@ module.exports = {
   scanGameLibrary,
   importScanToRegistered,
   addManualGame,
+  renameRegisteredGame,
   removeRegisteredGame,
   setGameEnabled,
   getRegistered,
+  extractExeIconDataUrl,
+  getSteamRunningAppId,
   steamArt,
+  steamHeader,
   steamStore,
 };

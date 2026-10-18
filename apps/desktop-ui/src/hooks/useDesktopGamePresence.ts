@@ -55,8 +55,8 @@ export function useDesktopGamePresence(prefs: ClientSettings | null) {
     };
 
     void tick();
-    // İlk tarama biraz daha sık; sonra 10 sn
-    const id = window.setInterval(() => void tick(), 10_000);
+    // Steam RunningAppID için 8 sn yeterli
+    const id = window.setInterval(() => void tick(), 8_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);

@@ -48,6 +48,8 @@
       "main.js",
       "preload.js",
       "dealer-tts.js",
+      "desktop-games.js",
+      "steam-games.js",
       "package.json",
       "ui/**/*",
       "build/icon.png",
