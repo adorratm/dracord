@@ -145,6 +145,19 @@ export function VoicePanel({
       // Seste görünen biri OFFLINE/eksik ise çevrimiçi tut (web parity)
       return 'ONLINE';
     };
+    const activityFor = (memberId: string, m?: (typeof members)[number] | null) => {
+      // Self: auth.user anlık Spotify/oyun — members gecikmeli kalabiliyor
+      if (user && memberId === user.id) {
+        return {
+          activity: user.activity ?? m?.activity ?? null,
+          activities: user.activities ?? m?.activities ?? null,
+        };
+      }
+      return {
+        activity: m?.activity ?? null,
+        activities: m?.activities ?? null,
+      };
+    };
     const voiceList = voice.peers.map((p) => {
       const m = members.find((x) => x.id === p.id);
       const status = liveStatus(m?.status);
@@ -157,6 +170,7 @@ export function VoicePanel({
       const dmTarget = m
         ? { id: m.id, isBot: m.isBot }
         : { id: p.id, isBot: peerIsBot };
+      const act = activityFor(p.id, m);
       return {
         id: p.id,
         displayName: p.displayName,
@@ -168,6 +182,8 @@ export function VoicePanel({
         socialLinks: m?.socialLinks,
         status,
         customStatus: m?.customStatus,
+        activity: act.activity,
+        activities: act.activities,
         isBot: peerIsBot,
         ...memberRoleExtras(m, roleColors),
         subtitle: presenceLabelTr(status, m?.customStatus),
@@ -186,6 +202,7 @@ export function VoicePanel({
         label: 'Üyeler',
         members: members.map((m) => {
           const contextActions = actionsFor(m, m);
+          const act = activityFor(m.id, m);
           return {
             id: m.id,
             displayName: m.displayName,
@@ -197,6 +214,8 @@ export function VoicePanel({
             socialLinks: m.socialLinks,
             status: (m.status ?? 'OFFLINE') as 'ONLINE' | 'IDLE' | 'DND' | 'OFFLINE',
             customStatus: m.customStatus,
+            activity: act.activity,
+            activities: act.activities,
             isBot: Boolean(m.isBot),
             ...memberRoleExtras(m, roleColors),
             subtitle: presenceLabelTr(m.status ?? 'OFFLINE', m.customStatus),
@@ -206,7 +225,7 @@ export function VoicePanel({
         }),
       },
     ];
-  }, [voice.peers, members, userId, roleColors, actionsFor]);
+  }, [voice.peers, members, userId, user, roleColors, actionsFor]);
 
   const focused = voice.activeScreenShare;
 

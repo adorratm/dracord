@@ -121,26 +121,39 @@ export function MemberPanel({
     };
 
     // Web parity: sesdeyken “Seste”, değilse “Çevrimiçi” (kendin / ses katılımcıları)
+    const withLiveSelfActivity = (m: PublicUser): PublicUser => {
+      if (!user || m.id !== user.id) return m;
+      return {
+        ...m,
+        activity: user.activity ?? m.activity ?? null,
+        activities: user.activities ?? m.activities ?? null,
+        customStatus: user.customStatus ?? m.customStatus,
+      };
+    };
+
     const voiceList: MemberListGroup['members'] =
       inVoice && voicePeers.length > 0
         ? voicePeers.map((p) => {
             const m = members.find((g) => g.id === p.id);
             if (m) {
               return mapMember(
-                {
+                withLiveSelfActivity({
                   ...m,
                   displayName: p.displayName || m.displayName,
                   avatarUrl: p.avatarUrl ?? m.avatarUrl,
-                },
+                }),
                 { forceOnline: true },
               );
             }
+            const isSelf = p.id === user?.id;
             return {
               id: p.id,
               displayName: p.displayName,
               avatarUrl: p.avatarUrl,
               status: 'ONLINE' as const,
               isBot: Boolean(p.isBot),
+              activity: isSelf ? user?.activity ?? null : null,
+              activities: isSelf ? user?.activities ?? null : null,
               subtitle: presenceLabelTr('ONLINE'),
               onClick: () => onOpenDm?.(p.id),
               contextActions: onOpenDm
@@ -193,7 +206,7 @@ export function MemberPanel({
       {
         id: 'members',
         label: 'Üyeler',
-        members: members.map((m) => mapMember(m)),
+        members: members.map((m) => mapMember(withLiveSelfActivity(m))),
       },
     ];
   }, [

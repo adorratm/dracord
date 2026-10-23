@@ -2033,6 +2033,8 @@ export function GuildChannelView({
       ? voice.participants.map((p) => {
           const isBot = Boolean((p as { isBot?: boolean }).isBot);
           const voiceChId = voice.voiceChannelId ?? (isVoiceView ? channelId : null);
+          const gm = guildMembers.find((g) => g.id === p.id);
+          const isSelf = p.id === user?.id;
           const actions = buildVoiceMemberActions({
             id: p.id,
             displayName: p.displayName,
@@ -2043,27 +2045,26 @@ export function GuildChannelView({
           return {
             id: p.id,
             displayName: p.displayName,
-            username: guildMembers.find((g) => g.id === p.id)?.username,
+            username: gm?.username,
             avatarUrl:
-              p.avatarUrl ||
-              guildMembers.find((g) => g.id === p.id)?.avatarUrl ||
-              (p.id === user?.id ? user.avatarUrl : null),
-            bannerUrl: guildMembers.find((g) => g.id === p.id)?.bannerUrl,
-            bannerColor: guildMembers.find((g) => g.id === p.id)?.bannerColor,
-            bio: guildMembers.find((g) => g.id === p.id)?.bio,
-            socialLinks: guildMembers.find((g) => g.id === p.id)?.socialLinks,
-            roles: guildMembers.find((g) => g.id === p.id)?.roles,
-            status: liveMemberStatus(
-              p.id,
-              guildMembers.find((g) => g.id === p.id)?.status,
-            ),
-            customStatus: guildMembers.find((g) => g.id === p.id)?.customStatus,
-            activity: guildMembers.find((g) => g.id === p.id)?.activity,
-            activities: guildMembers.find((g) => g.id === p.id)?.activities,
+              p.avatarUrl || gm?.avatarUrl || (isSelf ? user.avatarUrl : null),
+            bannerUrl: gm?.bannerUrl,
+            bannerColor: gm?.bannerColor,
+            bio: gm?.bio,
+            socialLinks: gm?.socialLinks,
+            roles: gm?.roles,
+            status: liveMemberStatus(p.id, gm?.status),
+            customStatus: isSelf
+              ? user?.customStatus ?? gm?.customStatus
+              : gm?.customStatus,
+            activity: isSelf ? user?.activity ?? gm?.activity : gm?.activity,
+            activities: isSelf
+              ? user?.activities ?? gm?.activities
+              : gm?.activities,
             isBot,
             subtitle: presenceLabelTr(
-              liveMemberStatus(p.id, guildMembers.find((g) => g.id === p.id)?.status),
-              guildMembers.find((g) => g.id === p.id)?.customStatus,
+              liveMemberStatus(p.id, gm?.status),
+              isSelf ? user?.customStatus ?? gm?.customStatus : gm?.customStatus,
             ),
             onClick:
               isBot || p.id === DRACORD_BOT_USER_ID
@@ -2256,9 +2257,9 @@ export function GuildChannelView({
             socialLinks: m.socialLinks,
             roles: m.roles,
             status: liveMemberStatus(m.id, m.status),
-            customStatus: m.customStatus,
-            activity: m.activity,
-            activities: m.activities,
+            customStatus: isSelf ? user?.customStatus ?? m.customStatus : m.customStatus,
+            activity: isSelf ? user?.activity ?? m.activity : m.activity,
+            activities: isSelf ? user?.activities ?? m.activities : m.activities,
             isBot,
             roleColor: prefs.accessibility.roleColors ? topRole?.color : undefined,
             badges: (m.roles ?? [])
