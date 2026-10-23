@@ -239,9 +239,9 @@ export default function FriendsHubPage() {
         });
       });
     };
-    sock.on('message:create', onCreate);
+    sock.on(SocketEvents.MESSAGE_CREATE, onCreate);
     return () => {
-      sock.off('message:create', onCreate);
+      sock.off(SocketEvents.MESSAGE_CREATE, onCreate);
     };
   }, [client, user, dmIdsKey]);
 
@@ -346,7 +346,7 @@ export default function FriendsHubPage() {
           dms
             .filter((ch) => !ch.selfNotes)
             .map((ch) => (
-              <li key={ch.id}>
+              <li key={ch.id} className="group relative">
                 <button
                   type="button"
                   onClick={() => openDmChannel(ch.id)}
@@ -360,15 +360,24 @@ export default function FriendsHubPage() {
                   />
                   <span className="font-body-sm text-on-surface truncate flex-1">{ch.name}</span>
                   {(ch.unreadCount ?? 0) > 0 ? (
-                    <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-[11px] font-bold flex items-center justify-center">
+                    <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-tertiary text-on-tertiary font-label-sm text-[11px] font-bold flex items-center justify-center group-hover:opacity-0">
                       {ch.unreadCount! > 99 ? '99+' : ch.unreadCount}
                     </span>
-                  ) : ch.unread ? (
-                    <span
-                      className="w-2 h-2 rounded-full bg-primary shrink-0"
-                      aria-label="Okunmamış"
-                    />
                   ) : null}
+                </button>
+                <button
+                  type="button"
+                  title="Sohbeti listeden kaldır"
+                  aria-label="Sohbeti listeden kaldır"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md items-center justify-center text-outline hover:text-on-surface hover:bg-surface-bright hidden group-hover:flex"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void client.closeDm(ch.id).then(() => {
+                      setDms((prev) => prev.filter((d) => d.id !== ch.id));
+                    });
+                  }}
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
                 </button>
               </li>
             ))

@@ -1,4 +1,5 @@
 import {
+  Column,
   CreateDateColumn,
   Entity,
   Index,
@@ -20,6 +21,10 @@ export class DMChannelMember {
 
   @CreateDateColumn({ type: 'timestamptz' })
   joinedAt!: Date;
+
+  /** Liste’den gizlendi — üyelik kalır, openDm tekrar açar */
+  @Column({ type: 'timestamptz', nullable: true })
+  hiddenAt!: Date | null;
 
   @ManyToOne('DMChannel', 'members', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'dmChannelId' })

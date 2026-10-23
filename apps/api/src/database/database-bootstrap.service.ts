@@ -13,6 +13,21 @@ export class DatabaseBootstrapService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureChannelTypeValues(['FORUM', 'GAME', 'WATCH_PARTY']);
+    await this.ensureDmHiddenAtColumn();
+  }
+
+  /** dm_channel_members.hiddenAt — synchronize kapalı ortamlarda */
+  private async ensureDmHiddenAtColumn() {
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE dm_channel_members
+        ADD COLUMN IF NOT EXISTS "hiddenAt" TIMESTAMPTZ NULL
+      `);
+    } catch (err) {
+      this.log.warn(
+        `dm_channel_members.hiddenAt kontrolü atlandı: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private async ensureChannelTypeValues(labels: string[]) {

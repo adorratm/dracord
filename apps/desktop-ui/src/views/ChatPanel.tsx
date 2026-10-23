@@ -477,6 +477,31 @@ export function ChatPanel({
 
   const isForumView = channel.type === 'FORUM';
 
+  const searchGifs = useCallback(
+    (q: string) =>
+      client.searchGifs(q).then((list) =>
+        list.map((g) => ({
+          id: g.id,
+          url: g.url,
+          previewUrl: g.previewUrl ?? g.url,
+          label: g.label ?? g.id,
+        })),
+      ),
+    [client],
+  );
+  const loadFeaturedGifs = useCallback(
+    () =>
+      client.featuredGifs().then((list) =>
+        list.map((g) => ({
+          id: g.id,
+          url: g.url,
+          previewUrl: g.previewUrl ?? g.url,
+          label: g.label ?? g.id,
+        })),
+      ),
+    [client],
+  );
+
   const sharedInputProps = {
     channelName: channel.name,
     mentionUsers: members.map((m) => ({
@@ -486,24 +511,8 @@ export function ChatPanel({
       avatarUrl: m.avatarUrl,
     })),
     mentionChannels: [{ id: channel.id, name: channel.name, type: channel.type }],
-    searchGifs: (q: string) =>
-      client.searchGifs(q).then((list) =>
-        list.map((g) => ({
-          id: g.id,
-          url: g.url,
-          previewUrl: g.previewUrl ?? g.url,
-          label: g.label ?? g.id,
-        })),
-      ),
-    loadFeaturedGifs: () =>
-      client.featuredGifs().then((list) =>
-        list.map((g) => ({
-          id: g.id,
-          url: g.url,
-          previewUrl: g.previewUrl ?? g.url,
-          label: g.label ?? g.id,
-        })),
-      ),
+    searchGifs,
+    loadFeaturedGifs,
     uploadStickerFile: async (file: File) => {
       const uploaded = await client.uploadFile(file, 'stickers');
       return { url: uploaded.url, contentType: uploaded.contentType };

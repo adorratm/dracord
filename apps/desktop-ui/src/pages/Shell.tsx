@@ -613,9 +613,55 @@ export function Shell() {
       }
       // Metin/forum: ses oturumunu bırakma
       openChannel(activeGuildId, ch.id);
+      void client.markChannelRead(ch.id).catch(() => undefined);
+      setChannels((prev) =>
+        prev.map((c) =>
+          c.id === ch.id ? { ...c, unreadCount: 0, unread: false } : c,
+        ),
+      );
     },
-    [activeGuildId, canManageChannels, joinVoiceChannel],
+    [activeGuildId, canManageChannels, joinVoiceChannel, client],
   );
+
+  // Metin/forum okunmamış rozetleri — socket ile anlık
+  useEffect(() => {
+    if (!user || !activeGuildId) return;
+    const sock = client.connectSocket();
+    const textIds = channels
+      .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
+      .map((c) => c.id);
+    for (const id of textIds) client.joinChannel(id);
+
+    const onCreate = (msg: { channelId: string; author?: { id?: string } }) => {
+      if (!msg?.channelId) return;
+      if (msg.channelId === activeChannelId) return;
+      if (msg.author?.id === user.id) return;
+      if (!textIds.includes(msg.channelId)) return;
+      setChannels((prev) =>
+        prev.map((ch) => {
+          if (ch.id !== msg.channelId) return ch;
+          const unreadCount = (ch.unreadCount ?? 0) + 1;
+          return { ...ch, unreadCount, unread: true };
+        }),
+      );
+    };
+    sock.on(SocketEvents.MESSAGE_CREATE, onCreate);
+    return () => {
+      sock.off(SocketEvents.MESSAGE_CREATE, onCreate);
+    };
+  }, [client, user, activeGuildId, channels, activeChannelId]);
+
+  // Aktif metin kanalını okundu işaretle (rozet takılı kalmasın)
+  useEffect(() => {
+    if (!activeChannelId || !activeChannel) return;
+    if (activeChannel.type !== 'TEXT' && activeChannel.type !== 'FORUM') return;
+    void client.markChannelRead(activeChannelId).catch(() => undefined);
+    setChannels((prev) =>
+      prev.map((c) =>
+        c.id === activeChannelId ? { ...c, unreadCount: 0, unread: false } : c,
+      ),
+    );
+  }, [activeChannelId, activeChannel?.type, client]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -960,6 +1006,8 @@ export function Shell() {
             voice.voiceChannelId === voiceChannelId &&
             voice.peers.some((p) => p.id === member.id);
           return {
+            activity: gm?.activity ?? null,
+            activities: gm?.activities ?? null,
             contextActions: actions.length ? actions : undefined,
             ...(inLocal && member.id !== user?.id
               ? {
@@ -1327,6 +1375,7 @@ export function Shell() {
                 status: selfStatus,
                 customStatus: user?.customStatus,
                 activity: user?.activity ?? null,
+                activities: user?.activities ?? null,
                 muted: inVoiceInThisGuild ? voice.muted : undefined,
                 deafened: inVoiceInThisGuild ? voice.deafened : undefined,
                 voiceConnected: inVoiceInThisGuild,

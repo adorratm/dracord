@@ -450,15 +450,29 @@ export function VoiceStage({
                         })}
                       </div>
                     )}
-                    <video
-                      ref={setVideoRef}
-                      className="flex-1 min-h-0 w-full h-full object-contain bg-black"
-                      playsInline
-                      autoPlay
-                      muted={screenShare.isLocal}
-                    />
-                    {/* Sinema letterbox vignette */}
-                    {inCinema && (
+                    {/* Kendi paylaşımını tam/sinema izlemek capture feedback → yeşil/ghost; placeholder göster */}
+                    {screenShare.isLocal && (inCinema || isFullscreen) ? (
+                      <div className="flex-1 min-h-0 w-full h-full bg-surface-container-lowest flex flex-col items-center justify-center gap-3 px-6 text-center">
+                        <span className="material-symbols-outlined text-[48px] text-primary-container">
+                          present_to_all
+                        </span>
+                        <p className="font-headline-sm text-on-surface">Ekranını paylaşıyorsun</p>
+                        <p className="font-body-sm text-on-surface-variant max-w-sm">
+                          Kendi paylaşımını tam ekranda izlemek görüntü bozulmasına yol açar. Diğer
+                          katılımcılar ekranını normal görür.
+                        </p>
+                      </div>
+                    ) : (
+                      <video
+                        ref={setVideoRef}
+                        className="flex-1 min-h-0 w-full h-full object-contain bg-black"
+                        playsInline
+                        autoPlay
+                        muted={screenShare.isLocal}
+                      />
+                    )}
+                    {/* Sinema letterbox — kendi paylaşımında GPU yeşil/ghost artefaktı yapabiliyor */}
+                    {inCinema && !screenShare.isLocal && (
                       <div
                         className="pointer-events-none absolute inset-0 z-[1]"
                         style={{

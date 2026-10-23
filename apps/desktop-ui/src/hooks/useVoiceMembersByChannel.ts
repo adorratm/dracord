@@ -26,18 +26,30 @@ function applyRosterSnapshot(
     if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
       continue;
     }
-    // Bağlı olduğumuz kanalı LiveKit peers kaynağı korusun
-    if (
-      opts.voiceGuildId === opts.guildId &&
-      opts.voiceChannelId === ch.id &&
-      prev[ch.id]?.length
-    ) {
-      next[ch.id] = prev[ch.id]!;
-      continue;
-    }
     let list = [...(membersByChannel[ch.id] ?? [])];
     if (opts.userId && opts.voiceChannelId !== ch.id) {
       list = list.filter((m) => m.id !== opts.userId);
+    }
+    const prevList = prev[ch.id] ?? [];
+    // Aktif kanal: speaking koru; ayrılanları server listesine göre düşür (geri ekleme yok)
+    if (
+      opts.voiceGuildId === opts.guildId &&
+      opts.voiceChannelId === ch.id &&
+      prevList.length
+    ) {
+      const prevById = new Map(prevList.map((m) => [m.id, m]));
+      list = list.map((m) => {
+        const prior = prevById.get(m.id);
+        if (!prior) return m;
+        return {
+          ...m,
+          ...prior,
+          muted: m.muted,
+          deafened: m.deafened ?? prior.deafened,
+          speaking: prior.speaking ?? m.speaking,
+          screenSharing: prior.screenSharing ?? m.screenSharing,
+        };
+      });
     }
     next[ch.id] = list;
   }
@@ -76,37 +88,37 @@ export function useVoiceMembersByChannel({
   const [voiceRosterReady, setVoiceRosterReady] = useState(false);
 
   useEffect(() => {
-    if (!guildId) {
-      setVoiceMembersByChannel({});
-      setVoiceRosterReady(false);
-      return;
-    }
+    setVoiceMembersByChannel({});
     setVoiceRosterReady(false);
+  }, [guildId]);
+
+  useEffect(() => {
+    if (!guildId) return;
     setVoiceMembersByChannel((prev) => {
       const next: Record<string, VoiceMemberSummary[]> = {};
       for (const ch of channels) {
         if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
           continue;
         }
+        const prevList = prev[ch.id];
+        // Socket/roster sonrası REST channel.voiceMembers ile geri ekleme yapma
+        if (voiceRosterReady && prevList !== undefined) {
+          let list = prevList;
+          if (user && voiceChannelId !== ch.id) {
+            list = list.filter((m) => m.id !== user.id);
+          }
+          next[ch.id] = list;
+          continue;
+        }
         let apiList = [...(ch.voiceMembers ?? [])];
         if (user && voiceChannelId !== ch.id) {
           apiList = apiList.filter((m) => m.id !== user.id);
         }
-        const prevList = prev[ch.id] ?? [];
         const byId = new Map(apiList.map((m) => [m.id, m]));
-        if (apiList.length === 0) {
-          for (const m of prevList) {
-            if (user && m.id === user.id && voiceChannelId !== ch.id) continue;
-            byId.set(m.id, m);
-          }
-        } else {
-          // Dolu API: roster ile birleştir (socket’ten gelenleri kaybetme)
+        if (prevList) {
           for (const m of prevList) {
             const existing = byId.get(m.id);
-            if (!existing) {
-              byId.set(m.id, m);
-              continue;
-            }
+            if (!existing) continue;
             byId.set(m.id, {
               ...existing,
               ...m,
@@ -116,21 +128,6 @@ export function useVoiceMembersByChannel({
         }
         next[ch.id] = [...byId.values()];
       }
-      if (voiceGuildId === guildId && voiceChannelId && prev[voiceChannelId]) {
-        const local = prev[voiceChannelId]!;
-        const api = next[voiceChannelId] ?? [];
-        const byId = new Map(api.map((m) => [m.id, m]));
-        for (const m of local) {
-          const existing = byId.get(m.id);
-          byId.set(
-            m.id,
-            existing
-              ? { ...existing, ...m, speaking: m.speaking ?? existing.speaking }
-              : m,
-          );
-        }
-        next[voiceChannelId] = [...byId.values()];
-      }
       if (user && (!voiceChannelId || voiceGuildId !== guildId)) {
         for (const key of Object.keys(next)) {
           next[key] = (next[key] ?? []).filter((m) => m.id !== user.id);
@@ -138,7 +135,7 @@ export function useVoiceMembersByChannel({
       }
       return next;
     });
-  }, [channels, voiceChannelId, voiceGuildId, guildId, user]);
+  }, [channels, voiceChannelId, voiceGuildId, guildId, user, voiceRosterReady]);
 
   useEffect(() => {
     if (!user || !guildId) return;
@@ -253,26 +250,28 @@ export function useVoiceMembersByChannel({
       const existing = prev[voiceChannelId] ?? [];
       const byId = new Map(existing.map((m) => [m.id, m]));
       const isAfkChannel = Boolean(afkChannelId && voiceChannelId === afkChannelId);
+      // Upsert only — leave VOICE_STATE ile düşer (peers replace flicker yok)
+      for (const p of peers) {
+        const m = members.find((g) => g.id === p.id);
+        const prior = byId.get(p.id);
+        const isSelf = p.id === user?.id;
+        byId.set(p.id, {
+          id: p.id,
+          displayName: p.displayName || m?.displayName || prior?.displayName || p.id,
+          avatarUrl: p.avatarUrl || m?.avatarUrl || prior?.avatarUrl || null,
+          muted: isAfkChannel ? true : isSelf ? muted : Boolean(p.muted),
+          deafened: isAfkChannel ? true : isSelf ? deafened : Boolean(prior?.deafened),
+          speaking: isAfkChannel ? false : Boolean(p.speaking),
+          screenSharing: Boolean(
+            (p as { screenSharing?: boolean }).screenSharing ?? prior?.screenSharing,
+          ),
+          isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot || prior?.isBot),
+          joinedAt: prior?.joinedAt,
+        });
+      }
       return {
         ...prev,
-        [voiceChannelId]: peers.map((p) => {
-          const m = members.find((g) => g.id === p.id);
-          const prior = byId.get(p.id);
-          const isSelf = p.id === user?.id;
-          return {
-            id: p.id,
-            displayName: p.displayName || m?.displayName || prior?.displayName || p.id,
-            avatarUrl: p.avatarUrl || m?.avatarUrl || prior?.avatarUrl || null,
-            muted: isAfkChannel ? true : isSelf ? muted : Boolean(p.muted),
-            deafened: isAfkChannel ? true : isSelf ? deafened : Boolean(prior?.deafened),
-            speaking: isAfkChannel ? false : Boolean(p.speaking),
-            screenSharing: Boolean(
-              (p as { screenSharing?: boolean }).screenSharing ?? prior?.screenSharing,
-            ),
-            isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot || prior?.isBot),
-            joinedAt: prior?.joinedAt,
-          };
-        }),
+        [voiceChannelId]: [...byId.values()],
       };
     });
   }, [

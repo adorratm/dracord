@@ -304,7 +304,7 @@ const ChannelRow = memo(function ChannelRow({
   onVoiceMemberLongPress?: (member: VoiceMemberSummary, channel: ChannelSummary) => void;
 }) {
   useThemeRevision();
-  const unread = (channel.unreadCount ?? 0) > 0 || channel.unread;
+  const unread = (channel.unreadCount ?? 0) > 0;
   // Ses bağlıysa yalnızca o kanalda self göster (oyun sesi hayaleti kalmasın)
   const selfLiveHere = activeVoiceChannelId
     ? activeVoiceChannelId === channel.id

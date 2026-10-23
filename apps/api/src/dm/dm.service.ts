@@ -70,10 +70,25 @@ export class DmService {
     );
     const existingId = (existing as Array<{ id: string }>)[0]?.id;
     if (existingId) {
+      // Liste’den gizlenmişse tekrar aç
+      await this.em.update(
+        DMChannelMember,
+        { dmChannelId: existingId, userId },
+        { hiddenAt: null },
+      );
       const channel = await this.em.findOne(Channel, {
         where: { dmChannelId: existingId, type: ChannelType.TEXT },
       });
-      if (channel) return this.toSummary(channel, other.displayName);
+      if (channel) {
+        const pub = toPublicUser(other, { viewerId: userId });
+        return this.toSummary(channel, other.displayName, false, {
+          peerUserId: other.id,
+          peerAvatarUrl: pub.avatarUrl,
+          peerStatus: pub.status,
+          peerActivity: pub.activity ?? null,
+          peerActivities: pub.activities ?? null,
+        });
+      }
     }
 
     const dm = await this.em.save(DMChannel, this.em.create(DMChannel, {}));
@@ -142,14 +157,31 @@ export class DmService {
     return this.toSummary(channel, 'Notlarım', true);
   }
 
-  async listForUser(userId: string): Promise<ChannelSummary[]> {
-    const memberships = await this.em.find(DMChannelMember, {
-      where: { userId },
-      select: { dmChannelId: true },
+  /** DM’i kendi listesinden gizle (karşı taraf etkilenmez) */
+  async closeForUser(userId: string, channelId: string): Promise<{ ok: true }> {
+    const channel = await this.em.findOne(Channel, {
+      where: { id: channelId, type: ChannelType.TEXT },
     });
-    if (!memberships.length) return [];
+    if (!channel?.dmChannelId) throw new NotFoundException('DM bulunamadı');
+    const member = await this.em.findOne(DMChannelMember, {
+      where: { dmChannelId: channel.dmChannelId, userId },
+    });
+    if (!member) throw new ForbiddenException('Bu DM’e erişimin yok');
+    member.hiddenAt = new Date();
+    await this.em.save(DMChannelMember, member);
+    return { ok: true };
+  }
 
-    const dmIds = memberships.map((m) => m.dmChannelId);
+  async listForUser(userId: string): Promise<ChannelSummary[]> {
+    const visible = await this.em
+      .createQueryBuilder(DMChannelMember, 'm')
+      .select('m.dmChannelId', 'dmChannelId')
+      .where('m.userId = :userId', { userId })
+      .andWhere('m.hiddenAt IS NULL')
+      .getRawMany<{ dmChannelId: string }>();
+    if (!visible.length) return [];
+
+    const dmIds = visible.map((m) => m.dmChannelId);
     const [channels, allMembers] = await Promise.all([
       this.em.find(Channel, {
         where: { dmChannelId: In(dmIds), type: ChannelType.TEXT },

@@ -484,7 +484,10 @@ function applyRemoteScreenShareViewQuality(
   const width = spec.width ?? 7680;
   const height = spec.height ?? 4320;
 
-  if (focused && track) bindScreenShareQualityFloor(track, width, height);
+  // Yerel paylaşımda gizli ikinci video yeşil/ghost artefaktına yol açabiliyor
+  if (focused && track && !(track as { isLocal?: boolean }).isLocal) {
+    bindScreenShareQualityFloor(track, width, height);
+  }
 
   try {
     pub.setVideoDimensions({ width, height });

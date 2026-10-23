@@ -754,26 +754,26 @@ export function GuildChannelView({
         if (ch.type !== 'VOICE' && ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') {
           continue;
         }
+        const prevList = prev[ch.id];
+        // Socket/roster yerleştikten sonra kanallar REST’i üye eklemesin (leave flicker)
+        if (voiceRosterReady && prevList !== undefined) {
+          let list = prevList;
+          if (user && voice.voiceChannelId !== ch.id) {
+            list = list.filter((m) => m.id !== user.id);
+          }
+          next[ch.id] = list;
+          continue;
+        }
         let apiList = [...(ch.voiceMembers ?? [])];
-        // Sunucudan gelen hayalet self kaydını daha en başta ele
         if (user && voice.voiceChannelId !== ch.id) {
           apiList = apiList.filter((m) => m.id !== user.id);
         }
-        const prevList = prev[ch.id] ?? [];
-        // Boş API: socket listesini koru. Dolu API: birleştir (eksik roster kaybetmesin)
+        // İlk seed: API; ayrılanları prev’den geri ekleme
         const byId = new Map(apiList.map((m) => [m.id, m]));
-        if (apiList.length === 0) {
-          for (const m of prevList) {
-            if (user && m.id === user.id && voice.voiceChannelId !== ch.id) continue;
-            byId.set(m.id, m);
-          }
-        } else {
+        if (prevList) {
           for (const m of prevList) {
             const existing = byId.get(m.id);
-            if (!existing) {
-              byId.set(m.id, m);
-              continue;
-            }
+            if (!existing) continue;
             byId.set(m.id, {
               ...existing,
               ...m,
@@ -781,22 +781,7 @@ export function GuildChannelView({
             });
           }
         }
-        // Anahtarı her zaman yaz — boş dizi API fallback’ini engeller (hayalet ikon)
         next[ch.id] = [...byId.values()];
-      }
-      if (
-        voice.voiceGuildId === guildId &&
-        voice.voiceChannelId &&
-        prev[voice.voiceChannelId]
-      ) {
-        const local = prev[voice.voiceChannelId]!;
-        const api = next[voice.voiceChannelId] ?? [];
-        const byId = new Map(api.map((m) => [m.id, m]));
-        for (const m of local) {
-          const existing = byId.get(m.id);
-          byId.set(m.id, existing ? { ...existing, ...m, speaking: m.speaking ?? existing.speaking } : m);
-        }
-        next[voice.voiceChannelId] = [...byId.values()];
       }
       if (user && (!voice.voiceChannelId || voice.voiceGuildId !== guildId)) {
         for (const key of Object.keys(next)) {
@@ -805,7 +790,7 @@ export function GuildChannelView({
       }
       return next;
     });
-  }, [channels, voice.voiceChannelId, voice.voiceGuildId, guildId, user]);
+  }, [channels, voice.voiceChannelId, voice.voiceGuildId, guildId, user, voiceRosterReady]);
 
   useEffect(() => {
     if (!user) return;
@@ -826,17 +811,30 @@ export function GuildChannelView({
           ) {
             continue;
           }
-          if (
-            voice.voiceGuildId === guildId &&
-            voice.voiceChannelId === ch.id &&
-            prev[ch.id]?.length
-          ) {
-            next[ch.id] = prev[ch.id]!;
-            continue;
-          }
           let list = [...(membersByChannel[ch.id] ?? [])];
           if (voice.voiceChannelId !== ch.id) {
             list = list.filter((m) => m.id !== user.id);
+          }
+          // Aktif kanalda speaking vb. yerel alanları koru; ayrılanları geri ekleme
+          const prevList = prev[ch.id] ?? [];
+          if (
+            voice.voiceGuildId === guildId &&
+            voice.voiceChannelId === ch.id &&
+            prevList.length
+          ) {
+            const prevById = new Map(prevList.map((m) => [m.id, m]));
+            list = list.map((m) => {
+              const prior = prevById.get(m.id);
+              if (!prior) return m;
+              return {
+                ...m,
+                ...prior,
+                muted: m.muted,
+                deafened: m.deafened ?? prior.deafened,
+                speaking: prior.speaking ?? m.speaking,
+                screenSharing: prior.screenSharing ?? m.screenSharing,
+              };
+            });
           }
           next[ch.id] = list;
         }
@@ -928,17 +926,29 @@ export function GuildChannelView({
               ) {
                 continue;
               }
-              if (
-                voice.voiceGuildId === guildId &&
-                voice.voiceChannelId === ch.id &&
-                prev[ch.id]?.length
-              ) {
-                next[ch.id] = prev[ch.id]!;
-                continue;
-              }
               let list = [...(roster.membersByChannel[ch.id] ?? [])];
               if (voice.voiceChannelId !== ch.id) {
                 list = list.filter((m) => m.id !== user.id);
+              }
+              const prevList = prev[ch.id] ?? [];
+              if (
+                voice.voiceGuildId === guildId &&
+                voice.voiceChannelId === ch.id &&
+                prevList.length
+              ) {
+                const prevById = new Map(prevList.map((m) => [m.id, m]));
+                list = list.map((m) => {
+                  const prior = prevById.get(m.id);
+                  if (!prior) return m;
+                  return {
+                    ...m,
+                    ...prior,
+                    muted: m.muted,
+                    deafened: m.deafened ?? prior.deafened,
+                    speaking: prior.speaking ?? m.speaking,
+                    screenSharing: prior.screenSharing ?? m.screenSharing,
+                  };
+                });
               }
               next[ch.id] = list;
             }
@@ -959,7 +969,9 @@ export function GuildChannelView({
   useEffect(() => {
     if (!user) return;
     const sock = client.connectSocket();
-    const textIds = channels.filter((c) => c.type === 'TEXT').map((c) => c.id);
+    const textIds = channels
+      .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
+      .map((c) => c.id);
     for (const id of textIds) client.joinChannel(id);
 
     const onCreate = (msg: { channelId: string; author?: { id?: string } }) => {
@@ -1092,39 +1104,38 @@ export function GuildChannelView({
       return;
     }
     setVoiceMembersByChannel((prev) => {
-      const existing = prev[voice.voiceChannelId!] ?? [];
+      const channelIdLive = voice.voiceChannelId!;
+      const existing = prev[channelIdLive] ?? [];
       const byId = new Map(existing.map((m) => [m.id, m]));
       const isAfkChannel = Boolean(
-        guild?.afkChannelId && voice.voiceChannelId === guild.afkChannelId,
+        guild?.afkChannelId && channelIdLive === guild.afkChannelId,
       );
+      // LiveKit peers yalnızca upsert — ayrılanları VOICE_STATE siler (replace flicker yok)
+      for (const p of voice.participants) {
+        const m = guildMembers.find((g) => g.id === p.id);
+        const prior = byId.get(p.id);
+        const isSelf = p.id === user?.id;
+        byId.set(p.id, {
+          id: p.id,
+          displayName: p.displayName || m?.displayName || prior?.displayName || p.id,
+          avatarUrl: p.avatarUrl || m?.avatarUrl || prior?.avatarUrl || null,
+          muted: isAfkChannel ? true : isSelf ? voice.muted : Boolean(p.muted),
+          deafened: isAfkChannel
+            ? true
+            : isSelf
+              ? voice.deafened
+              : Boolean(prior?.deafened),
+          speaking: isAfkChannel ? false : Boolean(p.speaking),
+          screenSharing: Boolean(
+            (p as { screenSharing?: boolean }).screenSharing ?? prior?.screenSharing,
+          ),
+          isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot || prior?.isBot),
+          joinedAt: prior?.joinedAt,
+        });
+      }
       return {
         ...prev,
-        [voice.voiceChannelId!]: voice.participants.map((p) => {
-          const m = guildMembers.find((g) => g.id === p.id);
-          const prior = byId.get(p.id);
-          const isSelf = p.id === user?.id;
-          return {
-            id: p.id,
-            displayName: p.displayName || m?.displayName || prior?.displayName || p.id,
-            avatarUrl: p.avatarUrl || m?.avatarUrl || prior?.avatarUrl || null,
-            // LiveKit mute kaynağı — prior ile OR etme (hayalet toplu mute)
-            muted: isAfkChannel
-              ? true
-              : isSelf
-                ? voice.muted
-                : Boolean(p.muted),
-            deafened: isAfkChannel
-              ? true
-              : isSelf
-                ? voice.deafened
-                : Boolean(prior?.deafened),
-            speaking: isAfkChannel ? false : Boolean(p.speaking),
-            screenSharing: Boolean(
-              (p as { screenSharing?: boolean }).screenSharing ?? prior?.screenSharing,
-            ),
-            isBot: Boolean((p as { isBot?: boolean }).isBot || m?.isBot || prior?.isBot),
-          };
-        }),
+        [channelIdLive]: [...byId.values()],
       };
     });
   }, [
@@ -1875,6 +1886,8 @@ export function GuildChannelView({
         inLocalVoiceSession,
       });
       return {
+        activity: gm?.activity ?? null,
+        activities: gm?.activities ?? null,
         contextActions: actions.length ? actions : undefined,
         ...(inLocalVoiceSession && !isSelf
           ? {
@@ -2112,6 +2125,8 @@ export function GuildChannelView({
                     avatarUrl: user.avatarUrl,
                     status: liveMemberStatus(user.id, user.status),
                     customStatus: user.customStatus,
+                    activity: user.activity,
+                    activities: user.activities,
                     isBot: Boolean(user.isBot),
                     subtitle: presenceLabelTr(
                       liveMemberStatus(user.id, user.status),
@@ -2638,6 +2653,7 @@ export function GuildChannelView({
         status: liveMemberStatus(user?.id ?? '', user?.status) || user?.status || 'ONLINE',
         customStatus: user?.customStatus ?? null,
         activity: user?.activity ?? null,
+        activities: user?.activities ?? null,
         muted: inVoice ? voice.muted : undefined,
         deafened: inVoice ? voice.deafened : undefined,
         noiseCancellation: voice.noiseCancellation,

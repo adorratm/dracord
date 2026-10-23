@@ -105,11 +105,14 @@ function mapChannelItem(
     name: ch.name,
     type: sidebarType(ch),
     active: ch.id === activeChannelId,
-    unread: Boolean(ch.unread || (ch.unreadCount ?? 0) > 0) && ch.id !== activeChannelId,
+    // Tek kaynak: unreadCount — stuck “unread:true / count:0” rozetini önler
+    unread: (ch.unreadCount ?? 0) > 0 && ch.id !== activeChannelId,
     locked: Boolean(ch.locked),
     badgeCount:
-      (ch.type === 'TEXT' || ch.type === 'FORUM') && ch.id !== activeChannelId
-        ? (ch.unreadCount ?? (ch.unread ? 1 : 0)) || undefined
+      (ch.type === 'TEXT' || ch.type === 'FORUM') &&
+      ch.id !== activeChannelId &&
+      (ch.unreadCount ?? 0) > 0
+        ? ch.unreadCount
         : undefined,
     viewerJoinedAt,
     showVoiceInvite: selfInChannel && Boolean(extras?.onInviteChannel),

@@ -698,6 +698,11 @@ export class DracordClient {
     return this.request('/dm');
   }
 
+  /** DM’i kendi listesinden gizle (karşı taraf etkilenmez) */
+  async closeDm(channelId: string): Promise<{ ok: true }> {
+    return this.request(`/dm/channels/${channelId}/close`, { method: 'POST' });
+  }
+
   async listDmMembers(channelId: string): Promise<PublicUser[]> {
     return this.request(`/dm/channels/${channelId}/members`);
   }

@@ -97,6 +97,7 @@ export function MemberPanel({
         status,
         customStatus: m.customStatus,
         activity: m.activity,
+        activities: m.activities,
         socialLinks: m.socialLinks,
         isBot,
         roles: m.roles,
@@ -169,6 +170,10 @@ export function MemberPanel({
                   activity:
                     user.activity ??
                     members.find((m) => m.id === user.id)?.activity ??
+                    null,
+                  activities:
+                    user.activities ??
+                    members.find((m) => m.id === user.id)?.activities ??
                     null,
                   socialLinks: user.socialLinks,
                   isBot: user.isBot,

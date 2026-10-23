@@ -215,6 +215,13 @@ export function ChatInput({
   const dragDepth = useRef(0);
   const attachDragDepth = useRef(0);
   const gifReqId = useRef(0);
+  const searchGifsRef = useRef(searchGifs);
+  const loadFeaturedGifsRef = useRef(loadFeaturedGifs);
+  searchGifsRef.current = searchGifs;
+  loadFeaturedGifsRef.current = loadFeaturedGifs;
+  const gifScrollRef = useRef<HTMLDivElement | null>(null);
+  const gifScrollTopRef = useRef(0);
+  const remoteGifsLenRef = useRef(0);
 
   const LINE_HEIGHT_PX = 24;
   const MAX_LINES = 8;
@@ -283,7 +290,7 @@ export function ChatInput({
 
   useEffect(() => {
     if (!pickerOpen || tab !== 'gif') return;
-    if (!searchGifs && !loadFeaturedGifs) {
+    if (!searchGifsRef.current && !loadFeaturedGifsRef.current) {
       setRemoteGifs([]);
       setGifError(null);
       setGifLoading(false);
@@ -293,17 +300,30 @@ export function ChatInput({
     const req = ++gifReqId.current;
     const q = mediaSearch.trim();
     const handle = window.setTimeout(() => {
-      setGifLoading(true);
+      // Önceki sonuçlar varken loading flash + scroll reset yapma
+      if (remoteGifsLenRef.current === 0) setGifLoading(true);
       setGifError(null);
       void (async () => {
         try {
           const list = q
-            ? await (searchGifs?.(q) ?? Promise.resolve([]))
-            : await (loadFeaturedGifs?.() ?? searchGifs?.('') ?? Promise.resolve([]));
+            ? await (searchGifsRef.current?.(q) ?? Promise.resolve([]))
+            : await (
+                loadFeaturedGifsRef.current?.() ??
+                searchGifsRef.current?.('') ??
+                Promise.resolve([])
+              );
           if (gifReqId.current !== req) return;
+          remoteGifsLenRef.current = list.length;
           setRemoteGifs(list);
+          // Scroll konumunu koru
+          requestAnimationFrame(() => {
+            if (gifScrollRef.current) {
+              gifScrollRef.current.scrollTop = gifScrollTopRef.current;
+            }
+          });
         } catch (err) {
           if (gifReqId.current !== req) return;
+          remoteGifsLenRef.current = 0;
           setRemoteGifs([]);
           setGifError(err instanceof Error ? err.message : 'GIF araması başarısız');
         } finally {
@@ -313,7 +333,8 @@ export function ChatInput({
     }, q ? 350 : 0);
 
     return () => window.clearTimeout(handle);
-  }, [pickerOpen, tab, mediaSearch, searchGifs, loadFeaturedGifs]);
+    // searchGifs/loadFeaturedGifs kasıtlı dışarıda — parent re-render scroll’u sıfırlamasın
+  }, [pickerOpen, tab, mediaSearch]);
 
   const submit = useCallback(() => {
     const trimmed = value.trim();
@@ -558,20 +579,42 @@ export function ChatInput({
       if (!rect) return;
       const pad = 12;
       const maxW = 448;
-      setPickerBox({
+      const next = {
         bottom: Math.max(8, window.innerHeight - rect.top + 8),
         left: Math.max(8, rect.left + pad),
         width: Math.min(maxW, Math.max(240, rect.width - pad * 2)),
+      };
+      setPickerBox((prev) => {
+        if (
+          prev &&
+          prev.bottom === next.bottom &&
+          prev.left === next.left &&
+          prev.width === next.width
+        ) {
+          return prev;
+        }
+        return next;
       });
     };
     update();
     window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
+    // scroll capture GIF listesini de yakalar → scrollTop sıfırlanır; sadece window scroll
+    window.addEventListener('scroll', update, false);
     return () => {
       window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('scroll', update, false);
     };
   }, [pickerOpen, mention, expanded, replyTo]);
+
+  // Chat re-render / portal pozisyon güncellemesinde GIF scroll konumunu koru
+  useLayoutEffect(() => {
+    if (!pickerOpen || tab !== 'gif') return;
+    const el = gifScrollRef.current;
+    if (!el) return;
+    if (gifScrollTopRef.current > 0) {
+      el.scrollTop = gifScrollTopRef.current;
+    }
+  });
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -924,7 +967,13 @@ export function ChatInput({
           )}
 
           {tab === 'gif' && (
-            <div className="p-space-sm flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <div
+              ref={gifScrollRef}
+              className="p-space-sm flex-1 min-h-0 overflow-y-auto overscroll-contain"
+              onScroll={(e) => {
+                gifScrollTopRef.current = (e.target as HTMLDivElement).scrollTop;
+              }}
+            >
               {(searchGifs || loadFeaturedGifs) && (
                 <p className="font-label-sm text-outline mb-space-sm flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px] leading-none">gif_box</span>
@@ -932,7 +981,7 @@ export function ChatInput({
                   {!mediaSearch.trim() && ' · Öne çıkanlar'}
                 </p>
               )}
-              {gifLoading && (
+              {gifLoading && remoteGifs.length === 0 && (
                 <p className="font-label-sm text-outline text-center py-space-md">Aranıyor…</p>
               )}
               {!gifLoading && gifError && (

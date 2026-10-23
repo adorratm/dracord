@@ -47,6 +47,8 @@ export interface SidebarVoiceMember {
   isBot?: boolean;
   /** ISO — kanala katıldığı an */
   joinedAt?: string;
+  activity?: UserActivity | null;
+  activities?: UserActivity[] | null;
   /** MOVE_MEMBERS ile başka ses kanalına sürükle */
   draggable?: boolean;
   contextActions?: SidebarVoiceMemberAction[];
@@ -419,14 +421,15 @@ export function UserPanel({
   };
 
   const statusOptions: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
-  const activityLine = !voiceConnected
-    ? activityLineTr(activity) ||
-      (activities && activities.length > 0
-        ? activityLineTr(activities[0])
-        : null)
-    : null;
+  const activityLine =
+    activityLineTr(activity) ||
+    (activities && activities.length > 0
+      ? activityLineTr(activities[0])
+      : null);
   const handleLine = voiceConnected
-    ? 'Sesli aramada'
+    ? activityLine
+      ? null
+      : 'Sesli aramada'
     : activityLine ||
       customStatus?.trim() ||
       (username ? `@${username.replace(/^@/, '')}` : presenceLabelTr(status));
@@ -650,13 +653,23 @@ export function UserPanel({
                 {displayName}
               </span>
               {activityLine && (activity || (activities && activities.length > 0)) ? (
-                <ActivityLine
-                  activity={activity}
-                  activities={activities}
-                  size="sm"
-                  className="font-label-sm text-[11px] text-secondary"
-                  textClassName="font-label-sm text-[11px] text-secondary"
-                />
+                <span className="flex flex-col gap-0.5 min-w-0">
+                  {voiceConnected ? (
+                    <span className="font-label-sm truncate text-[10px] text-dracula-green">
+                      <span className="material-symbols-outlined text-[11px] align-[-2px] mr-0.5">
+                        volume_up
+                      </span>
+                      Sesli aramada
+                    </span>
+                  ) : null}
+                  <ActivityLine
+                    activity={activity}
+                    activities={activities}
+                    size="sm"
+                    className="font-label-sm text-[11px] text-secondary"
+                    textClassName="font-label-sm text-[11px] text-secondary"
+                  />
+                </span>
               ) : (
                 <span
                   className={cn(
@@ -1347,14 +1360,26 @@ function ChannelRow({
                         statusRing={false}
                       />
                     </div>
-                    <span
-                      className={cn(
-                        'font-body-sm text-body-sm truncate flex-1',
-                        m.speaking && 'text-primary-container font-semibold',
-                      )}
-                    >
-                      {m.displayName}
-                    </span>
+                    <div className="min-w-0 flex-1 flex flex-col leading-tight gap-0.5">
+                      <span
+                        className={cn(
+                          'font-body-sm text-body-sm truncate',
+                          m.speaking && 'text-primary-container font-semibold',
+                        )}
+                      >
+                        {m.displayName}
+                      </span>
+                      {activityLineTr(m.activity) ||
+                      (m.activities && m.activities.length > 0) ? (
+                        <ActivityLine
+                          activity={m.activity}
+                          activities={m.activities}
+                          size="sm"
+                          className="font-label-sm text-[10px] text-secondary"
+                          textClassName="font-label-sm text-[10px] text-secondary"
+                        />
+                      ) : null}
+                    </div>
                     {m.isBot && (
                       <span className="shrink-0 px-1 py-px rounded text-[8px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
                         BOT

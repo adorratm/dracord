@@ -99,6 +99,14 @@ export class DmController {
     return this.calls.declineCall(channelId, user.sub);
   }
 
+  @Post('channels/:channelId/close')
+  close(
+    @CurrentUser() user: JwtPayloadUser,
+    @Param('channelId') channelId: string,
+  ) {
+    return this.dm.closeForUser(user.sub, channelId);
+  }
+
   @Post(':userId')
   open(@CurrentUser() user: JwtPayloadUser, @Param('userId') userId: string) {
     return this.dm.openOrCreate(user.sub, userId);
