@@ -16,6 +16,7 @@ export interface FriendRow {
   status?: PresenceStatus;
   subtitle?: string;
   activity?: UserActivity | null;
+  activities?: UserActivity[] | null;
   pendingIncoming?: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
@@ -64,9 +65,11 @@ function FriendRowItem({ friend, tab }: { friend: FriendRow; tab: FriendsTab }) 
         />
         <div className="flex flex-col min-w-0">
           <span className="font-headline-md text-headline-md text-on-surface truncate">{friend.displayName}</span>
-          {activityLineTr(friend.activity) ? (
+          {activityLineTr(friend.activity) ||
+          (friend.activities && friend.activities.length > 0) ? (
             <ActivityLine
               activity={friend.activity}
+              activities={friend.activities}
               size="md"
               className="font-body-sm text-body-sm text-secondary mt-0.5"
               textClassName="font-body-sm text-body-sm text-secondary"

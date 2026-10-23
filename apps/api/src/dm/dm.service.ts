@@ -4,8 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ChannelSummary, PresenceStatus } from '@dracord/types';
+import type {
+  ChannelSummary,
+  PresenceStatus,
+  UserActivity,
+} from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
+import { toPublicUser } from '@/common/user.mapper';
 import { EntityManager, In } from 'typeorm';
 import { ChannelsService } from '@/channels/channels.service';
 import { Channel } from '@/database/entities/channel.entity';
@@ -174,11 +179,16 @@ export class DmService {
           isSelfNotes ? 'Notlarım' : (peer?.user?.displayName ?? channel.name),
           isSelfNotes,
           peer?.user
-            ? {
-                peerUserId: peer.user.id,
-                peerAvatarUrl: peer.user.avatarUrl,
-                peerStatus: peer.user.status,
-              }
+            ? (() => {
+                const pub = toPublicUser(peer.user, { viewerId: userId });
+                return {
+                  peerUserId: peer.user.id,
+                  peerAvatarUrl: pub.avatarUrl,
+                  peerStatus: pub.status,
+                  peerActivity: pub.activity ?? null,
+                  peerActivities: pub.activities ?? null,
+                };
+              })()
             : undefined,
         ),
       );
@@ -238,6 +248,8 @@ export class DmService {
       peerUserId: string;
       peerAvatarUrl: string | null;
       peerStatus: PresenceStatus;
+      peerActivity?: UserActivity | null;
+      peerActivities?: UserActivity[] | null;
     },
   ): ChannelSummary {
     return {
@@ -253,6 +265,8 @@ export class DmService {
       peerUserId: peer?.peerUserId,
       peerAvatarUrl: peer?.peerAvatarUrl,
       peerStatus: peer?.peerStatus,
+      peerActivity: peer?.peerActivity ?? null,
+      peerActivities: peer?.peerActivities ?? null,
     };
   }
 }

@@ -60,6 +60,7 @@ export default function FriendsHubPage() {
           avatarUrl: f.avatarUrl,
           status: f.status,
           activity: f.activity,
+          activities: f.activities,
           onMessage: () => {
             void openDm(f.id);
           },
@@ -172,6 +173,7 @@ export default function FriendsHubPage() {
       userId: string;
       status: PublicUser['status'];
       activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
     }) => {
       setFriends((prev) =>
         prev.map((f) =>
@@ -181,14 +183,38 @@ export default function FriendsHubPage() {
                 status: payload.status,
                 activity:
                   payload.activity !== undefined ? payload.activity : f.activity,
+                activities:
+                  payload.activities !== undefined
+                    ? payload.activities
+                    : f.activities,
+              }
+            : f,
+        ),
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      avatarUrl?: string | null;
+    }) => {
+      setFriends((prev) =>
+        prev.map((f) =>
+          f.id === payload.userId
+            ? {
+                ...f,
+                displayName: payload.displayName ?? f.displayName,
+                avatarUrl:
+                  payload.avatarUrl !== undefined ? payload.avatarUrl : f.avatarUrl,
               }
             : f,
         ),
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
   }, [client, user]);
 

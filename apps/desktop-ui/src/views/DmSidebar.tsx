@@ -57,18 +57,58 @@ export function DmSidebar({
         });
       });
     };
-    const onPresence = (payload: { userId: string; status: PublicUser['status'] }) => {
+    const onPresence = (payload: {
+      userId: string;
+      status: PublicUser['status'];
+      activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
+    }) => {
       setDms((prev) =>
         prev.map((ch) =>
-          ch.peerUserId === payload.userId ? { ...ch, peerStatus: payload.status } : ch,
+          ch.peerUserId === payload.userId
+            ? {
+                ...ch,
+                peerStatus: payload.status,
+                peerActivity:
+                  payload.activity !== undefined
+                    ? payload.activity
+                    : ch.peerActivity,
+                peerActivities:
+                  payload.activities !== undefined
+                    ? payload.activities
+                    : ch.peerActivities,
+              }
+            : ch,
+        ),
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      avatarUrl?: string | null;
+    }) => {
+      setDms((prev) =>
+        prev.map((ch) =>
+          ch.peerUserId === payload.userId
+            ? {
+                ...ch,
+                name: payload.displayName ?? ch.name,
+                peerAvatarUrl:
+                  payload.avatarUrl !== undefined
+                    ? payload.avatarUrl
+                    : ch.peerAvatarUrl,
+              }
+            : ch,
         ),
       );
     };
     sock.on(SocketEvents.MESSAGE_CREATE, onCreate);
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.MESSAGE_CREATE, onCreate);
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
   }, [client, user, dmIdsKey]);
 

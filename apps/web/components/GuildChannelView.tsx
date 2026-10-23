@@ -368,6 +368,7 @@ export function GuildChannelView({
       status: PublicUser['status'];
       customStatus?: string | null;
       activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
     }) => {
       // Kendi oturumun bağlıyken gelen OFFLINE (reconnect grace) yok say
       if (
@@ -392,6 +393,8 @@ export function GuildChannelView({
                   payload.customStatus !== undefined ? payload.customStatus : m.customStatus,
                 activity:
                   payload.activity !== undefined ? payload.activity : m.activity,
+                activities:
+                  payload.activities !== undefined ? payload.activities : m.activities,
               }
             : m,
         ),
@@ -404,13 +407,62 @@ export function GuildChannelView({
               customStatus:
                 payload.customStatus !== undefined ? payload.customStatus : cur.customStatus,
               activity: payload.activity !== undefined ? payload.activity : cur.activity,
+              activities:
+                payload.activities !== undefined ? payload.activities : cur.activities,
+            }
+          : cur,
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      username?: string;
+      avatarUrl?: string | null;
+      bannerUrl?: string | null;
+      bannerColor?: string | null;
+      accentColor?: string | null;
+      bio?: string | null;
+    }) => {
+      setGuildMembers((prev) =>
+        prev.map((m) =>
+          m.id === payload.userId
+            ? {
+                ...m,
+                displayName: payload.displayName ?? m.displayName,
+                username: payload.username ?? m.username,
+                avatarUrl:
+                  payload.avatarUrl !== undefined ? payload.avatarUrl : m.avatarUrl,
+                bannerUrl:
+                  payload.bannerUrl !== undefined ? payload.bannerUrl : m.bannerUrl,
+                bannerColor:
+                  payload.bannerColor !== undefined ? payload.bannerColor : m.bannerColor,
+                bio: payload.bio !== undefined ? payload.bio : m.bio,
+              }
+            : m,
+        ),
+      );
+      setProfileUser((cur) =>
+        cur && cur.id === payload.userId
+          ? {
+              ...cur,
+              displayName: payload.displayName ?? cur.displayName,
+              username: payload.username ?? cur.username,
+              avatarUrl:
+                payload.avatarUrl !== undefined ? payload.avatarUrl : cur.avatarUrl,
+              bannerUrl:
+                payload.bannerUrl !== undefined ? payload.bannerUrl : cur.bannerUrl,
+              bannerColor:
+                payload.bannerColor !== undefined ? payload.bannerColor : cur.bannerColor,
+              bio: payload.bio !== undefined ? payload.bio : cur.bio,
             }
           : cur,
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
   }, [client, user, voice.participants]);
 
@@ -429,11 +481,20 @@ export function GuildChannelView({
               status: live,
               customStatus: user.customStatus,
               activity: user.activity !== undefined ? user.activity : m.activity,
+              activities:
+                user.activities !== undefined ? user.activities : m.activities,
             }
           : m,
       ),
     );
-  }, [user?.id, user?.status, user?.customStatus, user?.activity, client]);
+  }, [
+    user?.id,
+    user?.status,
+    user?.customStatus,
+    user?.activity,
+    user?.activities,
+    client,
+  ]);
 
   /** API OFFLINE döndürse bile: ses kanalındaysa veya kendi oturumun açıksa canlı durum */
   const liveMemberStatus = useCallback(
@@ -1985,6 +2046,7 @@ export function GuildChannelView({
             ),
             customStatus: guildMembers.find((g) => g.id === p.id)?.customStatus,
             activity: guildMembers.find((g) => g.id === p.id)?.activity,
+            activities: guildMembers.find((g) => g.id === p.id)?.activities,
             isBot,
             subtitle: presenceLabelTr(
               liveMemberStatus(p.id, guildMembers.find((g) => g.id === p.id)?.status),
@@ -2181,6 +2243,7 @@ export function GuildChannelView({
             status: liveMemberStatus(m.id, m.status),
             customStatus: m.customStatus,
             activity: m.activity,
+            activities: m.activities,
             isBot,
             roleColor: prefs.accessibility.roleColors ? topRole?.color : undefined,
             badges: (m.roles ?? [])

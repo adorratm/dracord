@@ -816,14 +816,15 @@ export function ChatInput({
         createPortal(
         <div
           ref={pickerPanelRef}
-          className="fixed z-[200] max-w-md rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden isolate"
+          className="fixed z-[200] max-w-md max-h-[min(70dvh,28rem)] flex flex-col rounded-xl bg-surface-container-high border border-surface-container-highest shadow-float overflow-hidden isolate"
           style={{
             bottom: pickerBox.bottom,
             left: pickerBox.left,
             width: pickerBox.width,
           }}
+          onWheel={(e) => e.stopPropagation()}
         >
-          <div className="flex border-b border-surface-container-highest">
+          <div className="flex border-b border-surface-container-highest shrink-0">
             {(
               [
                 ['emoji', 'Emoji'],
@@ -847,7 +848,7 @@ export function ChatInput({
             ))}
           </div>
 
-          <div className="px-space-sm py-space-xs border-b border-surface-container-highest">
+          <div className="px-space-sm py-space-xs border-b border-surface-container-highest shrink-0">
             <div className="flex items-center gap-space-xs h-9 px-space-sm rounded-lg bg-surface-container-lowest">
               <span className="material-symbols-outlined text-[18px] text-outline leading-none">
                 search
@@ -878,7 +879,7 @@ export function ChatInput({
           </div>
 
           {tab === 'emoji' && (
-            <div className="flex flex-col max-h-64">
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
               {!mediaSearch.trim() && (
                 <div className="flex gap-1 px-space-sm py-space-xs overflow-x-auto overflow-y-hidden shrink-0 border-b border-surface-container-highest [scrollbar-width:thin] [-ms-overflow-style:auto]">
                   {EMOJI_CATEGORIES.map((c) => (
@@ -898,7 +899,7 @@ export function ChatInput({
                   ))}
                 </div>
               )}
-              <div className="p-space-sm overflow-y-auto max-h-52 grid grid-cols-8 gap-1">
+              <div className="p-space-sm overflow-y-auto flex-1 min-h-0 overscroll-contain grid grid-cols-8 gap-1 content-start">
                 {activeEmojis.length === 0 ? (
                   <p className="col-span-8 font-label-sm text-outline text-center py-space-md">
                     Sonuç bulunamadı
@@ -923,7 +924,7 @@ export function ChatInput({
           )}
 
           {tab === 'gif' && (
-            <div className="p-space-sm max-h-64 overflow-y-auto">
+            <div className="p-space-sm flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {(searchGifs || loadFeaturedGifs) && (
                 <p className="font-label-sm text-outline mb-space-sm flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px] leading-none">gif_box</span>

@@ -84,14 +84,52 @@ export function FriendsHubView({
   useEffect(() => {
     if (!user) return;
     const sock = client.connectSocket();
-    const onPresence = (payload: { userId: string; status: PublicUser['status'] }) => {
+    const onPresence = (payload: {
+      userId: string;
+      status: PublicUser['status'];
+      activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
+    }) => {
       setFriends((prev) =>
-        prev.map((f) => (f.id === payload.userId ? { ...f, status: payload.status } : f)),
+        prev.map((f) =>
+          f.id === payload.userId
+            ? {
+                ...f,
+                status: payload.status,
+                activity:
+                  payload.activity !== undefined ? payload.activity : f.activity,
+                activities:
+                  payload.activities !== undefined
+                    ? payload.activities
+                    : f.activities,
+              }
+            : f,
+        ),
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      avatarUrl?: string | null;
+    }) => {
+      setFriends((prev) =>
+        prev.map((f) =>
+          f.id === payload.userId
+            ? {
+                ...f,
+                displayName: payload.displayName ?? f.displayName,
+                avatarUrl:
+                  payload.avatarUrl !== undefined ? payload.avatarUrl : f.avatarUrl,
+              }
+            : f,
+        ),
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
   }, [client, user]);
 
@@ -117,6 +155,7 @@ export function FriendsHubView({
         avatarUrl: u.avatarUrl,
         status: u.status,
         activity: u.activity,
+        activities: u.activities,
         subtitle: `@${u.username}`,
         onMessage: () => void openDm(u.id),
         onClick: () => void openDm(u.id),

@@ -3,6 +3,7 @@ import {
   SocketEvents,
   type DmCallPayload,
   type UserActivity,
+  type UserUpdatePayload,
   type VoiceStatePayload,
   type VoiceTakeoverPayload,
 } from '@dracord/types';
@@ -41,8 +42,13 @@ export class SocketBroadcastService {
     status: string;
     customStatus?: string | null;
     activity?: UserActivity | null;
+    activities?: UserActivity[] | null;
   }) {
     this.server?.emit(SocketEvents.PRESENCE_UPDATE, payload);
+  }
+
+  broadcastUserUpdate(payload: UserUpdatePayload) {
+    this.server?.emit(SocketEvents.USER_UPDATE, payload);
   }
 
   emitToChannel(channelId: string, event: string, payload: unknown) {

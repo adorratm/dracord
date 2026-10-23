@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ChannelSummary } from '@dracord/types';
 import { DM_CALL_GUILD_ID } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
+import { ActivityLine } from '@dracord/ui';
 import { useAuth } from '../auth';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
@@ -39,22 +40,64 @@ export function DmPanel({
   useEffect(() => {
     if (!user || !channel?.peerUserId) return;
     const sock = client.connectSocket();
-    const onPresence = (payload: { userId: string; status: string }) => {
+    const onPresence = (payload: {
+      userId: string;
+      status: string;
+      activity?: ChannelSummary['peerActivity'];
+      activities?: ChannelSummary['peerActivities'];
+    }) => {
+      if (payload.userId !== channel.peerUserId) return;
+      // Ses/DM aramasındaysa OFFLINE yutma
+      const inCall =
+        voice.voiceChannelId === channelId ||
+        voice.peers.some((p) => p.id === payload.userId);
+      const nextStatus =
+        inCall && payload.status === 'OFFLINE'
+          ? ('ONLINE' as const)
+          : (payload.status as ChannelSummary['peerStatus']);
+      setChannel((prev) =>
+        prev
+          ? {
+              ...prev,
+              peerStatus: nextStatus,
+              peerActivity:
+                payload.activity !== undefined
+                  ? payload.activity
+                  : prev.peerActivity,
+              peerActivities:
+                payload.activities !== undefined
+                  ? payload.activities
+                  : prev.peerActivities,
+            }
+          : prev,
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      avatarUrl?: string | null;
+    }) => {
       if (payload.userId !== channel.peerUserId) return;
       setChannel((prev) =>
         prev
           ? {
               ...prev,
-              peerStatus: payload.status as ChannelSummary['peerStatus'],
+              name: payload.displayName ?? prev.name,
+              peerAvatarUrl:
+                payload.avatarUrl !== undefined
+                  ? payload.avatarUrl
+                  : prev.peerAvatarUrl,
             }
           : prev,
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
-  }, [client, user, channel?.peerUserId]);
+  }, [client, user, channel?.peerUserId, channelId, voice.voiceChannelId, voice.peers]);
 
   const startCall = async (mode: 'audio' | 'video') => {
     if (selfNotes) return;
@@ -115,7 +158,17 @@ export function DmPanel({
           <span className="font-headline-md text-on-surface truncate block">
             {channel.name || 'DM'}
           </span>
-          {channel.peerStatus && !selfNotes && (
+          {!selfNotes &&
+          (channel.peerActivity ||
+            (channel.peerActivities && channel.peerActivities.length > 0)) ? (
+            <ActivityLine
+              activity={channel.peerActivity}
+              activities={channel.peerActivities}
+              size="sm"
+              className="font-label-sm text-secondary"
+              textClassName="font-label-sm text-secondary"
+            />
+          ) : channel.peerStatus && !selfNotes ? (
             <span className="font-label-sm text-outline capitalize">
               {channel.peerStatus === 'ONLINE'
                 ? 'Çevrimiçi'
@@ -125,7 +178,7 @@ export function DmPanel({
                     ? 'Rahatsız etmeyin'
                     : 'Çevrimdışı'}
             </span>
-          )}
+          ) : null}
         </div>
         <div className="ml-auto flex items-center gap-1">
           {!selfNotes && (

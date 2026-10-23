@@ -323,6 +323,7 @@ export function Shell() {
       status: PublicUser['status'];
       customStatus?: string | null;
       activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
     }) => {
       if (
         payload.userId === user.id &&
@@ -344,6 +345,8 @@ export function Shell() {
                   payload.customStatus !== undefined ? payload.customStatus : m.customStatus,
                 activity:
                   payload.activity !== undefined ? payload.activity : m.activity,
+                activities:
+                  payload.activities !== undefined ? payload.activities : m.activities,
               }
             : m,
         ),
@@ -356,13 +359,61 @@ export function Shell() {
               customStatus:
                 payload.customStatus !== undefined ? payload.customStatus : cur.customStatus,
               activity: payload.activity !== undefined ? payload.activity : cur.activity,
+              activities:
+                payload.activities !== undefined ? payload.activities : cur.activities,
+            }
+          : cur,
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      username?: string;
+      avatarUrl?: string | null;
+      bannerUrl?: string | null;
+      bannerColor?: string | null;
+      bio?: string | null;
+    }) => {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === payload.userId
+            ? {
+                ...m,
+                displayName: payload.displayName ?? m.displayName,
+                username: payload.username ?? m.username,
+                avatarUrl:
+                  payload.avatarUrl !== undefined ? payload.avatarUrl : m.avatarUrl,
+                bannerUrl:
+                  payload.bannerUrl !== undefined ? payload.bannerUrl : m.bannerUrl,
+                bannerColor:
+                  payload.bannerColor !== undefined ? payload.bannerColor : m.bannerColor,
+                bio: payload.bio !== undefined ? payload.bio : m.bio,
+              }
+            : m,
+        ),
+      );
+      setProfileUser((cur) =>
+        cur && cur.id === payload.userId
+          ? {
+              ...cur,
+              displayName: payload.displayName ?? cur.displayName,
+              username: payload.username ?? cur.username,
+              avatarUrl:
+                payload.avatarUrl !== undefined ? payload.avatarUrl : cur.avatarUrl,
+              bannerUrl:
+                payload.bannerUrl !== undefined ? payload.bannerUrl : cur.bannerUrl,
+              bannerColor:
+                payload.bannerColor !== undefined ? payload.bannerColor : cur.bannerColor,
+              bio: payload.bio !== undefined ? payload.bio : cur.bio,
             }
           : cur,
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
   }, [client, user, voice.peers]);
 
@@ -378,11 +429,13 @@ export function Shell() {
               status: live,
               customStatus: user.customStatus,
               activity: user.activity !== undefined ? user.activity : m.activity,
+              activities:
+                user.activities !== undefined ? user.activities : m.activities,
             }
           : m,
       ),
     );
-  }, [user?.id, user?.status, user?.customStatus, user?.activity, client]);
+  }, [user?.id, user?.status, user?.customStatus, user?.activity, user?.activities, client]);
 
   const liveMemberStatus = useCallback(
     (memberId: string, fallback?: PublicUser['status'] | null): PublicUser['status'] => {

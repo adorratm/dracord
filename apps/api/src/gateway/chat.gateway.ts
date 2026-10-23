@@ -130,6 +130,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         status: pub.status,
         customStatus: pub.customStatus ?? null,
         activity: pub.activity ?? null,
+        activities: pub.activities ?? null,
       });
     } catch {
       client.disconnect(true);
@@ -152,19 +153,37 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         this.offlineTimers.delete(user.sub);
         // Hâlâ soket yoksa çevrimdışı işaretle
         if (this.socketsByUser.has(user.sub)) return;
-        void this.presence
-          .markDisconnected(user.sub)
-          .then((pub) => {
-            this.server.emit(SocketEvents.PRESENCE_UPDATE, {
-              userId: user.sub,
-              status: pub.status,
-              customStatus: pub.customStatus ?? null,
-              activity: pub.activity ?? null,
-            });
-          })
-          .catch((err: Error) => {
-            this.logger.warn(`Disconnect cleanup failed: ${err.message}`);
+        void (async () => {
+          // Ses kanalındaysa çevrimdışı gösterme (reconnect / token yenileme)
+          try {
+            const locs = await this.voicePresence.getUserVoiceLocations(user.sub);
+            if (locs.length > 0) {
+              const pub = await this.presence.markConnected(user.sub);
+              this.server.emit(SocketEvents.PRESENCE_UPDATE, {
+                userId: user.sub,
+                status: pub.status,
+                customStatus: pub.customStatus ?? null,
+                activity: pub.activity ?? null,
+                activities: pub.activities ?? null,
+              });
+              return;
+            }
+          } catch (err) {
+            this.logger.warn(
+              `Voice check on disconnect failed: ${(err as Error).message}`,
+            );
+          }
+          const pub = await this.presence.markDisconnected(user.sub);
+          this.server.emit(SocketEvents.PRESENCE_UPDATE, {
+            userId: user.sub,
+            status: pub.status,
+            customStatus: pub.customStatus ?? null,
+            activity: pub.activity ?? null,
+            activities: pub.activities ?? null,
           });
+        })().catch((err: Error) => {
+          this.logger.warn(`Disconnect cleanup failed: ${err.message}`);
+        });
       }, OFFLINE_GRACE_MS);
       this.offlineTimers.set(user.sub, timer);
     } catch (err) {

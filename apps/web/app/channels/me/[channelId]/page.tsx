@@ -7,8 +7,9 @@ import {
 } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react';
-import type { MessageDto } from '@dracord/types';
+import type { MessageDto, UserActivity } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
+import { ActivityLine } from '@dracord/ui';
 import { AppShell } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
 import { DracoEmpty } from '@/components/Draco';
@@ -43,6 +44,8 @@ function DmChatInner({
   const [title, setTitle] = useState('DM');
   const [selfNotes, setSelfNotes] = useState(false);
   const [peerStatus, setPeerStatus] = useState<string | null>(null);
+  const [peerActivity, setPeerActivity] = useState<UserActivity | null>(null);
+  const [peerActivities, setPeerActivities] = useState<UserActivity[] | null>(null);
   const [friends, setFriends] = useState<
     Array<{ id: string; username: string; displayName: string; avatarUrl?: string | null }>
   >([]);
@@ -193,6 +196,8 @@ function DmChatInner({
         setTitle(ch.name);
         setSelfNotes(Boolean(ch.selfNotes));
         setPeerStatus(ch.peerStatus ?? null);
+        setPeerActivity(ch.peerActivity ?? null);
+        setPeerActivities(ch.peerActivities ?? null);
       }
       setDmTargets(list.filter((c) => c.id !== channelId).map((c) => ({ id: c.id, name: c.name })));
     });
@@ -201,11 +206,18 @@ function DmChatInner({
   useEffect(() => {
     if (!user) return;
     const sock = client.connectSocket();
-    const onPresence = (payload: { userId: string; status: string }) => {
+    const onPresence = (payload: {
+      userId: string;
+      status: string;
+      activity?: UserActivity | null;
+      activities?: UserActivity[] | null;
+    }) => {
       void client.listDms().then((list) => {
         const ch = list.find((c) => c.id === channelId);
         if (ch?.peerUserId === payload.userId) {
           setPeerStatus(payload.status);
+          if (payload.activity !== undefined) setPeerActivity(payload.activity);
+          if (payload.activities !== undefined) setPeerActivities(payload.activities);
         }
       });
     };
@@ -318,7 +330,18 @@ function DmChatInner({
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
           </button>
-          <span className="font-headline-md text-on-surface truncate">{title}</span>
+          <div className="min-w-0 flex-1">
+            <span className="font-headline-md text-on-surface truncate block">{title}</span>
+            {!selfNotes && (peerActivity || (peerActivities && peerActivities.length > 0)) ? (
+              <ActivityLine
+                activity={peerActivity}
+                activities={peerActivities}
+                size="sm"
+                className="font-label-sm text-secondary"
+                textClassName="font-label-sm text-secondary"
+              />
+            ) : null}
+          </div>
           <div className="ml-auto flex items-center gap-1 relative">
             <DmCallControls
               channelId={channelId}

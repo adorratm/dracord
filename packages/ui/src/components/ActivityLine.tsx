@@ -66,7 +66,6 @@ function MarqueeText({
     return () => ro?.disconnect();
   }, [text]);
 
-  // Gidiş + dönüş bir tur — biraz daha hızlı, boş bekleme kısa
   const durationSec = Math.max(5, Math.min(14, (shift / 22) * 2));
 
   return (
@@ -99,13 +98,12 @@ function onActivityLinkClick(url: string, e: MouseEvent) {
 }
 
 const IMAGE_BOX: Record<'sm' | 'md' | 'lg', string> = {
-  sm: 'w-4 h-4 rounded', // üye listesi
-  md: 'w-7 h-7 rounded-md', // arkadaş satırı
-  lg: 'w-12 h-12 rounded-lg', // hover kart
+  sm: 'w-4 h-4 rounded',
+  md: 'w-7 h-7 rounded-md',
+  lg: 'w-12 h-12 rounded-lg',
 };
 
-/** Üye listesi / hover / arkadaş — kapak + kayan yazı + Spotify/Steam link */
-export function ActivityLine({
+function SingleActivityLine({
   activity,
   className,
   textClassName,
@@ -113,18 +111,15 @@ export function ActivityLine({
   linkable = true,
   showImage = true,
 }: {
-  activity?: UserActivity | null;
+  activity: UserActivity;
   className?: string;
   textClassName?: string;
-  /** sm: liste, md: arkadaş, lg: hover / popover */
   size?: 'sm' | 'md' | 'lg';
-  /** url varsa tıklanınca aç (Spotify / Steam mağaza) */
   linkable?: boolean;
-  /** Kapak/logo (profilde büyük görsel varken kapat) */
   showImage?: boolean;
 }) {
   const line = activityLineTr(activity);
-  if (!line || !activity) return null;
+  if (!line) return null;
   const box = IMAGE_BOX[size];
   const url = linkable ? activity.url?.trim() || null : null;
   const title =
@@ -184,4 +179,61 @@ export function ActivityLine({
   }
 
   return <span className={sharedClass}>{body}</span>;
+}
+
+/** Üye listesi / hover / arkadaş — kapak + kayan yazı; birden fazla aktivite alt alta */
+export function ActivityLine({
+  activity,
+  activities,
+  className,
+  textClassName,
+  size = 'sm',
+  linkable = true,
+  showImage = true,
+}: {
+  activity?: UserActivity | null;
+  /** Oyun + Spotify aynı anda */
+  activities?: UserActivity[] | null;
+  className?: string;
+  textClassName?: string;
+  size?: 'sm' | 'md' | 'lg';
+  linkable?: boolean;
+  showImage?: boolean;
+}) {
+  const list =
+    activities && activities.length > 0
+      ? activities
+      : activity
+        ? [activity]
+        : [];
+  const visible = list.filter((a) => Boolean(activityLineTr(a)));
+  if (!visible.length) return null;
+
+  if (visible.length === 1) {
+    return (
+      <SingleActivityLine
+        activity={visible[0]}
+        className={className}
+        textClassName={textClassName}
+        size={size}
+        linkable={linkable}
+        showImage={showImage}
+      />
+    );
+  }
+
+  return (
+    <span className={cn('flex flex-col gap-0.5 min-w-0 max-w-full', className)}>
+      {visible.map((a) => (
+        <SingleActivityLine
+          key={`${a.source}:${a.name}:${a.details ?? ''}`}
+          activity={a}
+          textClassName={textClassName}
+          size={size}
+          linkable={linkable}
+          showImage={showImage}
+        />
+      ))}
+    </span>
+  );
 }

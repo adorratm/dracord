@@ -20,6 +20,7 @@ import { SearchIndexerService } from '@/search/search-indexer.service';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationsRealtimeService } from '@/notifications/notifications-realtime.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { mergeClientSettings } from './client-settings';
 import * as bcrypt from 'bcrypt';
 
@@ -42,6 +43,7 @@ export class UsersService {
     private readonly notifications: NotificationsService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly voicePresence: VoicePresenceService,
+    private readonly broadcast: SocketBroadcastService,
   ) {}
 
   async findById(id: string, viewerId?: string): Promise<PublicUser> {
@@ -315,7 +317,19 @@ export class UsersService {
     }
     await this.em.save(User, user);
     void this.indexer.indexUser(user).catch(() => undefined);
-    return toPublicUser(user);
+    const pub = toPublicUser(user);
+    this.broadcast.broadcastUserUpdate({
+      userId: user.id,
+      displayName: pub.displayName,
+      username: pub.username,
+      avatarUrl: pub.avatarUrl,
+      bannerUrl: pub.bannerUrl ?? null,
+      bannerColor: pub.bannerColor ?? null,
+      accentColor: pub.accentColor ?? null,
+      bio: pub.bio ?? null,
+      socialLinks: pub.socialLinks ?? null,
+    });
+    return pub;
   }
 
   normalizeUsername(raw: string): string {

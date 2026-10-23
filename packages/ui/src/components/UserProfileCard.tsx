@@ -33,6 +33,7 @@ export interface UserProfileCardProps {
     status?: PresenceStatus;
     customStatus?: string | null;
     activity?: UserActivity | null;
+    activities?: UserActivity[] | null;
     isBot?: boolean;
     roles?: MemberRoleSummary[];
     socialLinks?: SocialLinks | null;
@@ -187,12 +188,14 @@ export function UserProfileCard({
                 <div className="min-w-0 flex-1 self-center">
                   <ActivityLine
                     activity={user.activity}
+                    activities={user.activities}
                     size="md"
                     showImage={false}
                     className="font-label-md text-secondary w-full"
                     textClassName="font-label-md text-secondary"
                   />
-                  {user.activity.details ? (
+                  {user.activity.details &&
+                  !(user.activities && user.activities.length > 1) ? (
                     <p className="font-body-sm text-on-surface-variant truncate mt-0.5">
                       {user.activity.details}
                     </p>

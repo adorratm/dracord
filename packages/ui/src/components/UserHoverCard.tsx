@@ -26,6 +26,7 @@ export interface UserHoverCardUser {
   status?: PresenceStatus;
   customStatus?: string | null;
   activity?: UserActivity | null;
+  activities?: UserActivity[] | null;
   isBot?: boolean;
   socialLinks?: SocialLinks | null;
   roles?: MemberRoleSummary[];
@@ -182,12 +183,14 @@ export function UserHoverCard({
                   <div className="min-w-0 flex-1 self-center">
                     <ActivityLine
                       activity={user.activity}
+                      activities={user.activities}
                       size="md"
                       showImage={false}
                       className="font-label-sm text-secondary w-full"
                       textClassName="font-label-sm text-secondary"
                     />
-                    {user.activity.details ? (
+                    {user.activity.details &&
+                    !(user.activities && user.activities.length > 1) ? (
                       <p className="mt-0.5 font-body-sm text-on-surface-variant truncate">
                         {user.activity.details}
                       </p>

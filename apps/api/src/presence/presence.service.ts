@@ -41,6 +41,7 @@ export class PresenceService {
       status: updated.status,
       customStatus: updated.customStatus,
       activity: pub.activity ?? null,
+      activities: pub.activities ?? null,
     });
     return pub;
   }

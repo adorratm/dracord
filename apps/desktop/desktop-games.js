@@ -60,6 +60,10 @@ const SKIP_EXE = new Set([
   'leagueclientux.exe',
   'installerscripts.exe',
   'steamerrorreporter64.exe',
+  'wallpaper_engine.exe',
+  'wallpaper32.exe',
+  'wallpaper64.exe',
+  'wallpaperengine.exe',
 ]);
 
 const SKIP_STEAM_APP_IDS = new Set([
@@ -90,6 +94,7 @@ const SKIP_DIR = new Set([
   'engine',
   '__installer',
   'crashpad',
+  'wallpaper engine',
 ]);
 
 /** Bilinen Steam dışı exe → isim */

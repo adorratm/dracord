@@ -192,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status: PublicUser['status'];
       customStatus?: string | null;
       activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
     }) => {
       if (payload.userId !== userId) return;
       // Bu sekme açıkken kendini çevrimdışı gösterme (sayfa geçişi / reconnect race)
@@ -207,6 +208,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   : prev.customStatus,
               activity:
                 payload.activity !== undefined ? payload.activity : prev.activity,
+              activities:
+                payload.activities !== undefined
+                  ? payload.activities
+                  : prev.activities,
+            }
+          : prev,
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      username?: string;
+      avatarUrl?: string | null;
+      bannerUrl?: string | null;
+      bannerColor?: string | null;
+      accentColor?: string | null;
+      bio?: string | null;
+    }) => {
+      if (payload.userId !== userId) return;
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              displayName: payload.displayName ?? prev.displayName,
+              username: payload.username ?? prev.username,
+              avatarUrl:
+                payload.avatarUrl !== undefined ? payload.avatarUrl : prev.avatarUrl,
+              bannerUrl:
+                payload.bannerUrl !== undefined ? payload.bannerUrl : prev.bannerUrl,
+              bannerColor:
+                payload.bannerColor !== undefined
+                  ? payload.bannerColor
+                  : prev.bannerColor,
+              accentColor:
+                payload.accentColor !== undefined
+                  ? payload.accentColor
+                  : prev.accentColor,
+              bio: payload.bio !== undefined ? payload.bio : prev.bio,
             }
           : prev,
       );
@@ -219,10 +258,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     sock.on('connect', onConnect);
     if (sock.connected) onConnect();
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
       sock.off('connect', onConnect);
     };
   }, [ready, user?.id, client]);

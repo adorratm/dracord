@@ -33,6 +33,7 @@ export interface MemberListMember {
   status: PresenceStatus;
   customStatus?: string | null;
   activity?: UserActivity | null;
+  activities?: UserActivity[] | null;
   socialLinks?: SocialLinks | null;
   roleColor?: string;
   subtitle?: string;
@@ -237,9 +238,11 @@ export function MemberList({ groups, className }: MemberListProps) {
                               />
                             ))}
                         </span>
-                        {activityLineTr(member.activity) ? (
+                        {activityLineTr(member.activity) ||
+                        (member.activities && member.activities.length > 0) ? (
                           <ActivityLine
                             activity={member.activity}
+                            activities={member.activities}
                             className="font-label-sm text-label-sm text-secondary"
                             textClassName="font-label-sm text-label-sm text-secondary"
                           />

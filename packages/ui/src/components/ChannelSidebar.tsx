@@ -124,6 +124,7 @@ export interface UserPanelProps {
   customStatus?: string | null;
   /** Canlı aktivite (Spotify / masaüstü oyun / Dracord) */
   activity?: UserActivity | null;
+  activities?: UserActivity[] | null;
   muted?: boolean;
   deafened?: boolean;
   noiseCancellation?: boolean;
@@ -303,6 +304,7 @@ export function UserPanel({
   status = 'ONLINE',
   customStatus = null,
   activity = null,
+  activities = null,
   muted,
   deafened,
   noiseCancellation,
@@ -417,7 +419,12 @@ export function UserPanel({
   };
 
   const statusOptions: PresenceStatus[] = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
-  const activityLine = !voiceConnected ? activityLineTr(activity) : null;
+  const activityLine = !voiceConnected
+    ? activityLineTr(activity) ||
+      (activities && activities.length > 0
+        ? activityLineTr(activities[0])
+        : null)
+    : null;
   const handleLine = voiceConnected
     ? 'Sesli aramada'
     : activityLine ||
@@ -642,9 +649,10 @@ export function UserPanel({
               <span className="font-label-md text-on-surface truncate font-semibold">
                 {displayName}
               </span>
-              {activityLine && activity ? (
+              {activityLine && (activity || (activities && activities.length > 0)) ? (
                 <ActivityLine
                   activity={activity}
+                  activities={activities}
                   size="sm"
                   className="font-label-sm text-[11px] text-secondary"
                   textClassName="font-label-sm text-[11px] text-secondary"

@@ -176,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status: PublicUser['status'];
       customStatus?: string | null;
       activity?: PublicUser['activity'];
+      activities?: PublicUser['activities'];
     }) => {
       if (payload.userId !== user.id) return;
       if (payload.status === 'OFFLINE' && sock.connected) return;
@@ -188,13 +189,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 payload.customStatus !== undefined ? payload.customStatus : prev.customStatus,
               activity:
                 payload.activity !== undefined ? payload.activity : prev.activity,
+              activities:
+                payload.activities !== undefined
+                  ? payload.activities
+                  : prev.activities,
+            }
+          : prev,
+      );
+    };
+    const onUserUpdate = (payload: {
+      userId: string;
+      displayName?: string;
+      username?: string;
+      avatarUrl?: string | null;
+      bannerUrl?: string | null;
+      bannerColor?: string | null;
+      bio?: string | null;
+    }) => {
+      if (payload.userId !== user.id) return;
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              displayName: payload.displayName ?? prev.displayName,
+              username: payload.username ?? prev.username,
+              avatarUrl:
+                payload.avatarUrl !== undefined ? payload.avatarUrl : prev.avatarUrl,
+              bannerUrl:
+                payload.bannerUrl !== undefined ? payload.bannerUrl : prev.bannerUrl,
+              bannerColor:
+                payload.bannerColor !== undefined
+                  ? payload.bannerColor
+                  : prev.bannerColor,
+              bio: payload.bio !== undefined ? payload.bio : prev.bio,
             }
           : prev,
       );
     };
     sock.on(SocketEvents.PRESENCE_UPDATE, onPresence);
+    sock.on(SocketEvents.USER_UPDATE, onUserUpdate);
     return () => {
       sock.off(SocketEvents.PRESENCE_UPDATE, onPresence);
+      sock.off(SocketEvents.USER_UPDATE, onUserUpdate);
     };
   }, [client, user?.id]);
 

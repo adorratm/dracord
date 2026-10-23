@@ -90,8 +90,10 @@ export interface PublicUser {
   avatarUrl: string | null;
   status: PresenceStatus;
   customStatus?: string | null;
-  /** Canlı aktivite — gizlilik ayarına göre null olabilir */
+  /** Birincil canlı aktivite (öncelik: dracord > desktop > spotify) */
   activity?: UserActivity | null;
+  /** Tüm canlı aktiviteler — oyun + Spotify aynı anda (alt alta) */
+  activities?: UserActivity[] | null;
   usernameConfirmed?: boolean;
   bannerColor?: string | null;
   bannerUrl?: string | null;
@@ -385,6 +387,8 @@ export interface ChannelSummary {
   peerUserId?: string | null;
   peerAvatarUrl?: string | null;
   peerStatus?: PresenceStatus | null;
+  peerActivity?: UserActivity | null;
+  peerActivities?: UserActivity[] | null;
   /** Ses kanalı kilitli mi */
   locked?: boolean;
   /** Şifre var mı (hash asla gönderilmez) */
@@ -682,6 +686,8 @@ export const SocketEvents = {
   MESSAGE_DELETE: 'message:delete',
   TYPING_START: 'typing:start',
   PRESENCE_UPDATE: 'presence:update',
+  /** Profil / avatar / banner / displayName anlık güncelleme */
+  USER_UPDATE: 'user:update',
   CHANNEL_JOIN: 'channel:join',
   CHANNEL_LEAVE: 'channel:leave',
   VOICE_STATE: 'voice:state',
@@ -700,6 +706,19 @@ export const SocketEvents = {
   ACTIVITY_STATE: 'activity:state',
   ACTIVITY_LEAVE: 'activity:leave',
 } as const;
+
+/** Soket `user:update` — profil alanları (kısmi) */
+export interface UserUpdatePayload {
+  userId: string;
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  bannerColor?: string | null;
+  accentColor?: string | null;
+  bio?: string | null;
+  socialLinks?: SocialLinks | null;
+}
 
 /** Aktif ses istemcisi değişimi — yalnızca hedef kullanıcının soketlerine gider */
 export interface VoiceTakeoverPayload {
