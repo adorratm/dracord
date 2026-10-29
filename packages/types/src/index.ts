@@ -754,8 +754,17 @@ export interface ActivitySessionDto {
   playerIds: string[];
   spectatorIds: string[];
   state: Record<string, unknown>;
+  /** Optimistic concurrency — her başarılı state patch’te +1 (eski istemciler yok sayabilir) */
+  stateVersion?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** PATCH /activities/:id/state → 409 gövdesi */
+export interface ActivityStateConflictBody {
+  code: 'ACTIVITY_STATE_CONFLICT';
+  message: string;
+  session: ActivitySessionDto;
 }
 
 /** DM aramalarında presence için sentetik guild id */
@@ -830,6 +839,8 @@ export interface ClientSettings {
   };
   appearance: {
     theme: 'dark' | 'light';
+    /** Tema pack: default | midnight | rose | forest | nitro-aurora */
+    themePack?: string;
     messageDensity: 'cozy' | 'compact';
     /** Sol rail favori sunucu id’leri (üstte) */
     favoriteGuildIds: string[];
@@ -933,6 +944,12 @@ export interface GuildEventDto {
   coverUrl: string | null;
   status: 'scheduled' | 'cancelled' | 'ended';
   createdAt: string;
+  /** RSVP sayısı */
+  interestedCount?: number;
+  /** Bu kullanıcı ilgileniyor mu */
+  interestedByMe?: boolean;
+  /** Sahne / stage etkinliği */
+  isStage?: boolean;
 }
 
 export interface VoiceTokenResponse {

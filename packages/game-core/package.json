@@ -15,12 +15,14 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "lint": "echo ok"
+    "lint": "echo ok",
+    "test": "node --import tsx --test src/activity-sync.test.ts"
   },
   "dependencies": {
     "@dracord/types": "workspace:*"
   },
   "devDependencies": {
+    "tsx": "^4.20.5",
     "typescript": "^6.0.3"
   }
 }

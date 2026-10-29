@@ -7,3 +7,4 @@ export * from './watchParty';
 export * from './trivia';
 export * from './words';
 export * from './kinds';
+export * from './activity-sync';

@@ -40,6 +40,14 @@ export class GuildEvent extends CuidEntity {
   @Column({ type: 'varchar', default: 'scheduled' })
   status!: GuildEventStatus;
 
+  /** İlgi / RSVP kullanıcı id’leri (stage benzeri) */
+  @Column({ type: 'jsonb', default: [] })
+  interestedUserIds!: string[];
+
+  /** Ses/sahne kanalı vurgusu */
+  @Column({ type: 'boolean', default: false })
+  isStage!: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

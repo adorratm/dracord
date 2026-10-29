@@ -50,6 +50,12 @@ const NAV: NavDef[] = [
     titleKey: 'nav.billing',
     items: [
       { id: 'nitro', labelKey: 'nav.nitro', icon: 'workspace_premium', href: '/settings/nitro' },
+      {
+        id: 'stickers',
+        labelKey: 'nav.stickers',
+        icon: 'sticky_note_2',
+        href: '/settings/stickers',
+      },
       { id: 'boost', labelKey: 'nav.boost', icon: 'diamond', href: '/settings/boost' },
       {
         id: 'subscriptions',

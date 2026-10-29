@@ -48,6 +48,7 @@ import { NotificationsService } from '@/notifications/notifications.service';
 import { NotificationsRealtimeService } from '@/notifications/notifications-realtime.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
 import { MusicCommandsService } from '@/music/music-commands.service';
+import { AutomodService } from '@/moderation/automod.service';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { LinkPreviewService } from './link-preview.service';
 import { CustomSlashService } from './custom-slash.service';
@@ -73,6 +74,7 @@ export class MessagesService {
     private readonly realtime: MessagesRealtimeService,
     private readonly musicCommands: MusicCommandsService,
     private readonly customSlash: CustomSlashService,
+    private readonly automod: AutomodService,
   ) {}
 
   async listChannelMessages(
@@ -388,6 +390,7 @@ export class MessagesService {
       }
     }
     const trimmed = content.trim();
+    this.automod.assertMessageAllowed(trimmed, channelRow?.guildId);
     const msgType: MessageType = opts.type === 'heading' ? 'heading' : 'default';
     let poll: MessagePollStored | null = null;
     if (pollInput && msgType === 'default') {

@@ -6,7 +6,16 @@ import type {
   MemberRoleSummary,
   UserActivity,
 } from '@dracord/types';
-import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
@@ -38,15 +47,11 @@ export interface MemberListMember {
   roleColor?: string;
   subtitle?: string;
   isBot?: boolean;
-  /** Animasyonlu rol rozetleri */
   badges?: Array<{ id: string; badgeKey?: string | null; color?: string; label?: string }>;
   roles?: MemberRoleSummary[];
   onClick?: () => void;
-  /** @deprecated Tek aksiyon — yerine contextActions kullan */
   onContextMenu?: () => void;
-  /** Sağ tık menüsü — engel yalnızca buradan seçilince uygulanır */
   contextActions?: MemberListAction[];
-  /** Sürükleyerek ses kanalına taşı */
   draggable?: boolean;
 }
 
@@ -69,10 +74,148 @@ type MenuState = {
   actions: MemberListAction[];
 };
 
+type FlatRow =
+  | { type: 'header'; key: string; label: string; count: number }
+  | { type: 'member'; key: string; member: MemberListMember };
+
+function MemberRow({
+  member,
+  menuId,
+  menuOpen,
+  openMenu,
+}: {
+  member: MemberListMember;
+  menuId: string;
+  menuOpen: boolean;
+  openMenu: (e: MouseEvent, member: MemberListMember) => void;
+}) {
+  const actions = member.contextActions?.length
+    ? member.contextActions
+    : member.onContextMenu
+      ? [{ id: 'default', label: 'Engelle', danger: true, onSelect: member.onContextMenu }]
+      : [];
+  const hasMenu = actions.length > 0;
+  return (
+    <li className="transition-transform duration-150 hover:translate-x-0.5 list-none">
+      <UserHoverCard
+        user={{
+          id: member.id,
+          displayName: member.displayName,
+          username: member.username,
+          avatarUrl: member.avatarUrl,
+          bannerUrl: member.bannerUrl,
+          bannerColor: member.bannerColor,
+          bio: member.bio,
+          status: member.status,
+          customStatus: member.customStatus,
+          activity: member.activity,
+          isBot: member.isBot,
+          socialLinks: member.socialLinks,
+          roles: member.roles,
+        }}
+      >
+        <button
+          type="button"
+          draggable={member.draggable}
+          onDragStart={
+            member.draggable
+              ? (e) => {
+                  e.dataTransfer.setData('application/x-dracord-user', member.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }
+              : undefined
+          }
+          onClick={member.onClick}
+          onContextMenu={(e) => openMenu(e, member)}
+          aria-haspopup={hasMenu ? 'menu' : undefined}
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          className={cn(
+            'w-full max-w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group min-w-0',
+            menuOpen && 'bg-surface-container',
+            member.draggable && 'cursor-grab active:cursor-grabbing',
+          )}
+        >
+          <Avatar
+            displayName={member.displayName}
+            imageUrl={member.avatarUrl}
+            size="md"
+            status={member.status}
+          />
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span
+                className="font-body-sm text-body-sm truncate"
+                style={member.roleColor ? { color: member.roleColor } : undefined}
+              >
+                {member.displayName}
+              </span>
+              {member.isBot && (
+                <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
+                  BOT
+                </span>
+              )}
+              {(member.badges ?? [])
+                .filter((b) => b.badgeKey && b.badgeKey !== 'none')
+                .slice(0, 2)
+                .map((b) => (
+                  <RoleBadge
+                    key={b.id}
+                    badgeKey={b.badgeKey}
+                    color={b.color}
+                    size="sm"
+                  />
+                ))}
+            </span>
+            {activityLineTr(member.activity) ||
+            (member.activities && member.activities.length > 0) ? (
+              <ActivityLine
+                activity={member.activity}
+                activities={member.activities}
+                className="font-label-sm text-label-sm text-secondary"
+                textClassName="font-label-sm text-label-sm text-secondary"
+              />
+            ) : member.subtitle ? (
+              <span className="font-label-sm text-label-sm text-outline truncate">
+                {member.subtitle}
+              </span>
+            ) : null}
+          </div>
+        </button>
+      </UserHoverCard>
+    </li>
+  );
+}
+
 export function MemberList({ groups, className }: MemberListProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const parentRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
+
+  const flat = useMemo(() => {
+    const rows: FlatRow[] = [];
+    for (const g of groups) {
+      rows.push({
+        type: 'header',
+        key: `h-${g.id}`,
+        label: g.label,
+        count: g.members.length,
+      });
+      for (const m of g.members) {
+        rows.push({ type: 'member', key: m.id, member: m });
+      }
+    }
+    return rows;
+  }, [groups]);
+
+  const useVirt = flat.length > 48;
+  const virtualizer = useVirtualizer({
+    count: useVirt ? flat.length : 0,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (i) => (flat[i]?.type === 'header' ? 28 : 44),
+    overscan: 14,
+  });
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -85,8 +228,6 @@ export function MemberList({ groups, className }: MemberListProps) {
 
   useEffect(() => {
     if (!menu) return;
-
-    // Sağ tık mousedown'ı menüyü anında kapatmasın
     let removeClose: (() => void) | undefined;
     const timer = window.setTimeout(() => {
       const onPointerDown = (e: PointerEvent) => {
@@ -104,7 +245,6 @@ export function MemberList({ groups, className }: MemberListProps) {
         document.removeEventListener('keydown', onKey);
       };
     }, 0);
-
     return () => {
       window.clearTimeout(timer);
       removeClose?.();
@@ -146,120 +286,75 @@ export function MemberList({ groups, className }: MemberListProps) {
     });
   };
 
+  let body: ReactNode;
+  if (useVirt) {
+    body = (
+      <div
+        style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
+      >
+        {virtualizer.getVirtualItems().map((vi) => {
+          const row = flat[vi.index]!;
+          return (
+            <div
+              key={row.key}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${vi.start}px)`,
+              }}
+            >
+              {row.type === 'header' ? (
+                <h3 className="px-space-sm mb-space-xs font-label-sm text-label-sm uppercase tracking-wider font-bold text-on-surface-variant">
+                  {row.label} — {row.count}
+                </h3>
+              ) : (
+                <MemberRow
+                  member={row.member}
+                  menuId={menuId}
+                  menuOpen={menu?.memberId === row.member.id}
+                  openMenu={openMenu}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else {
+    body = groups.map((group) => (
+      <div key={group.id} className="mb-space-lg">
+        <h3 className="px-space-sm mb-space-xs font-label-sm text-label-sm uppercase tracking-wider font-bold text-on-surface-variant">
+          {group.label} — {group.members.length}
+        </h3>
+        <ul className="flex flex-col gap-0.5 dracord-stagger">
+          {group.members.map((member) => (
+            <MemberRow
+              key={member.id}
+              member={member}
+              menuId={menuId}
+              menuOpen={menu?.memberId === member.id}
+              openMenu={openMenu}
+            />
+          ))}
+        </ul>
+      </div>
+    ));
+  }
+
   return (
     <aside
       data-tour="members"
       className={cn(
-        'w-full min-w-0 bg-surface-container-low flex flex-col min-h-0 overflow-y-auto py-space-md px-space-sm shrink-0',
+        'w-full min-w-0 bg-surface-container-low flex flex-col min-h-0 overflow-hidden py-space-md px-space-sm shrink-0',
         className,
       )}
       aria-label="Üye listesi"
     >
-      {groups.map((group) => (
-        <div key={group.id} className="mb-space-lg">
-          <h3 className="px-space-sm mb-space-xs font-label-sm text-label-sm uppercase tracking-wider font-bold text-on-surface-variant">
-            {group.label} — {group.members.length}
-          </h3>
-          <ul className="flex flex-col gap-0.5 dracord-stagger">
-            {group.members.map((member) => {
-              const hasMenu = resolveActions(member).length > 0;
-              return (
-                <li key={member.id} className="transition-transform duration-150 hover:translate-x-0.5">
-                  <UserHoverCard
-                    user={{
-                      id: member.id,
-                      displayName: member.displayName,
-                      username: member.username,
-                      avatarUrl: member.avatarUrl,
-                      bannerUrl: member.bannerUrl,
-                      bannerColor: member.bannerColor,
-                      bio: member.bio,
-                      status: member.status,
-                      customStatus: member.customStatus,
-                      activity: member.activity,
-                      isBot: member.isBot,
-                      socialLinks: member.socialLinks,
-                      roles: member.roles,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      draggable={member.draggable}
-                      onDragStart={
-                        member.draggable
-                          ? (e) => {
-                              e.dataTransfer.setData(
-                                'application/x-dracord-user',
-                                member.id,
-                              );
-                              e.dataTransfer.effectAllowed = 'move';
-                            }
-                          : undefined
-                      }
-                      onClick={member.onClick}
-                      onContextMenu={(e) => openMenu(e, member)}
-                      aria-haspopup={hasMenu ? 'menu' : undefined}
-                      aria-expanded={menu?.memberId === member.id}
-                      aria-controls={menu?.memberId === member.id ? menuId : undefined}
-                      className={cn(
-                        'w-full max-w-full flex items-center gap-space-sm px-space-sm py-1.5 rounded-lg hover:bg-surface-container text-left transition-colors group min-w-0',
-                        menu?.memberId === member.id && 'bg-surface-container',
-                        member.draggable && 'cursor-grab active:cursor-grabbing',
-                      )}
-                    >
-                      <Avatar
-                        displayName={member.displayName}
-                        imageUrl={member.avatarUrl}
-                        size="md"
-                        status={member.status}
-                      />
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className="font-body-sm text-body-sm truncate"
-                            style={member.roleColor ? { color: member.roleColor } : undefined}
-                          >
-                            {member.displayName}
-                          </span>
-                          {member.isBot && (
-                            <span className="shrink-0 px-1 py-px rounded text-[9px] font-bold uppercase tracking-wide bg-primary-container text-on-primary-container leading-none">
-                              BOT
-                            </span>
-                          )}
-                          {(member.badges ?? [])
-                            .filter((b) => b.badgeKey && b.badgeKey !== 'none')
-                            .slice(0, 2)
-                            .map((b) => (
-                              <RoleBadge
-                                key={b.id}
-                                badgeKey={b.badgeKey}
-                                color={b.color}
-                                size="sm"
-                              />
-                            ))}
-                        </span>
-                        {activityLineTr(member.activity) ||
-                        (member.activities && member.activities.length > 0) ? (
-                          <ActivityLine
-                            activity={member.activity}
-                            activities={member.activities}
-                            className="font-label-sm text-label-sm text-secondary"
-                            textClassName="font-label-sm text-label-sm text-secondary"
-                          />
-                        ) : member.subtitle ? (
-                          <span className="font-label-sm text-label-sm text-outline truncate">
-                            {member.subtitle}
-                          </span>
-                        ) : null}
-                      </div>
-                    </button>
-                  </UserHoverCard>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto">
+        {body}
+      </div>
 
       {menu &&
         typeof document !== 'undefined' &&

@@ -29,6 +29,7 @@ import {
   SlashCommand,
   ActivitySession,
   GuildEvent,
+  PlatformApplication,
   User,
 } from './entities';
 import { DatabaseBootstrapService } from './database-bootstrap.service';
@@ -62,6 +63,7 @@ const entities = [
   SlashCommand,
   ActivitySession,
   GuildEvent,
+  PlatformApplication,
 ];
 
 @Module({

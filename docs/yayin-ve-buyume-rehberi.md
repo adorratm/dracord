@@ -1,5 +1,8 @@
 # Dracord — Senin yapman gerekenler
 
+Ürün / teknik gelişim yapılacaklar (oyun sync, API, bot, tema, Nitro): **[gelisim-yapilacaklar.md](./gelisim-yapilacaklar.md)**  
+Prod şema: **[prod-migration.md](./prod-migration.md)** · Platform API spec: **[platform-api-tasarim.md](./platform-api-tasarim.md)**  
+Canlıya alma sırası / flag’ler: **[prod-guvenli-rollout.md](./prod-guvenli-rollout.md)**
 Kod / SEO / ASO taslakları / indirme popup / hesap silme / desktop CI checksum tarafı repoda hazır.
 Bu belge yalnızca **senin** hesap, panel ve yayın adımlarını listeler.
 

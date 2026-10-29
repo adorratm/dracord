@@ -1,9 +1,26 @@
-import { Controller, Get, HttpException, HttpStatus, Module } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Module,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
+import { ActivitySyncMetricsService } from '@/activities/activity-sync-metrics.service';
+import { GatewayMetricsService } from '@/gateway/gateway-metrics.service';
+import { SocketAdapterStateService } from '@/gateway/socket-adapter-state.service';
+import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 
 @Controller('health')
 class HealthController {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly config: ConfigService,
+    private readonly adapterState: SocketAdapterStateService,
+    private readonly activitySync: ActivitySyncMetricsService,
+    private readonly gatewayMetrics: GatewayMetricsService,
+  ) {}
 
   /** Liveness — süreç ayakta mı */
   @Get()
@@ -14,15 +31,63 @@ class HealthController {
   /** Readiness — trafik almaya hazır mı */
   @Get('ready')
   async ready() {
+    const redisRequired =
+      this.config.get<string>('SOCKET_REDIS_REQUIRED') === 'true';
+    const adapter = this.adapterState.snapshot();
     try {
       if (!this.dataSource.isInitialized) {
         throw new Error('db not initialized');
       }
       await this.dataSource.query('SELECT 1');
-      return { ok: true, db: 'up' };
-    } catch {
+      if (redisRequired && !adapter.redisAdapter) {
+        throw new HttpException(
+          {
+            ok: false,
+            db: 'up',
+            redisAdapter: false,
+            error: adapter.error ?? 'Socket.IO Redis adapter yok',
+          },
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+      return {
+        ok: true,
+        db: 'up',
+        redisAdapter: adapter.redisAdapter,
+      };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
       throw new HttpException({ ok: false, db: 'down' }, HttpStatus.SERVICE_UNAVAILABLE);
     }
+  }
+
+  /** Oyun sync sayaçları + Redis adapter durumu (auth yok — ops metrik) */
+  @Get('activity-sync')
+  activitySyncHealth() {
+    return {
+      ok: true,
+      ...this.activitySync.snapshot(),
+      socket: this.adapterState.snapshot(),
+      flags: {
+        activityCas: this.config.get<string>('ACTIVITY_CAS') === 'true',
+        billiardsAuthority:
+          this.config.get<string>('ACTIVITY_BILLIARDS_AUTHORITY') === 'true',
+        socketRedisRequired:
+          this.config.get<string>('SOCKET_REDIS_REQUIRED') === 'true',
+      },
+    };
+  }
+
+  /** Gateway / presence / voice orphan sayaçları */
+  @Get('gateway')
+  gatewayHealth() {
+    return {
+      ok: true,
+      ...this.gatewayMetrics.snapshot(),
+      socket: this.adapterState.snapshot(),
+      offlineGraceMs: 25_000,
+      voiceOrphanGraceMs: 90_000,
+    };
   }
 }
 
@@ -47,6 +112,7 @@ class ClientVersionsController {
 }
 
 @Module({
+  imports: [SocketBroadcastModule],
   controllers: [HealthController, ClientVersionsController],
 })
 export class HealthModule {}

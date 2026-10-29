@@ -1,10 +1,22 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EntityManager } from 'typeorm';
+import {
+  activityCasCheck,
+  activityNextVersion,
+  billiardsParseBalls,
+  billiardsValidateShotPatch,
+  bjParseState,
+  triviaParseState,
+  watchPartyParseState,
+  wordsParseState,
+} from '@dracord/game-core';
 import type { ActivityKind, ActivitySessionDto } from '@dracord/types';
 import { ChannelType } from '@/database/enums';
 import { ActivitySession } from '@/database/entities/activity-session.entity';
@@ -14,6 +26,7 @@ import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { UserActivityService } from '@/presence/user-activity.service';
 import { SpotifyService } from '@/spotify/spotify.service';
 import { SocketEvents } from '@dracord/types';
+import { ActivitySyncMetricsService } from './activity-sync-metrics.service';
 
 const KIND_LABELS: Record<ActivityKind, string> = {
   billiards: 'Bilardo',
@@ -84,7 +97,7 @@ const STATE_KEYS: Record<ActivityKind, readonly string[]> = {
     'usedWords',
     'phase',
   ],
-  watch_party: ['mediaUrl', 'playing', 'at'],
+  watch_party: ['mediaUrl', 'playing', 'at', 'updatedAt', 'hostHeartbeatAt'],
 };
 
 const MAX_STATE_JSON_BYTES = 48_000;
@@ -106,7 +119,18 @@ export class ActivitiesService {
     private readonly channels: ChannelsService,
     private readonly userActivity: UserActivityService,
     private readonly spotify: SpotifyService,
+    private readonly config: ConfigService,
+    private readonly syncMetrics: ActivitySyncMetricsService,
   ) {}
+
+  private casEnforce(): boolean {
+    return this.config.get<string>('ACTIVITY_CAS') === 'true';
+  }
+
+  private billiardsAuthority(): boolean {
+    // Varsayılan kapalı (prod güvenli). Açmak: ACTIVITY_BILLIARDS_AUTHORITY=true
+    return this.config.get<string>('ACTIVITY_BILLIARDS_AUTHORITY') === 'true';
+  }
 
   private async publishDracordActivity(
     userId: string,
@@ -156,9 +180,77 @@ export class ActivitiesService {
       playerIds: s.playerIds ?? [],
       spectatorIds: s.spectatorIds ?? [],
       state: s.state ?? {},
+      stateVersion: Number.isFinite(s.stateVersion) ? s.stateVersion : 0,
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     };
+  }
+
+  private throwStateConflict(s: ActivitySession): never {
+    this.syncMetrics.recordConflict();
+    throw new ConflictException({
+      code: 'ACTIVITY_STATE_CONFLICT',
+      message: 'State çakışması — yeniden senkronize et',
+      session: this.toDto(s),
+    });
+  }
+
+  /** game-core parse ile güvenli normalizasyon — asla boş state ile silme */
+  private applyAuthoritativeMerge(
+    kind: ActivityKind,
+    playerIds: string[],
+    prev: Record<string, unknown>,
+    clean: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const merged = { ...prev, ...clean };
+    const keepMeta = {
+      memberJoinedAt: merged.memberJoinedAt ?? prev.memberJoinedAt,
+    };
+    if (kind === 'watch_party') {
+      const wp = watchPartyParseState(merged);
+      return {
+        ...merged,
+        ...keepMeta,
+        mediaUrl: wp.mediaUrl,
+        playing: wp.playing,
+        at: wp.at,
+        updatedAt: Date.now(),
+      };
+    }
+    if (kind === 'blackjack') {
+      // bjParseState eksik alanları varsayılanlar; memberJoinedAt korunur
+      const bj = bjParseState(merged, playerIds);
+      return { ...merged, ...bj, ...keepMeta };
+    }
+    if (kind === 'trivia') {
+      // kind zorunlu — yoksa triviaEmptyState tüm oturumu silerdi
+      const parsed = triviaParseState({ ...merged, kind: 'trivia' });
+      return { ...merged, ...parsed, ...keepMeta };
+    }
+    if (kind === 'words') {
+      const parsed = wordsParseState({ ...merged, kind: 'words' });
+      return { ...merged, ...parsed, ...keepMeta };
+    }
+    if (kind === 'billiards' && 'balls' in clean) {
+      const balls = billiardsParseBalls(clean.balls);
+      if (!balls) {
+        // Geçersiz top patch’i yok say — önceki toplar kalsın
+        const { balls: _drop, ...rest } = clean;
+        void _drop;
+        return { ...prev, ...rest, ...keepMeta };
+      }
+      return {
+        ...merged,
+        ...keepMeta,
+        balls: balls.map((b) => ({
+          id: b.id,
+          x: b.x,
+          y: b.y,
+          sunk: Boolean(b.sunk),
+        })),
+      };
+    }
+    return { ...merged, ...keepMeta };
   }
 
   private kindFromChannel(channel: Channel): ActivityKind {
@@ -246,6 +338,13 @@ export class ActivitiesService {
           throw new BadRequestException('Geçersiz zaman');
         }
         out.at = Math.min(Math.floor(at * 1000) / 1000, 86_400 * 12);
+      }
+      // İstemci updatedAt gönderebilir; sunucu her zaman kendi damgasını yazar (merge’de)
+      delete out.updatedAt;
+      if ('hostHeartbeatAt' in out) {
+        const hb = Number(out.hostHeartbeatAt);
+        out.hostHeartbeatAt =
+          Number.isFinite(hb) && hb > 0 ? Math.floor(hb) : Date.now();
       }
     } else if (kind === 'blackjack' && 'turn' in out) {
       // Blackjack: turn = oyuncu userId veya null
@@ -417,6 +516,7 @@ export class ActivitiesService {
       playerIds: [userId],
       spectatorIds: [],
       state: { ...baseState, memberJoinedAt: { [userId]: joinedAt } },
+      stateVersion: 0,
     });
     await this.em.save(s);
     const ch = await this.em.findOne(Channel, { where: { id: channelId } });
@@ -497,6 +597,7 @@ export class ActivitiesService {
     sessionId: string,
     userId: string,
     patch: Record<string, unknown>,
+    expectedVersion?: number,
   ): Promise<ActivitySessionDto> {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
     if (!s || s.status === 'ended') throw new NotFoundException('Aktivite yok');
@@ -512,8 +613,35 @@ export class ActivitiesService {
       throw new ForbiddenException('Oyuncu değilsin');
     }
 
+    const currentVersion = Number.isFinite(s.stateVersion) ? s.stateVersion : 0;
+    const cas = activityCasCheck(currentVersion, expectedVersion, this.casEnforce());
+    if (cas === 'missing') {
+      this.syncMetrics.recordCasMissing();
+      throw new BadRequestException(
+        'expectedVersion gerekli (ACTIVITY_CAS). Oturumu yenile.',
+      );
+    }
+    if (cas === 'conflict') {
+      this.throwStateConflict(s);
+    }
+
     const prev = (s.state ?? {}) as Record<string, unknown>;
     let clean = this.sanitizePatch(s.kind, prev, patch);
+
+    if (s.kind === 'billiards' && this.billiardsAuthority() && 'shot' in clean && clean.shot) {
+      const shotCheck = billiardsValidateShotPatch(clean.shot, {
+        userId,
+        playerIds: s.playerIds ?? [],
+        turn: prev.turn,
+        prevShot: prev.shot,
+      });
+      if (!shotCheck.ok) {
+        this.syncMetrics.recordBilliardsShotRejected();
+        throw new BadRequestException(shotCheck.reason);
+      }
+      clean.shot = shotCheck.shot;
+    }
+
     // Watch party: oyuncular link yükleyebilir; play/seek yalnızca host
     if (s.kind === 'watch_party' && !isHost) {
       if (!('mediaUrl' in clean)) {
@@ -524,15 +652,26 @@ export class ActivitiesService {
         playing: false,
         at: 0,
       };
+    } else if (s.kind === 'watch_party' && isHost) {
+      clean.hostHeartbeatAt = Date.now();
     }
+
     if (Object.keys(clean).length === 0) {
       throw new BadRequestException('Güncellenecek alan yok');
     }
-    s.state = { ...prev, ...clean };
+
+    s.state = this.applyAuthoritativeMerge(
+      s.kind,
+      s.playerIds ?? [],
+      prev,
+      clean,
+    );
+    s.stateVersion = activityNextVersion(currentVersion);
     if (s.status === 'lobby' && s.kind !== 'watch_party') {
       s.status = 'playing';
     }
     await this.em.save(s);
+    this.syncMetrics.recordPatch();
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_STATE, dto);
     return dto;

@@ -92,3 +92,32 @@ export const radii = {
   lg: 14,
   pill: 999,
 } as const;
+
+/** Kullanıcı tema pack’leri (Nitro özel pack’ler işaretli) */
+export type ThemePackId = 'default' | 'midnight' | 'rose' | 'forest' | 'nitro-aurora';
+
+export type ThemePackMeta = {
+  id: ThemePackId;
+  label: string;
+  /** Nitro gerekir */
+  nitroOnly?: boolean;
+  /** CSS değişkenleri (primary accent) */
+  vars: { primary: string; glow?: string };
+};
+
+export const THEME_PACKS: ThemePackMeta[] = [
+  { id: 'default', label: 'Dracula', vars: { primary: '#bd93f9' } },
+  { id: 'midnight', label: 'Gece Mavisi', vars: { primary: '#8be9fd' } },
+  { id: 'rose', label: 'Gül', vars: { primary: '#ff79c6' } },
+  { id: 'forest', label: 'Orman', vars: { primary: '#50fa7b' } },
+  {
+    id: 'nitro-aurora',
+    label: 'Aurora (Nitro)',
+    nitroOnly: true,
+    vars: { primary: '#ffb86c', glow: '#bd93f9' },
+  },
+];
+
+export function getThemePack(id: string | null | undefined): ThemePackMeta {
+  return THEME_PACKS.find((p) => p.id === id) ?? THEME_PACKS[0]!;
+}

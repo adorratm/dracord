@@ -44,3 +44,15 @@ export function trackGameFullscreen(kind: string, lockedLandscape: boolean) {
 export function trackDiscoverJoin(guildId: string) {
   trackEvent('discover_join', { guild_id: guildId });
 }
+
+export function trackInviteAccept(guildId: string, code?: string) {
+  trackEvent('invite_accept', { guild_id: guildId, invite_code: code ?? '' });
+}
+
+export function trackOnboardingComplete() {
+  trackEvent('onboarding_complete');
+}
+
+export function trackTemplateCreate(templateId: string) {
+  trackEvent('template_create', { template_id: templateId });
+}

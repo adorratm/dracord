@@ -26,6 +26,11 @@ import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 import { ActivitiesModule } from '@/activities/activities.module';
 import { GuildEventsModule } from '@/guild-events/guild-events.module';
 import { SpotifyModule } from '@/spotify/spotify.module';
+import { PlatformModule } from '@/platform/platform.module';
+import { BillingModule } from '@/billing/billing.module';
+import { ModerationModule } from '@/moderation/moderation.module';
+import { StickersModule } from '@/stickers/stickers.module';
+import { MetricsModule } from '@/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -40,6 +45,8 @@ import { SpotifyModule } from '@/spotify/spotify.module';
     }),
     DatabaseModule,
     SocketBroadcastModule,
+    ModerationModule,
+    MetricsModule,
     QueuesModule,
     BotModule,
     AuthModule,
@@ -54,6 +61,8 @@ import { SpotifyModule } from '@/spotify/spotify.module';
     UploadsModule,
     AdminModule,
     PlatformAdminModule,
+    PlatformModule,
+    BillingModule,
     ChatGatewayModule,
     MediaModule,
     HealthModule,
@@ -63,6 +72,7 @@ import { SpotifyModule } from '@/spotify/spotify.module';
     ActivitiesModule,
     GuildEventsModule,
     SpotifyModule,
+    StickersModule,
   ],
 })
 export class AppModule {}

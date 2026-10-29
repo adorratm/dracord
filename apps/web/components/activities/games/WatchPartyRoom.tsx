@@ -197,7 +197,11 @@ export function WatchPartyRoom(props: Props) {
     }
     needApplyRef.current = false;
 
-    const skew = Date.now() - new Date(session.updatedAt).getTime();
+    const stateUpdatedAt =
+      typeof state.updatedAt === 'number' && Number.isFinite(state.updatedAt)
+        ? state.updatedAt
+        : new Date(session.updatedAt).getTime();
+    const skew = Date.now() - stateUpdatedAt;
     const comp = playing && skew > 0 && skew < 10_000 ? skew / 1000 : 0;
     const expected = at + comp;
     const threshold = isHost ? 0.5 : 1.0;
@@ -213,7 +217,35 @@ export function WatchPartyRoom(props: Props) {
     } else {
       v.pause();
     }
-  }, [mediaUrl, playing, at, session.updatedAt, isHost, getVideo, isEmbed]);
+  }, [mediaUrl, playing, at, state.updatedAt, session.updatedAt, isHost, getVideo, isEmbed]);
+
+  // Host heartbeat — izleyicilerde skew; örtüşen patch / CAS çakışmasını önle
+  useEffect(() => {
+    if (!isHost || !playing || !mediaUrl) return;
+    let inFlight = false;
+    const tick = () => {
+      if (inFlight) return;
+      inFlight = true;
+      const finish = () => {
+        inFlight = false;
+      };
+      if (isEmbed) {
+        const emb = embedPlayerRef.current;
+        const t = emb?.getCurrentTime?.() ?? at;
+        void onPatch({ playing: true, at: t, hostHeartbeatAt: Date.now() })
+          .catch(() => undefined)
+          .finally(finish);
+        return;
+      }
+      const v = videoRef.current;
+      const t = v && Number.isFinite(v.currentTime) ? v.currentTime : at;
+      void onPatch({ playing: true, at: t, hostHeartbeatAt: Date.now() })
+        .catch(() => undefined)
+        .finally(finish);
+    };
+    const id = window.setInterval(tick, 8_000);
+    return () => window.clearInterval(id);
+  }, [isHost, playing, mediaUrl, isEmbed, onPatch, at]);
 
   // Dosya videosunu panele veya (duvar modunda) texture için DOM'dan ayır
   useEffect(() => {
@@ -677,12 +709,20 @@ export function WatchPartyRoom(props: Props) {
 
   const total = duration || 0;
   const shown = seekDraft ?? current;
+  const hostHb =
+    typeof state.hostHeartbeatAt === 'number' ? state.hostHeartbeatAt : null;
+  const hostStale =
+    Boolean(playing && mediaUrl && !isHost && hostHb) &&
+    Date.now() - (hostHb as number) > 20_000;
   const syncNote =
     media && !media.syncable
-      ? `${media.label}: herkes aynı içeriği görür; oynatma senkronu sınırlı olabilir`
+      ? `${media.label}: embed — herkes aynı linki açar; zaman çizelgesi senkronu platform API’sine bağlı (sınırlı)`
       : media
         ? `${media.label} · senkron oynatma`
         : null;
+  const hostStaleNote = hostStale
+    ? 'Moderatör senkronu gecikti — oynatma yerel kalabilir'
+    : null;
 
   return (
     <div data-game-root className="absolute inset-0 min-h-0 max-w-[100vw] overflow-hidden">
@@ -705,6 +745,11 @@ export function WatchPartyRoom(props: Props) {
           {syncNote && (
             <span className="pointer-events-auto inline-flex w-fit max-w-sm rounded-lg bg-[#11131e]/80 px-3 py-1 text-[11px] text-[#ccc3d3]">
               {syncNote}
+            </span>
+          )}
+          {hostStaleNote && (
+            <span className="pointer-events-auto inline-flex w-fit max-w-sm rounded-lg bg-[#ffb86c]/15 px-3 py-1 text-[11px] text-[#ffb86c]">
+              {hostStaleNote}
             </span>
           )}
           {mediaError && (

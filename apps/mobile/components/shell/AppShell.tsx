@@ -905,6 +905,9 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     if (!guildId) return;
     const sock = client.connectSocket();
     client.requestVoiceSync(guildId);
+    const offReconnect = client.onSocketReconnect(() => {
+      client.requestVoiceSync(guildId);
+    });
 
     const applyRoster = (membersByChannel: Record<string, VoiceMemberSummary[]>) => {
       setChannels((prev) =>
@@ -969,6 +972,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
       sock.off(SocketEvents.VOICE_SYNC, onSync);
+      offReconnect();
       if (voiceReloadTimer.current) clearTimeout(voiceReloadTimer.current);
     };
   }, [

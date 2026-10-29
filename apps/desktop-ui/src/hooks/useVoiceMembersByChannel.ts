@@ -140,8 +140,10 @@ export function useVoiceMembersByChannel({
   useEffect(() => {
     if (!user || !guildId) return;
     const sock = client.connectSocket();
-    client.joinChannel(guildId);
     client.requestVoiceSync(guildId);
+    const offReconnect = client.onSocketReconnect(() => {
+      client.requestVoiceSync(guildId);
+    });
 
     const onVoice = (payload: VoiceStatePayload) => {
       if (payload.guildId !== guildId) return;
@@ -199,6 +201,7 @@ export function useVoiceMembersByChannel({
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
       sock.off(SocketEvents.VOICE_SYNC, onSync);
+      offReconnect();
     };
   }, [client, guildId, user, voiceChannelId, voiceGuildId, afkChannelId, channels]);
 

@@ -39,6 +39,7 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   },
   appearance: {
     theme: 'dark',
+    themePack: 'default',
     messageDensity: 'cozy',
     favoriteGuildIds: [],
     guildOrderIds: [],

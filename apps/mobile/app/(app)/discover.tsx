@@ -188,7 +188,7 @@ export default function DiscoverScreen() {
                   fontSize: 13,
                 }}
               >
-                {v === 'servers' ? 'Sunucular' : 'Uygulamalar'}
+                {v === 'servers' ? 'Sunucular' : 'Aktiviteler'}
               </Text>
             </Pressable>
           );
@@ -370,10 +370,10 @@ export default function DiscoverScreen() {
               DRACORD
             </Text>
             <Text style={{ color: colors.text, fontWeight: '800', fontSize: 22, marginTop: 6 }}>
-              Uygulama dizini
+              Aktivite kısayolları
             </Text>
             <Text style={{ color: colors.textMuted, marginTop: 6, lineHeight: 18 }}>
-              Kürate demo katalog — oyun kanalları ve yardımcılar.
+              Yerleşik oyun / watch party kısayolları — sunucu mağazası değil; mevcut sunucundaki kanallara gider.
             </Text>
           </View>
 

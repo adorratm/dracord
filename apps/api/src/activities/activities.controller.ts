@@ -57,7 +57,22 @@ export class ActivitiesController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    return this.activities.patchState(id, req.user.sub, body ?? {});
+    const raw = body ?? {};
+    const expectedRaw = raw.expectedVersion;
+    const expectedVersion =
+      typeof expectedRaw === 'number'
+        ? expectedRaw
+        : typeof expectedRaw === 'string' && expectedRaw.trim() !== ''
+          ? Number(expectedRaw)
+          : undefined;
+    const patch = { ...raw };
+    delete patch.expectedVersion;
+    return this.activities.patchState(
+      id,
+      req.user.sub,
+      patch,
+      Number.isFinite(expectedVersion) ? expectedVersion : undefined,
+    );
   }
 
   @Post(':id/end')

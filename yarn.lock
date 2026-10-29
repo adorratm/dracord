@@ -1319,6 +1319,7 @@ __metadata:
     "@bull-board/api": "npm:^9.10.5"
     "@bull-board/express": "npm:^9.10.5"
     "@bull-board/ui": "npm:^9.10.5"
+    "@dracord/game-core": "workspace:*"
     "@dracord/types": "workspace:*"
     "@elastic/elasticsearch": "npm:8.19.2"
     "@nestjs/bullmq": "npm:^12.0.0"
@@ -1431,6 +1432,7 @@ __metadata:
   resolution: "@dracord/game-core@workspace:packages/game-core"
   dependencies:
     "@dracord/types": "workspace:*"
+    tsx: "npm:^4.20.5"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -14823,7 +14825,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tsx@npm:^4.23.15":
+"tsx@npm:^4.20.5, tsx@npm:^4.23.15":
   version: 4.23.15
   resolution: "tsx@npm:4.23.15"
   dependencies:

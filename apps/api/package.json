@@ -16,6 +16,7 @@
     "@bull-board/api": "^9.10.5",
     "@bull-board/express": "^9.10.5",
     "@bull-board/ui": "^9.10.5",
+    "@dracord/game-core": "workspace:*",
     "@dracord/types": "workspace:*",
     "@elastic/elasticsearch": "8.19.2",
     "@nestjs/bullmq": "^12.0.0",

@@ -14,7 +14,8 @@ import { Guild } from '@/database/entities/guild.entity';
 export class GuildEventsService {
   constructor(private readonly em: EntityManager) {}
 
-  private toDto(e: GuildEvent): GuildEventDto {
+  private toDto(e: GuildEvent, viewerId?: string): GuildEventDto {
+    const interested = e.interestedUserIds ?? [];
     return {
       id: e.id,
       guildId: e.guildId,
@@ -28,6 +29,9 @@ export class GuildEventsService {
       coverUrl: e.coverUrl,
       status: e.status,
       createdAt: e.createdAt.toISOString(),
+      interestedCount: interested.length,
+      interestedByMe: viewerId ? interested.includes(viewerId) : false,
+      isStage: Boolean(e.isStage),
     };
   }
 
@@ -50,7 +54,7 @@ export class GuildEventsService {
     });
     return events
       .filter((e) => e.status !== 'cancelled')
-      .map((e) => this.toDto(e));
+      .map((e) => this.toDto(e, userId));
   }
 
   async create(
@@ -64,6 +68,7 @@ export class GuildEventsService {
       location?: string | null;
       coverUrl?: string | null;
       channelId?: string | null;
+      isStage?: boolean;
     },
   ): Promise<GuildEventDto> {
     await this.ensureMember(guildId, userId);
@@ -92,9 +97,32 @@ export class GuildEventsService {
         coverUrl: data.coverUrl?.trim() || null,
         channelId: data.channelId ?? null,
         status: 'scheduled',
+        interestedUserIds: [userId],
+        isStage: Boolean(data.isStage),
       }),
     );
-    return this.toDto(event);
+    return this.toDto(event, userId);
+  }
+
+  async rsvp(
+    guildId: string,
+    eventId: string,
+    userId: string,
+    interested: boolean,
+  ): Promise<GuildEventDto> {
+    await this.ensureMember(guildId, userId);
+    const event = await this.em.findOne(GuildEvent, {
+      where: { id: eventId, guildId },
+    });
+    if (!event || event.status === 'cancelled') {
+      throw new NotFoundException('Etkinlik bulunamadı');
+    }
+    const set = new Set(event.interestedUserIds ?? []);
+    if (interested) set.add(userId);
+    else set.delete(userId);
+    event.interestedUserIds = [...set];
+    await this.em.save(GuildEvent, event);
+    return this.toDto(event, userId);
   }
 
   async update(
@@ -110,6 +138,7 @@ export class GuildEventsService {
       coverUrl?: string | null;
       channelId?: string | null;
       status?: 'scheduled' | 'cancelled' | 'ended';
+      isStage?: boolean;
     },
   ): Promise<GuildEventDto> {
     await this.ensureMember(guildId, userId);
@@ -146,8 +175,9 @@ export class GuildEventsService {
     if (data.coverUrl !== undefined) event.coverUrl = data.coverUrl?.trim() || null;
     if (data.channelId !== undefined) event.channelId = data.channelId;
     if (data.status !== undefined) event.status = data.status;
+    if (data.isStage !== undefined) event.isStage = Boolean(data.isStage);
     await this.em.save(GuildEvent, event);
-    return this.toDto(event);
+    return this.toDto(event, userId);
   }
 
   async remove(guildId: string, eventId: string, userId: string): Promise<void> {

@@ -52,6 +52,20 @@ function applyDomClasses(prefs: UserPreferences) {
   root.classList.toggle('experimental-ui', prefs.developer.experimental);
   root.lang = prefs.language.locale === 'en' ? 'en' : 'tr';
 
+  const pack = prefs.appearance.themePack ?? 'default';
+  root.dataset.themePack = pack;
+  const packPrimary: Record<string, string> = {
+    default: '#bd93f9',
+    midnight: '#8be9fd',
+    rose: '#ff79c6',
+    forest: '#50fa7b',
+    'nitro-aurora': '#ffb86c',
+  };
+  root.style.setProperty(
+    '--dracord-pack-primary',
+    packPrimary[pack] ?? packPrimary.default!,
+  );
+
   const desktop = (
     window as Window & {
       dracordDesktop?: { setSystemPrefs?: (p: UserPreferences['system']) => void };

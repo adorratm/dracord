@@ -175,7 +175,7 @@ export function DiscoverPage({
                 : 'text-on-surface-variant hover:bg-surface-container',
             )}
           >
-            Uygulamalar
+            Aktiviteler
           </button>
         </nav>
       </aside>
@@ -208,7 +208,7 @@ export function DiscoverPage({
                   : 'text-on-surface-variant',
               )}
             >
-              Uygulamalar
+              Aktiviteler
             </button>
           </div>
           <div className="flex items-center gap-1 px-3 md:px-6 py-2 overflow-x-auto">
@@ -270,6 +270,9 @@ export function DiscoverPage({
 
             <div className="px-3 md:px-6 py-6">
               <h2 className="font-headline-md text-on-surface mb-4">Öne çıkan sunucular</h2>
+              <p className="mb-4 font-body-sm text-on-surface-variant">
+                Keşfedilebilir topluluklar — pin’liler önce, ardından üye sayısına göre.
+              </p>
               {error && <p className="mb-3 font-body-sm text-error">{error}</p>}
               {discover.length === 0 ? (
                 <DracoEmpty
@@ -348,10 +351,10 @@ export function DiscoverPage({
                       Dracord
                     </p>
                     <h1 className="font-headline-lg text-on-primary-container text-2xl md:text-4xl font-bold">
-                      Uygulama dizini
+                      Aktivite kısayolları
                     </h1>
                     <p className="mt-2 font-body-md text-on-primary-container/90">
-                      Kürate demo katalog — oyun kanalları ve yardımcılar.
+                      Yerleşik oyun / watch party kısayolları — sunucu mağazası değil; mevcut sunucundaki kanallara gider.
                     </p>
                   </div>
                   <Draco

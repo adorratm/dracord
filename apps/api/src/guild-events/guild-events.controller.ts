@@ -38,9 +38,25 @@ export class GuildEventsController {
       location?: string | null;
       coverUrl?: string | null;
       channelId?: string | null;
+      isStage?: boolean;
     },
   ) {
     return this.events.create(guildId, user.sub, body);
+  }
+
+  @Post(':eventId/rsvp')
+  rsvp(
+    @Param('guildId') guildId: string,
+    @Param('eventId') eventId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { interested?: boolean },
+  ) {
+    return this.events.rsvp(
+      guildId,
+      eventId,
+      user.sub,
+      body?.interested !== false,
+    );
   }
 
   @Patch(':eventId')

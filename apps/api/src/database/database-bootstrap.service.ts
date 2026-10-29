@@ -14,6 +14,39 @@ export class DatabaseBootstrapService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureChannelTypeValues(['FORUM', 'GAME', 'WATCH_PARTY']);
     await this.ensureDmHiddenAtColumn();
+    await this.ensureActivityStateVersionColumn();
+    await this.ensureGuildEventEnrichColumns();
+  }
+
+  private async ensureGuildEventEnrichColumns() {
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE guild_events
+        ADD COLUMN IF NOT EXISTS "interestedUserIds" jsonb NOT NULL DEFAULT '[]'::jsonb
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE guild_events
+        ADD COLUMN IF NOT EXISTS "isStage" boolean NOT NULL DEFAULT false
+      `);
+    } catch (err) {
+      this.log.warn(
+        `guild_events enrich kolonları atlandı: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /** activity_sessions.stateVersion — synchronize kapalı ortamlarda */
+  private async ensureActivityStateVersionColumn() {
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE activity_sessions
+        ADD COLUMN IF NOT EXISTS "stateVersion" INTEGER NOT NULL DEFAULT 0
+      `);
+    } catch (err) {
+      this.log.warn(
+        `activity_sessions.stateVersion kontrolü atlandı: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /** dm_channel_members.hiddenAt — synchronize kapalı ortamlarda */

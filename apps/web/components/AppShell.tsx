@@ -21,7 +21,9 @@ import {
   peekGuildNavCache,
   prefetchGuildNav,
 } from '@/hooks/useGuildNav';
+import { trackInviteAccept } from '@/lib/analytics';
 import { useUserPreferences } from '@/lib/user-preferences';
+
 
 const LAST_CHANNEL_KEY = 'dracord:last-channel';
 const LAST_CHANNEL_BY_GUILD_KEY = 'dracord:last-channel-by-guild';
@@ -283,6 +285,10 @@ export function AppShell({
     try {
       const code = inviteCode.trim().split('/').pop() ?? '';
       const guild = await client.joinInvite(code);
+      trackInviteAccept(guild.id, code);
+      void client
+        .trackFunnel('invite_accept', { guildId: guild.id, code })
+        .catch(() => undefined);
       setInviteOpen(false);
       setInviteCode('');
       setGuildsOverride((prev) => {

@@ -30,9 +30,12 @@ function resolveDefaultBaseUrl(): string {
   return fromEnv || 'http://localhost:4000';
 }
 
-function formatApiError(status: number, text: string): string {
-  try {
-    const parsed = JSON.parse(text) as { message?: string | string[] };
+function formatApiError(status: number, text: string, body?: unknown): string {
+  const parsed =
+    body && typeof body === 'object'
+      ? (body as { message?: string | string[]; error?: string })
+      : null;
+  if (parsed) {
     if (Array.isArray(parsed.message)) return parsed.message.join(', ');
     if (typeof parsed.message === 'string') {
       if (parsed.message === 'Unauthorized' || status === 401) {
@@ -40,11 +43,49 @@ function formatApiError(status: number, text: string): string {
       }
       return parsed.message;
     }
+  }
+  try {
+    const fromText = JSON.parse(text) as { message?: string | string[] };
+    if (Array.isArray(fromText.message)) return fromText.message.join(', ');
+    if (typeof fromText.message === 'string') {
+      if (fromText.message === 'Unauthorized' || status === 401) {
+        return 'Oturum süresi dolmuş veya geçersiz. Tekrar giriş yap.';
+      }
+      return fromText.message;
+    }
   } catch {
     // ignore
   }
   if (status === 401) return 'Oturum süresi dolmuş veya geçersiz. Tekrar giriş yap.';
   return text || `HTTP ${status}`;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly body: unknown;
+
+  constructor(status: number, message: string, body: unknown = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
+export function getActivityConflictSession(
+  err: unknown,
+): import('@dracord/types').ActivitySessionDto | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  const body = err.body as {
+    session?: import('@dracord/types').ActivitySessionDto;
+    message?: { session?: import('@dracord/types').ActivitySessionDto };
+  } | null;
+  if (body?.session?.id) return body.session;
+  // Nest bazen object message gömer
+  if (body?.message && typeof body.message === 'object' && body.message.session?.id) {
+    return body.message.session;
+  }
+  return null;
 }
 
 const VOICE_CLIENT_STORAGE_KEY = 'dracord.voiceClientId';
@@ -68,9 +109,18 @@ export class DracordClient {
   private voiceClientId: string | null = null;
   private voicePlatform: string | null = null;
   public socket: Socket | null = null;
+  private reconnectHandlers = new Set<() => void>();
 
   constructor(baseUrl = resolveDefaultBaseUrl()) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+  }
+
+  /** Socket.IO yeniden bağlanınca (kanal re-join / VOICE_SYNC için) */
+  onSocketReconnect(handler: () => void): () => void {
+    this.reconnectHandlers.add(handler);
+    return () => {
+      this.reconnectHandlers.delete(handler);
+    };
   }
 
   setToken(token: string | null) {
@@ -186,7 +236,13 @@ export class DracordClient {
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(formatApiError(res.status, text));
+      let body: unknown = null;
+      try {
+        body = text.trim() ? JSON.parse(text) : null;
+      } catch {
+        body = null;
+      }
+      throw new ApiError(res.status, formatApiError(res.status, text, body), body);
     }
     if (res.status === 204) return undefined as T;
     const text = await res.text();
@@ -531,6 +587,7 @@ export class DracordClient {
       location?: string | null;
       coverUrl?: string | null;
       channelId?: string | null;
+      isStage?: boolean;
     },
   ): Promise<GuildEventDto> {
     return this.request(`/guilds/${guildId}/events`, {
@@ -1385,6 +1442,17 @@ export class DracordClient {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 800,
+      reconnectionDelayMax: 8_000,
+    });
+    this.socket.on('reconnect', () => {
+      if (this.socket) this.socket.auth = { token: this.accessToken };
+      for (const h of this.reconnectHandlers) {
+        try {
+          h();
+        } catch {
+          /* ignore handler errors */
+        }
+      }
     });
     return this.socket;
   }
@@ -1453,10 +1521,15 @@ export class DracordClient {
   async patchActivityState(
     id: string,
     state: Record<string, unknown>,
+    opts?: { expectedVersion?: number },
   ): Promise<import('@dracord/types').ActivitySessionDto> {
+    const body: Record<string, unknown> = { ...state };
+    if (opts?.expectedVersion != null && Number.isFinite(opts.expectedVersion)) {
+      body.expectedVersion = opts.expectedVersion;
+    }
     return this.request(`/activities/${id}/state`, {
       method: 'PATCH',
-      body: JSON.stringify(state),
+      body: JSON.stringify(body),
     });
   }
 
@@ -1464,6 +1537,144 @@ export class DracordClient {
     id: string,
   ): Promise<import('@dracord/types').ActivitySessionDto> {
     return this.request(`/activities/${id}/end`, { method: 'POST' });
+  }
+
+  async platformHealth(): Promise<{
+    ok: boolean;
+    platformApi: boolean;
+    platformOauth: boolean;
+  }> {
+    return this.request('/v1/health');
+  }
+
+  async listPlatformApplications(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      botUserId: string | null;
+      botTokenLast4: string | null;
+      webhookUrl: string | null;
+      botToken?: string;
+    }>
+  > {
+    return this.request('/platform/applications');
+  }
+
+  async createPlatformApplication(data: {
+    name: string;
+    description?: string;
+    withBot?: boolean;
+  }) {
+    return this.request('/platform/applications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }) as Promise<{
+      id: string;
+      name: string;
+      botUserId: string | null;
+      botTokenLast4: string | null;
+      webhookUrl: string | null;
+      botToken?: string;
+    }>;
+  }
+
+  async resetPlatformBotToken(id: string) {
+    return this.request(`/platform/applications/${id}/reset-token`, {
+      method: 'POST',
+    }) as Promise<{ botToken?: string; botTokenLast4: string | null }>;
+  }
+
+  async deletePlatformApplication(id: string) {
+    return this.request(`/platform/applications/${id}`, { method: 'DELETE' });
+  }
+
+  async requestBillingMe(): Promise<{
+    billing: import('@dracord/types').ClientSettings['billing'];
+    paymentsEnabled: boolean;
+  }> {
+    return this.request('/billing/me');
+  }
+
+  async subscribeNitro(plan: 'basic' | 'nitro', paytrToken?: string) {
+    return this.request('/billing/nitro/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ plan, paytrToken }),
+    }) as Promise<{ billing: import('@dracord/types').ClientSettings['billing'] }>;
+  }
+
+  async cancelNitro() {
+    return this.request('/billing/nitro/cancel', { method: 'POST' }) as Promise<{
+      billing: import('@dracord/types').ClientSettings['billing'];
+    }>;
+  }
+
+  async listGuildTemplates() {
+    return this.request('/guilds/templates') as Promise<
+      Array<{ id: string; name: string; description: string; channels: string[] }>
+    >;
+  }
+
+  async createGuildFromTemplate(templateId: string, name?: string) {
+    return this.request('/guilds/from-template', {
+      method: 'POST',
+      body: JSON.stringify({ templateId, name }),
+    });
+  }
+
+  async checkoutNitro(plan: 'basic' | 'nitro') {
+    return this.request('/billing/nitro/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    }) as Promise<{
+      mode: 'demo' | 'paytr';
+      plan: string;
+      iframeUrl?: string | null;
+      iframeToken?: string | null;
+      message?: string;
+    }>;
+  }
+
+  async listStickerMarketplace() {
+    return this.request('/stickers/marketplace') as Promise<
+      Array<{
+        id: string;
+        name: string;
+        description: string;
+        nitroOnly: boolean;
+        count: number;
+        preview: string[];
+      }>
+    >;
+  }
+
+  async installStickerPack(packId: string) {
+    return this.request(`/stickers/marketplace/${packId}/install`, {
+      method: 'POST',
+    }) as Promise<{
+      stickers: import('@dracord/types').ClientSettings['stickers'];
+      installed: string;
+    }>;
+  }
+
+  async trackFunnel(
+    event: string,
+    meta?: Record<string, string>,
+  ): Promise<{ ok: true }> {
+    return this.request('/metrics/funnel', {
+      method: 'POST',
+      body: JSON.stringify({ event, meta }),
+    });
+  }
+
+  async rsvpGuildEvent(
+    guildId: string,
+    eventId: string,
+    interested = true,
+  ): Promise<GuildEventDto> {
+    return this.request(`/guilds/${guildId}/events/${eventId}/rsvp`, {
+      method: 'POST',
+      body: JSON.stringify({ interested }),
+    });
   }
 }
 

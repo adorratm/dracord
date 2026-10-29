@@ -1,7 +1,7 @@
 'use client';
 
 import type { ActivityKind, ActivitySessionDto, ChannelSummary } from '@dracord/types';
-import { SocketEvents } from '@dracord/sdk';
+import { getActivityConflictSession, SocketEvents } from '@dracord/sdk';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -120,7 +120,9 @@ export function ActivityChannelView({
   const [error, setError] = useState<string | null>(null);
   const bootRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const sessionVersionRef = useRef(0);
   sessionIdRef.current = session?.id ?? null;
+  sessionVersionRef.current = session?.stateVersion ?? 0;
 
   const me = user?.id;
   const [guildNameById, setGuildNameById] = useState<Record<string, string>>({});
@@ -339,9 +341,16 @@ export function ActivityChannelView({
       const id = sessionIdRef.current;
       if (!id) return;
       try {
-        const s = await client.patchActivityState(id, state);
+        const s = await client.patchActivityState(id, state, {
+          expectedVersion: sessionVersionRef.current,
+        });
         setSession(s);
       } catch (e) {
+        const conflict = getActivityConflictSession(e);
+        if (conflict) {
+          setSession(conflict);
+          return;
+        }
         setError(errMsg(e, 'Durum güncellenemedi'));
         void refresh();
         throw e;

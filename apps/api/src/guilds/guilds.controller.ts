@@ -31,6 +31,23 @@ export class GuildsController {
     return this.guildsService.discover(q, category);
   }
 
+  @Get('templates')
+  listTemplates() {
+    return this.guildsService.listTemplates();
+  }
+
+  @Post('from-template')
+  createFromTemplate(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { templateId: string; name?: string },
+  ) {
+    return this.guildsService.createFromTemplate(
+      user.sub,
+      body?.templateId ?? '',
+      body?.name,
+    );
+  }
+
   @Post()
   create(
     @CurrentUser() user: JwtPayloadUser,

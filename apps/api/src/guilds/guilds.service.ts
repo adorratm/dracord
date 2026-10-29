@@ -54,6 +54,7 @@ import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { SlashCommand } from '@/database/entities/slash-command.entity';
 import { mergeClientSettings } from '@/users/client-settings';
+import { FunnelMetricsService } from '@/metrics/funnel-metrics.service';
 
 export const PERM_MANAGE_GUILD = GuildPermissions.MANAGE_GUILD;
 export const PERM_MANAGE_CHANNELS = GuildPermissions.MANAGE_CHANNELS;
@@ -79,6 +80,7 @@ export class GuildsService {
     private readonly voicePresence: VoicePresenceService,
     private readonly broadcast: SocketBroadcastService,
     private readonly platformAdmin: PlatformAdminService,
+    private readonly funnel: FunnelMetricsService,
   ) {}
 
   private async writeAudit(
@@ -341,10 +343,16 @@ export class GuildsService {
       .groupBy('gm.guildId')
       .getRawMany<{ guildId: string; cnt: string }>();
     const countMap = new Map(countRows.map((r) => [r.guildId, Number(r.cnt) || 0]));
-    return guilds.map((g) => ({
+    const summaries = guilds.map((g) => ({
       ...this.toSummary(g),
       memberCount: countMap.get(g.id) ?? 0,
     }));
+    // Pin sırası korunur; pin’sizler üye sayısına göre (öneri iskeleti)
+    const pinned = summaries.filter((g) => g.discoverPinned);
+    const rest = summaries
+      .filter((g) => !g.discoverPinned)
+      .sort((a, b) => (b.memberCount ?? 0) - (a.memberCount ?? 0));
+    return [...pinned, ...rest];
   }
 
   async getGuild(guildId: string, userId: string): Promise<GuildSummary> {
@@ -360,6 +368,83 @@ export class GuildsService {
     if (user.usernameConfirmed === false) {
       throw new ForbiddenException('Önce kullanıcı adını belirlemelisin');
     }
+  }
+
+  listTemplates() {
+    return [
+      {
+        id: 'gaming',
+        name: 'Oyun',
+        description: 'Genel + ses + oyun kanalı',
+        channels: ['genel', 'ses-lobi', 'oyun'],
+      },
+      {
+        id: 'study',
+        name: 'Çalışma',
+        description: 'Duyurular + sessiz çalışma sesi',
+        channels: ['duyurular', 'sohbet', 'calisma-odasi'],
+      },
+      {
+        id: 'community',
+        name: 'Topluluk',
+        description: 'Forum tarzı genel + etkinlikler',
+        channels: ['hosgeldin', 'genel', 'etkinlikler'],
+      },
+    ] as const;
+  }
+
+  async createFromTemplate(
+    userId: string,
+    templateId: string,
+    name?: string,
+  ): Promise<GuildSummary> {
+    const tpl = this.listTemplates().find((t) => t.id === templateId);
+    if (!tpl) throw new BadRequestException('Bilinmeyen şablon');
+    const guild = await this.createGuild(userId, {
+      name: (name?.trim() || tpl.name).slice(0, 80),
+    });
+    // Şablon kanalları — createGuild zaten varsayılan kanal açtıysa ek ses/metin ekle
+    try {
+      const existing = await this.em.find(Channel, {
+        where: { guildId: guild.id },
+      });
+      const hasText = existing.some((c) => c.type === ChannelType.TEXT);
+      if (!hasText) {
+        await this.em.save(
+          Channel,
+          this.em.create(Channel, {
+            guildId: guild.id,
+            name: tpl.channels[0] ?? 'genel',
+            type: ChannelType.TEXT,
+            position: 0,
+          }),
+        );
+      }
+      for (let i = 1; i < tpl.channels.length; i++) {
+        const chName = tpl.channels[i]!;
+        const isVoice =
+          /ses|oda|lobi|calisma/i.test(chName) && !/oyun|etkinlik/i.test(chName);
+        const isGame = /oyun/i.test(chName);
+        await this.em.save(
+          Channel,
+          this.em.create(Channel, {
+            guildId: guild.id,
+            name: chName,
+            type: isGame
+              ? ChannelType.GAME
+              : isVoice
+                ? ChannelType.VOICE
+                : ChannelType.TEXT,
+            position: i,
+            ...(isGame ? { gameKind: 'blackjack' } : {}),
+          }),
+        );
+      }
+    } catch {
+      /* şablon kanal ekleme best-effort */
+    }
+    this.funnel.record('template_create', { templateId, guildId: guild.id });
+    return this.getGuild(guild.id, userId);
   }
 
   async createGuild(
@@ -675,6 +760,7 @@ export class GuildsService {
     } else {
       await this.ensureEveryoneRole(invite.guildId, existing.id);
     }
+    this.funnel.record('invite_accept', { guildId: invite.guildId, code });
     return this.toSummary(invite.guild);
   }
 
@@ -698,6 +784,7 @@ export class GuildsService {
     } else {
       await this.ensureEveryoneRole(guildId, existing.id);
     }
+    this.funnel.record('discover_join', { guildId });
     return this.toSummary(guild);
   }
 

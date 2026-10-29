@@ -795,8 +795,11 @@ export function GuildChannelView({
   useEffect(() => {
     if (!user) return;
     const sock = client.connectSocket();
-    client.joinChannel(guildId);
+    // Guild ses odası VOICE_SYNC ile join edilir (CHANNEL_JOIN kanal id ister)
     client.requestVoiceSync(guildId);
+    const offReconnect = client.onSocketReconnect(() => {
+      client.requestVoiceSync(guildId);
+    });
 
     const applyRoster = (
       membersByChannel: Record<string, VoiceMemberSummary[]>,
@@ -895,6 +898,7 @@ export function GuildChannelView({
     return () => {
       sock.off(SocketEvents.VOICE_STATE, onVoice);
       sock.off(SocketEvents.VOICE_SYNC, onSync);
+      offReconnect();
     };
   }, [
     client,

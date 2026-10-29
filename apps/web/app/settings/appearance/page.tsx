@@ -53,6 +53,27 @@ export default function AppearanceSettingsPage() {
           }
         />
         <SettingsSelect
+          label="Tema paketi"
+          description="Vurgu rengi. Aurora için Nitro gerekir (istemci kontrolü)."
+          value={prefs.appearance.themePack ?? 'default'}
+          options={[
+            { value: 'default', label: 'Dracula' },
+            { value: 'midnight', label: 'Gece Mavisi' },
+            { value: 'rose', label: 'Gül' },
+            { value: 'forest', label: 'Orman' },
+            { value: 'nitro-aurora', label: 'Aurora (Nitro)' },
+          ]}
+          onChange={(v) => {
+            if (
+              v === 'nitro-aurora' &&
+              prefs.billing.nitroPlan === 'none'
+            ) {
+              return;
+            }
+            setSection('appearance', { themePack: v });
+          }}
+        />
+        <SettingsSelect
           label="Mesaj yoğunluğu"
           value={prefs.appearance.messageDensity}
           options={[

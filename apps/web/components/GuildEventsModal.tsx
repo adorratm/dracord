@@ -29,6 +29,7 @@ export function GuildEventsModal({
   const [startsAt, setStartsAt] = useState('');
   const [location, setLocation] = useState('');
   const [channelId, setChannelId] = useState('');
+  const [isStage, setIsStage] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -55,6 +56,7 @@ export function GuildEventsModal({
     setStartsAt('');
     setLocation('');
     setChannelId('');
+    setIsStage(false);
   };
 
   const create = async () => {
@@ -67,6 +69,7 @@ export function GuildEventsModal({
         startsAt: new Date(startsAt).toISOString(),
         location: location.trim() || null,
         channelId: channelId || null,
+        isStage,
       });
       resetWizard();
       await load();
@@ -84,6 +87,23 @@ export function GuildEventsModal({
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Silinemedi');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleRsvp = async (event: GuildEventDto) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await client.rsvpGuildEvent(
+        guildId,
+        event.id,
+        !event.interestedByMe,
+      );
+      setEvents((prev) => prev.map((e) => (e.id === next.id ? next : e)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'RSVP başarısız');
     } finally {
       setBusy(false);
     }
@@ -165,7 +185,14 @@ export function GuildEventsModal({
                 className="rounded-lg border border-surface-container-highest bg-surface-container-low px-3 py-2 flex gap-2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-label-md text-on-surface truncate">{e.title}</p>
+                  <p className="font-label-md text-on-surface truncate">
+                    {e.title}
+                    {e.isStage ? (
+                      <span className="ml-2 text-[10px] uppercase tracking-wide text-primary-container">
+                        Stage
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="font-label-sm text-outline mt-0.5">
                     {new Date(e.startsAt).toLocaleString('tr-TR', {
                       day: 'numeric',
@@ -174,12 +201,28 @@ export function GuildEventsModal({
                       minute: '2-digit',
                     })}
                     {e.location ? ` · ${e.location}` : ''}
+                    {typeof e.interestedCount === 'number'
+                      ? ` · ${e.interestedCount} ilgili`
+                      : ''}
                   </p>
                   {e.description && (
                     <p className="font-body-sm text-on-surface-variant mt-1 line-clamp-2">
                       {e.description}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={cn(
+                      'mt-2 h-8 px-2.5 rounded-md font-label-sm disabled:opacity-50',
+                      e.interestedByMe
+                        ? 'bg-primary-container text-on-primary-container'
+                        : 'bg-surface-container-high text-on-surface',
+                    )}
+                    onClick={() => void toggleRsvp(e)}
+                  >
+                    {e.interestedByMe ? 'İlgileniyorum ✓' : 'İlgilen'}
+                  </button>
                 </div>
                 <button
                   type="button"
@@ -228,6 +271,14 @@ export function GuildEventsModal({
                   placeholder="Ne olacak?"
                 />
               </label>
+              <label className="flex items-center gap-2 font-label-sm text-on-surface">
+                <input
+                  type="checkbox"
+                  checked={isStage}
+                  onChange={(e) => setIsStage(e.target.checked)}
+                />
+                Sahne (stage) etkinliği
+              </label>
             </>
           )}
           {step === 2 && (
@@ -265,7 +316,10 @@ export function GuildEventsModal({
                 />
               </label>
               <div className="rounded-lg bg-surface-container-low border border-surface-container-highest p-3">
-                <p className="font-label-md text-on-surface">{title || 'Başlıksız'}</p>
+                <p className="font-label-md text-on-surface">
+                  {title || 'Başlıksız'}
+                  {isStage ? ' · Stage' : ''}
+                </p>
                 <p className="font-label-sm text-outline mt-1">
                   {startsAt
                     ? new Date(startsAt).toLocaleString('tr-TR')

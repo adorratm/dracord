@@ -3,7 +3,8 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView as ExpoVideoView } from 'expo-video';
 import { VideoView as LiveKitVideoView } from '@livekit/react-native';
-import { SocketEvents, type ActivitySessionDto, type ChannelSummary } from '@dracord/types';
+import { type ActivitySessionDto, type ChannelSummary } from '@dracord/types';
+import { getActivityConflictSession, SocketEvents } from '@dracord/sdk';
 import { watchPartyParseState } from '@dracord/game-core';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
@@ -291,7 +292,15 @@ export function ActivityRoom({
     if (!session) return;
     setBusy(true);
     try {
-      setSession(await client.patchActivityState(session.id, state));
+      setSession(
+        await client.patchActivityState(session.id, state, {
+          expectedVersion: session.stateVersion ?? 0,
+        }),
+      );
+    } catch (e) {
+      const conflict = getActivityConflictSession(e);
+      if (conflict) setSession(conflict);
+      else throw e;
     } finally {
       setBusy(false);
     }

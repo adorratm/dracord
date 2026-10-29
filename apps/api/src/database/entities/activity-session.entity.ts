@@ -54,6 +54,10 @@ export class ActivitySession extends CuidEntity {
   @Column({ type: 'jsonb', default: {} })
   state!: Record<string, unknown>;
 
+  /** Optimistic concurrency — patch CAS */
+  @Column({ type: 'int', default: 0 })
+  stateVersion!: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

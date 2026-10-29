@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityKind, ActivitySessionDto, ChannelSummary, PublicUser } from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
-import { SocketEvents } from '@dracord/sdk';
+import { getActivityConflictSession, SocketEvents } from '@dracord/sdk';
 import { MemberList, type MemberListGroup } from '@dracord/ui';
 import { BilliardsGame } from '../../../web/components/activities/games/BilliardsGame';
 import { BlackjackGame } from '../../../web/components/activities/games/BlackjackGame';
@@ -204,8 +204,17 @@ export function ActivityPanel({
     if (!session) return;
     setBusy(true);
     try {
-      setSession(await client.patchActivityState(session.id, state));
+      setSession(
+        await client.patchActivityState(session.id, state, {
+          expectedVersion: session.stateVersion ?? 0,
+        }),
+      );
     } catch (e) {
+      const conflict = getActivityConflictSession(e);
+      if (conflict) {
+        setSession(conflict);
+        return;
+      }
       setError(errMsg(e, 'Durum güncellenemedi'));
     } finally {
       setBusy(false);

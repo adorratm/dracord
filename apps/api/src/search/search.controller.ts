@@ -28,12 +28,15 @@ export class SearchController {
     @Query('channelId') channelId?: string,
     @Query('limit') limit?: string,
   ) {
+    const max = Number(process.env.SEARCH_MAX_RESULTS ?? 50);
+    const cap = Number.isFinite(max) && max > 0 ? Math.min(max, 100) : 50;
     const parsed = limit ? Number(limit) : 20;
+    const lim = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), cap) : 20;
     return this.search.search(user.sub, q, {
       types: types ? types.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
       guildId,
       channelId,
-      limit: Number.isFinite(parsed) ? parsed : 20,
+      limit: lim,
     });
   }
 

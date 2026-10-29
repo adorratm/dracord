@@ -9,6 +9,7 @@ const nav = [
   { href: '/search', label: 'Arama' },
   { href: '/users', label: 'Kullanıcılar' },
   { href: '/guilds', label: 'Sunucular' },
+  { href: '/developers', label: 'Geliştiriciler' },
   { href: '/queues', label: 'Kuyruklar' },
 ];
 

@@ -29,6 +29,8 @@ import { NotificationsRealtimeService } from '@/notifications/notifications-real
 import { PresenceService } from '@/presence/presence.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { WsJwtGuard } from './ws-jwt.guard';
+import { GatewayMetricsService } from './gateway-metrics.service';
+import { SocketAdapterStateService } from './socket-adapter-state.service';
 import { SocketBroadcastService } from './socket-broadcast.service';
 
 interface WsUser {
@@ -38,6 +40,8 @@ interface WsUser {
 }
 
 const OFFLINE_GRACE_MS = 25_000;
+/** Ses kanalında görünüp soketi olmayan hayalet üye temizliği (TTL ile hizalı). 0 = kapalı */
+const VOICE_ORPHAN_GRACE_MS = 90_000;
 
 @WebSocketGateway({
   cors: {
@@ -56,6 +60,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private readonly logger = new Logger(ChatGateway.name);
   private readonly socketsByUser = new Map<string, Set<string>>();
   private readonly offlineTimers = new Map<string, NodeJS.Timeout>();
+  private readonly voiceOrphanTimers = new Map<string, NodeJS.Timeout>();
 
   @WebSocketServer()
   server!: Server;
@@ -70,6 +75,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly messagesRealtime: MessagesRealtimeService,
     private readonly broadcast: SocketBroadcastService,
+    private readonly adapterState: SocketAdapterStateService,
+    private readonly gatewayMetrics: GatewayMetricsService,
   ) {}
 
   afterInit(server: Server) {
@@ -77,6 +84,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.messagesRealtime.setServer(server);
     this.broadcast.setServer(server);
     const redisUrl = this.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
+    const redisRequired =
+      this.config.get<string>('SOCKET_REDIS_REQUIRED') === 'true';
     try {
       const pubClient = new Redis(redisUrl, {
         maxRetriesPerRequest: null,
@@ -86,13 +95,27 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       void Promise.all([pubClient.connect(), subClient.connect()])
         .then(() => {
           server.adapter(createAdapter(pubClient, subClient));
+          this.adapterState.markEnabled();
           this.logger.log('Socket.io Redis adapter enabled');
         })
         .catch((err: Error) => {
-          this.logger.warn(`Redis adapter skipped: ${err.message}`);
+          this.adapterState.markFailed(err.message);
+          if (redisRequired) {
+            this.logger.error(
+              `Redis adapter required but failed: ${err.message}`,
+            );
+          } else {
+            this.logger.warn(`Redis adapter skipped: ${err.message}`);
+          }
         });
     } catch (err) {
-      this.logger.warn(`Redis adapter skipped: ${(err as Error).message}`);
+      const msg = (err as Error).message;
+      this.adapterState.markFailed(msg);
+      if (redisRequired) {
+        this.logger.error(`Redis adapter required but failed: ${msg}`);
+      } else {
+        this.logger.warn(`Redis adapter skipped: ${msg}`);
+      }
     }
   }
 
@@ -115,6 +138,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       if (pending) {
         clearTimeout(pending);
         this.offlineTimers.delete(user.sub);
+        this.gatewayMetrics.recordGraceCancelled();
+      }
+      const orphanPending = this.voiceOrphanTimers.get(user.sub);
+      if (orphanPending) {
+        clearTimeout(orphanPending);
+        this.voiceOrphanTimers.delete(user.sub);
+        this.gatewayMetrics.recordGraceCancelled();
       }
 
       let set = this.socketsByUser.get(user.sub);
@@ -123,6 +153,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         this.socketsByUser.set(user.sub, set);
       }
       set.add(client.id);
+      this.gatewayMetrics.recordConnect();
 
       const pub = await this.presence.markConnected(user.sub);
       this.server.emit(SocketEvents.PRESENCE_UPDATE, {
@@ -141,6 +172,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const user = client.data?.user as WsUser | undefined;
     if (!user?.sub) return;
     try {
+      this.gatewayMetrics.recordDisconnect();
       const set = this.socketsByUser.get(user.sub);
       set?.delete(client.id);
       if (set && set.size > 0) return;
@@ -154,7 +186,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         // Hâlâ soket yoksa çevrimdışı işaretle
         if (this.socketsByUser.has(user.sub)) return;
         void (async () => {
-          // Ses kanalındaysa çevrimdışı gösterme (reconnect / token yenileme)
+          // Ses kanalındaysa kısa süre online tut; ardından hayalet roster temizle
           try {
             const locs = await this.voicePresence.getUserVoiceLocations(user.sub);
             if (locs.length > 0) {
@@ -166,6 +198,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                 activity: pub.activity ?? null,
                 activities: pub.activities ?? null,
               });
+              this.scheduleVoiceOrphanCleanup(user.sub);
               return;
             }
           } catch (err) {
@@ -174,6 +207,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             );
           }
           const pub = await this.presence.markDisconnected(user.sub);
+          this.gatewayMetrics.recordOffline();
           this.server.emit(SocketEvents.PRESENCE_UPDATE, {
             userId: user.sub,
             status: pub.status,
@@ -189,6 +223,42 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     } catch (err) {
       this.logger.warn(`Disconnect cleanup failed: ${(err as Error).message}`);
     }
+  }
+
+  /** Soketsiz ses presence → leaveEverywhere + offline */
+  private scheduleVoiceOrphanCleanup(userId: string) {
+    if (this.config.get<string>('VOICE_ORPHAN_CLEANUP') === 'false') return;
+    const prev = this.voiceOrphanTimers.get(userId);
+    if (prev) clearTimeout(prev);
+    const timer = setTimeout(() => {
+      this.voiceOrphanTimers.delete(userId);
+      if (this.socketsByUser.has(userId)) return;
+      void (async () => {
+        const left = await this.voicePresence.leaveEverywhere(userId);
+        if (left.length > 0) {
+          this.gatewayMetrics.recordVoiceOrphanClear(left.length);
+          for (const payload of left) {
+            this.server.emit(SocketEvents.VOICE_STATE, payload);
+          }
+          this.logger.log(
+            `Voice orphan cleaned user=${userId} channels=${left.length}`,
+          );
+        }
+        if (this.socketsByUser.has(userId)) return;
+        const pub = await this.presence.markDisconnected(userId);
+        this.gatewayMetrics.recordOffline();
+        this.server.emit(SocketEvents.PRESENCE_UPDATE, {
+          userId,
+          status: pub.status,
+          customStatus: pub.customStatus ?? null,
+          activity: pub.activity ?? null,
+          activities: pub.activities ?? null,
+        });
+      })().catch((err: Error) => {
+        this.logger.warn(`Voice orphan cleanup failed: ${err.message}`);
+      });
+    }, VOICE_ORPHAN_GRACE_MS);
+    this.voiceOrphanTimers.set(userId, timer);
   }
 
   @UseGuards(WsJwtGuard)
@@ -286,6 +356,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       status: pub.status,
       customStatus: pub.customStatus ?? null,
       activity: pub.activity ?? null,
+      activities: pub.activities ?? null,
     });
     return { ok: true, user: pub };
   }
@@ -307,6 +378,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     void client.join(this.guildRoom(body.guildId));
     const membersByChannel = await this.voicePresence.listGuildVoice(body.guildId);
     const payload: VoiceSyncPayload = { guildId: body.guildId, membersByChannel };
+    this.gatewayMetrics.recordVoiceSync();
     client.emit(SocketEvents.VOICE_SYNC, payload);
     return payload;
   }

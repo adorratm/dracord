@@ -29,3 +29,4 @@ export { ActivitySession } from './activity-session.entity';
 export type { ActivityKind, ActivityStatus } from './activity-session.entity';
 export { GuildEvent } from './guild-event.entity';
 export type { GuildEventStatus } from './guild-event.entity';
+export { PlatformApplication } from './platform-application.entity';

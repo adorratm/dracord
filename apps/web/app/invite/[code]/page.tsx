@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { Draco, DracoEmpty } from '@/components/Draco';
 import { invalidateGuildNavCache } from '@/hooks/useGuildNav';
+import { trackInviteAccept } from '@/lib/analytics';
+
 
 export default function InviteJoinPage() {
   const params = useParams<{ code: string }>();
@@ -23,6 +25,11 @@ export default function InviteJoinPage() {
     void (async () => {
       try {
         const guild = await client.joinInvite(code);
+        trackInviteAccept(guild.id, code);
+        void client.trackFunnel('invite_accept', {
+          guildId: guild.id,
+          code,
+        }).catch(() => undefined);
         invalidateGuildNavCache(guild.id);
         const channels = await client.getGuildChannels(guild.id);
         const text =
