@@ -22,8 +22,8 @@
     "lint": "echo ok"
   },
   "devDependencies": {
-    "electron": "45.0.0",
-    "electron-builder": "^26.18.0",
+    "electron": "45.1.0",
+    "electron-builder": "^26.18.1",
     "png-to-ico": "^3.0.2"
   },
   "build": {
@@ -142,6 +142,6 @@
   },
   "dependencies": {
     "edge-tts-universal": "1.4.0",
-    "electron-updater": "6.8.11"
+    "electron-updater": "6.8.12"
   }
 }

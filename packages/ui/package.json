@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@dracord/types": "workspace:*",
-    "@tanstack/react-virtual": "^3.14.22",
+    "@tanstack/react-virtual": "^3.14.24",
     "gifenc": "^1.0.3"
   },
   "devDependencies": {
