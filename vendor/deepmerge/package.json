@@ -1,0 +1,28 @@
+{
+  "name": "deepmerge",
+  "description": "A library for deep (recursive) merging of Javascript objects (Dracord security backport of TehShrike/deepmerge#274 for CVE-2026-93753 / GHSA-gcqx-w48m-w2h4).",
+  "keywords": [
+    "merge",
+    "deep",
+    "extend",
+    "copy",
+    "clone",
+    "recursive"
+  ],
+  "version": "4.3.2",
+  "homepage": "https://github.com/TehShrike/deepmerge",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/TehShrike/deepmerge.git"
+  },
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "license": "MIT"
+}

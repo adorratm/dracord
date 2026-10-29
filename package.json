@@ -48,6 +48,7 @@
     "sprintf-js": "portal:./vendor/sprintf-js",
     "node-forge": "portal:./vendor/node-forge",
     "decode-uri-component": "portal:./vendor/decode-uri-component",
+    "deepmerge": "portal:./vendor/deepmerge",
     "body-parser": "2.4.0",
     "express": "5.3.0",
     "zod": "4.6.6",
