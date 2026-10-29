@@ -6,6 +6,10 @@ name: Deploy production
 #
 # Required secrets:
 #   HETZNER_HOST, HETZNER_USER, HETZNER_SSH_KEY
+# Strongly recommended:
+#   GHCR_PULL_TOKEN — classic PAT (read:packages) or fine-grained (Packages: Read).
+#   VPS pulls with job GITHUB_TOKEN often get `error from registry: denied` even after
+#   "Login Succeeded". Create at https://github.com/settings/tokens and store as repo secret.
 # Optional:
 #   HETZNER_SSH_PORT, DRACORD_DEPLOY_PATH, DRACORD_DEPLOY_BRANCH, DRACORD_REPLICAS
 #   DRACORD_IMAGE_PREFIX (default ghcr.io/<owner>/dracord)
@@ -99,12 +103,22 @@ jobs:
           cache-to: type=gha,mode=max,scope=dracord-${{ matrix.service }}
           provenance: false
 
+      - name: Verify ${{ matrix.service }} manifest on GHCR
+        run: |
+          set -euo pipefail
+          img="${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ steps.meta.outputs.tag }}"
+          docker buildx imagetools inspect "$img"
+          echo "OK $img"
+
   deploy:
     name: Hetzner pull + roll
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: production
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Require deploy secrets
         env:
@@ -132,7 +146,9 @@ jobs:
           script_stop: true
           timeout: 60s
           debug: false
-          envs: DRACORD_DEPLOY_PATH,DRACORD_DEPLOY_BRANCH,DRACORD_REPLICAS,DRACORD_IMAGE_TAG,DRACORD_IMAGE_PREFIX,GHCR_TOKEN,GHCR_USER
+          # Token is inlined via ${{ }} (expanded on the runner before SSH). Do not rely on
+          # GITHUB_TOKEN alone for VPS GHCR pulls — private packages often return "denied".
+          envs: DRACORD_DEPLOY_PATH,DRACORD_DEPLOY_BRANCH,DRACORD_REPLICAS,DRACORD_IMAGE_TAG,DRACORD_IMAGE_PREFIX
           script: |
             set -euo pipefail
             export DRACORD_DEPLOY_PATH="${DRACORD_DEPLOY_PATH:-/opt/dracord}"
@@ -150,9 +166,14 @@ jobs:
               echo "Missing $DRACORD_DEPLOY_PATH/.env on server (never commit .env)."
               exit 1
             fi
-            if [[ -n "${GHCR_TOKEN:-}" ]]; then
-              echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-adorratm}" --password-stdin
+            GHCR_USER='${{ github.repository_owner }}'
+            # Prefer long-lived PAT (repo secret GHCR_PULL_TOKEN). Fallback: job token.
+            GHCR_PASS='${{ secrets.GHCR_PULL_TOKEN }}'
+            if [[ -z "$GHCR_PASS" ]]; then
+              echo "==> WARN: GHCR_PULL_TOKEN secret empty — falling back to GITHUB_TOKEN (may get denied on VPS)"
+              GHCR_PASS='${{ github.token }}'
             fi
+            echo "$GHCR_PASS" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             cd "$DRACORD_DEPLOY_PATH"
             git fetch --prune origin
             git checkout "$DRACORD_DEPLOY_BRANCH"
@@ -165,8 +186,6 @@ jobs:
           DRACORD_REPLICAS: ${{ secrets.DRACORD_REPLICAS }}
           DRACORD_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
           DRACORD_IMAGE_PREFIX: ${{ needs.build.outputs.image_prefix }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_USER: ${{ github.actor }}
 
       - name: Public smoke checks
         if: success()

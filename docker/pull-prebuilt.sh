@@ -16,15 +16,25 @@ echo "==> Pull prebuilt images (tag=$TAG prefix=$PREFIX retries=$RETRIES)"
 pull_one() {
   local remote="$1"
   local attempt=1
-  local err=0
+  local err=1
 
   while (( attempt <= RETRIES )); do
     echo "    pull attempt ${attempt}/${RETRIES}: ${remote}"
-    if docker pull "$remote"; then
+    # Capture status before `if` — after a failed `if cmd`, $? is 0 (if succeeded).
+    set +e
+    docker pull "$remote"
+    err=$?
+    set -e
+    if [[ "$err" -eq 0 ]]; then
       return 0
     fi
-    err=$?
     echo "    !! pull failed (exit ${err}) — cleaning partial image / content" >&2
+    # GHCR often returns "denied" for private packages with a bad/missing token
+    # OR for a tag that does not exist. Hint once on first failure.
+    if (( attempt == 1 )); then
+      echo "    tip: if message was 'denied', set repo secret GHCR_PULL_TOKEN (PAT read:packages)" >&2
+      echo "         and ensure package is linked to adorratm/dracord (GHCR package settings)." >&2
+    fi
     docker image rm -f "$remote" 2>/dev/null || true
     # Incomplete overlayfs extracts leave bad snapshots; prune dangling only (safe with running stacks)
     docker image prune -f >/dev/null 2>&1 || true

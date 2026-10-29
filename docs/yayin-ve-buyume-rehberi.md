@@ -127,7 +127,22 @@ Hesap silme (mağaza zorunluluğu) uygulamada hazır: Ayarlar → Hesap Durumu �
 
 ---
 
-## 7. Deploy: Docker pull Lchown hatası (VPS)
+## 7. Deploy: GHCR `denied` (VPS pull)
+
+CI log’unda:
+
+`Error response from daemon: error from registry: denied`
+
+ve öncesinde `Login Succeeded` görürsen: VPS’te `GITHUB_TOKEN` ile login olabiliyor ama private paket pull reddediliyor.
+
+1. GitHub → Settings → Developer settings → [Personal access tokens](https://github.com/settings/tokens) → classic token: `read:packages` (push için ayrıca `write:packages` gerekmez; sadece pull).
+2. Repo → Settings → Secrets → Actions → `GHCR_PULL_TOKEN` = token.
+3. Paket erişimi: https://github.com/adorratm/dracord/pkgs/container/dracord%2Fapi → Package settings → Manage Actions access / Ensure repository `adorratm/dracord` linked.
+4. Actions → Deploy production → Re-run.
+
+---
+
+## 7b. Deploy: Docker pull Lchown hatası (VPS)
 
 CI log’unda şuna benzer bir satır görürsen:
 
