@@ -228,6 +228,8 @@ export function ActivityRoom({
       return;
     }
     if (leftRef.current) return;
+    // Auth henüz hazır değilse beklenen "Oda hazırlanıyor" — user gelince tekrar dene
+    if (!user?.id) return;
     void (async () => {
       try {
         setError(null);
@@ -236,8 +238,8 @@ export function ActivityRoom({
         setError(e instanceof Error ? e.message : 'Aktivite açılamadı');
       }
     })();
-    // enterRoom bilinçli dışarıda — ses odası ile aynı
-  }, [guildId, channel.id, browsingOther]); // eslint-disable-line react-hooks/exhaustive-deps
+    // enterRoom bilinçli dışarıda — user.id presence spam’ini keser
+  }, [guildId, channel.id, browsingOther, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Watch party: web/desktop gibi kanal sesine katıl (oyunlar WebView içinde join eder)
   useEffect(() => {
@@ -292,11 +294,10 @@ export function ActivityRoom({
     if (!session) return;
     setBusy(true);
     try {
-      setSession(
-        await client.patchActivityState(session.id, state, {
-          expectedVersion: session.stateVersion ?? 0,
-        }),
-      );
+      const next = await client.patchActivityState(session.id, state, {
+        expectedVersion: session.stateVersion ?? 0,
+      });
+      setSession(next);
     } catch (e) {
       const conflict = getActivityConflictSession(e);
       if (conflict) setSession(conflict);
@@ -374,10 +375,20 @@ export function ActivityRoom({
     );
   }
 
-  if (!session || !user) {
+  if (!user) {
     return (
       <View style={{ padding: 16 }}>
-        <Text style={{ color: colors.textMuted }}>Oda hazırlanıyor…</Text>
+        <Text style={{ color: colors.textMuted }}>Oturum açılıyor…</Text>
+      </View>
+    );
+  }
+
+  if (!session) {
+    return (
+      <View style={{ padding: 16 }}>
+        <Text style={{ color: colors.textMuted }}>
+          {error ? error : 'Oda hazırlanıyor…'}
+        </Text>
       </View>
     );
   }

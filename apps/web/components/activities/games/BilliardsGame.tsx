@@ -561,6 +561,8 @@ export function BilliardsGame(props: GameProps) {
     let simulating = false;
     /** Rakip simü bitti ama otorite balls henüz gelmedi — eski state'e snap etme */
     let waitingAuthority = false;
+    let waitingAuthoritySince = 0;
+    const WAITING_AUTHORITY_MS = 4500;
     let pendingSync = false;
     let snapped = false;
     let simTime = 0;
@@ -678,17 +680,24 @@ export function BilliardsGame(props: GameProps) {
       });
       const shotClear = !st.shot;
       // Otorite vuruşu bitirdi (shot temiz + yeni balls) veya sapma görüldü
+      const authorityTimedOut =
+        waitingAuthority &&
+        waitingAuthoritySince > 0 &&
+        performance.now() - waitingAuthoritySince > WAITING_AUTHORITY_MS;
       const authorityArrived =
-        waitingAuthority && (shotClear || sunkMismatch || posDrift);
+        waitingAuthority &&
+        (shotClear || sunkMismatch || posDrift || authorityTimedOut);
 
       // Rakip / izleyici: otorite balls gelince yerel sim'i kes
       if ((simulating && !isLocalAuthority) || waitingAuthority) {
         if (authorityArrived || (!waitingAuthority && (sunkMismatch || posDrift))) {
           simulating = false;
           waitingAuthority = false;
+          waitingAuthoritySince = 0;
           isLocalAuthority = false;
           shotOwner = null;
           forceSnap = true;
+          if (authorityTimedOut) inputLocked = false;
         } else {
           pendingSync = true;
           return;
@@ -863,12 +872,14 @@ export function BilliardsGame(props: GameProps) {
       if (!isLocalAuthority) {
         // Otorite sonucu gelene kadar bekle — eski toplara geri alma (rollback) yapma
         waitingAuthority = true;
+        waitingAuthoritySince = performance.now();
         isLocalAuthority = false;
         shotOwner = null;
         pendingSync = true;
         return;
       }
       waitingAuthority = false;
+      waitingAuthoritySince = 0;
       const out = exportBalls();
       const patch = resolveRules(out);
       isLocalAuthority = false;
@@ -887,7 +898,12 @@ export function BilliardsGame(props: GameProps) {
       setBusy(true);
       void propsRef.current
         .onPatch(patch)
-        .catch(() => undefined)
+        .catch(() => {
+          // Patch fail (CAS/authority) — kilidi aç ki masa donmasın
+          localTurnOverride = null;
+          localCueInHandOverride = null;
+          inputLocked = false;
+        })
         .finally(() => {
           setBusy(false);
           forceSnap = true;
@@ -913,6 +929,7 @@ export function BilliardsGame(props: GameProps) {
       cue.vz = dz * speed;
       simulating = true;
       waitingAuthority = false;
+      waitingAuthoritySince = 0;
       simTime = 0;
       firstHitId = null;
       sunkThisShot = [];

@@ -187,43 +187,46 @@ export function ActivityChannelView({
   // Kanal değişince: oturumu getir, yoksa başlat, üye değilse katıl
   useEffect(() => {
     let cancelled = false;
+    const bootChannel = channelId;
+    bootRef.current = bootChannel;
     setSession(null);
     setLoading(true);
     setError(null);
-    bootRef.current = null;
     void (async () => {
-      let s = await refresh();
-      if (cancelled) return;
-      if (!s) {
-        try {
-          s = await client.startActivity({ guildId, channelId });
-          if (cancelled) return;
-          setSession(s);
-        } catch (e) {
-          s = await refresh();
-          if (cancelled) return;
-          if (!s) setError(errMsg(e, 'Aktivite başlatılamadı'));
-        }
-      }
-      if (cancelled) return;
-      if (s && me && !s.playerIds.includes(me) && !s.spectatorIds.includes(me)) {
-        // Watch Party'de oda herkese açık; izleyici olarak otomatik katıl
-        if (s.kind === 'watch_party') {
+      try {
+        let s = await refresh();
+        if (cancelled || bootRef.current !== bootChannel) return;
+        if (!s) {
           try {
-            const joined = await client.joinActivity(s.id, true);
-            if (!cancelled) setSession(joined);
-          } catch {
-            /* lobi arayüzü kalan seçenekleri sunar */
+            s = await client.startActivity({ guildId, channelId: bootChannel });
+            if (cancelled || bootRef.current !== bootChannel) return;
+            setSession(s);
+          } catch (e) {
+            s = await refresh();
+            if (cancelled || bootRef.current !== bootChannel) return;
+            if (!s) setError(errMsg(e, 'Aktivite başlatılamadı'));
           }
         }
+        if (cancelled || bootRef.current !== bootChannel) return;
+        if (s && me && !s.playerIds.includes(me) && !s.spectatorIds.includes(me)) {
+          // Watch Party'de oda herkese açık; izleyici olarak otomatik katıl
+          if (s.kind === 'watch_party') {
+            try {
+              const joined = await client.joinActivity(s.id, true);
+              if (!cancelled && bootRef.current === bootChannel) setSession(joined);
+            } catch {
+              /* lobi arayüzü kalan seçenekleri sunar */
+            }
+          }
+        }
+      } finally {
+        if (!cancelled && bootRef.current === bootChannel) setLoading(false);
       }
-      bootRef.current = channelId;
-      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- me = user.id
   }, [client, guildId, channelId, me]);
 
   // Socket olayları

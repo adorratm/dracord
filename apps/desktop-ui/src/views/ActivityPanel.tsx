@@ -79,7 +79,9 @@ export function ActivityPanel({
   const [pickerOpen, setPickerOpen] = useState(false);
   const bootRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const sessionVersionRef = useRef(0);
   sessionIdRef.current = session?.id ?? null;
+  sessionVersionRef.current = session?.stateVersion ?? 0;
 
   const me = user?.id;
   const [nameByUserId, setNameByUserId] = useState<Record<string, string>>({});
@@ -123,36 +125,41 @@ export function ActivityPanel({
 
   useEffect(() => {
     let cancelled = false;
-    bootRef.current = channelId;
+    const bootChannel = channelId;
+    bootRef.current = bootChannel;
+    setSession(null);
     setLoading(true);
     setError(null);
     void (async () => {
       try {
         let s = await refresh();
-        if (cancelled || bootRef.current !== channelId) return;
+        if (cancelled || bootRef.current !== bootChannel) return;
         if (!s) {
-          s = await client.startActivity({ guildId, channelId });
+          s = await client.startActivity({ guildId, channelId: bootChannel });
         }
-        if (cancelled || bootRef.current !== channelId) return;
+        if (cancelled || bootRef.current !== bootChannel) return;
         setSession(s);
         if (
-          user &&
+          me &&
           s &&
-          !s.playerIds.includes(user.id) &&
-          !s.spectatorIds.includes(user.id)
+          !s.playerIds.includes(me) &&
+          !s.spectatorIds.includes(me)
         ) {
           setSession(await client.joinActivity(s.id, false));
         }
       } catch (e) {
-        if (!cancelled) setError(errMsg(e, 'Aktivite yüklenemedi'));
+        if (!cancelled && bootRef.current === bootChannel) {
+          setError(errMsg(e, 'Aktivite yüklenemedi'));
+        }
       } finally {
-        if (!cancelled && bootRef.current === channelId) setLoading(false);
+        if (!cancelled && bootRef.current === bootChannel) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [client, guildId, channelId, refresh, user]);
+    // presence user objesi boot’u iptal edip loading’de bırakıyordu — yalnız id
+  }, [client, guildId, channelId, refresh, me]);
 
   useEffect(() => {
     client.joinChannel(channelId);
@@ -201,17 +208,19 @@ export function ActivityPanel({
   );
 
   const patch = async (state: Record<string, unknown>) => {
-    if (!session) return;
+    const id = sessionIdRef.current;
+    if (!id) return;
     setBusy(true);
     try {
-      setSession(
-        await client.patchActivityState(session.id, state, {
-          expectedVersion: session.stateVersion ?? 0,
-        }),
-      );
+      const next = await client.patchActivityState(id, state, {
+        expectedVersion: sessionVersionRef.current,
+      });
+      sessionVersionRef.current = next.stateVersion ?? sessionVersionRef.current;
+      setSession(next);
     } catch (e) {
       const conflict = getActivityConflictSession(e);
       if (conflict) {
+        sessionVersionRef.current = conflict.stateVersion ?? sessionVersionRef.current;
         setSession(conflict);
         return;
       }
