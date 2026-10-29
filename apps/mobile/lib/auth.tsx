@@ -38,6 +38,7 @@ type AuthCtx = {
   user: PublicUser | null;
   ready: boolean;
   loginGoogle: () => Promise<void>;
+  loginApple: () => Promise<void>;
   logout: () => Promise<void>;
   setSession: (tokens: AuthTokens, user: PublicUser) => Promise<void>;
   refreshUser: () => Promise<PublicUser | null>;
@@ -206,6 +207,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await applyOAuthTokens(tokens);
   }, [client, applyOAuthTokens]);
 
+  const loginApple = useCallback(async () => {
+    const AppleAuthentication = await import('expo-apple-authentication');
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) throw new Error('Apple girişi bu cihazda yok');
+    const cred = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+    if (!cred.identityToken) throw new Error('Apple identityToken yok');
+    const displayName = [cred.fullName?.givenName, cred.fullName?.familyName]
+      .filter(Boolean)
+      .join(' ');
+    const result = await client.loginWithApple({
+      idToken: cred.identityToken,
+      email: cred.email ?? undefined,
+      displayName: displayName || undefined,
+    });
+    if (result.requires2fa) {
+      throw new Error('2FA gerekli — web üzerinden doğrula');
+    }
+    await setSession(
+      { accessToken: result.accessToken, refreshToken: result.refreshToken },
+      result.user,
+    );
+  }, [client, setSession]);
+
   const refreshUser = useCallback(async () => {
     try {
       const me = await client.getMe();
@@ -260,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      loginApple,
       logout,
       setSession,
       refreshUser,
@@ -270,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      loginApple,
       logout,
       setSession,
       refreshUser,

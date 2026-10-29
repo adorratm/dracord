@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { Draco } from '../../components/Draco';
 
 export default function LoginScreen() {
-  const { user, loginGoogle } = useAuth();
+  const { user, loginGoogle, loginApple } = useAuth();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,6 +90,33 @@ export default function LoginScreen() {
       >
         <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>
           {busy ? 'Google açılıyor…' : 'Google ile giriş yap'}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        disabled={busy}
+        onPress={() => {
+          setBusy(true);
+          setError(null);
+          void loginApple()
+            .then(() => router.replace('/(app)/guilds'))
+            .catch((e) => setError(e instanceof Error ? e.message : 'Apple girişi başarısız'))
+            .finally(() => setBusy(false));
+        }}
+        style={{
+          width: '100%',
+          maxWidth: 360,
+          height: 52,
+          borderRadius: 14,
+          marginTop: 10,
+          backgroundColor: '#f8f8f2',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        <Text style={{ color: '#282a36', fontWeight: '700', fontSize: 16 }}>
+          Apple ile giriş yap
         </Text>
       </Pressable>
 

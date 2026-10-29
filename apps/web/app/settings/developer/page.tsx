@@ -195,6 +195,14 @@ export default function DeveloperSettingsPage() {
                 <SettingsNote>
                   Bot mesajı: <code>Authorization: Bot &lt;token&gt;</code> →{' '}
                   <code>POST /v1/channels/:id/messages</code>
+                  <br />
+                  Slash sync: <code>PUT /v1/applications/:id/commands</code> (guildId +
+                  commands)
+                  <br />
+                  OAuth widget:{' '}
+                  <code>{`<script src="/sdk/login-with-dracord.js"></script>`}</code> →{' '}
+                  <code>DracordLogin.render(...)</code> · consent:{' '}
+                  <code>/oauth/authorize?client_id=…</code>
                 </SettingsNote>
               </div>
             )}

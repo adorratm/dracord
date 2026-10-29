@@ -49,13 +49,13 @@ Yerel: `yarn workspace @dracord/desktop build:win` / `build:linux`
 
 Şu an CI **imzasız** DMG üretir (`apps/desktop` → `build.mac.identity: null`). Gatekeeper uyarısı normal.
 
-İmzalı + notarize için:
+İmzalı + notarize için (kod hazır: `identity` kaldırıldı, `afterSign` → `build/notarize.js`):
 
-- [ ] `package.json` içinden `"identity": null` satırını kaldır
-- [ ] GitHub Secrets: `CSC_LINK` (p12/base64), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`
-- [ ] Workflow yeniden çalıştır → `NEXT_PUBLIC_DOWNLOAD_MACOS=...`
+- [ ] GitHub Secrets: `CSC_LINK` (p12/base64 Developer ID), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`
+- [ ] Desktop Release workflow → imzalı+notarized DMG
+- [ ] `NEXT_PUBLIC_DOWNLOAD_MACOS=...` doğrula
 
-### Windows imza (sonra, ücretli)
+### Windows imza (sonra, ücretli — bilinçli ertelendi)
 
 - [ ] OV/EV Authenticode al → `CSC_LINK` + `CSC_KEY_PASSWORD` secrets
 - [ ] İmza sonrası popup metnini gevşetmek için agent’a söyle
@@ -64,9 +64,10 @@ Yerel: `yarn workspace @dracord/desktop build:win` / `build:linux`
 
 ## 2. Mobil ortak
 
-- [ ] `cd apps/mobile` → `npx eas-cli login` → `npx eas init` (`projectId` `app.json`)
-- [ ] EAS production profilinde API: `https://api.dracord.com.tr`
+- [ ] `cd apps/mobile` → `npx eas-cli login` → `npx eas init` — rehber: `apps/mobile/store/eas-setup.md`
+- [x] EAS production API env: `eas.json` → `EXPO_PUBLIC_API_URL`
 - [ ] Google Cloud OAuth: iOS / Android client ID + `dracord://oauth` redirect
+- [x] Apple Sign In kodu (expo-apple-authentication + API JWKS); Apple Developer’da capability aç + `APPLE_CLIENT_ID`
 - [ ] Ekran görüntüleri + 1024 ikon + Play feature graphic (1024×500) — metin önerisi: `apps/mobile/store/feature-graphic.md`
 - [ ] ASO metinlerini Console’a yapıştır: `apps/mobile/store/aso-tr.md`, `aso-en.md`
 - [ ] Privacy / Data safety: `apps/mobile/store/privacy-labels.md`
@@ -97,7 +98,7 @@ yarn workspace @dracord/mobile exec eas build --platform android --profile produ
 - [ ] Banking / vergi / sözleşmeler (eksikse)
 - [ ] Privacy Nutrition Labels (`privacy-labels.md`)
 - [ ] Age rating
-- [ ] **Sign in with Apple**: Apple Developer’da App ID capability + Services ID; API’de `APPLE_CLIENT_ID` (şu an prod Apple login stub — capability açınca kod tamamlat)
+- [ ] **Sign in with Apple**: Apple Developer’da App ID capability + (web için) Services ID; API/web `APPLE_CLIENT_ID` / `NEXT_PUBLIC_APPLE_CLIENT_ID` (kod hazır)
 
 ```bash
 yarn workspace @dracord/mobile exec eas build --platform ios --profile production
@@ -122,10 +123,11 @@ Hesap silme (mağaza zorunluluğu) uygulamada hazır: Ayarlar → Hesap Durumu �
 
 ---
 
-## 6. Sonra (Nitro / PayTR)
+## 6. Nitro / PayTR
+
+Kod hazır (`NITRO_PAYMENTS`, checkout + imzalı callback, web Nitro sayfası). Kalan ops:
 
 - [ ] PayTR merchant sözleşme + API anahtarları (sunucu `.env`, client’ta değil)
-- [ ] Web checkout + entitlement için geliştirme isteği
 - [ ] Mobilde dijital abonelik → mümkünse “Web’de yükselt” (IAP dayatmasından kaçın)
 
 ---

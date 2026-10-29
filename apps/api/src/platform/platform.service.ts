@@ -8,11 +8,16 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'crypto';
 import { EntityManager } from 'typeorm';
+import { AuthService } from '@/auth/auth.service';
 import { PlatformApplication } from '@/database/entities/platform-application.entity';
+import { Guild } from '@/database/entities/guild.entity';
+import { GuildMember } from '@/database/entities/guild-member.entity';
+import { SlashCommand } from '@/database/entities/slash-command.entity';
 import { User } from '@/database/entities/user.entity';
 import { UserStatus } from '@/database/enums';
 import { createId } from '@paralleldrive/cuid2';
 import { isPlatformApiEnabled, isPlatformOauthEnabled } from './platform-enabled';
+import { BUILTIN_COMMANDS } from '@/bot/bots.controller';
 
 export type ApplicationDto = {
   id: string;
@@ -39,6 +44,7 @@ export class PlatformService {
   constructor(
     private readonly em: EntityManager,
     private readonly config: ConfigService,
+    private readonly auth: AuthService,
   ) {}
 
   assertEnabled() {
@@ -94,7 +100,13 @@ export class PlatformService {
       redirectUris: (data.redirectUris ?? []).filter(
         (u) => typeof u === 'string' && u.startsWith('http'),
       ),
-      scopes: ['bot', 'identify', 'messages.write'],
+      scopes: [
+        'bot',
+        'identify',
+        'messages.write',
+        'guilds',
+        'applications.commands',
+      ],
       botUserId: null,
       botTokenHash: null,
       botTokenLast4: null,
@@ -240,9 +252,112 @@ export class PlatformService {
       where: { id: opts.clientId },
     });
     if (!app) throw new NotFoundException('Uygulama yok');
-    // MVP: kısa ömürlü opaque token (gerçek JWT OAuth sonraki iterasyon)
-    const access = `oauth.${entry.userId}.${randomBytes(16).toString('hex')}`;
-    return { access_token: access, token_type: 'Bearer', expires_in: 3600 };
+    return this.auth.issueOauthAccessToken(entry.userId);
+  }
+
+  async getGuildForBot(botUserId: string, guildId: string) {
+    this.assertEnabled();
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId: botUserId },
+    });
+    if (!member) throw new ForbiddenException('Bot bu sunucunun üyesi değil');
+    const guild = await this.em.findOne(Guild, { where: { id: guildId } });
+    if (!guild) throw new NotFoundException('Sunucu yok');
+    return {
+      id: guild.id,
+      name: guild.name,
+      iconUrl: guild.iconUrl,
+      ownerId: guild.ownerId,
+    };
+  }
+
+  async syncSlashCommands(
+    applicationId: string,
+    botUserId: string,
+    ownerUserId: string,
+    body: {
+      guildId: string;
+      commands?: Array<{
+        name: string;
+        description: string;
+        usage?: string;
+        aliases?: string[];
+        responseTemplate?: string;
+      }>;
+    },
+  ) {
+    this.assertEnabled();
+    const guildId = body.guildId?.trim();
+    if (!guildId) throw new BadRequestException('guildId gerekli');
+    const member = await this.em.findOne(GuildMember, {
+      where: { guildId, userId: ownerUserId },
+    });
+    const botMember = await this.em.findOne(GuildMember, {
+      where: { guildId, userId: botUserId },
+    });
+    if (!member && !botMember) {
+      throw new ForbiddenException(
+        'Uygulama sahibi veya bot sunucuda olmalı',
+      );
+    }
+
+    const app = await this.em.findOne(PlatformApplication, {
+      where: { id: applicationId },
+    });
+    if (!app?.botUserId || app.botUserId !== botUserId) {
+      throw new ForbiddenException();
+    }
+
+    const existing = await this.em.find(SlashCommand, {
+      where: { guildId, botUserId },
+    });
+    if (existing.length) await this.em.remove(SlashCommand, existing);
+
+    const botUser = await this.em.findOne(User, { where: { id: botUserId } });
+    const botName = botUser?.displayName ?? app.name;
+    const out: Array<{
+      id: string;
+      name: string;
+      description: string;
+      usage: string;
+    }> = [];
+
+    for (const raw of body.commands ?? []) {
+      const name = (raw.name ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 32);
+      if (name.length < 2) continue;
+      if (
+        BUILTIN_COMMANDS.some(
+          (c) =>
+            c.name === name ||
+            (c.aliases as readonly string[]).includes(name),
+        )
+      ) {
+        continue;
+      }
+      const description = (raw.description ?? name).trim().slice(0, 200) || name;
+      const usage = (raw.usage ?? `/${name}`).trim().slice(0, 120);
+      const aliases = (raw.aliases ?? [])
+        .map((a) => a.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32))
+        .filter(Boolean);
+      const row = this.em.create(SlashCommand, {
+        guildId,
+        name,
+        description,
+        usage,
+        aliases: aliases.length ? aliases : null,
+        responseTemplate: raw.responseTemplate?.trim().slice(0, 2000) || null,
+        botUserId,
+        botName: botName.slice(0, 64),
+        createdById: ownerUserId,
+      });
+      await this.em.save(SlashCommand, row);
+      out.push({ id: row.id, name: row.name, description, usage });
+    }
+    return { applicationId, guildId, commands: out };
   }
 
   async findApp(id: string) {

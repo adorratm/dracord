@@ -8,10 +8,10 @@
     "userInterfaceStyle": "automatic",
     "runtimeVersion": "0.1.0",
     "updates": {
-      "url": "https://u.expo.dev/replace-with-eas-project-id",
+      "url": "https://u.expo.dev/REPLACE_AFTER_EAS_INIT",
       "fallbackToCacheTimeout": 0,
       "checkAutomatically": "ON_LOAD",
-      "enabled": true
+      "enabled": false
     },
     "platforms": [
       "ios",
@@ -26,6 +26,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dracord.mobile",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Sesli odalarda konuşmak için mikrofon gerekir.",
         "NSCameraUsageDescription": "Kamera ile görüntülü katılım için kullanılır.",
@@ -63,6 +64,7 @@
       "expo-dev-client",
       "expo-secure-store",
       "expo-web-browser",
+      "expo-apple-authentication",
       "expo-video",
       "expo-font",
       [
@@ -104,7 +106,7 @@
     "extra": {
       "apiUrl": "https://api.dracord.com.tr",
       "eas": {
-        "projectId": "replace-with-eas-project-id"
+        "projectId": "REPLACE_AFTER_EAS_INIT"
       },
       "router": {
         "origin": false

@@ -8,7 +8,7 @@ Yayın: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md) · Smoke: [na
 
 ## Durum özeti
 
-Tüm maddeler **çalışır MVP** olarak tamamlandı. Prod’da agresif özellikler flag arkasında (varsayılan off).
+P0–P2 **çalışır MVP** tamam. P3: platform olgunlaştırma + ölçek (shard). Prod’da agresif özellikler flag arkasında.
 
 ### DoD
 
@@ -18,42 +18,23 @@ Tüm maddeler **çalışır MVP** olarak tamamlandı. Prod’da agresif özellik
 
 ---
 
-## P0 — Oyun sync
+## P0 — P2
 
-- [x] CAS / stateVersion · game-core merge · bilardo flag · watch heartbeat · Redis health · metrikler
-
----
-
-## P1 A — Stabilite
-
-- [x] Gateway / voice orphan / reconnect
-- [x] Mesaj + **üye listesi** sanallaştırma (`MessageList`, `MemberList` >48 satır)
-- [x] `SEARCH_MAX_RESULTS` · smoke script · prod migration doc
+- [x] Oyun sync (CAS, game-core, bilardo flag, watch, Redis, metrik)
+- [x] Stabilite (gateway, mesaj/üye virt, search cap)
+- [x] Platform B0–B4 MVP (bot, slash sync, webhook, OAuth widget)
+- [x] Tema · Keşfet · Nitro/PayTR · sticker · Spotify · funnel · otomöd · şablon · etkinlik RSVP/stage
+- [x] Apple Sign In (JWKS verify + web/mobile UI; `APPLE_CLIENT_ID` gerekir)
+- [x] macOS notarize hook (`afterSign`; secrets yoksa no-op) — **Windows OV ücretli hariç**
 
 ---
 
-## P1–P2 B — Platform
+## P3 — Sonraki (opsiyonel)
 
-- [x] `PLATFORM_API` bot token + `/v1` · uygulamalar · webhook · OAuth2 MVP · [sdk.md](./sdk.md)
-
----
-
-## P1–P2 C — Ürün
-
-- [x] Tema pack’leri · Keşfet · Nitro billing
-- [x] **PayTR:** imza doğrulamalı callback + `POST /billing/nitro/checkout` (get-token)
-- [x] **Sticker marketplace:** `GET/POST /stickers/marketplace/*` + Ayarlar → Sticker mağazası
-- [x] Spotify + developer bot paneli
-- [x] Funnel: `POST /metrics/funnel`, `GET /health/funnel`; invite/discover/template otomatik kayıt
-
----
-
-## P2+
-
-- [x] Otomod · sunucu şablonları
-- [x] **Etkinlik RSVP / stage:** `interestedUserIds`, `isStage`, `POST …/events/:id/rsvp`
-- [x] Yatay ölçek: Redis required flag (shard sonraki)
-- [x] Yeni aktivite kapısı (P0 sync hazır)
+- [ ] Socket.IO / API **shard**
+- [ ] Platform: OAuth refresh, Redis rate limit, Bot WS, `@dracord/bot-sdk`
+- [ ] TypeORM migration runner (sync-once yerine)
+- [ ] Funnel metrikleri kalıcı store
 
 ---
 
@@ -62,13 +43,13 @@ Tüm maddeler **çalışır MVP** olarak tamamlandı. Prod’da agresif özellik
 | Flag | Varsayılan | Açınca |
 | --- | --- | --- |
 | `PLATFORM_API` | off | Bot /v1 |
-| `PLATFORM_OAUTH` | off | OAuth2 |
+| `PLATFORM_OAUTH` | off | OAuth2 + widget |
 | `NITRO_PAYMENTS` | off | PayTR checkout + imzalı callback |
 | `ACTIVITY_CAS` | off | CAS zorunlu |
 | `ACTIVITY_BILLIARDS_AUTHORITY` | off | Bilardo shot |
 | `SOCKET_REDIS_REQUIRED` | off | Ready Redis |
 | `AUTO_MOD` | on | `false` kapat |
-| `SEARCH_MAX_RESULTS` | 50 | Arama cap |
-| `PAYTR_*` | — | Merchant id/key/salt + test mode |
+| `APPLE_CLIENT_ID` | — | Apple Sign In gerçek verify |
+| `PAYTR_*` | — | Merchant |
 
-Deploy: [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) — önce şema (`stateVersion`, `guild_events` enrich), sonra API.
+Deploy: [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) · Yayın ops: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md)

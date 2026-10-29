@@ -22,7 +22,12 @@ client.connectSocket();
 | `platformHealth()` | `GET /v1/health` |
 | `listPlatformApplications()` | `GET /platform/applications` |
 | `createPlatformApplication` | `POST /platform/applications` |
+| `setPlatformWebhook` | `PUT /platform/applications/:id/webhook` |
+| `syncPlatformCommands` | `PUT /v1/applications/:id/commands` |
+| `oauthAuthorize` | `POST /oauth2/authorize` |
+| `loginWithApple` | `POST /auth/apple` |
 | Bot mesaj | `Authorization: Bot <token>` → `POST /v1/channels/:id/messages` |
+| Widget | `https://dracord.com.tr/sdk/login-with-dracord.js` |
 
 ## Billing
 

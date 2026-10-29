@@ -412,21 +412,69 @@ export class AuthService {
     // Production’da stub asla; aksi halde sahte idToken ile hesap açılır
     const stubMode = !isProd && stubRequested && !appleClientId;
 
-    if (!stubMode) {
-      throw new UnauthorizedException('Apple Sign In is not available');
+    if (stubMode) {
+      const stubId = dto.idToken.slice(0, 64) || randomBytes(8).toString('hex');
+      const email =
+        dto.email?.toLowerCase() ??
+        `apple-${stubId.slice(0, 8)}@stub.dracord.local`;
+      const displayName = dto.displayName ?? 'Apple User';
+      return this.loginWithOAuthProfile(AuthProvider.APPLE, {
+        providerAccountId: stubId,
+        email,
+        username: email.split('@')[0]!,
+        displayName,
+      });
     }
 
-    const stubId = dto.idToken.slice(0, 64) || randomBytes(8).toString('hex');
-    const email =
-      dto.email?.toLowerCase() ?? `apple-${stubId.slice(0, 8)}@stub.dracord.local`;
-    const displayName = dto.displayName ?? 'Apple User';
+    if (!appleClientId) {
+      throw new UnauthorizedException(
+        'Apple Sign In yapılandırılmamış (APPLE_CLIENT_ID)',
+      );
+    }
 
-    return this.loginWithOAuthProfile(AuthProvider.APPLE, {
-      providerAccountId: stubId,
-      email,
-      username: email.split('@')[0]!,
-      displayName,
-    });
+    try {
+      const { verifyAppleIdToken } = await import('@/auth/apple-id-token');
+      const claims = await verifyAppleIdToken(dto.idToken, appleClientId);
+      const email =
+        (dto.email ?? claims.email)?.toLowerCase() ??
+        `apple-${claims.sub.slice(0, 10)}@privaterelay.appleid.com`;
+      const displayName = dto.displayName ?? email.split('@')[0] ?? 'Apple User';
+      return this.loginWithOAuthProfile(AuthProvider.APPLE, {
+        providerAccountId: claims.sub,
+        email,
+        username: email.split('@')[0]!,
+        displayName,
+      });
+    } catch (e) {
+      throw new UnauthorizedException(
+        e instanceof Error ? e.message : 'Geçersiz Apple kimlik jetonu',
+      );
+    }
+  }
+
+  /** 3. parti OAuth access token (kısa ömürlü, refresh yok) */
+  async issueOauthAccessToken(userId: string): Promise<{
+    access_token: string;
+    token_type: 'Bearer';
+    expires_in: number;
+  }> {
+    const user = await this.getUserById(userId);
+    const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    const expiresInSec = 3600;
+    const accessToken = await this.jwt.signAsync(
+      {
+        sub: user.id,
+        email: user.email,
+        username: user.username,
+        typ: 'oauth',
+      },
+      { secret: accessSecret, expiresIn: expiresInSec },
+    );
+    return {
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: expiresInSec,
+    };
   }
 
   async googleCallback(

@@ -117,7 +117,80 @@ export class PlatformController {
     };
   }
 
-  /** Dracord ile giriş — authorize (basit onay) */
+  @Get('v1/guilds/:guildId')
+  @UseGuards(BotAuthGuard)
+  botGuild(
+    @Req() req: { bot: BotAuthContext },
+    @Param('guildId') guildId: string,
+  ) {
+    if (
+      !req.bot.scopes.includes('guilds') &&
+      !req.bot.scopes.includes('bot')
+    ) {
+      return { error: 'guilds scope gerekli' };
+    }
+    return this.platform.getGuildForBot(req.bot.botUserId, guildId);
+  }
+
+  @Put('v1/applications/:applicationId/commands')
+  @UseGuards(BotAuthGuard)
+  syncCommands(
+    @Req() req: { bot: BotAuthContext },
+    @Param('applicationId') applicationId: string,
+    @Body()
+    body: {
+      guildId?: string;
+      commands?: Array<{
+        name: string;
+        description: string;
+        usage?: string;
+        aliases?: string[];
+        responseTemplate?: string;
+      }>;
+    },
+  ) {
+    if (req.bot.applicationId !== applicationId) {
+      return { error: 'applicationId token ile uyuşmuyor' };
+    }
+    if (
+      !req.bot.scopes.includes('applications.commands') &&
+      !req.bot.scopes.includes('bot')
+    ) {
+      return { error: 'applications.commands scope gerekli' };
+    }
+    return this.platform.syncSlashCommands(
+      applicationId,
+      req.bot.botUserId,
+      req.bot.ownerUserId,
+      { guildId: body?.guildId ?? '', commands: body?.commands },
+    );
+  }
+
+  /** JSON onay — web consent widget Bearer ile çağırır */
+  @Post('oauth2/authorize')
+  @UseGuards(JwtAuthGuard)
+  oauthAuthorizeJson(
+    @Req() req: { user: { sub: string } },
+    @Body()
+    body: {
+      client_id?: string;
+      redirect_uri?: string;
+      response_type?: string;
+      state?: string;
+    },
+  ) {
+    if ((body.response_type ?? 'code') !== 'code') {
+      return { error: 'response_type=code gerekli' };
+    }
+    return this.issueOauthCode(
+      req.user.sub,
+      body.client_id ?? '',
+      body.redirect_uri ?? '',
+      body.state,
+    );
+  }
+
+  /** Dracord ile giriş — authorize (redirect; Authorization header gerekir) */
   @Get('oauth2/authorize')
   @UseGuards(JwtAuthGuard)
   async oauthAuthorize(
@@ -131,21 +204,21 @@ export class PlatformController {
     if (responseType !== 'code') {
       return res.status(400).json({ error: 'response_type=code gerekli' });
     }
-    const app = await this.platform.findApp(clientId);
-    if (!app) return res.status(404).json({ error: 'client_id geçersiz' });
-    const allowed = (app.redirectUris ?? []).includes(redirectUri);
-    if (!allowed) {
-      return res.status(400).json({ error: 'redirect_uri kayıtlı değil' });
+    try {
+      const result = await this.issueOauthCode(
+        req.user.sub,
+        clientId,
+        redirectUri,
+        state,
+      );
+      if ('error' in result) {
+        return res.status(400).json(result);
+      }
+      return res.redirect(result.redirect);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'authorize failed';
+      return res.status(400).json({ error: msg });
     }
-    const code = this.platform.createAuthCode({
-      applicationId: clientId,
-      userId: req.user.sub,
-      redirectUri,
-    });
-    const url = new URL(redirectUri);
-    url.searchParams.set('code', code);
-    if (state) url.searchParams.set('state', state);
-    return res.redirect(url.toString());
   }
 
   @Post('oauth2/token')
@@ -166,5 +239,31 @@ export class PlatformController {
       clientId: body.client_id ?? '',
       redirectUri: body.redirect_uri ?? '',
     });
+  }
+
+  private async issueOauthCode(
+    userId: string,
+    clientId: string,
+    redirectUri: string,
+    state?: string,
+  ) {
+    const app = await this.platform.findApp(clientId);
+    if (!app) return { error: 'client_id geçersiz' as const };
+    const allowed = (app.redirectUris ?? []).includes(redirectUri);
+    if (!allowed) return { error: 'redirect_uri kayıtlı değil' as const };
+    const code = this.platform.createAuthCode({
+      applicationId: clientId,
+      userId,
+      redirectUri,
+    });
+    const url = new URL(redirectUri);
+    url.searchParams.set('code', code);
+    if (state) url.searchParams.set('state', state);
+    return {
+      code,
+      state: state ?? null,
+      redirect: url.toString(),
+      redirect_uri: redirectUri,
+    };
   }
 }

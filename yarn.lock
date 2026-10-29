@@ -1353,6 +1353,7 @@ __metadata:
     dotenv: "npm:^18.0.9"
     edge-tts-universal: "npm:1.4.0"
     ioredis: "npm:^6.0.0"
+    jose: "npm:^6.2.14"
     livekit-server-sdk: "npm:^2.19.2"
     passport: "npm:^0.7.0"
     passport-google-oauth20: "npm:^2.0.0"
@@ -1419,6 +1420,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dracord/desktop@workspace:apps/desktop"
   dependencies:
+    "@electron/notarize": "npm:^3.1.2"
     edge-tts-universal: "npm:1.4.0"
     electron: "npm:45.1.0"
     electron-builder: "npm:^26.18.1"
@@ -1455,6 +1457,7 @@ __metadata:
     "@types/react": "npm:~19.3.0"
     "@types/three": "npm:^0.186.0"
     expo: "npm:~58.0.21"
+    expo-apple-authentication: "npm:^58.0.2"
     expo-application: "npm:^58.1.2"
     expo-audio: "npm:~58.0.10"
     expo-build-properties: "npm:^58.0.11"
@@ -1679,6 +1682,16 @@ __metadata:
     fs-extra: "npm:^9.0.1"
     promise-retry: "npm:^2.0.1"
   checksum: 10c0/262c6a90db4b18c82abb2a8f5349d1bf19ac34a440fe6c01b8aee302b1c886a79906693e6c3fdba2a4efa23a6519abf2113a882b438f7b6687eb2daed3da2afa
+  languageName: node
+  linkType: hard
+
+"@electron/notarize@npm:^3.1.2":
+  version: 3.1.2
+  resolution: "@electron/notarize@npm:3.1.2"
+  dependencies:
+    debug: "npm:^4.4.0"
+    promise-retry: "npm:^2.0.1"
+  checksum: 10c0/131c96223171e4cb58714136e94d325407d1e8570f95ccac86e5abb97b79c1ae43df0db2006136b181db0abb3ddc029a4dce3b321a42ca34362d601a3ec878a4
   languageName: node
   linkType: hard
 
@@ -8503,6 +8516,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-apple-authentication@npm:^58.0.2":
+  version: 58.0.2
+  resolution: "expo-apple-authentication@npm:58.0.2"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/ff06e5c41a2fdb3f18ee79120f2089caec93bf478a95a7303f6ca6c2ef2b451acc4a68f0d5f9b671742b205fa749fd82f076e69c68f5d81afd91468df2e29f5b
+  languageName: node
+  linkType: hard
+
 "expo-application@npm:^58.1.2, expo-application@npm:~58.1.2":
   version: 58.1.2
   resolution: "expo-application@npm:58.1.2"
@@ -10479,6 +10503,13 @@ __metadata:
   version: 6.2.12
   resolution: "jose@npm:6.2.12"
   checksum: 10c0/e8582b946fabcae228819982dda4849908c353e9cb098f02f773635aa0d2f4917f17484c7441b8d526e564013b4cf96951455c94f81d0a39ee765bad44ce293d
+  languageName: node
+  linkType: hard
+
+"jose@npm:^6.2.14":
+  version: 6.2.14
+  resolution: "jose@npm:6.2.14"
+  checksum: 10c0/3db121220793e391c24803edae1ede848e7a67e2c3d37f9864f3e3e245c4b2d318f176d17f0f8ab02be07e210a3db5453612c8d5716af2deeaaa4e5d50e70641
   languageName: node
   linkType: hard
 

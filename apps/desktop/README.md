@@ -64,6 +64,8 @@ adresini kullanır. Eski release’leri silmek sorun değildir; **en güncel** r
 
 ### macOS (Developer ID + Notarize)
 
+`build.mac.identity` sabit `null` değil — CI’da `CSC_LINK` yoksa electron-builder imzasız üretir. `afterSign` → `build/notarize.js` (secrets yoksa no-op).
+
 | Değişken | Açıklama |
 | --- | --- |
 | `CSC_LINK` / Keychain identity | Developer ID Application |

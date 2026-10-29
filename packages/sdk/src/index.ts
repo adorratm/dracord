@@ -400,8 +400,26 @@ export class DracordClient {
     return this.request('/auth/2fa/setup', { method: 'DELETE' });
   }
 
+  async loginWithApple(data: {
+    idToken: string;
+    email?: string;
+    displayName?: string;
+  }) {
+    return this.request('/auth/apple', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }) as Promise<{
+      accessToken: string;
+      refreshToken: string;
+      user: PublicUser;
+      requires2fa?: boolean;
+      challengeToken?: string;
+    }>;
+  }
+
   getGoogleLoginUrl(intent: 'web' | 'admin' | 'desktop' | 'mobile' = 'web') {
     const url = new URL(`${this.baseUrl}/auth/google`);
+
     // mobile → aynı dracord:// deep link (desktop intent)
     const resolved = intent === 'mobile' ? 'desktop' : intent;
     if (resolved === 'admin' || resolved === 'desktop') {
@@ -1586,6 +1604,70 @@ export class DracordClient {
 
   async deletePlatformApplication(id: string) {
     return this.request(`/platform/applications/${id}`, { method: 'DELETE' });
+  }
+
+  async setPlatformWebhook(id: string, url: string | null) {
+    return this.request(`/platform/applications/${id}/webhook`, {
+      method: 'PUT',
+      body: JSON.stringify({ url }),
+    }) as Promise<{ id: string; webhookUrl: string | null }>;
+  }
+
+  async syncPlatformCommands(
+    applicationId: string,
+    data: {
+      guildId: string;
+      commands: Array<{
+        name: string;
+        description: string;
+        usage?: string;
+        aliases?: string[];
+        responseTemplate?: string;
+      }>;
+    },
+    botToken: string,
+  ) {
+    const headers = new Headers({ Authorization: `Bot ${botToken}` });
+    const res = await fetch(
+      `${this.baseUrl}/v1/applications/${applicationId}/commands`,
+      {
+        method: 'PUT',
+        headers: { ...Object.fromEntries(headers), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<{
+      applicationId: string;
+      guildId: string;
+      commands: Array<{ id: string; name: string }>;
+    }>;
+  }
+
+  async oauthAuthorize(opts: {
+    clientId: string;
+    redirectUri: string;
+    responseType?: string;
+    state?: string;
+  }) {
+    return this.request('/oauth2/authorize', {
+      method: 'POST',
+      body: JSON.stringify({
+        client_id: opts.clientId,
+        redirect_uri: opts.redirectUri,
+        response_type: opts.responseType ?? 'code',
+        state: opts.state,
+      }),
+    }) as Promise<{
+      code?: string;
+      redirect: string;
+      redirect_uri?: string;
+      state?: string | null;
+      error?: string;
+    }>;
   }
 
   async requestBillingMe(): Promise<{
