@@ -35,8 +35,10 @@ FROM deps AS build
 COPY packages/types ./packages/types
 COPY packages/sdk ./packages/sdk
 COPY packages/config ./packages/config
+COPY packages/game-core ./packages/game-core
 COPY apps/api ./apps/api
-RUN yarn workspace @dracord/types build
+RUN yarn workspace @dracord/types build \
+ && yarn workspace @dracord/game-core build
 WORKDIR /app/apps/api
 RUN yarn build
 
