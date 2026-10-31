@@ -403,11 +403,20 @@ export function OkeyGame(props: GameProps) {
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
 
+  // Otorite state (CAS version) değişince yerel seçimleri sıfırla — spectator/turn sapması olmasın
   useEffect(() => {
     setSelected([]);
     setStaged([]);
     syncRef.current?.();
-  }, [session.state.hands, session.state.turn, session.state.melds, session.state.opened, session.playerIds, userId]);
+  }, [
+    session.state.hands,
+    session.state.turn,
+    session.state.melds,
+    session.state.opened,
+    session.stateVersion,
+    session.playerIds,
+    userId,
+  ]);
 
   const onReady = useCallback((api: ThreeSceneApi) => {
     const { THREE, scene, renderer } = api;

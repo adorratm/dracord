@@ -14,6 +14,8 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { registerGameOverlay } = require('./desktop-overlay');
+const { registerWatchPartyAdblock } = require('./desktop-adblock');
 
 // Electron varsayılan cache klasörü Windows'ta kilitlenebiliyor (Access denied).
 // ready olmadan önce ayrı userData + GPU disk cache kapat.
@@ -1285,9 +1287,22 @@ if (!gotLock) {
     registerDealerTtsIpc();
     registerProtocol();
     registerWindowIpc();
+    try {
+      registerWatchPartyAdblock();
+    } catch (err) {
+      console.warn('[adblock]', err);
+    }
     // Sürüm IPC’sini pencere açılmadan kaydet (UI “…” takılı kalmasın)
     setupAutoUpdater();
     createWindow();
+    try {
+      registerGameOverlay({
+        showMainWindow,
+        getMainWindow: () => mainWindow,
+      });
+    } catch (err) {
+      console.warn('[overlay]', err);
+    }
 
     app.on('activate', () => {
       if (!mainWindow || mainWindow.isDestroyed()) {

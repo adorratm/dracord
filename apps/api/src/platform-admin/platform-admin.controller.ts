@@ -11,6 +11,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { ContentHashService } from '@/moderation/content-hash.service';
+import { GuildSafetyService } from '@/moderation/guild-safety.service';
+import type { TrustSafetyCategory } from '@/database/entities/trust-safety-report.entity';
+import { PlatformAuditService } from '@/platform/platform-audit.service';
 import { PlatformAdminGuard } from '@/platform-admin/platform-admin.guard';
 import { PlatformAdminService } from '@/platform-admin/platform-admin.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
@@ -25,6 +29,9 @@ export class PlatformAdminController {
     private readonly search: SearchService,
     private readonly indexer: SearchIndexerService,
     private readonly es: ElasticsearchService,
+    private readonly safety: GuildSafetyService,
+    private readonly hashes: ContentHashService,
+    private readonly platformAudit: PlatformAuditService,
   ) {}
 
   @Get('guilds')
@@ -210,5 +217,110 @@ export class PlatformAdminController {
   @Get('guilds/:guildId/roles')
   listRoles(@Param('guildId') guildId: string) {
     return this.admin.listRoles(guildId);
+  }
+
+  @Get('trust-safety/reports')
+  listTsReports(@Query('limit') limit?: string) {
+    const n = limit ? Number(limit) : 50;
+    return this.safety.listOpenReports(Number.isFinite(n) ? n : 50);
+  }
+
+  @Post('trust-safety/reports/:id/resolve')
+  resolveTsReport(
+    @Param('id') id: string,
+    @Req() req: { user: { sub: string } },
+    @Body() body: { status?: 'resolved' | 'dismissed' },
+  ) {
+    return this.safety.resolveReport(
+      id,
+      req.user.sub,
+      body?.status === 'dismissed' ? 'dismissed' : 'resolved',
+    );
+  }
+
+  @Get('trust-safety/trusted-guilds')
+  listTrustedGuilds() {
+    return this.safety.listTrustedGuilds();
+  }
+
+  @Post('trust-safety/trusted-guilds')
+  addTrustedGuild(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { guildId?: string; note?: string },
+  ) {
+    return this.safety.addTrustedGuild(
+      body.guildId ?? '',
+      req.user.sub,
+      body.note,
+    );
+  }
+
+  @Delete('trust-safety/trusted-guilds/:guildId')
+  removeTrustedGuild(@Param('guildId') guildId: string) {
+    return this.safety.removeTrustedGuild(guildId);
+  }
+
+  @Get('trust-safety/guilds/:guildId/policy')
+  getGuildSafetyPolicy(@Param('guildId') guildId: string) {
+    return this.safety.getEffectivePolicy(guildId);
+  }
+
+  @Get('trust-safety/hashes')
+  listContentHashes(@Query('limit') limit?: string) {
+    const n = limit ? Number(limit) : 100;
+    return this.hashes.list(Number.isFinite(n) ? n : 100);
+  }
+
+  @Post('trust-safety/hashes')
+  addContentHash(
+    @Req() req: { user: { sub: string } },
+    @Body()
+    body: {
+      hashValue?: string;
+      algorithm?: string;
+      category?: TrustSafetyCategory;
+      score?: number;
+      note?: string;
+    },
+  ) {
+    return this.hashes.add({
+      hashValue: body?.hashValue ?? '',
+      algorithm: body?.algorithm,
+      category: body?.category,
+      score: body?.score,
+      note: body?.note,
+      createdByUserId: req.user.sub,
+    });
+  }
+
+  @Post('trust-safety/hashes/:id/deactivate')
+  deactivateContentHash(@Param('id') id: string) {
+    return this.hashes.deactivate(id);
+  }
+
+  /** Toplu hash import (PhotoDNA ortaklığı değil — yerel DB) */
+  @Post('trust-safety/hashes/import')
+  importContentHashes(
+    @Req() req: { user: { sub: string } },
+    @Body()
+    body: {
+      text?: string;
+      items?: unknown;
+    },
+  ) {
+    const payload = body?.text ?? body?.items ?? body;
+    return this.hashes.bulkImport(payload, req.user.sub);
+  }
+
+  @Get('platform-audit')
+  listPlatformAudit(
+    @Query('applicationId') applicationId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const n = limit ? Number(limit) : 50;
+    return this.platformAudit.list({
+      applicationId: applicationId || undefined,
+      limit: Number.isFinite(n) ? n : 50,
+    });
   }
 }

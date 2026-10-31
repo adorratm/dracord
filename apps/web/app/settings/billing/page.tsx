@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/components/AuthProvider';
 import {
   SettingsPage,
   SettingsSection,
@@ -10,9 +12,34 @@ import { useUserPreferences } from '@/lib/user-preferences';
 import { newId } from '@/lib/totp';
 
 export default function BillingPage() {
+  const { client } = useAuth();
   const { prefs, setSection } = useUserPreferences();
   const [last4, setLast4] = useState('');
   const [brand, setBrand] = useState('Visa');
+  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const me = await client.requestBillingMe();
+      setPaymentsEnabled(Boolean(me.paymentsEnabled));
+      setSection('billing', {
+        nitroPlan: me.billing.nitroPlan,
+        nitroExpiresAt: me.billing.nitroExpiresAt,
+        boostCredits: me.billing.boostCredits,
+        invoices: me.billing.invoices ?? prefs.billing.invoices,
+        paymentMethods:
+          me.billing.paymentMethods?.length
+            ? me.billing.paymentMethods
+            : prefs.billing.paymentMethods,
+      });
+    } catch {
+      /* offline */
+    }
+  }, [client, prefs.billing.invoices, prefs.billing.paymentMethods, setSection]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const addCard = () => {
     const digits = last4.replace(/\D/g, '').slice(-4);
@@ -35,10 +62,45 @@ export default function BillingPage() {
   return (
     <SettingsPage
       title="Faturalandırma"
-      description="Demo ödeme yöntemleri ve fatura geçmişi (gerçek kart çekilmez)."
+      description="Ödeme yöntemleri ve fatura geçmişi."
     >
+      <SettingsSection title="Plan özeti">
+        <div className="px-space-md py-space-md space-y-1 font-body-sm">
+          <p>
+            Nitro:{' '}
+            <span className="text-on-surface font-label-md">
+              {prefs.billing.nitroPlan === 'none'
+                ? 'yok'
+                : prefs.billing.nitroPlan}
+            </span>
+            {' · '}
+            <Link href="/settings/nitro" className="text-primary-container hover:underline">
+              Yönet
+            </Link>
+          </p>
+          <p>
+            Takviye kredisi:{' '}
+            <span className="text-on-surface font-label-md">
+              {prefs.billing.boostCredits}
+            </span>
+            {' · '}
+            <Link href="/settings/boost" className="text-primary-container hover:underline">
+              Takviye
+            </Link>
+          </p>
+          <p className="text-outline">
+            {paymentsEnabled
+              ? 'PayTR ödemeleri açık.'
+              : 'Ödeme kapalı (demo abonelik). NITRO_PAYMENTS ile açılır.'}
+          </p>
+        </div>
+      </SettingsSection>
       <SettingsSection title="Ödeme yöntemi ekle">
         <div className="px-space-md py-space-md space-y-space-sm">
+          <SettingsNote>
+            Kartlar yalnızca istemci tercihlerinde saklanır; gerçek çekim yapılmaz.
+            Canlı ödeme PayTR checkout ile Nitro sayfasındadır.
+          </SettingsNote>
           <div className="flex flex-wrap gap-2">
             <select
               value={brand}

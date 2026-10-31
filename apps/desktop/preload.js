@@ -53,4 +53,22 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
     ipcRenderer.on('oauth:spotify-done', handler);
     return () => ipcRenderer.removeListener('oauth:spotify-done', handler);
   },
+  /** Oyun overlay (Ctrl+Shift+`) */
+  toggleGameOverlay: () => ipcRenderer.invoke('overlay:toggle'),
+  isGameOverlayVisible: () => ipcRenderer.invoke('overlay:is-visible'),
+  setGameOverlayState: (state) => ipcRenderer.invoke('overlay:set-state', state),
+  setOverlayPrefs: (prefs) => ipcRenderer.invoke('overlay:set-prefs', prefs),
+  getOverlayPrefs: () => ipcRenderer.invoke('overlay:get-prefs'),
+  setWatchPartyAdblock: (enabled) =>
+    ipcRenderer.invoke('adblock:set-enabled', Boolean(enabled)),
+  onOverlayVoiceCommand: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('overlay:voice-command', handler);
+    return () => ipcRenderer.removeListener('overlay:voice-command', handler);
+  },
+  onOverlayQuickChat: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('overlay:quick-chat', handler);
+    return () => ipcRenderer.removeListener('overlay:quick-chat', handler);
+  },
 });

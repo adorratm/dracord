@@ -1,9 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager } from 'typeorm';
 import type { UserActivity } from '@dracord/types';
 import { OauthConnection } from '@/database/entities/oauth-connection.entity';
 import { UserActivityService } from '@/presence/user-activity.service';
+import { QueuesService } from '@/queues/queues.service';
 
 const SPOTIFY_AUTH = 'https://accounts.spotify.com';
 const SPOTIFY_API = 'https://api.spotify.com/v1';
@@ -19,6 +20,7 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     private readonly em: EntityManager,
     private readonly userActivity: UserActivityService,
+    @Optional() private readonly queues?: QueuesService,
   ) {}
 
   isConfigured(): boolean {
@@ -104,13 +106,24 @@ export class SpotifyService implements OnModuleInit, OnModuleDestroy {
       this.log.warn('SPOTIFY_CLIENT_ID/SECRET yok — Spotify presence kapalı');
       return;
     }
-    // Şarkı değişimini hızlı yansıt; TTL 90s ile uyumlu
-    this.timer = setInterval(() => void this.pollAll(), 10_000);
-    void this.pollAll();
+    // Scheduler kuyruğa atar; worker pollAllOnce çalıştırır
+    this.timer = setInterval(() => {
+      if (this.queues) {
+        void this.queues.enqueueSpotifyPoll().catch(() => undefined);
+      } else {
+        void this.pollAllOnce();
+      }
+    }, 10_000);
+    void this.pollAllOnce();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /** BullMQ worker giriş noktası */
+  async pollAllOnce() {
+    return this.pollAll();
   }
 
   private async pollAll() {

@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Optional, Post, Query, UseGuards } from '@nestjs/common';
 import { PlatformAdminService } from '@/auth/platform-admin.service';
 import {
   CurrentUser,
   type JwtPayloadUser,
 } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { QueuesService } from '@/queues/queues.service';
 import { ElasticsearchService } from './elasticsearch.service';
 import { SearchIndexerService } from './search-indexer.service';
 import { SearchService } from './search.service';
@@ -17,6 +18,7 @@ export class SearchController {
     private readonly indexer: SearchIndexerService,
     private readonly es: ElasticsearchService,
     private readonly platformAdmin: PlatformAdminService,
+    @Optional() private readonly queues?: QueuesService,
   ) {}
 
   @Get()
@@ -48,6 +50,10 @@ export class SearchController {
   @Post('reindex')
   async reindex(@CurrentUser() user: JwtPayloadUser) {
     await this.platformAdmin.assertIsPlatformAdmin(user.sub);
+    if (this.queues) {
+      await this.queues.enqueueSearchReindex();
+      return { queued: true };
+    }
     return this.indexer.reindexAll();
   }
 }

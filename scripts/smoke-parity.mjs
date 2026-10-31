@@ -30,9 +30,13 @@ results.push(await check('/health/gateway'));
 results.push(await check('/v1/health'));
 results.push(await check('/health/funnel'));
 results.push(await check('/client/versions'));
+results.push(await check('/.well-known/dracord'));
+results.push(await check('/openapi.json'));
 
 console.log('\nManuel smoke (native-parity-checklist.md):');
 console.log('  login → mesaj → ses → oyun → watch → keşfet → ayarlar');
+console.log('  bilardo sıra değişimi · OAuth consent · slash sync');
+console.log('  ekstra: node scripts/smoke-shard.mjs · smoke-staging-flags.mjs');
 console.log(
   results.every(Boolean) ? '\nPublic health: PASS' : '\nPublic health: FAIL',
 );

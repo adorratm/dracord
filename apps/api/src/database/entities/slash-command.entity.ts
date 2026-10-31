@@ -11,6 +11,26 @@ import { CuidEntity } from './cuid-base.entity';
 import type { Guild } from './guild.entity';
 import type { User } from './user.entity';
 
+/** Discord ApplicationCommandOptionType uyumlu */
+export type SlashOptionType =
+  | 3 // STRING
+  | 4 // INTEGER
+  | 5 // BOOLEAN
+  | 6 // USER
+  | 7 // CHANNEL
+  | 8 // ROLE
+  | 9 // MENTIONABLE
+  | 10 // NUMBER
+  | 11; // ATTACHMENT
+
+export type SlashCommandOption = {
+  type: SlashOptionType;
+  name: string;
+  description: string;
+  required?: boolean;
+  choices?: Array<{ name: string; value: string | number }>;
+};
+
 /** Sunucuya özel veya global slash komut kaydı */
 @Entity('slash_commands')
 @Unique(['guildId', 'name'])
@@ -32,7 +52,11 @@ export class SlashCommand extends CuidEntity {
   @Column({ type: 'varchar' })
   usage!: string;
 
-  /** Bot yanıt şablonu: {user} {args} {command} — boşsa varsayılan özet */
+  /** Discord-parity tipli argümanlar (jsonb) */
+  @Column({ type: 'jsonb', nullable: true })
+  options!: SlashCommandOption[] | null;
+
+  /** Bot yanıt şablonu: {user} {args} {command} {opt.NAME} — boşsa varsayılan özet */
   @Column({ type: 'varchar', nullable: true })
   responseTemplate!: string | null;
 

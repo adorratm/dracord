@@ -17,8 +17,15 @@
     "desktop:dev": "yarn workspace @dracord/desktop dev",
     "desktop-ui": "yarn workspace @dracord/desktop-ui dev",
     "mobile": "yarn workspace @dracord/mobile dev",
+    "docs": "yarn workspace @dracord/docs dev",
+    "docs:check": "node scripts/check-docs.mjs",
+    "bot-sdk:build": "yarn workspace @dracord/bot-sdk build",
+    "bot-sdk:publish": "yarn workspace @dracord/bot-sdk publish:npm",
+    "smoke": "node scripts/smoke-parity.mjs",
+    "smoke:shard": "node scripts/smoke-shard.mjs",
+    "smoke:staging": "node scripts/smoke-staging-flags.mjs",
     "db:generate": "echo \"TypeORM: no client generation step\"",
-    "db:migrate": "echo \"TypeORM synchronize on boot (non-production)\"",
+    "db:migrate": "yarn workspace @dracord/api db:migrate",
     "db:seed": "yarn workspace @dracord/api db:seed",
     "docker:up": "docker compose -f docker/docker-compose.yml --env-file .env up -d postgres pgbouncer redis elasticsearch livekit",
     "docker:up:all": "docker compose -f docker/docker-compose.yml --env-file .env up -d --build",
@@ -32,11 +39,11 @@
     "typescript": "^6.0.3"
   },
   "volta": {
-    "node": "26.12.1",
+    "node": "27.0.0-alpha.0.0.0",
     "yarn": "4.18.1"
   },
   "dependencies": {
-    "framer-motion": "^14.7.1"
+    "framer-motion": "^14.9.0"
   },
   "resolutions": {
     "uuid": "11.1.1",

@@ -4,12 +4,19 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'crypto';
 import { EntityManager } from 'typeorm';
+import { GiftCode, type GiftKind } from '@/database/entities/gift-code.entity';
 import { User } from '@/database/entities/user.entity';
 import { mergeClientSettings } from '@/users/client-settings';
 import { isNitroPaymentsEnabled } from '@/platform/platform-enabled';
 import { createId } from '@paralleldrive/cuid2';
 import { paytrPaymentHash, paytrVerifyCallback } from './paytr';
+
+function makeGiftCode(): string {
+  const part = () => randomBytes(2).toString('hex').toUpperCase();
+  return `${part()}-${part()}-${part()}-${part()}`;
+}
 
 const PLAN_AMOUNT_KURUS: Record<'basic' | 'nitro', string> = {
   basic: '4990',
@@ -233,5 +240,93 @@ export class BillingService {
     }
     await this.subscribe(userId!, plan, { skipPaymentCheck: true });
     return { status: 'OK' };
+  }
+
+  private giftDto(row: GiftCode) {
+    return {
+      id: row.id,
+      kind: row.kind,
+      label: row.label,
+      code: row.code,
+      redeemed: Boolean(row.redeemedAt),
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async listGifts(userId: string) {
+    const rows = await this.em.find(GiftCode, {
+      where: { createdByUserId: userId },
+      order: { createdAt: 'DESC' },
+      take: 100,
+    });
+    return { gifts: rows.map((r) => this.giftDto(r)) };
+  }
+
+  async createGift(userId: string, kind: GiftKind) {
+    if (kind !== 'nitro' && kind !== 'boost') {
+      throw new BadRequestException('kind nitro|boost olmalı');
+    }
+    let code = makeGiftCode();
+    for (let i = 0; i < 5; i++) {
+      const exists = await this.em.findOne(GiftCode, { where: { code } });
+      if (!exists) break;
+      code = makeGiftCode();
+    }
+    const row = this.em.create(GiftCode, {
+      code,
+      kind,
+      label: kind === 'nitro' ? 'Nitro hediyesi' : 'Takviye hediyesi',
+      createdByUserId: userId,
+      redeemedByUserId: null,
+      redeemedAt: null,
+    });
+    await this.em.save(GiftCode, row);
+    return { gift: this.giftDto(row) };
+  }
+
+  async redeemGift(userId: string, rawCode: string) {
+    const code = rawCode?.trim().toUpperCase();
+    if (!code) throw new BadRequestException('Kod gerekli');
+
+    // Demo sabitleri — seed/test
+    if (code === 'DRACORD-NITRO' || code === 'DRACORD-BOOST') {
+      const kind: GiftKind = code === 'DRACORD-NITRO' ? 'nitro' : 'boost';
+      return this.applyGiftBenefit(userId, kind);
+    }
+
+    const row = await this.em.findOne(GiftCode, { where: { code } });
+    if (!row || row.redeemedAt) {
+      throw new BadRequestException('Geçersiz veya kullanılmış kod');
+    }
+    if (row.createdByUserId === userId) {
+      throw new BadRequestException('Kendi hediye kodunu kullanamazsın');
+    }
+    row.redeemedByUserId = userId;
+    row.redeemedAt = new Date();
+    await this.em.save(GiftCode, row);
+    return this.applyGiftBenefit(userId, row.kind);
+  }
+
+  private async applyGiftBenefit(userId: string, kind: GiftKind) {
+    const user = await this.em.findOne(User, { where: { id: userId } });
+    if (!user) throw new BadRequestException('Kullanıcı yok');
+    const settings = mergeClientSettings(user.clientSettings);
+    if (kind === 'nitro') {
+      const expires = new Date();
+      expires.setMonth(expires.getMonth() + 1);
+      const nextPlan =
+        settings.billing.nitroPlan === 'nitro' ? 'nitro' : 'basic';
+      settings.billing.nitroPlan = nextPlan;
+      settings.billing.nitroExpiresAt = expires.toISOString();
+      settings.billing.boostCredits = Math.max(
+        settings.billing.boostCredits,
+        nextPlan === 'nitro' ? 2 : 1,
+      );
+    } else {
+      settings.billing.boostCredits += 1;
+    }
+    user.clientSettings = settings as unknown as Record<string, unknown>;
+    await this.em.save(user);
+    return { billing: settings.billing, kind };
   }
 }

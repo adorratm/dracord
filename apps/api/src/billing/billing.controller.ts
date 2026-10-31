@@ -48,4 +48,29 @@ export class BillingController {
   paytr(@Body() body: Record<string, unknown>) {
     return this.billing.paytrCallback(body ?? {});
   }
+
+  @Get('gifts')
+  @UseGuards(JwtAuthGuard)
+  listGifts(@Req() req: { user: { sub: string } }) {
+    return this.billing.listGifts(req.user.sub);
+  }
+
+  @Post('gifts')
+  @UseGuards(JwtAuthGuard)
+  createGift(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { kind?: 'nitro' | 'boost' },
+  ) {
+    const kind = body?.kind === 'boost' ? 'boost' : 'nitro';
+    return this.billing.createGift(req.user.sub, kind);
+  }
+
+  @Post('gifts/redeem')
+  @UseGuards(JwtAuthGuard)
+  redeemGift(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { code?: string },
+  ) {
+    return this.billing.redeemGift(req.user.sub, body?.code ?? '');
+  }
 }

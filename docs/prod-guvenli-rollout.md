@@ -22,9 +22,20 @@ Kolon yokken yeni API `stateVersion` okursa hata alabilir → **önce şema, son
 
 ## Davranış doğrulama (smoke)
 
+Otomatik:
+
+```bash
+yarn smoke                 # public health + discovery + openapi
+yarn smoke:staging         # flag / discovery özeti
+yarn smoke:shard           # guild hash + instance
+# multi-pod: SHARD_PEER_URL=http://api-b:4000 yarn smoke:shard
+```
+
+Manuel:
+
 - [ ] Metin kanalı mesaj / presence
 - [ ] Ses odası join / leave / roster (reconnect sonrası liste dolu)
-- [ ] Bilardo vuruş (flag’siz)
+- [ ] Bilardo vuruş + **sıra değişiminde nişangâh**
 - [ ] Watch party play/seek (host heartbeat sessiz)
 - [ ] Trivia / kelime / blackjack turu (state silinmemeli)
 - [ ] Keşfet sunucu listesi + katıl

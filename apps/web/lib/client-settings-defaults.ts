@@ -51,6 +51,15 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     minimizeToTray: true,
     autoUpdate: true,
   },
+  overlay: {
+    enabled: true,
+    hotkey: 'Control+Shift+`',
+    followDisplay: true,
+    showMembers: true,
+    showQuickChat: true,
+    opacity: 0.94,
+    watchPartyAdblock: true,
+  },
   language: {
     locale: 'tr',
     hour24: true,

@@ -11,6 +11,7 @@ const nav = [
   { href: '/guilds', label: 'Sunucular' },
   { href: '/developers', label: 'Geliştiriciler' },
   { href: '/queues', label: 'Kuyruklar' },
+  { href: '/trust-safety', label: 'T&S' },
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {

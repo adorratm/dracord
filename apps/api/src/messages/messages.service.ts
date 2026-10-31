@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   EntityManager,
@@ -49,6 +50,7 @@ import { NotificationsRealtimeService } from '@/notifications/notifications-real
 import { SearchIndexerService } from '@/search/search-indexer.service';
 import { MusicCommandsService } from '@/music/music-commands.service';
 import { AutomodService } from '@/moderation/automod.service';
+import { QueuesService } from '@/queues/queues.service';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { LinkPreviewService } from './link-preview.service';
 import { CustomSlashService } from './custom-slash.service';
@@ -75,6 +77,7 @@ export class MessagesService {
     private readonly musicCommands: MusicCommandsService,
     private readonly customSlash: CustomSlashService,
     private readonly automod: AutomodService,
+    @Optional() private readonly queues?: QueuesService,
   ) {}
 
   async listChannelMessages(
@@ -390,7 +393,7 @@ export class MessagesService {
       }
     }
     const trimmed = content.trim();
-    this.automod.assertMessageAllowed(trimmed, channelRow?.guildId);
+    await this.automod.assertMessageAllowed(trimmed, channelRow?.guildId);
     const msgType: MessageType = opts.type === 'heading' ? 'heading' : 'default';
     let poll: MessagePollStored | null = null;
     if (pollInput && msgType === 'default') {
@@ -471,10 +474,6 @@ export class MessagesService {
       }
     }
 
-    const embeds =
-      msgType === 'default' && trimmed && !poll && !/^sticker:\S+$/u.test(trimmed)
-        ? await this.linkPreview.buildEmbeds(trimmed)
-        : [];
     // Attachment URL’leri content’te tekrarlanıyorsa embed’i atla (yalnızca görsel mesaj)
     const attachmentUrls = new Set((attachments ?? []).map((a) => a.url));
     const contentUrls = trimmed ? this.linkPreview.extractUrls(trimmed) : [];
@@ -482,7 +481,13 @@ export class MessagesService {
       attachmentUrls.size > 0 &&
       contentUrls.length > 0 &&
       contentUrls.every((u) => attachmentUrls.has(u));
-    const finalEmbeds = onlyAttachmentUrls ? [] : embeds;
+    const wantPreview =
+      msgType === 'default' &&
+      Boolean(trimmed) &&
+      !poll &&
+      !/^sticker:\S+$/u.test(trimmed) &&
+      !onlyAttachmentUrls;
+    // Link preview BullMQ’ya; ilk yanıt hızlı gelsin
     const saved = await this.em.save(
       Message,
       this.em.create(Message, {
@@ -496,7 +501,7 @@ export class MessagesService {
         pinnedById: null,
         forwardedFrom: opts.forwardedFrom ?? null,
         attachments: attachments?.length ? attachments : null,
-        embeds: finalEmbeds.length ? finalEmbeds : null,
+        embeds: null,
         poll,
       }),
     );
@@ -521,6 +526,34 @@ export class MessagesService {
         ? []
         : await this.createMessageNotifications(dto, channelRow, userId);
     this.realtime.emitCreate(channelId, dto);
+
+    if (wantPreview && this.queues) {
+      void this.queues
+        .enqueueLinkPreview({
+          messageId: saved.id,
+          channelId,
+          content: trimmed,
+        })
+        .catch(() => undefined);
+    } else if (wantPreview) {
+      void this.applyLinkPreviewEmbeds(saved.id, channelId, trimmed).catch(
+        () => undefined,
+      );
+    }
+
+    if (this.queues) {
+      void this.queues
+        .enqueueMediaScan({
+          guildId: channelRow?.guildId ?? null,
+          channelId,
+          messageId: saved.id,
+          userId,
+          content: trimmed,
+          attachmentUrls: (attachments ?? []).map((a) => a.url),
+          source: 'message-create',
+        })
+        .catch(() => undefined);
+    }
 
     if (threadRootId) {
       const replyCount = await this.em.count(Message, {
@@ -765,6 +798,33 @@ export class MessagesService {
     void this.indexer.indexMessage(dto).catch(() => undefined);
     this.realtime.emitUpdate(message.channelId, dto);
     return dto;
+  }
+
+  /** BullMQ link.preview worker — embed’leri yazıp MESSAGE_UPDATE yayınlar */
+  async applyLinkPreviewEmbeds(
+    messageId: string,
+    channelId: string,
+    content: string,
+  ): Promise<void> {
+    const embeds = await this.linkPreview.buildEmbeds(content);
+    if (!embeds.length) return;
+    const message = await this.em.findOne(Message, {
+      where: { id: messageId, channelId, deletedAt: IsNull() },
+      relations: { author: true },
+    });
+    if (!message) return;
+    message.embeds = embeds;
+    await this.em.save(Message, message);
+    const reactions = await this.em.find(Reaction, {
+      where: { messageId },
+      relations: { user: true },
+    });
+    const dto = await this.toDtoResolved(message, {
+      viewerId: message.authorId,
+      reactions,
+    });
+    void this.indexer.indexMessage(dto).catch(() => undefined);
+    this.realtime.emitUpdate(channelId, dto);
   }
 
   async deleteMessage(messageId: string, userId: string): Promise<{ id: string; channelId: string }> {

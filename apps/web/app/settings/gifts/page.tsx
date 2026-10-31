@@ -1,82 +1,80 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
 import {
   SettingsPage,
   SettingsSection,
   SettingsNote,
 } from '@/components/settings/SettingsControls';
 import { useUserPreferences } from '@/lib/user-preferences';
-import { newId } from '@/lib/totp';
 
-function makeCode(): string {
-  const part = () => Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${part()}-${part()}-${part()}`;
-}
+type GiftRow = {
+  id: string;
+  kind: 'nitro' | 'boost';
+  label: string;
+  code: string;
+  redeemed: boolean;
+  createdAt: string;
+};
 
 export default function GiftsPage() {
-  const { prefs, setSection } = useUserPreferences();
+  const { client } = useAuth();
+  const { setSection } = useUserPreferences();
+  const [gifts, setGifts] = useState<GiftRow[]>([]);
   const [code, setCode] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const createGift = (kind: 'nitro' | 'boost') => {
-    const gift = {
-      id: newId('gift'),
-      kind,
-      label: kind === 'nitro' ? 'Nitro hediyesi' : 'Takviye hediyesi',
-      code: makeCode(),
-      redeemed: false,
-    };
-    setSection('billing', { gifts: [gift, ...prefs.billing.gifts] });
+  const load = useCallback(async () => {
+    try {
+      const res = await client.listGifts();
+      setGifts(res.gifts ?? []);
+    } catch {
+      /* offline */
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const createGift = async (kind: 'nitro' | 'boost') => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await client.createGift(kind);
+      setGifts((prev) => [res.gift, ...prev]);
+      setMsg(`Kod oluşturuldu: ${res.gift.code}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Oluşturma başarısız');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const redeem = () => {
+  const redeem = async () => {
+    setBusy(true);
     setMsg(null);
-    const normalized = code.trim().toUpperCase();
-    const gift = prefs.billing.gifts.find(
-      (g) => g.code === normalized && !g.redeemed,
-    );
-    if (!gift) {
-      // Demo: DRACORD-NITRO / DRACORD-BOOST sabit kodları
-      if (normalized === 'DRACORD-NITRO') {
-        const expires = new Date();
-        expires.setMonth(expires.getMonth() + 1);
-        setSection('billing', {
-          nitroPlan: 'nitro',
-          nitroExpiresAt: expires.toISOString(),
-        });
-        setMsg('Nitro kodu kullanıldı!');
-        setCode('');
-        return;
-      }
-      if (normalized === 'DRACORD-BOOST') {
-        setSection('billing', { boostCredits: prefs.billing.boostCredits + 1 });
-        setMsg('Takviye kodu kullanıldı!');
-        setCode('');
-        return;
-      }
-      setMsg('Geçersiz veya kullanılmış kod.');
-      return;
-    }
-    const gifts = prefs.billing.gifts.map((g) =>
-      g.id === gift.id ? { ...g, redeemed: true } : g,
-    );
-    if (gift.kind === 'nitro') {
-      const expires = new Date();
-      expires.setMonth(expires.getMonth() + 1);
+    try {
+      const res = await client.redeemGift(code);
       setSection('billing', {
-        gifts,
-        nitroPlan: 'basic',
-        nitroExpiresAt: expires.toISOString(),
+        nitroPlan: res.billing.nitroPlan,
+        nitroExpiresAt: res.billing.nitroExpiresAt,
+        boostCredits: res.billing.boostCredits,
       });
-    } else {
-      setSection('billing', {
-        gifts,
-        boostCredits: prefs.billing.boostCredits + 1,
-      });
+      setMsg(
+        res.kind === 'nitro'
+          ? 'Nitro hediyesi kullanıldı!'
+          : 'Takviye hediyesi kullanıldı!',
+      );
+      setCode('');
+      void load();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Kod kullanılamadı');
+    } finally {
+      setBusy(false);
     }
-    setMsg('Hediye kullanıldı!');
-    setCode('');
   };
 
   return (
@@ -86,13 +84,14 @@ export default function GiftsPage() {
           <input
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="XXXX-XXXX-XXXX veya DRACORD-NITRO"
+            placeholder="XXXX-XXXX-XXXX-XXXX veya DRACORD-NITRO"
             className="flex-1 h-10 rounded-lg bg-surface-container-highest px-3 outline-none font-body-sm"
           />
           <button
             type="button"
-            onClick={redeem}
-            className="px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+            disabled={busy || !code.trim()}
+            onClick={() => void redeem()}
+            className="px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
           >
             Kullan
           </button>
@@ -103,26 +102,32 @@ export default function GiftsPage() {
         <div className="px-space-md py-space-md flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => createGift('nitro')}
-            className="px-space-md py-space-sm rounded-lg bg-surface-container-high font-label-sm"
+            disabled={busy}
+            onClick={() => void createGift('nitro')}
+            className="px-space-md py-space-sm rounded-lg bg-surface-container-high font-label-sm disabled:opacity-50"
           >
             Nitro hediyesi oluştur
           </button>
           <button
             type="button"
-            onClick={() => createGift('boost')}
-            className="px-space-md py-space-sm rounded-lg bg-surface-container-high font-label-sm"
+            disabled={busy}
+            onClick={() => void createGift('boost')}
+            className="px-space-md py-space-sm rounded-lg bg-surface-container-high font-label-sm disabled:opacity-50"
           >
             Takviye hediyesi oluştur
           </button>
         </div>
+        <SettingsNote>
+          Kodlar sunucuda saklanır; başka bir hesaba hediye edebilirsin. Kendi
+          kodunu kullanamazsın.
+        </SettingsNote>
       </SettingsSection>
       <SettingsSection title="Envanter">
-        {prefs.billing.gifts.length === 0 ? (
+        {gifts.length === 0 ? (
           <SettingsNote>Hediye yok.</SettingsNote>
         ) : (
           <ul className="divide-y divide-surface-container-high">
-            {prefs.billing.gifts.map((g) => (
+            {gifts.map((g) => (
               <li key={g.id} className="px-space-md py-space-sm">
                 <p className="font-body-md">
                   {g.label}{' '}

@@ -13,6 +13,7 @@ import { ThreeSceneHost, type ThreeSceneApi } from '../three/ThreeSceneHost';
 import { disposeObject, pointerNdc, type GameProps } from '../three/sceneUtils';
 import {
   resolveWatchMedia,
+  watchMediaRiskMessage,
   watchMediaHint,
   type WatchMediaRef,
 } from '@/lib/watch-party-media';
@@ -55,6 +56,7 @@ export function WatchPartyRoom(props: Props) {
   const at = Number(state.at) || 0;
 
   const media = useMemo(() => (mediaUrl ? resolveWatchMedia(mediaUrl) : null), [mediaUrl]);
+  const mediaRisk = useMemo(() => watchMediaRiskMessage(media), [media]);
   const isEmbed = Boolean(media && !media.isDirectFile);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -757,6 +759,11 @@ export function WatchPartyRoom(props: Props) {
               {mediaError}
             </span>
           )}
+          {mediaRisk && (
+            <span className="pointer-events-auto inline-flex w-fit max-w-sm rounded-lg bg-[#ffb86c]/15 px-3 py-1 text-[11px] text-[#ffb86c]">
+              {mediaRisk}
+            </span>
+          )}
         </div>
 
         {/* Sinema: panel / tam ekran / duvar (embed) */}
@@ -765,7 +772,7 @@ export function WatchPartyRoom(props: Props) {
             ref={cinemaShellRef}
             className={
               cinemaMode === 'fullscreen'
-                ? 'fixed inset-0 z-[80] flex flex-col bg-black'
+                ? 'fixed inset-0 z-80 flex flex-col bg-black'
                 : showWallEmbed
                   ? 'absolute left-1/2 top-[18%] z-30 flex w-[min(56vw,640px)] -translate-x-1/2 flex-col overflow-hidden rounded-lg border border-[#bd93f9]/35 bg-black shadow-xl'
                   : 'absolute left-1/2 top-[10%] z-30 flex -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-[#bd93f9]/40 bg-black shadow-2xl'
@@ -833,7 +840,7 @@ export function WatchPartyRoom(props: Props) {
                   isHost={isHost}
                   muted={muted}
                   volume={volume}
-                  className="absolute inset-0 h-full w-full overflow-hidden bg-black [&_iframe]:!absolute [&_iframe]:!inset-0 [&_iframe]:!h-full [&_iframe]:!w-full [&_iframe]:!max-h-none [&_iframe]:!max-w-none"
+                  className="absolute inset-0 h-full w-full overflow-hidden bg-black [&_iframe]:absolute! [&_iframe]:inset-0! [&_iframe]:h-full! [&_iframe]:w-full! [&_iframe]:max-h-none! [&_iframe]:max-w-none!"
                   playerRef={embedPlayerRef}
                   onTime={(t, d) => {
                     setCurrent(t);

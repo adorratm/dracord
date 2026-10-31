@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { PlatformApplication } from '@/database/entities/platform-application.entity';
 import { isPlatformApiEnabled } from './platform-enabled';
-import { platformRateLimit } from './platform-rate-limit';
+import { PlatformRateLimitService } from './platform-rate-limit.service';
 
 export type BotAuthContext = {
   applicationId: string;
@@ -26,6 +26,7 @@ export class BotAuthGuard implements CanActivate {
   constructor(
     private readonly config: ConfigService,
     private readonly em: EntityManager,
+    private readonly rateLimit: PlatformRateLimitService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -51,10 +52,14 @@ export class BotAuthGuard implements CanActivate {
     if (!app?.botUserId) {
       throw new UnauthorizedException('Geçersiz bot token');
     }
-    const rl = platformRateLimit(`bot:${app.id}`);
+    const rl = await this.rateLimit.consume(`bot:${app.id}`);
     if (!rl.ok) {
       throw new HttpException(
-        `Rate limit — ${rl.retryAfterSec}s sonra tekrar dene`,
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: `Rate limit — ${rl.retryAfterSec}s sonra tekrar dene`,
+          retryAfter: rl.retryAfterSec,
+        },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }

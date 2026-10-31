@@ -36,12 +36,17 @@ SDK: `@dracord/sdk` — `platformHealth`, uygulamalar, `setPlatformWebhook`, `oa
 
 ## Kalan (olgunlaştırma)
 
-- [ ] OAuth refresh token + scope seçimi consent UI
-- [ ] Redis rate limit + audit log kalıcılığı
-- [ ] Bot WS gateway (`wss://…/v1/gateway`)
-- [ ] `@dracord/bot-sdk` paketi / npm publish
-- [ ] Müzik botu first-party application migration
-- [ ] Global (guild’siz) slash + Discord-parity command schema
+- [x] OAuth refresh token + scope seçimi consent UI
+- [x] Bot WS gateway (`/v1/gateway` Socket.IO)
+- [x] OpenAPI JSON (`/openapi.json`)
+- [x] Redis rate limit + platform audit log kalıcılığı
+- [x] `@dracord/bot-sdk` paketi (`packages/bot-sdk`; npm publish opsiyonel)
+- [x] Docs sitesi iskeleti (`apps/docs`)
+- [x] Müzik botu first-party application bootstrap (`Dracord Music`)
+- [x] Global (guild’siz) slash sync (`guildId: global`)
+- [x] Discord-parity command option schema (tipli argümanlar)
+- [x] Funnel persist + `yarn db:migrate`
+- [ ] Mintlify hosted publish (yerel docs sitesi mevcut)
 
 ---
 

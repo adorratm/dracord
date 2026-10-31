@@ -86,6 +86,8 @@ function inPocketMouth(x: number, z: number, px: number, pz: number) {
 }
 /** Güç çubuğu: 0→100 (ms) */
 const CHARGE_DURATION_MS = 1000;
+/** Otorite vuruşu sırasında izleyiciye ara top konumu (ms) */
+const MID_SHOT_SNAPSHOT_MS = 220;
 const CUE_START = { x: -3, z: 0 };
 /** Klasik doygun bilardo renkleri (pastel değil) */
 const BALL_COLORS = [
@@ -566,6 +568,8 @@ export function BilliardsGame(props: GameProps) {
     let pendingSync = false;
     let snapped = false;
     let simTime = 0;
+    let lastMidShotSnapAt = 0;
+    let midShotSnapBusy = false;
     let charging = false;
     let chargePower = 0;
     let chargeStartedAt = 0;
@@ -642,12 +646,38 @@ export function BilliardsGame(props: GameProps) {
       return out;
     };
 
+    /** Ara snapshot — fizik hızlarına dokunma */
+    const exportBallsLive = (): Ball[] => {
+      const out: Ball[] = [];
+      for (const b of [...bodies.values()].sort((a, c) => a.id - c.id)) {
+        const n = toNorm(b.x, b.z);
+        out.push({ id: b.id, x: n.x, y: n.y, vx: 0, vy: 0, ...(b.sunk ? { sunk: true } : {}) });
+      }
+      return out;
+    };
+
     /** Authority sonucu / tur değişiminde anında snap — lerp kaymasını önler */
     let forceSnap = true;
     let inputLocked = false;
+    let inputLockedSince = 0;
+    /** finishShot onPatch bitene kadar — legalContinue’da erken unlock çift vuruş yapmasın */
+    let patchPending = false;
     let localTurnOverride: number | null = null;
     let localCueInHandOverride: boolean | null = null;
     let lastSyncedTurn = Number(propsRef.current.session.state.turn ?? 0);
+    let waitingBallsFingerprint = '';
+
+    const lockInput = () => {
+      inputLocked = true;
+      inputLockedSince = performance.now();
+    };
+    const unlockInput = (force = false) => {
+      if (patchPending && !force) return;
+      inputLocked = false;
+      inputLockedSince = 0;
+      localTurnOverride = null;
+      localCueInHandOverride = null;
+    };
 
     const applyBallsState = (stateBalls: Ball[], snap: boolean) => {
       for (const b of stateBalls) {
@@ -669,7 +699,11 @@ export function BilliardsGame(props: GameProps) {
 
     const sync = () => {
       const st = propsRef.current.session.state;
+      const p = propsRef.current;
       const stateBalls = parseBalls(st.balls) ?? defaultBalls();
+      const ballsFp = stateBalls
+        .map((b) => `${b.id}:${b.x.toFixed(3)},${b.y.toFixed(3)},${b.sunk ? 1 : 0}`)
+        .join('|');
       const sunkMismatch = stateBalls.some((b) => b.sunk !== bodies.get(b.id)?.sunk);
       const posDrift = stateBalls.some((b) => {
         const body = bodies.get(b.id);
@@ -679,14 +713,47 @@ export function BilliardsGame(props: GameProps) {
         return Math.hypot(body.x - tx, body.z - tz) > 0.08;
       });
       const shotClear = !st.shot;
+      const shotActive = Boolean(st.shot);
       // Otorite vuruşu bitirdi (shot temiz + yeni balls) veya sapma görüldü
       const authorityTimedOut =
         waitingAuthority &&
         waitingAuthoritySince > 0 &&
         performance.now() - waitingAuthoritySince > WAITING_AUTHORITY_MS;
+      const ballsChangedWhileWaiting =
+        waitingAuthority &&
+        waitingBallsFingerprint !== '' &&
+        ballsFp !== waitingBallsFingerprint;
       const authorityArrived =
         waitingAuthority &&
-        (shotClear || sunkMismatch || posDrift || authorityTimedOut);
+        (ballsChangedWhileWaiting ||
+          sunkMismatch ||
+          posDrift ||
+          (shotClear && ballsChangedWhileWaiting) ||
+          (shotClear && !shotActive && performance.now() - waitingAuthoritySince > 400) ||
+          authorityTimedOut);
+
+      // Güvenlik: kilit 2.5s+ açık kalmasın (sıra değişimi / CAS yarışı)
+      if (
+        inputLocked &&
+        inputLockedSince > 0 &&
+        performance.now() - inputLockedSince > 2500 &&
+        !simulating
+      ) {
+        patchPending = false;
+        unlockInput(true);
+      }
+
+      // İzleyici / rakip: vuruş sürerken otorite ara snapshot → yerel predict’i bırak, balls’a uy
+      if (simulating && !isLocalAuthority && shotActive && !waitingAuthority) {
+        for (const b of bodies.values()) {
+          b.vx = 0;
+          b.vz = 0;
+        }
+        applyBallsState(stateBalls, posDrift || sunkMismatch || forceSnap);
+        forceSnap = false;
+        pendingSync = false;
+        return;
+      }
 
       // Rakip / izleyici: otorite balls gelince yerel sim'i kes
       if ((simulating && !isLocalAuthority) || waitingAuthority) {
@@ -694,10 +761,16 @@ export function BilliardsGame(props: GameProps) {
           simulating = false;
           waitingAuthority = false;
           waitingAuthoritySince = 0;
+          waitingBallsFingerprint = '';
           isLocalAuthority = false;
           shotOwner = null;
           forceSnap = true;
-          if (authorityTimedOut) inputLocked = false;
+          if (authorityTimedOut) unlockInput();
+        } else if (shotActive && (posDrift || sunkMismatch)) {
+          // Final gelmeden ara düzeltme
+          applyBallsState(stateBalls, true);
+          pendingSync = false;
+          return;
         } else {
           pendingSync = true;
           return;
@@ -709,11 +782,35 @@ export function BilliardsGame(props: GameProps) {
       pendingSync = false;
       const turnNow = Number(st.turn ?? 0);
       const turnChanged = turnNow !== lastSyncedTurn;
+      // Sıra değişti ama shot hâlâ state’te (yarış): topları uygula; kilidi de çöz
+      if (turnChanged && shotActive && !shotClear) {
+        applyBallsState(stateBalls, true);
+        if (
+          localTurnOverride !== null &&
+          turnNow === localTurnOverride
+        ) {
+          unlockInput();
+        }
+        forceSnap = false;
+        // lastSyncedTurn güncelle — aksi halde sonsuza turnChanged + early return
+        lastSyncedTurn = turnNow;
+        return;
+      }
       lastSyncedTurn = turnNow;
       if (localTurnOverride !== null && turnNow === localTurnOverride) {
-        localTurnOverride = null;
-        localCueInHandOverride = null;
-        inputLocked = false;
+        unlockInput();
+      }
+      // Sıra bende + shot yok + sim yok → kilit kalmamalı (imleç / nişangâh)
+      const nPlayers = Math.max(1, p.session.playerIds.length);
+      const myIdx = p.userId ? p.session.playerIds.indexOf(p.userId) : -1;
+      if (
+        inputLocked &&
+        !simulating &&
+        shotClear &&
+        myIdx >= 0 &&
+        myIdx === turnNow % nPlayers
+      ) {
+        unlockInput();
       }
       const snap =
         forceSnap || turnChanged || Boolean(st.cueInHand) || sunkMismatch || posDrift;
@@ -739,7 +836,7 @@ export function BilliardsGame(props: GameProps) {
     };
 
     const canControl = () => {
-      if (inputLocked || simulating) return false;
+      if (inputLocked || simulating || patchPending) return false;
       const p = propsRef.current;
       if (!p.canPlay || !p.userId || p.session.state.winner) return false;
       const turn =
@@ -873,6 +970,11 @@ export function BilliardsGame(props: GameProps) {
         // Otorite sonucu gelene kadar bekle — eski toplara geri alma (rollback) yapma
         waitingAuthority = true;
         waitingAuthoritySince = performance.now();
+        waitingBallsFingerprint = (
+          parseBalls(propsRef.current.session.state.balls) ?? defaultBalls()
+        )
+          .map((b) => `${b.id}:${b.x.toFixed(3)},${b.y.toFixed(3)},${b.sunk ? 1 : 0}`)
+          .join('|');
         isLocalAuthority = false;
         shotOwner = null;
         pendingSync = true;
@@ -886,29 +988,33 @@ export function BilliardsGame(props: GameProps) {
       shotOwner = null;
       if (!patch) {
         forceSnap = true;
+        unlockInput();
         sync();
         return;
       }
       // Optimistic: sıra / cue-in-hand / toplar hemen — çift vuruş ve kayma olmasın
       localTurnOverride = Number(patch.turn);
       localCueInHandOverride = Boolean(patch.cueInHand);
-      inputLocked = true;
+      patchPending = true;
+      lockInput();
       forceSnap = true;
       applyBallsState(patch.balls as Ball[], true);
       setBusy(true);
+      const patchStarted = performance.now();
       void propsRef.current
         .onPatch(patch)
         .catch(() => {
           // Patch fail (CAS/authority) — kilidi aç ki masa donmasın
-          localTurnOverride = null;
-          localCueInHandOverride = null;
-          inputLocked = false;
+          patchPending = false;
+          unlockInput(true);
         })
         .finally(() => {
+          patchPending = false;
           setBusy(false);
           forceSnap = true;
-          if (pendingSync) sync();
-          else sync();
+          // Geç gelen yanıt: kilit zaten güvenlikle açıldıysa tekrar kilitleme
+          if (performance.now() - patchStarted > 2800) unlockInput(true);
+          sync();
         });
     };
 
@@ -1140,7 +1246,11 @@ export function BilliardsGame(props: GameProps) {
       ghostFill.visible = show;
       aimObjLine.visible = show;
       aimCueLine.visible = show;
-      dom.style.cursor = show || (inHand && mine && !w) ? 'crosshair' : 'default';
+      // Kilit / sim / patch sırasında wait — sıra gelince crosshair
+      if (show || (inHand && mine && !w)) dom.style.cursor = 'crosshair';
+      else if (simulating || inputLocked || patchPending || waitingAuthority)
+        dom.style.cursor = 'wait';
+      else dom.style.cursor = 'default';
       if (!show) {
         charging = false;
         chargePower = 0;
@@ -1246,6 +1356,22 @@ export function BilliardsGame(props: GameProps) {
         for (const b of bodies.values()) {
           if (!b.sunk && Math.hypot(b.vx, b.vz) > 0.06) moving = true;
         }
+        // Otorite: ara snapshot — izleyici final’den önce aynı yolda kalsın
+        if (
+          isLocalAuthority &&
+          moving &&
+          !midShotSnapBusy &&
+          now - lastMidShotSnapAt >= MID_SHOT_SNAPSHOT_MS
+        ) {
+          lastMidShotSnapAt = now;
+          midShotSnapBusy = true;
+          void propsRef.current
+            .onPatch({ balls: exportBallsLive() })
+            .catch(() => undefined)
+            .finally(() => {
+              midShotSnapBusy = false;
+            });
+        }
         if (!moving || simTime > 14) finishShot();
       } else {
         // Snap sonrası lerp yok; yalnızca küçük düzeltme (opsiyonel yumuşaklık)
@@ -1299,7 +1425,14 @@ export function BilliardsGame(props: GameProps) {
         localCueInHandOverride !== null
           ? localCueInHandOverride
           : Boolean(p.session.state.cueInHand);
-      if (simulating || inputLocked || !canControl() || inHand || p.session.state.winner) {
+      if (
+        simulating ||
+        inputLocked ||
+        patchPending ||
+        !canControl() ||
+        inHand ||
+        p.session.state.winner
+      ) {
         cancelCharge();
         return;
       }
@@ -1483,7 +1616,7 @@ export function BilliardsGame(props: GameProps) {
       <span
         key={id}
         title={striped ? `Çizgili ${id}` : id === 8 ? '8' : `Düz ${id}`}
-        className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/40 text-[8px] font-bold leading-none sm:h-[1.125rem] sm:min-w-[1.125rem] sm:text-[9px]"
+        className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/40 text-[8px] font-bold leading-none sm:h-4.5 sm:min-w-4.5 sm:text-[9px]"
         style={{
           background: striped
             ? `linear-gradient(180deg, #f7f4ec 30%, ${bg} 30%, ${bg} 70%, #f7f4ec 70%)`
@@ -1553,7 +1686,7 @@ export function BilliardsGame(props: GameProps) {
               <div className="mb-1 text-center text-[11px] text-[#f8f8f2]/80">Güç %{power}</div>
               <div className="h-2 overflow-hidden rounded-full bg-[#282a36]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#50fa7b] via-[#f1fa8c] to-[#ff5555]"
+                  className="h-full rounded-full bg-linear-to-r from-[#50fa7b] via-[#f1fa8c] to-[#ff5555]"
                   style={{ width: `${power}%` }}
                 />
               </div>

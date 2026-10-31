@@ -2,13 +2,13 @@
 
 Ürün / teknik roadmap. Canlıyı bozmadan büyüme.
 
-Yayın: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md) · Smoke: [native-parity-checklist.md](./native-parity-checklist.md) · [prod-migration.md](./prod-migration.md) · [platform-api-tasarim.md](./platform-api-tasarim.md) · [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) · [sdk.md](./sdk.md)
+Yayın: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md) · Smoke: [native-parity-checklist.md](./native-parity-checklist.md) · [prod-migration.md](./prod-migration.md) · [platform-api-tasarim.md](./platform-api-tasarim.md) · [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) · [sdk.md](./sdk.md) · [developer/README.md](./developer/README.md)
 
 ---
 
 ## Durum özeti
 
-P0–P2 **çalışır MVP** tamam. P3: platform olgunlaştırma + ölçek (shard). Prod’da agresif özellikler flag arkasında.
+P0–P3 platform olgunlaştırma **MVP tamam**. Ölçek: Redis adapter + sticky LB + gateway shard MVP (guild hash / identify). Prod’da agresif özellikler flag arkasında.
 
 ### DoD
 
@@ -29,12 +29,34 @@ P0–P2 **çalışır MVP** tamam. P3: platform olgunlaştırma + ölçek (shard
 
 ---
 
-## P3 — Sonraki (opsiyonel)
+## P3 — Platform olgunlaştırma
 
-- [ ] Socket.IO / API **shard**
-- [ ] Platform: OAuth refresh, Redis rate limit, Bot WS, `@dracord/bot-sdk`
-- [ ] TypeORM migration runner (sync-once yerine)
-- [ ] Funnel metrikleri kalıcı store
+- [x] OAuth refresh + scope consent UI
+- [x] Redis rate limit (bellek fallback)
+- [x] Bot WS gateway `/v1/gateway`
+- [x] `@dracord/bot-sdk` paketi (npm publish opsiyonel)
+- [x] TypeORM migration runner (`yarn db:migrate`)
+- [x] Funnel metrikleri kalıcı store
+- [x] Global slash + Discord-parity options
+- [x] Gifts API · overlay ayarları · T&S hash import
+- [x] Docs sitesi (`apps/docs`) + OpenAPI JSON
+- [x] BullMQ: reminder / push / webhook / spotify poll
+- [x] Bilardo mid-shot + TrustedGuild T&S
+- [x] Desktop overlay + Watch Party adblock (webRequest)
+- [x] `GET /.well-known/dracord` (+ `instance.shard_*` + algorithm)
+- [x] Guild-hash gateway **shard** MVP (identify `shard`, dispatch filtre, voice WRONG_SHARD)
+- [x] Mintlify publish iskeleti (`docs/docs.json` + CI check) — **hosted hesap bağlama manuel**
+- [ ] PhotoDNA / NCMEC **yasal** ortaklık
+- [x] `@dracord/bot-sdk` publish pipeline (`publish-bot-sdk.yml` + pack) — **NPM_TOKEN ile gerçek publish manuel**
+- [x] Shard / staging smoke scriptleri (`yarn smoke:shard`, `yarn smoke:staging`)
+
+---
+
+## Bilinçli dışı
+
+- YouTube mid-roll strip / iframe DOM enjeksiyonu (ToS)
+- Exclusive-fullscreen DLL inject
+- Harici CSAM ML SaaS (lisanssız)
 
 ---
 
@@ -49,7 +71,8 @@ P0–P2 **çalışır MVP** tamam. P3: platform olgunlaştırma + ölçek (shard
 | `ACTIVITY_BILLIARDS_AUTHORITY` | off | Bilardo shot |
 | `SOCKET_REDIS_REQUIRED` | off | Ready Redis |
 | `AUTO_MOD` | on | `false` kapat |
+| `INSTANCE_SHARD_ID` / `COUNT` | 0 / 1 | Discovery instance stub |
 | `APPLE_CLIENT_ID` | — | Apple Sign In gerçek verify |
 | `PAYTR_*` | — | Merchant |
 
-Deploy: [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) · Yayın ops: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md)
+Deploy: [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) · Ölçek: [developer/scaling.md](./developer/scaling.md) · Yayın ops: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md)

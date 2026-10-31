@@ -68,10 +68,16 @@ function applyDomClasses(prefs: UserPreferences) {
 
   const desktop = (
     window as Window & {
-      dracordDesktop?: { setSystemPrefs?: (p: UserPreferences['system']) => void };
+      dracordDesktop?: {
+        setSystemPrefs?: (p: UserPreferences['system']) => void;
+        setOverlayPrefs?: (p: UserPreferences['overlay']) => void;
+        setWatchPartyAdblock?: (enabled: boolean) => void;
+      };
     }
   ).dracordDesktop;
   desktop?.setSystemPrefs?.(prefs.system);
+  desktop?.setOverlayPrefs?.(prefs.overlay);
+  desktop?.setWatchPartyAdblock?.(prefs.overlay.watchPartyAdblock !== false);
   configureUiTones({
     enabled: prefs.notifications.soundEnabled !== false,
     volume: prefs.notifications.uiToneVolume ?? 0.85,
@@ -91,6 +97,7 @@ function mergePrefs(
     accessibility: { ...base.accessibility, ...(patch.accessibility ?? {}) },
     appearance: { ...base.appearance, ...(patch.appearance ?? {}) },
     system: { ...base.system, ...(patch.system ?? {}) },
+    overlay: { ...base.overlay, ...(patch.overlay ?? {}) },
     language: { ...base.language, ...(patch.language ?? {}) },
     activity: { ...base.activity, ...(patch.activity ?? {}) },
     developer: { ...base.developer, ...(patch.developer ?? {}) },

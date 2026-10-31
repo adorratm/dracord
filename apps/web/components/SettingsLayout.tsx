@@ -35,7 +35,20 @@ const NAV: NavDef[] = [
         href: '/settings/account-status',
       },
       { id: 'privacy', labelKey: 'nav.privacy', icon: 'shield', href: '/settings/privacy' },
+      {
+        id: 'activity-privacy',
+        labelKey: 'nav.activityPrivacy',
+        icon: 'visibility',
+        href: '/settings/activity-privacy',
+      },
       { id: 'messaging', labelKey: 'nav.messaging', icon: 'forum', href: '/settings/messaging' },
+      {
+        id: 'connections',
+        labelKey: 'nav.connections',
+        icon: 'link',
+        href: '/settings/connections',
+      },
+      { id: 'family', labelKey: 'nav.family', icon: 'family_restroom', href: '/settings/family' },
       { id: 'bookmarks', labelKey: 'nav.bookmarks', icon: 'bookmark', href: '/settings/bookmarks' },
       {
         id: 'notifications',
@@ -64,6 +77,12 @@ const NAV: NavDef[] = [
         href: '/settings/subscriptions',
       },
       { id: 'gifts', labelKey: 'nav.gifts', icon: 'card_giftcard', href: '/settings/gifts' },
+      {
+        id: 'billing',
+        labelKey: 'nav.billingMethods',
+        icon: 'credit_card',
+        href: '/settings/billing',
+      },
     ],
   },
   {
@@ -71,6 +90,13 @@ const NAV: NavDef[] = [
     titleKey: 'nav.experience',
     items: [
       { id: 'voice', labelKey: 'nav.voice', icon: 'mic', href: '/settings/voice' },
+      {
+        id: 'overlay',
+        labelKey: 'nav.overlay',
+        icon: 'picture_in_picture_alt',
+        href: '/settings/overlay',
+      },
+      { id: 'games', labelKey: 'nav.games', icon: 'sports_esports', href: '/settings/games' },
       { id: 'appearance', labelKey: 'nav.appearance', icon: 'palette', href: '/settings/appearance' },
       {
         id: 'accessibility',

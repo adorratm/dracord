@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 :root,
 html.dark {
@@ -276,4 +275,28 @@ html.light .dracord-toast.Toastify__toast {
   direction: ltr;
   font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
+}
+
+/* Sayfa / kanal geçiş yumuşatma (View Transitions destekli tarayıcılar) */
+@supports (view-transition-name: none) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 160ms;
+    animation-timing-function: ease-out;
+  }
+}
+
+.dracord-route-fade {
+  animation: dracordRouteFade 160ms ease-out;
+}
+
+@keyframes dracordRouteFade {
+  from {
+    opacity: 0.72;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

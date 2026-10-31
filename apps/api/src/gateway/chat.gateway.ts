@@ -32,6 +32,11 @@ import { WsJwtGuard } from './ws-jwt.guard';
 import { GatewayMetricsService } from './gateway-metrics.service';
 import { SocketAdapterStateService } from './socket-adapter-state.service';
 import { SocketBroadcastService } from './socket-broadcast.service';
+import {
+  guildBelongsToShard,
+  guildShardIndex,
+  readInstanceShard,
+} from '@/platform/gateway-shard';
 
 interface WsUser {
   sub: string;
@@ -369,6 +374,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ): Promise<VoiceSyncPayload> {
     const user = client.data.user as WsUser;
     if (!body?.guildId) throw new WsException('guildId gerekli');
+    const { shardId, shardCount } = readInstanceShard(this.config);
+    if (!guildBelongsToShard(body.guildId, shardId, shardCount)) {
+      throw new WsException({
+        code: 'WRONG_SHARD',
+        message: 'guild bu instance shard diliminde değil',
+        shard_id: shardId,
+        shard_count: shardCount,
+        guild_shard: guildShardIndex(body.guildId, shardCount),
+      });
+    }
     try {
       // Üyelik + VIEW_CHANNEL filtresi (yan etki: roster erişim kontrolü)
       await this.channels.listGuildChannels(body.guildId, user.sub);

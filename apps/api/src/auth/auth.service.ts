@@ -452,21 +452,28 @@ export class AuthService {
     }
   }
 
-  /** 3. parti OAuth access token (kısa ömürlü, refresh yok) */
-  async issueOauthAccessToken(userId: string): Promise<{
+  /** 3. parti OAuth access token (+ opsiyonel refresh_token çağıran tarafta saklanır) */
+  async issueOauthAccessToken(
+    userId: string,
+    opts?: { scopes?: string[]; applicationId?: string },
+  ): Promise<{
     access_token: string;
     token_type: 'Bearer';
     expires_in: number;
+    scope: string;
   }> {
     const user = await this.getUserById(userId);
     const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
     const expiresInSec = 3600;
+    const scopes = opts?.scopes?.length ? opts.scopes : ['identify'];
     const accessToken = await this.jwt.signAsync(
       {
         sub: user.id,
-        email: user.email,
+        email: scopes.includes('email') ? user.email : undefined,
         username: user.username,
         typ: 'oauth',
+        scp: scopes,
+        aid: opts?.applicationId,
       },
       { secret: accessSecret, expiresIn: expiresInSec },
     );
@@ -474,6 +481,7 @@ export class AuthService {
       access_token: accessToken,
       token_type: 'Bearer',
       expires_in: expiresInSec,
+      scope: scopes.join(' '),
     };
   }
 

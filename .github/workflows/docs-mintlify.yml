@@ -1,0 +1,35 @@
+name: Docs (Mintlify check)
+
+# Mintlify Cloud deploy genelde mintlify.app bağlantısıyla yapılır.
+# Bu workflow monorepo docs.json + markdown bütünlüğünü kontrol eder.
+# Hosted publish: Mintlify dashboard → GitHub repo → docs path = docs
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'docs/**'
+      - 'apps/docs/**'
+      - '.github/workflows/docs-mintlify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Validate docs.json + required pages
+        run: node scripts/check-docs.mjs
+      - name: Install + build Next docs
+        run: |
+          yarn install --immutable
+          yarn workspace @dracord/docs build

@@ -539,6 +539,29 @@ export class DracordClient {
     return this.request(`/guilds/${guildId}`);
   }
 
+  async getGuildSafetyPolicy(guildId: string): Promise<{
+    trusted: boolean;
+    nsfwThreshold: number;
+    gamblingThreshold: number;
+    scanScreenShare: boolean;
+    scanAttachments: boolean;
+    scanText: boolean;
+    copyrightHeuristics: boolean;
+    clientNsfwOffAllowed: boolean;
+  }> {
+    return this.request(`/guilds/${guildId}/safety-policy`);
+  }
+
+  async reportGuildScreenSignal(
+    guildId: string,
+    data: { windowTitle: string; channelId?: string },
+  ): Promise<{ ok: boolean; queued: boolean }> {
+    return this.request(`/guilds/${guildId}/safety/screen-signal`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async updateGuild(
     guildId: string,
     data: {
@@ -1375,6 +1398,21 @@ export class DracordClient {
     return this.featuredGifs();
   }
 
+  /** Kullanıcı içerik şikayeti → T&S kuyruğu */
+  async createContentReport(data: {
+    category?: string;
+    guildId?: string | null;
+    channelId?: string | null;
+    messageId?: string | null;
+    targetUserId?: string | null;
+    reason?: string;
+  }): Promise<{ id: string; status: string; category: string }> {
+    return this.request('/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   /** @deprecated Use gifProviderStatus */
   async tenorStatus(): Promise<{ configured: boolean }> {
     return this.gifProviderStatus();
@@ -1647,12 +1685,31 @@ export class DracordClient {
     }>;
   }
 
+  async getOauthApplication(clientId: string) {
+    const res = await fetch(
+      `${this.baseUrl}/oauth2/application/${encodeURIComponent(clientId)}`,
+    );
+    if (!res.ok) {
+      throw new Error(`OAuth uygulama bilgisi alınamadı (${res.status})`);
+    }
+    return res.json() as Promise<{
+      id: string;
+      name: string;
+      description: string;
+      scopes: string[];
+    }>;
+  }
+
   async oauthAuthorize(opts: {
     clientId: string;
     redirectUri: string;
     responseType?: string;
     state?: string;
+    scope?: string | string[];
   }) {
+    const scope = Array.isArray(opts.scope)
+      ? opts.scope.join(' ')
+      : opts.scope;
     return this.request('/oauth2/authorize', {
       method: 'POST',
       body: JSON.stringify({
@@ -1660,12 +1717,42 @@ export class DracordClient {
         redirect_uri: opts.redirectUri,
         response_type: opts.responseType ?? 'code',
         state: opts.state,
+        scope,
       }),
     }) as Promise<{
       code?: string;
       redirect: string;
       redirect_uri?: string;
       state?: string | null;
+      scope?: string;
+      error?: string;
+    }>;
+  }
+
+  async oauthToken(opts: {
+    grantType: 'authorization_code' | 'refresh_token';
+    clientId: string;
+    code?: string;
+    redirectUri?: string;
+    refreshToken?: string;
+  }) {
+    const res = await fetch(`${this.baseUrl}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: opts.grantType,
+        client_id: opts.clientId,
+        code: opts.code,
+        redirect_uri: opts.redirectUri,
+        refresh_token: opts.refreshToken,
+      }),
+    });
+    return res.json() as Promise<{
+      access_token?: string;
+      token_type?: string;
+      expires_in?: number;
+      refresh_token?: string;
+      scope?: string;
       error?: string;
     }>;
   }
@@ -1713,6 +1800,45 @@ export class DracordClient {
       iframeUrl?: string | null;
       iframeToken?: string | null;
       message?: string;
+    }>;
+  }
+
+  async listGifts() {
+    return this.request('/billing/gifts') as Promise<{
+      gifts: Array<{
+        id: string;
+        kind: 'nitro' | 'boost';
+        label: string;
+        code: string;
+        redeemed: boolean;
+        createdAt: string;
+      }>;
+    }>;
+  }
+
+  async createGift(kind: 'nitro' | 'boost') {
+    return this.request('/billing/gifts', {
+      method: 'POST',
+      body: JSON.stringify({ kind }),
+    }) as Promise<{
+      gift: {
+        id: string;
+        kind: 'nitro' | 'boost';
+        label: string;
+        code: string;
+        redeemed: boolean;
+        createdAt: string;
+      };
+    }>;
+  }
+
+  async redeemGift(code: string) {
+    return this.request('/billing/gifts/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }) as Promise<{
+      billing: import('@dracord/types').ClientSettings['billing'];
+      kind: 'nitro' | 'boost';
     }>;
   }
 

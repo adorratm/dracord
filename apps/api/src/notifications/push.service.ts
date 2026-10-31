@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager } from 'typeorm';
 import * as webpush from 'web-push';
 import type { NotificationDto } from '@dracord/types';
 import { PushSubscription } from '@/database/entities/push-subscription.entity';
+import { QueuesService } from '@/queues/queues.service';
 
 @Injectable()
 export class PushService {
@@ -14,6 +15,7 @@ export class PushService {
   constructor(
     private readonly em: EntityManager,
     private readonly config: ConfigService,
+    @Optional() private readonly queues?: QueuesService,
   ) {
     const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY')?.trim() || '';
     const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY')?.trim() || '';
@@ -85,7 +87,18 @@ export class PushService {
     return { ok: true };
   }
 
+  /** HTTP yolundan — BullMQ’ya atar (retry / non-blocking) */
   async sendNotificationDtos(dtos: NotificationDto[]): Promise<void> {
+    if (!this.enabled || !dtos.length) return;
+    if (this.queues) {
+      await this.queues.enqueuePushNotify(dtos);
+      return;
+    }
+    await this.deliverNotificationDtos(dtos);
+  }
+
+  /** Worker içinden gerçek gönderim */
+  async deliverNotificationDtos(dtos: NotificationDto[]): Promise<void> {
     if (!this.enabled || !dtos.length) return;
     const byUser = new Map<string, NotificationDto[]>();
     for (const n of dtos) {

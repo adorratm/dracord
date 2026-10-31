@@ -1,0 +1,229 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0b0f14;
+  --bg-elevated: #12181f;
+  --panel: #151c24;
+  --text: #eef2f6;
+  --muted: #8b98a8;
+  --accent: #38bdf8;
+  --accent-dim: color-mix(in srgb, var(--accent) 18%, transparent);
+  --border: #243041;
+  --code: #0e141b;
+  --nav-w: 260px;
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(900px 420px at 8% -8%, #16324a 0%, transparent 55%),
+    radial-gradient(700px 380px at 100% 0%, #132028 0%, transparent 45%),
+    var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--nav-w) 1fr;
+  min-height: 100vh;
+}
+
+.nav {
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  backdrop-filter: blur(10px);
+  padding: 1.35rem 1.1rem 2rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--text);
+  margin-bottom: 1.5rem;
+  text-decoration: none;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+}
+
+.brand-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.nav-group {
+  margin-bottom: 1.15rem;
+}
+
+.nav-group-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.45rem 0.35rem;
+}
+
+.nav nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.nav a.nav-link {
+  color: var(--muted);
+  font-size: 0.92rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.nav a.nav-link:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+  text-decoration: none;
+}
+
+.muted {
+  margin-top: 1.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.content {
+  padding: 2.25rem clamp(1.25rem, 4vw, 3.25rem) 4rem;
+  max-width: 860px;
+}
+
+.hero-card {
+  margin: 0 0 1.75rem;
+  padding: 1.35rem 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%),
+    var(--panel);
+}
+
+.hero-card p {
+  margin: 0.35rem 0 0;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+
+.pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.22rem 0.65rem;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 3vw, 2.15rem);
+  margin: 0 0 0.65rem;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin: 2rem 0 0.65rem;
+  letter-spacing: -0.02em;
+}
+
+p,
+li {
+  line-height: 1.65;
+  color: color-mix(in srgb, var(--text) 90%, var(--muted));
+}
+
+code,
+pre {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+}
+
+code {
+  background: var(--code);
+  padding: 0.12rem 0.38rem;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+pre {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 0.55rem 0.4rem;
+}
+
+@media (max-width: 800px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .nav {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

@@ -77,18 +77,46 @@ function scoresFromPredictions(
   return labels;
 }
 
-export function evaluateNsfwScores(labels: NsfwLabelScores): NsfwVerdict {
+export type NsfwThresholds = {
+  porn?: number;
+  hentai?: number;
+  sexy?: number;
+  combo?: number;
+};
+
+/** Guild safety policy nsfwThreshold (0–1) → model eşikleri */
+export function thresholdsFromPolicy(nsfwThreshold?: number | null): NsfwThresholds {
+  const t =
+    typeof nsfwThreshold === 'number' && Number.isFinite(nsfwThreshold)
+      ? Math.min(0.95, Math.max(0.25, nsfwThreshold))
+      : PORN_THRESHOLD;
+  return {
+    porn: t,
+    hentai: t,
+    combo: Math.min(0.98, t + 0.17),
+    sexy: Math.min(0.98, Math.max(0.75, t + 0.35)),
+  };
+}
+
+export function evaluateNsfwScores(
+  labels: NsfwLabelScores,
+  thresholds?: NsfwThresholds,
+): NsfwVerdict {
+  const pornT = thresholds?.porn ?? PORN_THRESHOLD;
+  const hentaiT = thresholds?.hentai ?? HENTAI_THRESHOLD;
+  const comboT = thresholds?.combo ?? COMBO_THRESHOLD;
+  const sexyT = thresholds?.sexy ?? SEXY_THRESHOLD;
   const combo = labels.Porn + labels.Hentai + labels.Sexy * 0.5;
-  if (labels.Porn >= PORN_THRESHOLD) {
+  if (labels.Porn >= pornT) {
     return { blocked: true, score: labels.Porn, labels, reason: 'porn' };
   }
-  if (labels.Hentai >= HENTAI_THRESHOLD) {
+  if (labels.Hentai >= hentaiT) {
     return { blocked: true, score: labels.Hentai, labels, reason: 'hentai' };
   }
-  if (combo >= COMBO_THRESHOLD) {
+  if (combo >= comboT) {
     return { blocked: true, score: combo, labels, reason: 'combo' };
   }
-  if (labels.Sexy >= SEXY_THRESHOLD) {
+  if (labels.Sexy >= sexyT) {
     return { blocked: true, score: labels.Sexy, labels, reason: 'sexy' };
   }
   return {
@@ -148,6 +176,7 @@ function downscaleBitmap(bitmap: ImageBitmap, maxSide = 224): HTMLCanvasElement 
 
 export async function classifyMediaTrack(
   track: MediaStreamTrack,
+  thresholds?: NsfwThresholds,
 ): Promise<NsfwVerdict | null> {
   if (track.readyState !== 'live' || track.kind !== 'video') return null;
   let bitmap: ImageBitmap | null = null;
@@ -157,7 +186,7 @@ export async function classifyMediaTrack(
     const canvas = downscaleBitmap(bitmap);
     const model = await getModel();
     const preds = await model.classify(canvas, 5);
-    return evaluateNsfwScores(scoresFromPredictions(preds));
+    return evaluateNsfwScores(scoresFromPredictions(preds), thresholds);
   } catch (err) {
     console.warn('[nsfw-guard] classify failed', err);
     return null;
@@ -243,6 +272,9 @@ export function startNsfwTrackMonitor(opts: {
   getTrack: () => MediaStreamTrack | null | undefined;
   onBlocked: (verdict: NsfwVerdict) => void;
   intervalMs?: number;
+  /** Guild safety nsfwThreshold (0–1) — floor sıkılaştırması */
+  nsfwThreshold?: number | null;
+  thresholds?: NsfwThresholds;
   /** Model önceden ısınsın */
   warmup?: boolean;
 }): NsfwMonitorHandle {
@@ -250,6 +282,8 @@ export function startNsfwTrackMonitor(opts: {
   let hits = 0;
   let timer: number | null = null;
   let inFlight = false;
+  const thresholds =
+    opts.thresholds ?? thresholdsFromPolicy(opts.nsfwThreshold);
 
   if (opts.warmup !== false) {
     void getModel().catch(() => undefined);
@@ -264,7 +298,7 @@ export function startNsfwTrackMonitor(opts: {
     }
     inFlight = true;
     try {
-      const verdict = await classifyMediaTrack(track);
+      const verdict = await classifyMediaTrack(track, thresholds);
       if (stopped) return;
       // Fail-closed: tarama başarısız / model yok → ardışık hatalarda engelle
       if (!verdict) {

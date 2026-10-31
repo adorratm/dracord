@@ -31,6 +31,7 @@ import { BillingModule } from '@/billing/billing.module';
 import { ModerationModule } from '@/moderation/moderation.module';
 import { StickersModule } from '@/stickers/stickers.module';
 import { MetricsModule } from '@/metrics/metrics.module';
+import { DiscoveryModule } from '@/discovery/discovery.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { MetricsModule } from '@/metrics/metrics.module';
     GuildEventsModule,
     SpotifyModule,
     StickersModule,
+    DiscoveryModule,
   ],
 })
 export class AppModule {}

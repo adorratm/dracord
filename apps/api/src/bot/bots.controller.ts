@@ -5,7 +5,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { EntityManager, IsNull } from 'typeorm';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { GuildMember } from '@/database/entities/guild-member.entity';
@@ -98,6 +98,8 @@ export class BotsController {
       botId?: string;
       botName?: string;
       custom?: boolean;
+      global?: boolean;
+      options?: unknown;
     }> = [];
 
     if (guildId) {
@@ -108,7 +110,7 @@ export class BotsController {
         throw new ForbiddenException('Bu sunucunun üyesi değilsin');
       }
       const rows = await this.em.find(SlashCommand, {
-        where: { guildId },
+        where: [{ guildId }, { guildId: IsNull() }],
         order: { name: 'ASC' },
       });
       for (const row of rows) {
@@ -121,6 +123,8 @@ export class BotsController {
           botId: row.botUserId ?? undefined,
           botName: row.botName ?? 'Özel',
           custom: true,
+          global: row.guildId == null,
+          options: row.options ?? undefined,
         });
       }
     }

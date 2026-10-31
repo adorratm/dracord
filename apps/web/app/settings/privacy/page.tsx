@@ -116,9 +116,29 @@ export default function PrivacySettingsPage() {
           }}
         />
         <SettingsNote>
-          {locale === 'en'
-            ? 'Link preview censorship is under Appearance.'
-            : 'Link önizleme sansürü Görünüm ayarlarında.'}
+          {locale === 'en' ? (
+            <>
+              Game / Spotify / desktop activity details:{' '}
+              <Link
+                href="/settings/activity-privacy"
+                className="text-primary-container hover:underline"
+              >
+                Activity Privacy
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              Oyun / Spotify / masaüstü etkinlik ayrıntıları:{' '}
+              <Link
+                href="/settings/activity-privacy"
+                className="text-primary-container hover:underline"
+              >
+                Etkinlik Gizliliği
+              </Link>
+              .
+            </>
+          )}
         </SettingsNote>
       </SettingsSection>
     </SettingsPage>

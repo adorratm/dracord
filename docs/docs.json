@@ -1,0 +1,42 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Dracord Developer",
+  "theme": "mint",
+  "colors": {
+    "primary": "#0EA5E9",
+    "light": "#38BDF8",
+    "dark": "#0369A1"
+  },
+  "favicon": "/favicon.ico",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Başlangıç",
+            "pages": [
+              "developer/README",
+              "developer/http-api",
+              "developer/bot-gateway"
+            ]
+          },
+          {
+            "group": "Platform",
+            "pages": ["sdk", "developer/scaling"]
+          },
+          {
+            "group": "Ops",
+            "pages": ["prod-migration", "prod-guvenli-rollout"]
+          }
+        ]
+      }
+    ]
+  },
+  "api": {
+    "openapi": ["developer/openapi.json"]
+  },
+  "footerSocials": {
+    "github": "https://github.com/adorratm/dracord"
+  }
+}

@@ -700,6 +700,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const nsfwShareMonitorRef = useRef<NsfwMonitorHandle | null>(null);
   const nsfwCameraMonitorRef = useRef<NsfwMonitorHandle | null>(null);
   const nsfwCooldownUntilRef = useRef(0);
+  /** TrustedGuild veya ALLOW_CLIENT_NSFW_OFF — aksi halde filtre kapatılamaz */
+  const nsfwClientOffAllowedRef = useRef(false);
+  /** Guild safety floor — nsfwjs eşikleri */
+  const nsfwThresholdRef = useRef<number | null>(null);
 
   const [connected, setConnected] = useState(false);
   const [isVoiceLeader, setIsVoiceLeader] = useState(true);
@@ -735,6 +739,34 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   mutedRef.current = muted;
   channelIdRef.current = voiceChannelId;
   guildIdRef.current = voiceGuildId;
+
+  useEffect(() => {
+    if (!voiceGuildId) {
+      nsfwClientOffAllowedRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    void client
+      .getGuildSafetyPolicy(voiceGuildId)
+      .then((p) => {
+        if (cancelled) return;
+        nsfwClientOffAllowedRef.current = Boolean(
+          p.clientNsfwOffAllowed || p.trusted,
+        );
+        nsfwThresholdRef.current =
+          typeof p.nsfwThreshold === 'number' ? p.nsfwThreshold : null;
+        if (!nsfwClientOffAllowedRef.current && !audioSettingsRef.current.nsfwContentFilter) {
+          persistAudio({ ...audioSettingsRef.current, nsfwContentFilter: true });
+        }
+      })
+      .catch(() => {
+        nsfwClientOffAllowedRef.current = false;
+        nsfwThresholdRef.current = null;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [voiceGuildId, client]);
   isLeaderRef.current = isVoiceLeader;
   audioSettingsRef.current = audioSettings;
 
@@ -2238,6 +2270,65 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     await setDeafen(!deafenedRef.current);
   }, [setDeafen]);
 
+  // Desktop oyun overlay (Ctrl+Shift+`) mute / deafen / üye listesi / hızlı sohbet
+  useEffect(() => {
+    type DesktopApi = {
+      onOverlayVoiceCommand?: (cb: (p: { kind?: string }) => void) => () => void;
+      onOverlayQuickChat?: (cb: (p: { text?: string }) => void) => () => void;
+      setGameOverlayState?: (s: {
+        members: Array<{ name: string; muted?: boolean; speaking?: boolean }>;
+        toast?: string;
+      }) => Promise<unknown>;
+    };
+    const api = (window as unknown as { dracordDesktop?: DesktopApi }).dracordDesktop;
+    if (!api) return;
+    const unsubVoice = api.onOverlayVoiceCommand?.((payload) => {
+      if (payload?.kind === 'mute') void toggleMute();
+      if (payload?.kind === 'deafen') void toggleDeafen();
+    });
+    const unsubChat = api.onOverlayQuickChat?.((payload) => {
+      const text = payload?.text?.trim();
+      if (text) setError(`Overlay: ${text}`);
+    });
+    return () => {
+      unsubVoice?.();
+      unsubChat?.();
+    };
+  }, [toggleMute, toggleDeafen]);
+
+  useEffect(() => {
+    const api = (
+      window as unknown as {
+        dracordDesktop?: {
+          setGameOverlayState?: (s: {
+            members: Array<{ name: string; muted?: boolean; speaking?: boolean }>;
+          }) => Promise<unknown>;
+        };
+      }
+    ).dracordDesktop;
+    if (!api?.setGameOverlayState) return;
+    let showMembers = true;
+    try {
+      const raw = window.localStorage.getItem('dracord.userPreferences.v1');
+      if (raw) {
+        const parsed = JSON.parse(raw) as { overlay?: { showMembers?: boolean; enabled?: boolean } };
+        if (parsed.overlay?.enabled === false) return;
+        if (parsed.overlay?.showMembers === false) showMembers = false;
+      }
+    } catch {
+      /* ignore */
+    }
+    void api.setGameOverlayState({
+      members: showMembers
+        ? participants.slice(0, 24).map((p) => ({
+            name: p.displayName || p.id,
+            muted: Boolean(p.muted),
+            speaking: Boolean(p.speaking),
+          }))
+        : [],
+    });
+  }, [participants]);
+
   const syncSharePresence = useCallback(
     (sharing: boolean) => {
       const channelId = channelIdRef.current;
@@ -2326,6 +2417,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (!audioSettingsRef.current.nsfwContentFilter) return;
       nsfwShareMonitorRef.current = startNsfwTrackMonitor({
         intervalMs: NSFW_SAMPLE_INTERVAL_MS,
+        nsfwThreshold: nsfwThresholdRef.current,
         getTrack: () => {
           const pub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
           return pub?.track?.mediaStreamTrack ?? null;
@@ -2370,6 +2462,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (!audioSettingsRef.current.nsfwContentFilter) return;
       nsfwCameraMonitorRef.current = startNsfwTrackMonitor({
         intervalMs: NSFW_SAMPLE_INTERVAL_MS,
+        nsfwThreshold: nsfwThresholdRef.current,
         getTrack: () => {
           const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
           return pub?.track?.mediaStreamTrack ?? null;
@@ -2461,6 +2554,24 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       applyScreenShareView(room);
       refreshParticipants(room, mutedRef.current);
       startLocalScreenShareNsfwGuard(room);
+      // Telif heuristiği: yayın track etiketini / displaySurface bilgisini gönder
+      const gid = guildIdRef.current;
+      const cid = channelIdRef.current;
+      if (gid) {
+        const pub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+        const label =
+          pub?.track?.mediaStreamTrack?.label?.trim() ||
+          (pub?.track as { name?: string } | undefined)?.name ||
+          '';
+        if (label) {
+          void client
+            .reportGuildScreenSignal(gid, {
+              windowTitle: label,
+              channelId: cid ?? undefined,
+            })
+            .catch(() => undefined);
+        }
+      }
     } catch (err) {
       setScreenSharing(false);
       screenSharingRef.current = false;
@@ -2483,6 +2594,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenShareBusyRef.current = false;
     }
   }, [
+    client,
     refreshParticipants,
     applyScreenShareView,
     stopLocalScreenShare,
@@ -2795,7 +2907,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const setNsfwContentFilter = useCallback(
     (enabled: boolean) => {
-      const nsfwContentFilter = Boolean(enabled);
+      // Platform floor: Trusted değilse istemci filtreyi tamamen kapatamaz
+      const allowOff = nsfwClientOffAllowedRef.current;
+      const nsfwContentFilter = enabled ? true : allowOff ? false : true;
+      if (!enabled && !allowOff) {
+        setError('İçerik filtresi bu sunucuda platform politikası gereği kapatılamaz');
+      }
       persistAudio({ ...audioSettingsRef.current, nsfwContentFilter });
       const room = roomRef.current;
       if (!nsfwContentFilter) {

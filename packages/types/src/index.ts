@@ -862,6 +862,19 @@ export interface ClientSettings {
     minimizeToTray: boolean;
     autoUpdate: boolean;
   };
+  /** Masaüstü oyun overlay (Electron) */
+  overlay: {
+    enabled: boolean;
+    /** Electron accelerator, örn. Control+Shift+` */
+    hotkey: string;
+    followDisplay: boolean;
+    showMembers: boolean;
+    showQuickChat: boolean;
+    /** 0.4–1 */
+    opacity: number;
+    /** Watch Party session reklam ağı filtresi */
+    watchPartyAdblock: boolean;
+  };
   language: {
     locale: 'tr' | 'en';
     hour24: boolean;

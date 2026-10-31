@@ -18,6 +18,11 @@ const links = [
     title: 'Kuyruklar',
     desc: 'Bull Board — arka plan iş kuyruğu izleme.',
   },
+  {
+    href: '/trust-safety',
+    title: 'Trust & Safety',
+    desc: 'Otomatik raporlar, TrustedGuild muafiyeti, floor politikası.',
+  },
 ];
 
 export default function DashboardPage() {

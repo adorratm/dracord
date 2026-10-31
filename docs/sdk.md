@@ -2,6 +2,8 @@
 
 Paylaşımlı TypeScript istemci: REST + Socket.IO.
 
+Geliştirici keşif: `GET {api}/.well-known/dracord` — bakınız [`developer/README.md`](./developer/README.md).
+
 ```ts
 import { DracordClient, SocketEvents } from '@dracord/sdk';
 

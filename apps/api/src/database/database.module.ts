@@ -30,6 +30,13 @@ import {
   ActivitySession,
   GuildEvent,
   PlatformApplication,
+  TrustedGuild,
+  GuildSafetyPolicy,
+  TrustSafetyReport,
+  ContentHash,
+  GiftCode,
+  PlatformAuditLog,
+  FunnelEventRow,
   User,
 } from './entities';
 import { DatabaseBootstrapService } from './database-bootstrap.service';
@@ -64,6 +71,13 @@ const entities = [
   ActivitySession,
   GuildEvent,
   PlatformApplication,
+  TrustedGuild,
+  GuildSafetyPolicy,
+  TrustSafetyReport,
+  ContentHash,
+  GiftCode,
+  PlatformAuditLog,
+  FunnelEventRow,
 ];
 
 @Module({

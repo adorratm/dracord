@@ -7,6 +7,8 @@ export class ActivitySyncMetricsService {
   private conflicts = 0;
   private casMissing = 0;
   private billiardsShotRejected = 0;
+  private billiardsPosDrift = 0;
+  private billiardsAuthorityTimeout = 0;
   private lastConflictAt: string | null = null;
 
   recordPatch() {
@@ -26,12 +28,22 @@ export class ActivitySyncMetricsService {
     this.billiardsShotRejected += 1;
   }
 
+  recordBilliardsPosDrift() {
+    this.billiardsPosDrift += 1;
+  }
+
+  recordBilliardsAuthorityTimeout() {
+    this.billiardsAuthorityTimeout += 1;
+  }
+
   snapshot() {
     return {
       patches: this.patches,
       conflicts: this.conflicts,
       casMissing: this.casMissing,
       billiardsShotRejected: this.billiardsShotRejected,
+      billiardsPosDrift: this.billiardsPosDrift,
+      billiardsAuthorityTimeout: this.billiardsAuthorityTimeout,
       lastConflictAt: this.lastConflictAt,
     };
   }

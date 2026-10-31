@@ -22,6 +22,7 @@ import {
   prefetchGuildNav,
 } from '@/hooks/useGuildNav';
 import { trackInviteAccept } from '@/lib/analytics';
+import { markChannelVisited } from '@/lib/channel-view-cache';
 import { useUserPreferences } from '@/lib/user-preferences';
 
 
@@ -29,6 +30,7 @@ const LAST_CHANNEL_KEY = 'dracord:last-channel';
 const LAST_CHANNEL_BY_GUILD_KEY = 'dracord:last-channel-by-guild';
 
 export function rememberChannel(guildId: string, channelId: string) {
+  markChannelVisited(channelId);
   try {
     localStorage.setItem(LAST_CHANNEL_KEY, JSON.stringify({ guildId, channelId }));
     const raw = localStorage.getItem(LAST_CHANNEL_BY_GUILD_KEY);
@@ -488,7 +490,7 @@ export function AppShell({
       {showServerRail && serversOpen && (
         <button
           type="button"
-          className="md:hidden fixed inset-0 z-[5] bg-transparent"
+          className="md:hidden fixed inset-0 z-5 bg-transparent"
           aria-label="Sunucu menüsünü kapat"
           onClick={() => setServersOpen(false)}
         />

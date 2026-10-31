@@ -14,12 +14,18 @@ import {
   type JwtPayloadUser,
 } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { GuildSafetyService } from '@/moderation/guild-safety.service';
+import { QueuesService } from '@/queues/queues.service';
 import { GuildsService } from './guilds.service';
 
 @Controller('guilds')
 @UseGuards(JwtAuthGuard)
 export class GuildsController {
-  constructor(private readonly guildsService: GuildsService) {}
+  constructor(
+    private readonly guildsService: GuildsService,
+    private readonly safety: GuildSafetyService,
+    private readonly queues: QueuesService,
+  ) {}
 
   @Get()
   list(@CurrentUser() user: JwtPayloadUser) {
@@ -65,6 +71,43 @@ export class GuildsController {
   @Get(':guildId')
   getOne(@Param('guildId') guildId: string, @CurrentUser() user: JwtPayloadUser) {
     return this.guildsService.getGuild(guildId, user.sub);
+  }
+
+  /** Etkili T&S politikası (istemci NSFW floor için) */
+  @Get(':guildId/safety-policy')
+  async safetyPolicy(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    await this.guildsService.getGuild(guildId, user.sub);
+    const policy = await this.safety.getEffectivePolicy(guildId);
+    return {
+      ...policy,
+      clientNsfwOffAllowed: this.safety.clientNsfwOverrideAllowed(
+        guildId,
+        policy.trusted,
+      ),
+    };
+  }
+
+  /** Ekran paylaşımı pencere başlığı sinyali (telif heuristiği) */
+  @Post(':guildId/safety/screen-signal')
+  async screenSignal(
+    @Param('guildId') guildId: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { windowTitle?: string; channelId?: string },
+  ) {
+    await this.guildsService.getGuild(guildId, user.sub);
+    const title = body?.windowTitle?.trim();
+    if (!title) return { ok: true, queued: false };
+    await this.queues.enqueueMediaScan({
+      guildId,
+      channelId: body.channelId ?? null,
+      userId: user.sub,
+      windowTitle: title,
+      source: 'screen-share',
+    });
+    return { ok: true, queued: true };
   }
 
   @Get(':guildId/members')

@@ -13,10 +13,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
+import { EntityManager } from 'typeorm';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { Channel } from '@/database/entities/channel.entity';
 import { MessagesService } from '@/messages/messages.service';
 import { BotAuthGuard, type BotAuthContext } from './bot-auth.guard';
 import { isPlatformApiEnabled, isPlatformOauthEnabled } from './platform-enabled';
+import type { SlashCommandOption } from '@/database/entities/slash-command.entity';
+import { PlatformAuditService } from './platform-audit.service';
 import { PlatformService } from './platform.service';
 
 @Controller()
@@ -25,6 +29,8 @@ export class PlatformController {
     private readonly platform: PlatformService,
     private readonly messages: MessagesService,
     private readonly config: ConfigService,
+    private readonly audit: PlatformAuditService,
+    private readonly em: EntityManager,
   ) {}
 
   /** Her zaman erişilebilir — flag durumu */
@@ -100,9 +106,21 @@ export class PlatformController {
       req.bot.botUserId,
       content,
     );
+    const channel = await this.em.findOne(Channel, {
+      where: { id: channelId },
+      select: { id: true, guildId: true },
+    });
     void this.platform.dispatchWebhook(req.bot.applicationId, 'MESSAGE_CREATE', {
       channelId,
       messageId: message.id,
+      ...(channel?.guildId ? { guildId: channel.guildId } : {}),
+    });
+    void this.audit.record({
+      action: 'bot.message.create',
+      applicationId: req.bot.applicationId,
+      actorUserId: req.bot.botUserId,
+      targetId: channelId,
+      meta: { messageId: message.id },
     });
     return message;
   }
@@ -139,13 +157,15 @@ export class PlatformController {
     @Param('applicationId') applicationId: string,
     @Body()
     body: {
-      guildId?: string;
+      /** `global` veya boş = tüm sunucularda görünen komutlar */
+      guildId?: string | null;
       commands?: Array<{
         name: string;
         description: string;
         usage?: string;
         aliases?: string[];
         responseTemplate?: string;
+        options?: SlashCommandOption[];
       }>;
     },
   ) {
@@ -158,12 +178,26 @@ export class PlatformController {
     ) {
       return { error: 'applications.commands scope gerekli' };
     }
-    return this.platform.syncSlashCommands(
+    const result = this.platform.syncSlashCommands(
       applicationId,
       req.bot.botUserId,
       req.bot.ownerUserId,
       { guildId: body?.guildId ?? '', commands: body?.commands },
     );
+    void this.audit.record({
+      action: 'bot.commands.sync',
+      applicationId,
+      actorUserId: req.bot.botUserId,
+      targetId: body?.guildId ?? null,
+      meta: { count: body?.commands?.length ?? 0 },
+    });
+    return result;
+  }
+
+  /** Consent UI — uygulama adı + sunulan scope’lar */
+  @Get('oauth2/application/:clientId')
+  oauthAppPublic(@Param('clientId') clientId: string) {
+    return this.platform.getOauthAppPublic(clientId);
   }
 
   /** JSON onay — web consent widget Bearer ile çağırır */
@@ -177,16 +211,23 @@ export class PlatformController {
       redirect_uri?: string;
       response_type?: string;
       state?: string;
+      scope?: string | string[];
     },
   ) {
     if ((body.response_type ?? 'code') !== 'code') {
       return { error: 'response_type=code gerekli' };
     }
+    const scopeList = Array.isArray(body.scope)
+      ? body.scope
+      : typeof body.scope === 'string'
+        ? body.scope.split(/[\s,]+/).filter(Boolean)
+        : undefined;
     return this.issueOauthCode(
       req.user.sub,
       body.client_id ?? '',
       body.redirect_uri ?? '',
       body.state,
+      scopeList,
     );
   }
 
@@ -199,17 +240,22 @@ export class PlatformController {
     @Query('redirect_uri') redirectUri: string,
     @Query('response_type') responseType: string,
     @Query('state') state: string | undefined,
+    @Query('scope') scope: string | undefined,
     @Res() res: Response,
   ) {
     if (responseType !== 'code') {
       return res.status(400).json({ error: 'response_type=code gerekli' });
     }
     try {
+      const scopeList = scope
+        ? scope.split(/[\s,]+/).filter(Boolean)
+        : undefined;
       const result = await this.issueOauthCode(
         req.user.sub,
         clientId,
         redirectUri,
         state,
+        scopeList,
       );
       if ('error' in result) {
         return res.status(400).json(result);
@@ -229,8 +275,15 @@ export class PlatformController {
       code?: string;
       client_id?: string;
       redirect_uri?: string;
+      refresh_token?: string;
     },
   ) {
+    if (body.grant_type === 'refresh_token') {
+      return this.platform.refreshOauthToken({
+        refreshToken: body.refresh_token ?? '',
+        clientId: body.client_id ?? '',
+      });
+    }
     if (body.grant_type !== 'authorization_code') {
       return { error: 'unsupported_grant_type' };
     }
@@ -246,15 +299,21 @@ export class PlatformController {
     clientId: string,
     redirectUri: string,
     state?: string,
+    requestedScopes?: string[],
   ) {
     const app = await this.platform.findApp(clientId);
     if (!app) return { error: 'client_id geçersiz' as const };
     const allowed = (app.redirectUris ?? []).includes(redirectUri);
     if (!allowed) return { error: 'redirect_uri kayıtlı değil' as const };
+    const scopes = this.platform.normalizeOauthScopes(
+      requestedScopes,
+      app.scopes ?? [],
+    );
     const code = this.platform.createAuthCode({
       applicationId: clientId,
       userId,
       redirectUri,
+      scopes,
     });
     const url = new URL(redirectUri);
     url.searchParams.set('code', code);
@@ -262,6 +321,7 @@ export class PlatformController {
     return {
       code,
       state: state ?? null,
+      scope: scopes.join(' '),
       redirect: url.toString(),
       redirect_uri: redirectUri,
     };

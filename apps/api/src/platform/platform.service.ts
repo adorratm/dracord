@@ -3,19 +3,26 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'crypto';
-import { EntityManager } from 'typeorm';
+import { EntityManager, IsNull } from 'typeorm';
 import { AuthService } from '@/auth/auth.service';
 import { PlatformApplication } from '@/database/entities/platform-application.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
-import { SlashCommand } from '@/database/entities/slash-command.entity';
+import {
+  SlashCommand,
+  type SlashCommandOption,
+  type SlashOptionType,
+} from '@/database/entities/slash-command.entity';
 import { User } from '@/database/entities/user.entity';
 import { UserStatus } from '@/database/enums';
 import { createId } from '@paralleldrive/cuid2';
+import { QueuesService } from '@/queues/queues.service';
+import { BotGatewayService } from './bot-gateway.service';
 import { isPlatformApiEnabled, isPlatformOauthEnabled } from './platform-enabled';
 import { BUILTIN_COMMANDS } from '@/bot/bots.controller';
 
@@ -33,11 +40,38 @@ export type ApplicationDto = {
   botToken?: string;
 };
 
+/** Kullanıcı OAuth scope’ları (bot scope’larından ayrı) */
+export const OAUTH_USER_SCOPES = [
+  'identify',
+  'email',
+  'guilds',
+  'connections',
+] as const;
+
 /** OAuth authorization code (bellek; MVP) */
 const oauthCodes = new Map<
   string,
-  { applicationId: string; userId: string; redirectUri: string; expiresAt: number }
+  {
+    applicationId: string;
+    userId: string;
+    redirectUri: string;
+    scopes: string[];
+    expiresAt: number;
+  }
 >();
+
+/** OAuth refresh token (bellek; MVP) */
+const oauthRefreshTokens = new Map<
+  string,
+  {
+    applicationId: string;
+    userId: string;
+    scopes: string[];
+    expiresAt: number;
+  }
+>();
+
+const OAUTH_REFRESH_TTL_MS = 30 * 24 * 60 * 60_000;
 
 @Injectable()
 export class PlatformService {
@@ -45,6 +79,8 @@ export class PlatformService {
     private readonly em: EntityManager,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    @Optional() private readonly queues?: QueuesService,
+    @Optional() private readonly botGateway?: BotGatewayService,
   ) {}
 
   assertEnabled() {
@@ -103,8 +139,10 @@ export class PlatformService {
       scopes: [
         'bot',
         'identify',
-        'messages.write',
+        'email',
         'guilds',
+        'connections',
+        'messages.write',
         'applications.commands',
       ],
       botUserId: null,
@@ -210,11 +248,28 @@ export class PlatformService {
     return { ok: true };
   }
 
+  normalizeOauthScopes(
+    requested: string[] | undefined,
+    appScopes: string[],
+  ): string[] {
+    const allowed = new Set([
+      ...OAUTH_USER_SCOPES,
+      ...appScopes.filter((s) => typeof s === 'string'),
+    ]);
+    const raw = (requested?.length ? requested : ['identify']).map((s) =>
+      s.trim().toLowerCase(),
+    );
+    const out = [...new Set(raw.filter((s) => s && allowed.has(s)))];
+    if (!out.includes('identify')) out.unshift('identify');
+    return out;
+  }
+
   /** OAuth2 — kod üret (kullanıcı onayladı) */
   createAuthCode(opts: {
     applicationId: string;
     userId: string;
     redirectUri: string;
+    scopes: string[];
   }): string {
     if (!isPlatformOauthEnabled(this.config)) {
       throw new ServiceUnavailableException('PLATFORM_OAUTH kapalı');
@@ -224,16 +279,38 @@ export class PlatformService {
       applicationId: opts.applicationId,
       userId: opts.userId,
       redirectUri: opts.redirectUri,
+      scopes: opts.scopes,
       expiresAt: Date.now() + 10 * 60_000,
     });
     return code;
+  }
+
+  private issueRefreshToken(opts: {
+    applicationId: string;
+    userId: string;
+    scopes: string[];
+  }): string {
+    const token = randomBytes(32).toString('hex');
+    oauthRefreshTokens.set(token, {
+      applicationId: opts.applicationId,
+      userId: opts.userId,
+      scopes: opts.scopes,
+      expiresAt: Date.now() + OAUTH_REFRESH_TTL_MS,
+    });
+    return token;
   }
 
   async exchangeCode(opts: {
     code: string;
     clientId: string;
     redirectUri: string;
-  }): Promise<{ access_token: string; token_type: 'Bearer'; expires_in: number }> {
+  }): Promise<{
+    access_token: string;
+    token_type: 'Bearer';
+    expires_in: number;
+    refresh_token: string;
+    scope: string;
+  }> {
     if (!isPlatformOauthEnabled(this.config)) {
       throw new ServiceUnavailableException('PLATFORM_OAUTH kapalı');
     }
@@ -252,7 +329,71 @@ export class PlatformService {
       where: { id: opts.clientId },
     });
     if (!app) throw new NotFoundException('Uygulama yok');
-    return this.auth.issueOauthAccessToken(entry.userId);
+    const issued = await this.auth.issueOauthAccessToken(entry.userId, {
+      scopes: entry.scopes,
+      applicationId: opts.clientId,
+    });
+    const refresh_token = this.issueRefreshToken({
+      applicationId: opts.clientId,
+      userId: entry.userId,
+      scopes: entry.scopes,
+    });
+    return { ...issued, refresh_token };
+  }
+
+  async refreshOauthToken(opts: {
+    refreshToken: string;
+    clientId: string;
+  }): Promise<{
+    access_token: string;
+    token_type: 'Bearer';
+    expires_in: number;
+    refresh_token: string;
+    scope: string;
+  }> {
+    if (!isPlatformOauthEnabled(this.config)) {
+      throw new ServiceUnavailableException('PLATFORM_OAUTH kapalı');
+    }
+    const entry = oauthRefreshTokens.get(opts.refreshToken);
+    oauthRefreshTokens.delete(opts.refreshToken);
+    if (!entry || entry.expiresAt < Date.now()) {
+      throw new BadRequestException('Geçersiz veya süresi dolmuş refresh_token');
+    }
+    if (entry.applicationId !== opts.clientId) {
+      throw new BadRequestException('client_id uyuşmuyor');
+    }
+    const issued = await this.auth.issueOauthAccessToken(entry.userId, {
+      scopes: entry.scopes,
+      applicationId: opts.clientId,
+    });
+    const refresh_token = this.issueRefreshToken({
+      applicationId: opts.clientId,
+      userId: entry.userId,
+      scopes: entry.scopes,
+    });
+    return { ...issued, refresh_token };
+  }
+
+  /** Consent UI için public uygulama özeti */
+  async getOauthAppPublic(clientId: string) {
+    if (!isPlatformOauthEnabled(this.config)) {
+      throw new ServiceUnavailableException('PLATFORM_OAUTH kapalı');
+    }
+    const app = await this.findApp(clientId);
+    if (!app) throw new NotFoundException('Uygulama yok');
+    const userScopes = (app.scopes ?? []).filter((s) =>
+      (OAUTH_USER_SCOPES as readonly string[]).includes(s),
+    );
+    const available =
+      userScopes.length > 0
+        ? userScopes
+        : (['identify', 'email', 'guilds'] as string[]);
+    return {
+      id: app.id,
+      name: app.name,
+      description: app.description,
+      scopes: available,
+    };
   }
 
   async getGuildForBot(botUserId: string, guildId: string) {
@@ -276,29 +417,38 @@ export class PlatformService {
     botUserId: string,
     ownerUserId: string,
     body: {
-      guildId: string;
+      /** `global` | `@global` | boş → guild’siz global komutlar */
+      guildId?: string | null;
       commands?: Array<{
         name: string;
         description: string;
         usage?: string;
         aliases?: string[];
         responseTemplate?: string;
+        options?: SlashCommandOption[];
       }>;
     },
   ) {
     this.assertEnabled();
-    const guildId = body.guildId?.trim();
-    if (!guildId) throw new BadRequestException('guildId gerekli');
-    const member = await this.em.findOne(GuildMember, {
-      where: { guildId, userId: ownerUserId },
-    });
-    const botMember = await this.em.findOne(GuildMember, {
-      where: { guildId, userId: botUserId },
-    });
-    if (!member && !botMember) {
-      throw new ForbiddenException(
-        'Uygulama sahibi veya bot sunucuda olmalı',
-      );
+    const rawGuild = (body.guildId ?? '').trim();
+    const isGlobal =
+      !rawGuild ||
+      rawGuild.toLowerCase() === 'global' ||
+      rawGuild === '@global';
+    const guildId: string | null = isGlobal ? null : rawGuild;
+
+    if (!isGlobal) {
+      const member = await this.em.findOne(GuildMember, {
+        where: { guildId: guildId!, userId: ownerUserId },
+      });
+      const botMember = await this.em.findOne(GuildMember, {
+        where: { guildId: guildId!, userId: botUserId },
+      });
+      if (!member && !botMember) {
+        throw new ForbiddenException(
+          'Uygulama sahibi veya bot sunucuda olmalı',
+        );
+      }
     }
 
     const app = await this.em.findOne(PlatformApplication, {
@@ -309,7 +459,9 @@ export class PlatformService {
     }
 
     const existing = await this.em.find(SlashCommand, {
-      where: { guildId, botUserId },
+      where: isGlobal
+        ? { guildId: IsNull(), botUserId }
+        : { guildId: guildId!, botUserId },
     });
     if (existing.length) await this.em.remove(SlashCommand, existing);
 
@@ -343,12 +495,14 @@ export class PlatformService {
       const aliases = (raw.aliases ?? [])
         .map((a) => a.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32))
         .filter(Boolean);
+      const options = this.normalizeSlashOptions(raw.options);
       const row = this.em.create(SlashCommand, {
         guildId,
         name,
         description,
         usage,
         aliases: aliases.length ? aliases : null,
+        options: options.length ? options : null,
         responseTemplate: raw.responseTemplate?.trim().slice(0, 2000) || null,
         botUserId,
         botName: botName.slice(0, 64),
@@ -360,12 +514,69 @@ export class PlatformService {
     return { applicationId, guildId, commands: out };
   }
 
+  private normalizeSlashOptions(
+    raw: SlashCommandOption[] | undefined,
+  ): SlashCommandOption[] {
+    if (!Array.isArray(raw)) return [];
+    const allowed = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    const out: SlashCommandOption[] = [];
+    for (const o of raw.slice(0, 25)) {
+      const name = String(o?.name ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 32);
+      if (name.length < 1) continue;
+      const type = Number(o?.type) as SlashOptionType;
+      if (!allowed.has(type)) continue;
+      const description =
+        String(o?.description ?? name).trim().slice(0, 100) || name;
+      const choices = Array.isArray(o?.choices)
+        ? o.choices
+            .slice(0, 25)
+            .map((c) => ({
+              name: String(c?.name ?? '').slice(0, 100),
+              value:
+                typeof c?.value === 'number'
+                  ? c.value
+                  : String(c?.value ?? '').slice(0, 100),
+            }))
+            .filter((c) => c.name)
+        : undefined;
+      out.push({
+        type,
+        name,
+        description,
+        required: Boolean(o?.required),
+        ...(choices?.length ? { choices } : {}),
+      });
+    }
+    return out;
+  }
+
   async findApp(id: string) {
     return this.em.findOne(PlatformApplication, { where: { id } });
   }
 
-  /** Webhook outbound (best-effort, flag açıkken) */
+  /** Webhook outbound — kuyruğa al (retry) + canlı bot gateway */
   async dispatchWebhook(
+    applicationId: string,
+    event: string,
+    payload: Record<string, unknown>,
+  ) {
+    this.botGateway?.dispatchToApplication(applicationId, event, {
+      ...payload,
+      at: new Date().toISOString(),
+    });
+    if (this.queues) {
+      await this.queues.enqueueWebhook(applicationId, event, payload);
+      return;
+    }
+    await this.deliverWebhook(applicationId, event, payload);
+  }
+
+  /** Worker: gerçek HTTP POST */
+  async deliverWebhook(
     applicationId: string,
     event: string,
     payload: Record<string, unknown>,
@@ -387,8 +598,9 @@ export class PlatformService {
         .update(app.webhookSecret + body)
         .digest('hex');
     }
-    void fetch(app.webhookUrl, { method: 'POST', headers, body }).catch(
-      () => undefined,
-    );
+    const res = await fetch(app.webhookUrl, { method: 'POST', headers, body });
+    if (!res.ok) {
+      throw new Error(`Webhook HTTP ${res.status}`);
+    }
   }
 }

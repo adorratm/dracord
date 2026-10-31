@@ -356,3 +356,28 @@ export function resolveWatchMedia(raw: string): WatchMediaRef | null {
 export function watchMediaHint(): string {
   return 'YouTube, Twitch, Vimeo, Streamable, Drive, TikTok veya herhangi bir video linki';
 }
+
+/** Resmi / düşük-reklam riskli sağlayıcılar */
+export const WATCH_SAFE_PROVIDERS: ReadonlySet<WatchMediaProvider> = new Set([
+  'file',
+  'youtube',
+  'vimeo',
+  'twitch',
+  'streamable',
+  'dailymotion',
+]);
+
+export function isWatchMediaAllowlisted(media: WatchMediaRef | null | undefined): boolean {
+  if (!media) return false;
+  return WATCH_SAFE_PROVIDERS.has(media.provider);
+}
+
+/** Bilinmeyen iframe — web’de Desktop öner; desktop’ta ağ filtresi yardımcı olur */
+export function watchMediaRiskMessage(media: WatchMediaRef | null | undefined): string | null {
+  if (!media) return null;
+  if (isWatchMediaAllowlisted(media)) return null;
+  if (media.provider === 'iframe') {
+    return 'Bu bağlantı allowlist dışında; üçüncü parti reklam içerebilir. Daha az reklam için Dracord Desktop kullanın.';
+  }
+  return 'Bu gömülü kaynak ek reklam gösterebilir.';
+}

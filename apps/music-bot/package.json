@@ -13,7 +13,7 @@
     "@dracord/types": "workspace:*",
     "@livekit/rtc-ffi-bindings": "0.13.3",
     "@livekit/rtc-node": "^1.2.1",
-    "bullmq": "^6.5.1",
+    "bullmq": "^6.5.3",
     "dotenv": "^18.0.9",
     "ioredis": "^6.0.0"
   },

@@ -1,0 +1,53 @@
+{
+  "name": "@dracord/bot-sdk",
+  "version": "0.1.0",
+  "description": "Dracord platform bot client — REST + Socket.IO gateway",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "echo ok",
+    "prepublishOnly": "yarn build",
+    "publish:npm": "yarn build && npm publish --access public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dracord/dracord.git",
+    "directory": "packages/bot-sdk"
+  },
+  "keywords": [
+    "dracord",
+    "bot",
+    "discord",
+    "socket.io",
+    "gateway"
+  ],
+  "homepage": "https://dracord.com.tr/docs",
+  "dependencies": {
+    "socket.io-client": "^4.8.4"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

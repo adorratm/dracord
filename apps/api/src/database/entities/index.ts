@@ -30,3 +30,19 @@ export type { ActivityKind, ActivityStatus } from './activity-session.entity';
 export { GuildEvent } from './guild-event.entity';
 export type { GuildEventStatus } from './guild-event.entity';
 export { PlatformApplication } from './platform-application.entity';
+export { TrustedGuild } from './trusted-guild.entity';
+export { GuildSafetyPolicy } from './guild-safety-policy.entity';
+export { TrustSafetyReport } from './trust-safety-report.entity';
+export type {
+  TrustSafetyCategory,
+  TrustSafetyStatus,
+} from './trust-safety-report.entity';
+export { ContentHash } from './content-hash.entity';
+export { GiftCode } from './gift-code.entity';
+export type { GiftKind } from './gift-code.entity';
+export { PlatformAuditLog } from './platform-audit-log.entity';
+export { FunnelEventRow } from './funnel-event.entity';
+export type {
+  SlashCommandOption,
+  SlashOptionType,
+} from './slash-command.entity';
