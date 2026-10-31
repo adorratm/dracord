@@ -207,10 +207,17 @@ export class GuildSafetyService {
     return row;
   }
 
-  /** İstemci NSFW kapatamaz — sunucu floor geçerli mi? */
-  clientNsfwOverrideAllowed(guildId: string | null | undefined, trusted: boolean) {
+  /**
+   * İstemci NSFW filtresi kapatılabilir mi?
+   * TrustedGuild · sunucu sahibi / platform admin · ALLOW_CLIENT_NSFW_OFF=true
+   */
+  clientNsfwOverrideAllowed(
+    _guildId: string | null | undefined,
+    trusted: boolean,
+    opts?: { guildOwnerOrPlatformAdmin?: boolean },
+  ) {
     if (trusted) return true;
-    // Config ile global kapatma yoksa client override yok
+    if (opts?.guildOwnerOrPlatformAdmin) return true;
     return this.config.get<string>('ALLOW_CLIENT_NSFW_OFF') === 'true';
   }
 }

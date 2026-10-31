@@ -741,8 +741,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   guildIdRef.current = voiceGuildId;
 
   useEffect(() => {
+    // Ses kanalı yoksa kişisel tercih serbest (DM / ayarlar ekranı)
     if (!voiceGuildId) {
-      nsfwClientOffAllowedRef.current = false;
+      nsfwClientOffAllowedRef.current = true;
+      nsfwThresholdRef.current = null;
       return;
     }
     let cancelled = false;
@@ -760,6 +762,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
+        // Politika okunamazsa güvenli tarafta kal
         nsfwClientOffAllowedRef.current = false;
         nsfwThresholdRef.current = null;
       });
@@ -2911,7 +2914,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const allowOff = nsfwClientOffAllowedRef.current;
       const nsfwContentFilter = enabled ? true : allowOff ? false : true;
       if (!enabled && !allowOff) {
-        setError('İçerik filtresi bu sunucuda platform politikası gereği kapatılamaz');
+        setError(
+          'İçerik filtresi bu sunucuda kapatılamaz. Sunucu sahibi, platform yöneticisi veya güvenilir sunucu listesindeki sunucularda kapatılabilir.',
+        );
       }
       persistAudio({ ...audioSettingsRef.current, nsfwContentFilter });
       const room = roomRef.current;

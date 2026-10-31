@@ -81,11 +81,15 @@ export class GuildsController {
   ) {
     await this.guildsService.getGuild(guildId, user.sub);
     const policy = await this.safety.getEffectivePolicy(guildId);
+    const perms = await this.guildsService.listMyPermissions(guildId, user.sub);
+    // listMyPermissions: platform admin de owner=true döner
+    const guildOwnerOrPlatformAdmin = Boolean(perms.owner || perms.platformAdmin);
     return {
       ...policy,
       clientNsfwOffAllowed: this.safety.clientNsfwOverrideAllowed(
         guildId,
         policy.trusted,
+        { guildOwnerOrPlatformAdmin },
       ),
     };
   }

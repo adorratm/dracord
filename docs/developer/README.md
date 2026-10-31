@@ -85,7 +85,8 @@ Ayrıntılar: [`../platform-api-tasarim.md`](../platform-api-tasarim.md) · SDK:
 ## Trust & Safety (platform)
 
 - TrustedGuild: seçili sunucularda NSFW/telif/kumar floor muaf  
-- Diğer sunucularda floor kapatılamaz; yalnızca eşik soften  
+- Diğer sunucularda sunucu taraması floor’u kapatılamaz; yalnızca eşik soften  
+- Kişisel istemci NSFW filtresi: TrustedGuild **veya** sunucu sahibi / platform admin kapatabilir (`ALLOW_CLIENT_NSFW_OFF=true` ile herkese)  
 - Admin: `/trust-safety` paneli + `/platform-admin/trust-safety/*` (+ hashes)
 - İstemci: `GET /guilds/:id/safety-policy` · ekran sinyali `POST …/safety/screen-signal`
 - BullMQ `media.scan` + hash DB eşlemesi; link preview async `link.preview`
