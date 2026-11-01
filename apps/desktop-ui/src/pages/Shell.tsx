@@ -50,6 +50,7 @@ import { NotificationsPanel } from '../views/NotificationsPanel';
 import { GuildSettingsPage } from '../views/GuildSettingsPage';
 import { GuildEventsModal } from '../views/GuildEventsModal';
 import { useDesktopGamePresence } from '../hooks/useDesktopGamePresence';
+import { useDesktopOverlayBridge } from '../hooks/useDesktopOverlayBridge';
 import { GuildBoostPage } from '../views/GuildBoostPage';
 import { MemberPanel } from '../views/MemberPanel';
 import { NotificationBell } from '../views/NotificationBell';
@@ -103,6 +104,7 @@ export function Shell() {
   });
   const [prefs, setPrefs] = useState<ClientSettings>(loadLocalPrefs);
   useDesktopGamePresence(prefs);
+  useDesktopOverlayBridge();
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
@@ -1184,7 +1186,7 @@ export function Shell() {
     <div className="flex flex-col h-dvh max-h-dvh w-screen overflow-hidden bg-surface">
       <UpdateBanner />
       {voice.voiceOnOtherClient && voice.voiceChannelId && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[90] max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-90 max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
           <span className="material-symbols-outlined text-primary-container text-[20px]">
             {voice.voiceElsewherePlatform === 'mobile' ? 'smartphone' : 'language'}
           </span>

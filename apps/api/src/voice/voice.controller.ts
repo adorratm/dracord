@@ -25,6 +25,7 @@ import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { Channel } from '@/database/entities/channel.entity';
 import { EntityManager } from 'typeorm';
 import { VoiceTokenDto } from '@/voice/dto/voice-token.dto';
+import { RemoteControlService } from './remote-control.service';
 import { VoicePresenceService } from './voice-presence.service';
 import { VoiceService } from './voice.service';
 
@@ -34,6 +35,7 @@ export class VoiceController {
   constructor(
     private readonly voiceService: VoiceService,
     private readonly presence: VoicePresenceService,
+    private readonly remoteControl: RemoteControlService,
     private readonly channels: ChannelsService,
     private readonly guilds: GuildsService,
     private readonly broadcast: SocketBroadcastService,
@@ -42,6 +44,27 @@ export class VoiceController {
     private readonly platformAdmin: PlatformAdminService,
     private readonly activities: ActivitiesService,
   ) {}
+
+  private emitRemoteCleared(
+    session: {
+      guildId: string;
+      channelId: string;
+      sharerId: string;
+      status: 'idle' | 'pending' | 'active';
+      controllerId: string | null;
+      controllerName: string | null;
+      sharerName: string | null;
+      updatedAt?: number;
+    },
+    reason: string,
+  ) {
+    this.broadcast.broadcastRemoteControlState(
+      this.remoteControl.toPayload(
+        { ...session, updatedAt: session.updatedAt ?? Date.now() },
+        reason,
+      ),
+    );
+  }
 
   private async resolvePresenceGuildId(channelId: string): Promise<string | null> {
     const channel = await this.em.findOne(Channel, { where: { id: channelId } });
@@ -193,6 +216,11 @@ export class VoiceController {
       screenSharing: body.screenSharing,
     });
     if (updated) this.broadcast.broadcastVoiceState(updated);
+    // Ekran paylaşımı bitince uzak kontrol oturumunu düşür
+    if (body.screenSharing === false) {
+      const cleared = this.remoteControl.clearForSharer(body.channelId, user.sub);
+      if (cleared) this.emitRemoteCleared(cleared, 'share_ended');
+    }
     return updated;
   }
 
@@ -206,6 +234,9 @@ export class VoiceController {
     if (!guildId) return null;
     const payload = await this.presence.leave(guildId, channelId, user.sub);
     if (payload) this.broadcast.broadcastVoiceState(payload);
+    for (const cleared of this.remoteControl.clearControllerEverywhere(user.sub)) {
+      this.emitRemoteCleared(cleared, 'left_voice');
+    }
     await this.presence.clearActiveClient(user.sub, clientId);
     await this.activities.leaveUserFromActivities(user.sub);
     if (guildId === DM_CALL_GUILD_ID) {

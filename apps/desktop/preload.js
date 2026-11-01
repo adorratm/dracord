@@ -61,6 +61,11 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   getOverlayPrefs: () => ipcRenderer.invoke('overlay:get-prefs'),
   setWatchPartyAdblock: (enabled) =>
     ipcRenderer.invoke('adblock:set-enabled', Boolean(enabled)),
+  /** Uzak kontrol (ekran paylaşımı host) */
+  setRemoteControlBounds: (bounds) =>
+    ipcRenderer.invoke('remote-control:set-bounds', bounds),
+  injectRemoteControlInput: (ev) =>
+    ipcRenderer.invoke('remote-control:inject', ev),
   onOverlayVoiceCommand: (callback) => {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on('overlay:voice-command', handler);

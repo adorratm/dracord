@@ -700,12 +700,75 @@ export const SocketEvents = {
   VOICE_TAKEOVER: 'voice:takeover',
   /** DM / grup DM ses-görüntü araması */
   DM_CALL: 'dm:call',
+  /** Ekran paylaşımı uzak kontrol (tek controller) */
+  REMOTE_CONTROL_REQUEST: 'remote-control:request',
+  REMOTE_CONTROL_RESPONSE: 'remote-control:response',
+  REMOTE_CONTROL_REVOKE: 'remote-control:revoke',
+  REMOTE_CONTROL_STATE: 'remote-control:state',
+  REMOTE_CONTROL_INPUT: 'remote-control:input',
   NOTIFICATION_CREATE: 'notification:create',
   REACTION_UPDATE: 'reaction:update',
   ACTIVITY_UPSERT: 'activity:upsert',
   ACTIVITY_STATE: 'activity:state',
   ACTIVITY_LEAVE: 'activity:leave',
 } as const;
+
+/** Uzak kontrol oturumu — kanal + paylaşan başına en fazla 1 controller */
+export type RemoteControlStatus = 'idle' | 'pending' | 'active';
+
+export interface RemoteControlStatePayload {
+  guildId: string;
+  channelId: string;
+  /** Ekranı paylaşan kullanıcı */
+  sharerId: string;
+  status: RemoteControlStatus;
+  /** İstek atan / aktif controller */
+  controllerId: string | null;
+  controllerName?: string | null;
+  sharerName?: string | null;
+  reason?: string | null;
+}
+
+export interface RemoteControlRequestPayload {
+  guildId: string;
+  channelId: string;
+  sharerId: string;
+}
+
+export interface RemoteControlResponsePayload {
+  guildId: string;
+  channelId: string;
+  sharerId: string;
+  controllerId: string;
+  accept: boolean;
+}
+
+export interface RemoteControlRevokePayload {
+  guildId: string;
+  channelId: string;
+  sharerId: string;
+  reason?: string;
+}
+
+/** Normalize edilmiş video koordinatları (0–1, object-contain içerik kutusu) */
+export interface RemoteControlInputPayload {
+  guildId: string;
+  channelId: string;
+  sharerId: string;
+  type: 'move' | 'down' | 'up' | 'wheel' | 'key';
+  nx?: number;
+  ny?: number;
+  button?: number;
+  deltaY?: number;
+  key?: string;
+  code?: string;
+  /** keydown | keyup */
+  keyAction?: 'down' | 'up';
+  ctrl?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+  meta?: boolean;
+}
 
 /** Soket `user:update` — profil alanları (kısmi) */
 export interface UserUpdatePayload {

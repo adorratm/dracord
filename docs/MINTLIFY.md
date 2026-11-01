@@ -1,25 +1,30 @@
 # Mintlify (public developer docs)
 
-## Kritik ayar
+## Canlı site durumu
 
-Mintlify dashboard → **Docs directory = `docs/mintlify`**
+Mintlify dashboard’da **Docs directory** iki şekilde olabilir:
 
-`docs/` kökünü seçme: prod rollout, migration, roadmap ve dahili checklist gizli sayfa olarak yayınlanır (URL + arama).
+| Ayar | Sayfa URL’leri | `docs.json` |
+| --- | --- | --- |
+| `/docs` (şu an canlı) | `/mintlify/quickstart` … | `docs/docs.json` + `.mintignore` |
+| `/docs/mintlify` (tercih) | `/quickstart` … | `docs/mintlify/docs.json` |
+
+**Tercih edilen:** Git Settings → “docs.json is in a subdirectory” → path = `docs/mintlify`  
+Böylece URL’ler `/quickstart` gibi temiz kalır ve `/mintlify` öneki olmaz.
+
+Path hâlâ `/docs` ise `docs/docs.json` tüm sayfaları `mintlify/*` olarak listeler; MDX’teki `/quickstart` linkleri redirect ile `/mintlify/quickstart`’a gider. Dahili `docs/*.md` dosyaları `.mintignore` ile yayınlanmaz.
 
 ## Deploy
 
 ```bash
 cd docs/mintlify
-npx mintlify dev    # lokal
-# push → otomatik deploy (bağlı repo)
+npx mintlify dev    # lokal (path=docs/mintlify varsayımı)
+# push → Mintlify otomatik deploy
 ```
 
-Ana sayfa: `/` (`index.mdx`)  
-Eski kırık link `/developer/README` → redirect `/`
+Doğrulama: `yarn docs:check` (veya `node scripts/check-docs.mjs`)
 
 ## İçerik politikası
 
-Public: bot, OAuth, HTTP, gateway, SDK, discovery, OpenAPI  
-Private (repo `docs/` altında kalsın): prod-*, gelisim-*, scaling ops, platform-admin, T&S
-
-Doğrulama: `yarn docs:check`
+Public (`docs/mintlify`): bot, OAuth, HTTP, gateway, SDK, discovery, OpenAPI  
+Private (repo `docs/` altında, `.mintignore`): prod-*, gelisim-*, scaling, platform-admin, T&S

@@ -21,6 +21,11 @@ import type {
   VoiceTokenResponse,
   GifDto,
   TenorGifDto,
+  RemoteControlInputPayload,
+  RemoteControlRequestPayload,
+  RemoteControlResponsePayload,
+  RemoteControlRevokePayload,
+  RemoteControlStatePayload,
 } from '@dracord/types';
 import { SocketEvents } from '@dracord/types';
 
@@ -1534,6 +1539,56 @@ export class DracordClient {
   /** Guild ses roster snapshot iste (sunucu VOICE_SYNC ile yanıtlar) */
   requestVoiceSync(guildId: string) {
     this.socket?.emit(SocketEvents.VOICE_SYNC, { guildId });
+  }
+
+  requestRemoteControl(payload: RemoteControlRequestPayload) {
+    this.socket?.emit(SocketEvents.REMOTE_CONTROL_REQUEST, payload);
+  }
+
+  respondRemoteControl(payload: RemoteControlResponsePayload) {
+    this.socket?.emit(SocketEvents.REMOTE_CONTROL_RESPONSE, payload);
+  }
+
+  revokeRemoteControl(payload: RemoteControlRevokePayload) {
+    this.socket?.emit(SocketEvents.REMOTE_CONTROL_REVOKE, payload);
+  }
+
+  sendRemoteControlInput(payload: RemoteControlInputPayload) {
+    this.socket?.emit(SocketEvents.REMOTE_CONTROL_INPUT, payload);
+  }
+
+  onRemoteControlState(
+    handler: (payload: RemoteControlStatePayload) => void,
+  ): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.REMOTE_CONTROL_STATE, handler);
+    return () => sock.off(SocketEvents.REMOTE_CONTROL_STATE, handler);
+  }
+
+  onRemoteControlRequest(
+    handler: (
+      payload: RemoteControlRequestPayload & {
+        controllerId: string;
+        controllerName?: string;
+      },
+    ) => void,
+  ): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.REMOTE_CONTROL_REQUEST, handler);
+    return () => sock.off(SocketEvents.REMOTE_CONTROL_REQUEST, handler);
+  }
+
+  onRemoteControlInput(
+    handler: (
+      payload: RemoteControlInputPayload & { controllerId?: string },
+    ) => void,
+  ): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.REMOTE_CONTROL_INPUT, handler);
+    return () => sock.off(SocketEvents.REMOTE_CONTROL_INPUT, handler);
   }
 
   startTyping(channelId: string) {

@@ -63,6 +63,7 @@ import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
+import { useRemoteControl } from '@/lib/use-remote-control';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -137,6 +138,16 @@ export function GuildChannelView({
     aroundMessageId,
   );
   const voice = useVoiceSession();
+  const remote = useRemoteControl({
+    client,
+    userId: user?.id,
+    guildId: voice.voiceGuildId,
+    channelId: voice.voiceChannelId,
+    sharerId: voice.activeScreenShare?.isLocal
+      ? user?.id
+      : voice.activeScreenShare?.identity ?? null,
+    localSharing: Boolean(voice.screenSharing),
+  });
   const { prefs } = useUserPreferences();
   const imageModeration = useImageModeration();
   const guildSkin = prefs.appearance.guildSkins?.[guildId];
@@ -2649,7 +2660,7 @@ export function GuildChannelView({
       }}
       className={cn(
         'h-full w-full md:w-72',
-        guildSkin?.sidebarTint && 'bg-[var(--guild-sidebar-tint)]',
+        guildSkin?.sidebarTint && 'bg-(--guild-sidebar-tint)',
       )}
       userPanel={{
         displayName: user?.displayName ?? 'Kullanıcı',
@@ -2830,7 +2841,7 @@ export function GuildChannelView({
         }
       >
       {dmError && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-90 max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
           <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
           <p className="font-body-sm flex-1 min-w-0">{dmError}</p>
           <button
@@ -2843,13 +2854,13 @@ export function GuildChannelView({
         </div>
       )}
       {voice.error && !voice.voiceChannelId && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-90 max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
           <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">mic_off</span>
           <p className="font-body-sm flex-1 min-w-0">{voice.error}</p>
         </div>
       )}
       {voice.voiceOnOtherTab && voice.voiceChannelId && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[90] max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-90 max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
           <span className="material-symbols-outlined text-primary-container text-[20px]">
             {voice.voiceElsewherePlatform === 'desktop'
               ? 'desktop_windows'
@@ -3107,6 +3118,13 @@ export function GuildChannelView({
             voice.setScreenShareViewQuality(q as ScreenShareViewQualityId)
           }
           onFocusScreenShare={voice.focusScreenShare}
+          remoteControl={remote.remoteControl}
+          onRequestRemoteControl={remote.requestRemoteControl}
+          onAcceptRemoteControl={remote.acceptRemoteControl}
+          onRejectRemoteControl={remote.rejectRemoteControl}
+          onStopRemoteControl={remote.stopRemoteControl}
+          onRemoteControlPointer={remote.sendRemoteControlPointer}
+          onRemoteControlKey={remote.sendRemoteControlKey}
           participantsDrawerOpen={participantsOpen}
           chatDrawerOpen={chatOpen}
           chatPanelWidth={voiceChatWidth}
@@ -3334,7 +3352,7 @@ export function GuildChannelView({
                   value={forumSort}
                   onChange={(v) => setForumSort(v as ForumSort)}
                   aria-label="Sıralama"
-                  className="!min-w-[8rem] sm:!min-w-[9rem]"
+                  className="min-w-32! sm:min-w-36!"
                   options={[
                     { value: 'newest', label: 'En yeni' },
                     { value: 'oldest', label: 'En eski' },
@@ -3345,7 +3363,7 @@ export function GuildChannelView({
                   value={forumTag ?? ''}
                   onChange={(v) => setForumTag(v || null)}
                   aria-label="Etiket"
-                  className="!min-w-[7rem] sm:!min-w-[9rem] max-w-[10rem]"
+                  className="min-w-28! sm:min-w-36! max-w-40"
                   options={[
                     { value: '', label: 'Tüm etiketler' },
                     ...forumTags.map((tag) => ({ value: tag, label: `#${tag}` })),
@@ -3557,7 +3575,7 @@ export function GuildChannelView({
                   </p>
                 }
               />
-              <div className="shrink-0 border-t border-surface-container-high relative z-[100]">
+              <div className="shrink-0 border-t border-surface-container-high relative z-100">
                 <ChatInput
                   key={`thread-${threadRoot.id}`}
                   channelName={channel?.name}
@@ -3761,7 +3779,7 @@ export function GuildChannelView({
                   }
                 />
               )}
-              <div className="relative shrink-0 z-[100]">
+              <div className="relative shrink-0 z-100">
                 {typingUsers.length > 0 && (
                   <p className="px-space-md pb-1 font-label-sm text-outline truncate">
                     {typingUsers.length === 1
@@ -4159,7 +4177,7 @@ export function GuildChannelView({
                             {role.name}
                           </span>
                           <SearchableSelect
-                            className="!min-w-[7.5rem]"
+                            className="min-w-30!"
                             value={mode}
                             onChange={(v) =>
                               setOverwritePerm(

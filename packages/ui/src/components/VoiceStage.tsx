@@ -61,6 +61,38 @@ export interface VoiceStageProps {
   screenShareViewQuality?: string;
   screenShareViewQualityOptions?: Array<{ value: string; label: string }>;
   onScreenShareViewQualityChange?: (quality: string) => void;
+  /** Uzak kontrol (tek controller) */
+  remoteControl?: {
+    status: 'idle' | 'pending' | 'active';
+    /** Bu istemci controller mı */
+    isController?: boolean;
+    /** Bu istemci paylaşan mı */
+    isSharer?: boolean;
+    controllerName?: string | null;
+    pendingFromName?: string | null;
+  } | null;
+  onRequestRemoteControl?: () => void;
+  onAcceptRemoteControl?: () => void;
+  onRejectRemoteControl?: () => void;
+  onStopRemoteControl?: () => void;
+  /** Aktif kontrolde video üzerinde pointer/keyboard olayları */
+  onRemoteControlPointer?: (ev: {
+    type: 'move' | 'down' | 'up' | 'wheel';
+    nx: number;
+    ny: number;
+    button?: number;
+    deltaY?: number;
+  }) => void;
+  onRemoteControlKey?: (ev: {
+    type: 'key';
+    keyAction: 'down' | 'up';
+    key: string;
+    code: string;
+    ctrl?: boolean;
+    alt?: boolean;
+    shift?: boolean;
+    meta?: boolean;
+  }) => void;
   participantsDrawerOpen?: boolean;
   chatDrawerOpen?: boolean;
   onToggleMute?: () => void;
@@ -142,6 +174,13 @@ export function VoiceStage({
   screenShareViewQuality,
   screenShareViewQualityOptions = [],
   onScreenShareViewQualityChange,
+  remoteControl = null,
+  onRequestRemoteControl,
+  onAcceptRemoteControl,
+  onRejectRemoteControl,
+  onStopRemoteControl,
+  onRemoteControlPointer,
+  onRemoteControlKey,
   participantsDrawerOpen,
   chatDrawerOpen,
   onToggleMute,
@@ -165,6 +204,24 @@ export function VoiceStage({
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoCbRef = useRef(screenShare?.videoRef);
   screenVideoCbRef.current = screenShare?.videoRef;
+
+  const mapPointerToNorm = useCallback((clientX: number, clientY: number) => {
+    const video = videoElRef.current;
+    if (!video) return null;
+    const rect = video.getBoundingClientRect();
+    const vw = video.videoWidth || 1;
+    const vh = video.videoHeight || 1;
+    const scale = Math.min(rect.width / vw, rect.height / vh);
+    const cw = vw * scale;
+    const ch = vh * scale;
+    const left = rect.left + (rect.width - cw) / 2;
+    const top = rect.top + (rect.height - ch) / 2;
+    if (cw <= 0 || ch <= 0) return null;
+    const nx = (clientX - left) / cw;
+    const ny = (clientY - top) / ch;
+    if (nx < 0 || ny < 0 || nx > 1 || ny > 1) return null;
+    return { nx, ny };
+  }, []);
   const [isFullscreen, setIsFullscreen] = useState(false);
   /** Ekran paylaşımı izlerken sinema (tiyatro) görünümü */
   const [cinemaMode, setCinemaMode] = useState(false);
@@ -471,6 +528,114 @@ export function VoiceStage({
                         muted={screenShare.isLocal}
                       />
                     )}
+                    {remoteControl?.isController &&
+                      remoteControl.status === 'active' &&
+                      !screenShare.isLocal && (
+                        <div
+                          className="absolute inset-0 z-[3] cursor-none"
+                          tabIndex={0}
+                          role="application"
+                          aria-label="Uzak kontrol yüzeyi"
+                          onPointerMove={(e) => {
+                            const n = mapPointerToNorm(e.clientX, e.clientY);
+                            if (!n) return;
+                            onRemoteControlPointer?.({
+                              type: 'move',
+                              nx: n.nx,
+                              ny: n.ny,
+                            });
+                          }}
+                          onPointerDown={(e) => {
+                            (e.currentTarget as HTMLElement).setPointerCapture?.(
+                              e.pointerId,
+                            );
+                            const n = mapPointerToNorm(e.clientX, e.clientY);
+                            if (!n) return;
+                            onRemoteControlPointer?.({
+                              type: 'down',
+                              nx: n.nx,
+                              ny: n.ny,
+                              button: e.button,
+                            });
+                          }}
+                          onPointerUp={(e) => {
+                            const n = mapPointerToNorm(e.clientX, e.clientY);
+                            if (!n) return;
+                            onRemoteControlPointer?.({
+                              type: 'up',
+                              nx: n.nx,
+                              ny: n.ny,
+                              button: e.button,
+                            });
+                          }}
+                          onWheel={(e) => {
+                            const n = mapPointerToNorm(e.clientX, e.clientY);
+                            if (!n) return;
+                            onRemoteControlPointer?.({
+                              type: 'wheel',
+                              nx: n.nx,
+                              ny: n.ny,
+                              deltaY: e.deltaY,
+                            });
+                          }}
+                          onKeyDown={(e) => {
+                            e.preventDefault();
+                            onRemoteControlKey?.({
+                              type: 'key',
+                              keyAction: 'down',
+                              key: e.key,
+                              code: e.code,
+                              ctrl: e.ctrlKey,
+                              alt: e.altKey,
+                              shift: e.shiftKey,
+                              meta: e.metaKey,
+                            });
+                          }}
+                          onKeyUp={(e) => {
+                            e.preventDefault();
+                            onRemoteControlKey?.({
+                              type: 'key',
+                              keyAction: 'up',
+                              key: e.key,
+                              code: e.code,
+                              ctrl: e.ctrlKey,
+                              alt: e.altKey,
+                              shift: e.shiftKey,
+                              meta: e.metaKey,
+                            });
+                          }}
+                        />
+                      )}
+                    {remoteControl?.isSharer &&
+                      remoteControl.status === 'pending' &&
+                      remoteControl.pendingFromName && (
+                        <div className="absolute top-space-sm right-space-sm z-[4] max-w-sm rounded-xl bg-surface-container border border-surface-container-high p-3 shadow-lg space-y-2">
+                          <p className="font-label-md text-on-surface">
+                            Uzak kontrol isteği
+                          </p>
+                          <p className="font-body-sm text-on-surface-variant">
+                            <strong>{remoteControl.pendingFromName}</strong> ekranını
+                            kontrol etmek istiyor. Aynı anda yalnızca bir kişi
+                            kontrol edebilir.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="h-8 px-3 rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+                              onClick={() => onAcceptRemoteControl?.()}
+                            >
+                              Kabul et
+                            </button>
+                            <button
+                              type="button"
+                              className="h-8 px-3 rounded-lg bg-surface-container-high font-label-sm"
+                              onClick={() => onRejectRemoteControl?.()}
+                            >
+                              Reddet
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     {/* Sinema letterbox — kendi paylaşımında GPU yeşil/ghost artefaktı yapabiliyor */}
                     {inCinema && !screenShare.isLocal && (
                       <div
@@ -542,6 +707,69 @@ export function VoiceStage({
                               ))}
                             </select>
                           </label>
+                        )}
+                      {!screenShare.isLocal && onRequestRemoteControl && (
+                        <button
+                          type="button"
+                          disabled={
+                            remoteControl?.status === 'active' &&
+                            !remoteControl.isController
+                          }
+                          className={cn(
+                            'h-7 px-2 rounded-md font-label-sm shrink-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+                            remoteControl?.isController && remoteControl.status === 'active'
+                              ? 'bg-dracula-green/90 text-black'
+                              : remoteControl?.status === 'pending' && remoteControl.isController
+                                ? 'bg-white/20 text-white'
+                                : 'bg-white/15 hover:bg-white/25 text-white',
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (
+                              remoteControl?.isController &&
+                              (remoteControl.status === 'active' ||
+                                remoteControl.status === 'pending')
+                            ) {
+                              onStopRemoteControl?.();
+                              return;
+                            }
+                            if (
+                              remoteControl?.status === 'active' &&
+                              !remoteControl.isController
+                            ) {
+                              return;
+                            }
+                            onRequestRemoteControl();
+                          }}
+                          title={
+                            remoteControl?.status === 'active' && !remoteControl.isController
+                              ? 'Başka biri kontrol ediyor'
+                              : 'Uzak kontrol'
+                          }
+                        >
+                          {remoteControl?.isController && remoteControl.status === 'active'
+                            ? 'Kontrolü bırak'
+                            : remoteControl?.status === 'pending' && remoteControl.isController
+                              ? 'İstek bekleniyor…'
+                              : remoteControl?.status === 'active'
+                                ? `${remoteControl.controllerName || 'Biri'} kontrol ediyor`
+                                : 'Kontrol iste'}
+                        </button>
+                      )}
+                      {screenShare.isLocal &&
+                        remoteControl?.status === 'active' &&
+                        remoteControl.controllerName && (
+                          <button
+                            type="button"
+                            className="h-7 px-2 rounded-md bg-dracula-orange/90 text-black font-label-sm shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onStopRemoteControl?.();
+                            }}
+                            title="Uzak kontrolü sonlandır"
+                          >
+                            {remoteControl.controllerName} kontrol ediyor · Durdur
+                          </button>
                         )}
                     </div>
                     <div

@@ -15,6 +15,10 @@ import {
 import {
   SocketEvents,
   type DmCallPayload,
+  type RemoteControlInputPayload,
+  type RemoteControlRequestPayload,
+  type RemoteControlResponsePayload,
+  type RemoteControlRevokePayload,
   type VoiceStatePayload,
   type VoiceSyncPayload,
 } from '@dracord/types';
@@ -27,6 +31,7 @@ import { MessagesService } from '@/messages/messages.service';
 import { MessagesRealtimeService } from '@/messages/messages-realtime.service';
 import { NotificationsRealtimeService } from '@/notifications/notifications-realtime.service';
 import { PresenceService } from '@/presence/presence.service';
+import { RemoteControlService } from '@/voice/remote-control.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { WsJwtGuard } from './ws-jwt.guard';
 import { GatewayMetricsService } from './gateway-metrics.service';
@@ -76,6 +81,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly messages: MessagesService,
     private readonly presence: PresenceService,
     private readonly voicePresence: VoicePresenceService,
+    private readonly remoteControl: RemoteControlService,
     private readonly channels: ChannelsService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly messagesRealtime: MessagesRealtimeService,
@@ -437,7 +443,162 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (payload) {
       this.server.emit(SocketEvents.VOICE_STATE, payload);
     }
+    // Ses kanalı değişince uzak kontrol oturumlarını temizle
+    if (!body.channelId) {
+      for (const cleared of this.remoteControl.clearControllerEverywhere(user.sub)) {
+        this.emitRemoteControlState(cleared.guildId, cleared, 'left_voice');
+      }
+    }
     return payload;
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.REMOTE_CONTROL_REQUEST)
+  handleRemoteControlRequest(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: RemoteControlRequestPayload,
+  ) {
+    const user = client.data.user as WsUser;
+    if (!body?.guildId || !body?.channelId || !body?.sharerId) {
+      throw new WsException('geçersiz istek');
+    }
+    const result = this.remoteControl.request({
+      guildId: body.guildId,
+      channelId: body.channelId,
+      sharerId: body.sharerId,
+      controllerId: user.sub,
+      controllerName: user.username || user.sub,
+    });
+    if (!result.ok) {
+      const payload = result.session
+        ? this.remoteControl.toPayload(result.session, result.error)
+        : {
+            guildId: body.guildId,
+            channelId: body.channelId,
+            sharerId: body.sharerId,
+            status: 'idle' as const,
+            controllerId: null,
+            reason: result.error,
+          };
+      client.emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+      return { ok: false, error: result.error };
+    }
+    const state = this.remoteControl.toPayload(result.session);
+    this.emitRemoteControlState(body.guildId, result.session);
+    // Paylaşana doğrudan da bildir (pending UI)
+    this.server.to(`user:${body.sharerId}`).emit(SocketEvents.REMOTE_CONTROL_REQUEST, {
+      ...body,
+      controllerId: user.sub,
+      controllerName: user.username || user.sub,
+    });
+    return { ok: true, state };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.REMOTE_CONTROL_RESPONSE)
+  handleRemoteControlResponse(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: RemoteControlResponsePayload,
+  ) {
+    const user = client.data.user as WsUser;
+    if (!body?.channelId || !body?.sharerId || !body?.controllerId) {
+      throw new WsException('geçersiz yanıt');
+    }
+    const result = this.remoteControl.respond({
+      channelId: body.channelId,
+      sharerId: body.sharerId,
+      controllerId: body.controllerId,
+      accept: Boolean(body.accept),
+      actorId: user.sub,
+    });
+    if (!result.ok) {
+      throw new WsException(result.error);
+    }
+    this.emitRemoteControlState(
+      body.guildId || result.session.guildId,
+      result.session,
+      body.accept ? 'accepted' : 'rejected',
+    );
+    return { ok: true };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.REMOTE_CONTROL_REVOKE)
+  handleRemoteControlRevoke(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: RemoteControlRevokePayload,
+  ) {
+    const user = client.data.user as WsUser;
+    if (!body?.channelId || !body?.sharerId) {
+      throw new WsException('geçersiz iptal');
+    }
+    const result = this.remoteControl.revoke({
+      channelId: body.channelId,
+      sharerId: body.sharerId,
+      actorId: user.sub,
+    });
+    if (!result.ok) {
+      throw new WsException(result.error);
+    }
+    this.emitRemoteControlState(
+      body.guildId || result.session.guildId,
+      result.session,
+      body.reason || 'revoked',
+    );
+    return { ok: true };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.REMOTE_CONTROL_INPUT)
+  handleRemoteControlInput(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: RemoteControlInputPayload,
+  ) {
+    const user = client.data.user as WsUser;
+    if (!body?.channelId || !body?.sharerId || !body?.type) return { ok: false };
+    if (
+      !this.remoteControl.canInject({
+        channelId: body.channelId,
+        sharerId: body.sharerId,
+        controllerId: user.sub,
+      })
+    ) {
+      return { ok: false, error: 'not_controller' };
+    }
+    // Yalnızca paylaşanın soketlerine (düşük gecikme, tek hedef)
+    this.server.to(`user:${body.sharerId}`).emit(SocketEvents.REMOTE_CONTROL_INPUT, {
+      ...body,
+      controllerId: user.sub,
+    });
+    return { ok: true };
+  }
+
+  private emitRemoteControlState(
+    guildId: string,
+    session: {
+      guildId: string;
+      channelId: string;
+      sharerId: string;
+      status: 'idle' | 'pending' | 'active';
+      controllerId: string | null;
+      controllerName: string | null;
+      sharerName: string | null;
+    },
+    reason?: string | null,
+  ) {
+    const payload = this.remoteControl.toPayload(
+      { ...session, updatedAt: Date.now() },
+      reason,
+    );
+    this.server.to(this.guildRoom(guildId)).emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+    this.server
+      .to(`user:${session.sharerId}`)
+      .emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+    if (session.controllerId) {
+      this.server
+        .to(`user:${session.controllerId}`)
+        .emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+    }
   }
 
   broadcastVoiceState(payload: VoiceStatePayload) {

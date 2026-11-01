@@ -7,7 +7,7 @@
     "light": "#38BDF8",
     "dark": "#0369A1"
   },
-  "_comment": "DEPRECATED for Mintlify hosting. Use docs/mintlify/ as the Mintlify docs directory so internal markdown under docs/ is NOT published. Kept only as a pointer for older configs.",
+  "favicon": "/mintlify/favicon.svg",
   "navigation": {
     "tabs": [
       {
@@ -15,7 +15,25 @@
         "groups": [
           {
             "group": "Başlangıç",
-            "pages": ["mintlify/index"]
+            "pages": [
+              "mintlify/index",
+              "mintlify/quickstart",
+              "mintlify/discovery"
+            ]
+          },
+          {
+            "group": "API",
+            "pages": [
+              "mintlify/authentication",
+              "mintlify/http-api",
+              "mintlify/slash-commands",
+              "mintlify/bot-gateway",
+              "mintlify/oauth2"
+            ]
+          },
+          {
+            "group": "SDK",
+            "pages": ["mintlify/bot-sdk", "mintlify/openapi"]
           }
         ]
       }
@@ -23,8 +41,77 @@
   },
   "redirects": [
     {
+      "source": "/quickstart",
+      "destination": "/mintlify/quickstart"
+    },
+    {
+      "source": "/discovery",
+      "destination": "/mintlify/discovery"
+    },
+    {
+      "source": "/authentication",
+      "destination": "/mintlify/authentication"
+    },
+    {
+      "source": "/http-api",
+      "destination": "/mintlify/http-api"
+    },
+    {
+      "source": "/slash-commands",
+      "destination": "/mintlify/slash-commands"
+    },
+    {
+      "source": "/bot-gateway",
+      "destination": "/mintlify/bot-gateway"
+    },
+    {
+      "source": "/oauth2",
+      "destination": "/mintlify/oauth2"
+    },
+    {
+      "source": "/bot-sdk",
+      "destination": "/mintlify/bot-sdk"
+    },
+    {
+      "source": "/openapi",
+      "destination": "/mintlify/openapi"
+    },
+    {
+      "source": "/sdk",
+      "destination": "/mintlify/bot-sdk"
+    },
+    {
+      "source": "/mintlify",
+      "destination": "/mintlify/index"
+    },
+    {
       "source": "/developer/README",
-      "destination": "https://dracord.mintlify.app"
+      "destination": "/mintlify/index"
+    },
+    {
+      "source": "/developer/readme",
+      "destination": "/mintlify/index"
+    },
+    {
+      "source": "/developer/http-api",
+      "destination": "/mintlify/http-api"
+    },
+    {
+      "source": "/developer/bot-gateway",
+      "destination": "/mintlify/bot-gateway"
     }
-  ]
+  ],
+  "api": {
+    "openapi": "mintlify/openapi.json"
+  },
+  "footerSocials": {
+    "github": "https://github.com/adorratm/dracord"
+  },
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "Sayfa bulunamadı",
+      "description": "[Ana sayfaya dön](/mintlify/index) veya [hızlı başlangıç](/mintlify/quickstart) ile devam et."
+    }
+  }
 }

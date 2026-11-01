@@ -1,0 +1,4 @@
+# Mintlify docs directory = /docs iken yalnızca public mintlify/ yayınlansın.
+# Dahili roadmap / rollout / checklist sızmasın.
+*.md
+developer/

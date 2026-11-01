@@ -155,6 +155,22 @@ type DracordDesktopApi = {
   }) => Promise<unknown>;
   getOverlayPrefs?: () => Promise<Record<string, unknown>>;
   setWatchPartyAdblock?: (enabled: boolean) => Promise<unknown>;
+  setRemoteControlBounds?: (bounds: {
+    x?: number;
+    y?: number;
+    width: number;
+    height: number;
+  } | null) => Promise<unknown>;
+  injectRemoteControlInput?: (ev: {
+    type: string;
+    nx?: number;
+    ny?: number;
+    button?: number;
+    deltaY?: number;
+    key?: string;
+    code?: string;
+    keyAction?: string;
+  }) => Promise<{ ok?: boolean; error?: string }>;
   onOverlayVoiceCommand?: (
     callback: (payload: unknown) => void,
   ) => () => void;

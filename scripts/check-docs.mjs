@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mintRoot = join(root, 'docs/mintlify');
 const docsJsonPath = join(mintRoot, 'docs.json');
+const rootDocsJsonPath = join(root, 'docs/docs.json');
+const mintIgnorePath = join(root, 'docs/.mintignore');
 
 let ok = true;
 
@@ -36,6 +38,37 @@ for (const p of pages) {
   } else {
     console.log(`OK page ${p}`);
   }
+}
+
+/** Canlı Mintlify çoğu zaman path=/docs kullanır — kök docs.json tüm mintlify sayfalarını listelemeli */
+if (existsSync(rootDocsJsonPath)) {
+  const rootCfg = JSON.parse(readFileSync(rootDocsJsonPath, 'utf8'));
+  const rootPages = [];
+  for (const tab of rootCfg.navigation?.tabs ?? []) {
+    for (const group of tab.groups ?? []) {
+      for (const p of group.pages ?? []) rootPages.push(p);
+    }
+  }
+  for (const expected of pages) {
+    const prefixed = `mintlify/${expected}`;
+    if (!rootPages.includes(prefixed)) {
+      console.error(`FAIL docs/docs.json missing nav page: ${prefixed}`);
+      ok = false;
+    }
+  }
+  if (rootPages.length >= pages.length) {
+    console.log(`OK docs/docs.json lists ${rootPages.length} mintlify pages`);
+  }
+} else {
+  console.error('FAIL missing docs/docs.json (Mintlify monorepo path=/docs için gerekli)');
+  ok = false;
+}
+
+if (!existsSync(mintIgnorePath)) {
+  console.error('FAIL missing docs/.mintignore (dahili docs sızıntısını engeller)');
+  ok = false;
+} else {
+  console.log('OK docs/.mintignore');
 }
 
 const openapi = cfg.api?.openapi;

@@ -13,6 +13,7 @@ import {
   SCREEN_SHARE_VIEW_QUALITY_SPECS,
 } from '@/lib/voice-settings';
 import { useAuth } from '../auth';
+import { useRemoteControl } from '../hooks/useRemoteControl';
 import { loadLocalPrefs } from '../lib/client-settings';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
@@ -60,6 +61,16 @@ export function VoicePanel({
 }) {
   const { client, user } = useAuth();
   const voice = useVoiceSession();
+  const remote = useRemoteControl({
+    client,
+    userId: user?.id,
+    guildId: voice.voiceGuildId,
+    channelId: voice.voiceChannelId,
+    sharerId: voice.activeScreenShare?.isLocal
+      ? user?.id
+      : voice.activeScreenShare?.identity ?? null,
+    localSharing: Boolean(voice.screenSharing),
+  });
   const roleColors = loadLocalPrefs().accessibility.roleColors !== false;
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(340);
@@ -273,6 +284,13 @@ export function VoicePanel({
       }
       onFocusScreenShare={(id) => voice.focusScreenShare(id)}
       onCameraVideoRef={(participantId, el) => voice.attachCamera(participantId, el)}
+      remoteControl={remote.remoteControl}
+      onRequestRemoteControl={remote.requestRemoteControl}
+      onAcceptRemoteControl={remote.acceptRemoteControl}
+      onRejectRemoteControl={remote.rejectRemoteControl}
+      onStopRemoteControl={remote.stopRemoteControl}
+      onRemoteControlPointer={remote.sendRemoteControlPointer}
+      onRemoteControlKey={remote.sendRemoteControlKey}
       chatDrawerOpen={chatOpen}
       participantsDrawerOpen={participantsOpen}
       chatPanelWidth={chatWidth}

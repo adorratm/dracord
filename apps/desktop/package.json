@@ -1,6 +1,6 @@
 {
   "name": "@dracord/desktop",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "private": true,
   "description": "Dracord native masaüstü istemcisi (Electron + desktop-ui)",
   "author": "Dracord",
@@ -54,6 +54,7 @@
       "desktop-games.js",
       "desktop-overlay.js",
       "desktop-adblock.js",
+      "remote-input.js",
       "steam-games.js",
       "package.json",
       "ui/**/*",

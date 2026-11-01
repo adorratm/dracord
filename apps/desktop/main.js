@@ -1135,6 +1135,38 @@ function registerWindowIpc() {
     return { ok: true, ...applied };
   });
 
+  /** Uzak kontrol — OS input inject (Windows) */
+  const remoteInput = require('./remote-input');
+  /** @type {{ x: number, y: number, width: number, height: number } | null} */
+  let remoteShareBounds = null;
+  ipcMain.handle('remote-control:set-bounds', (_e, bounds) => {
+    if (
+      bounds &&
+      typeof bounds.width === 'number' &&
+      typeof bounds.height === 'number'
+    ) {
+      remoteShareBounds = {
+        x: Number(bounds.x) || 0,
+        y: Number(bounds.y) || 0,
+        width: bounds.width,
+        height: bounds.height,
+      };
+      return { ok: true };
+    }
+    remoteShareBounds = null;
+    return { ok: true, cleared: true };
+  });
+  ipcMain.handle('remote-control:inject', (_e, ev) => {
+    try {
+      return remoteInput.injectRemoteInput(ev || {}, remoteShareBounds);
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+  });
+
   /** Steam / Epic / manuel oyun algılama + kütüphane */
   const desktopGames = require('./desktop-games');
   ipcMain.handle('presence:detect-games', async () => {

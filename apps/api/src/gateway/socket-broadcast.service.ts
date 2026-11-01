@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   SocketEvents,
   type DmCallPayload,
+  type RemoteControlStatePayload,
   type UserActivity,
   type UserUpdatePayload,
   type VoiceStatePayload,
@@ -23,6 +24,19 @@ export class SocketBroadcastService {
 
   broadcastVoiceState(payload: VoiceStatePayload) {
     this.server?.emit(SocketEvents.VOICE_STATE, payload);
+  }
+
+  broadcastRemoteControlState(payload: RemoteControlStatePayload) {
+    const guildRoom = `guild:${payload.guildId}`;
+    this.server?.to(guildRoom).emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+    this.server
+      ?.to(`user:${payload.sharerId}`)
+      .emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+    if (payload.controllerId) {
+      this.server
+        ?.to(`user:${payload.controllerId}`)
+        .emit(SocketEvents.REMOTE_CONTROL_STATE, payload);
+    }
   }
 
   emitVoiceTakeover(userId: string, payload: VoiceTakeoverPayload) {
