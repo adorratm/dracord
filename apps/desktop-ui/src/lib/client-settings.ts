@@ -53,6 +53,15 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     minimizeToTray: true,
     autoUpdate: true,
   },
+  overlay: {
+    enabled: true,
+    hotkey: 'Control+Shift+`',
+    followDisplay: true,
+    showMembers: true,
+    showQuickChat: true,
+    opacity: 0.94,
+    watchPartyAdblock: true,
+  },
   language: {
     locale: 'tr',
     hour24: true,
@@ -180,4 +189,18 @@ export function syncDesktopSystemPrefs(
       autoUpdate: system.autoUpdate !== false,
     }),
   ).catch(() => undefined);
+}
+
+/** Electron overlay + watch-party adblock tercihlerini main’e uygula */
+export function syncDesktopOverlayPrefs(overlay: ClientSettings['overlay']) {
+  const api = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+  if (!api) return;
+  if (api.setOverlayPrefs) {
+    void Promise.resolve(api.setOverlayPrefs({ ...overlay })).catch(() => undefined);
+  }
+  if (api.setWatchPartyAdblock) {
+    void Promise.resolve(
+      api.setWatchPartyAdblock(overlay.watchPartyAdblock !== false),
+    ).catch(() => undefined);
+  }
 }

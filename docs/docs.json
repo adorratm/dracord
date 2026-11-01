@@ -7,7 +7,7 @@
     "light": "#38BDF8",
     "dark": "#0369A1"
   },
-  "favicon": "/favicon.ico",
+  "_comment": "DEPRECATED for Mintlify hosting. Use docs/mintlify/ as the Mintlify docs directory so internal markdown under docs/ is NOT published. Kept only as a pointer for older configs.",
   "navigation": {
     "tabs": [
       {
@@ -15,28 +15,16 @@
         "groups": [
           {
             "group": "Başlangıç",
-            "pages": [
-              "developer/README",
-              "developer/http-api",
-              "developer/bot-gateway"
-            ]
-          },
-          {
-            "group": "Platform",
-            "pages": ["sdk", "developer/scaling"]
-          },
-          {
-            "group": "Ops",
-            "pages": ["prod-migration", "prod-guvenli-rollout"]
+            "pages": ["mintlify/index"]
           }
         ]
       }
     ]
   },
-  "api": {
-    "openapi": ["developer/openapi.json"]
-  },
-  "footerSocials": {
-    "github": "https://github.com/adorratm/dracord"
-  }
+  "redirects": [
+    {
+      "source": "/developer/README",
+      "destination": "https://dracord.mintlify.app"
+    }
+  ]
 }

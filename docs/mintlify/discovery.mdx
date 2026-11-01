@@ -1,0 +1,28 @@
+---
+title: Keşif (Discovery)
+description: İstemciler base URL’i sabit kodlamasın — /.well-known/dracord.
+---
+
+```http
+GET https://api.dracord.com.tr/.well-known/dracord
+```
+
+Örnek alanlar:
+
+| Alan | Anlam |
+| --- | --- |
+| `endpoints.api_public` | REST kökü |
+| `endpoints.bot_gateway` | Bot Socket.IO URL |
+| `endpoints.openapi` | OpenAPI JSON |
+| `endpoints.oauth_authorize` | Kullanıcı onay UI |
+| `endpoints.oauth_token` | Token endpoint |
+| `features.platform_api` | Bot API açık mı |
+| `features.platform_oauth` | OAuth açık mı |
+
+```ts
+const res = await fetch('https://api.dracord.com.tr/.well-known/dracord');
+const disc = await res.json();
+const api = disc.endpoints.api_public;
+```
+
+SDK: `DracordBot.fromDiscovery(origin, token)` aynı nesneyi kullanır.

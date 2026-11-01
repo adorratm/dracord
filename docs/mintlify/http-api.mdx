@@ -1,0 +1,77 @@
+---
+title: HTTP API
+description: Bot ve OAuth ile kullanılan kamuya açık REST uçları.
+---
+
+Base: discovery’deki `api_public` (prod: `https://api.dracord.com.tr`).
+
+## Bot uçları
+
+| Method | Path | Açıklama |
+| --- | --- | --- |
+| GET | `/v1/health` | Platform durumu |
+| GET | `/v1/users/@me` | Bot kullanıcı bilgisi |
+| GET | `/v1/guilds/:guildId` | Sunucu özeti (yetki gerekir) |
+| POST | `/v1/channels/:channelId/messages` | Mesaj gönder `{ content }` |
+| PUT | `/v1/applications/:applicationId/commands` | Slash senkronu |
+
+Tüm bot isteklerinde: `Authorization: Bot <token>`.
+
+### Mesaj örneği
+
+```json
+POST /v1/channels/{channelId}/messages
+{
+  "content": "Merhaba"
+}
+```
+
+### Komut senkronu
+
+```json
+PUT /v1/applications/{applicationId}/commands
+{
+  "guildId": "global",
+  "commands": [
+    {
+      "name": "ping",
+      "description": "Pong döner",
+      "options": []
+    }
+  ]
+}
+```
+
+`guildId`: `"global"` veya belirli bir sunucu kimliği. Option tipleri Discord-parity (3=STRING … 11=ATTACHMENT). Ayrıntı: [Slash komutlar](/slash-commands).
+
+## Uygulama yönetimi (kullanıcı JWT)
+
+Oturum açmış geliştirici:
+
+| Method | Path |
+| --- | --- |
+| GET | `/platform/applications` |
+| POST | `/platform/applications` |
+| DELETE | `/platform/applications/:id` |
+| POST | `/platform/applications/:id/reset-token` |
+| PUT | `/platform/applications/:id/webhook` |
+
+Webhook URL kaydı: bot olaylarını HTTPS endpoint’ine de iletir.
+
+## OAuth2
+
+| Method | Path |
+| --- | --- |
+| GET | `/oauth2/application/:clientId` |
+| POST | `/oauth2/authorize` |
+| POST | `/oauth2/token` |
+
+Detay: [OAuth2](/oauth2).
+
+## Hatalar
+
+JSON gövde; HTTP durum kodları (401 yetkisiz, 403 yasak, 404 yok, 429 rate limit). Rate limit aşımlarında yeniden dene (backoff).
+
+## OpenAPI
+
+Makine okunur şema: [OpenAPI](/openapi) · canlı `GET /openapi.json`.

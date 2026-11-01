@@ -1,0 +1,32 @@
+---
+title: Kimlik doğrulama
+description: Bot token ve kullanıcı OAuth2.
+---
+
+## Bot token
+
+Platform uygulamalarının bot token’ı:
+
+```http
+Authorization: Bot <token>
+```
+
+Token’ı Ayarlar → Gelişmiş’ten alırsın. Sızdırırsan **Token yenile** ile iptal et.
+
+## Kullanıcı Bearer (JWT)
+
+Kullanıcı oturumu (birinci parti istemci / OAuth access token):
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Üçüncü parti uygulamalar için [OAuth2](/oauth2) akışını kullan.
+
+## Sağlık kontrolü
+
+```http
+GET /v1/health
+```
+
+Kimlik gerektirmez. `platformApi` / `platformOauth` bayraklarını döner.

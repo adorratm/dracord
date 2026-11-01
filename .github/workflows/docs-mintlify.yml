@@ -1,14 +1,14 @@
 name: Docs (Mintlify check)
 
-# Mintlify Cloud deploy genelde mintlify.app bağlantısıyla yapılır.
-# Bu workflow monorepo docs.json + markdown bütünlüğünü kontrol eder.
-# Hosted publish: Mintlify dashboard → GitHub repo → docs path = docs
+# Public Mintlify content: docs/mintlify only.
+# Dashboard → Docs directory MUST be docs/mintlify (not docs/).
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'docs/**'
+      - 'docs/mintlify/**'
+      - 'scripts/check-docs.mjs'
       - 'apps/docs/**'
       - '.github/workflows/docs-mintlify.yml'
 

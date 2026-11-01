@@ -1,0 +1,42 @@
+---
+title: "@dracord/bot-sdk"
+description: TypeScript bot istemcisi — REST + gateway.
+---
+
+```bash
+yarn add @dracord/bot-sdk
+# veya npm i @dracord/bot-sdk
+```
+
+```ts
+import { DracordBot, guildShardIndex } from '@dracord/bot-sdk';
+
+const bot = await DracordBot.fromDiscovery(
+  'https://api.dracord.com.tr',
+  process.env.BOT_TOKEN!,
+);
+
+await bot.health();
+await bot.sendMessage(channelId, 'merhaba');
+await bot.syncCommands(applicationId, 'global', [
+  { name: 'ping', description: 'Pong' },
+]);
+
+bot.connectGateway({
+  onReady: (d) => console.log('ready', d),
+  onDispatch: (t, d) => console.log(t, d),
+});
+```
+
+## API özeti
+
+| Metod | Açıklama |
+| --- | --- |
+| `fromDiscovery` | Discovery + istemci |
+| `health` / `me` / `getGuild` | REST |
+| `sendMessage` | Kanal mesajı |
+| `syncCommands` | Slash sync |
+| `connectGateway` / `disconnectGateway` | Socket.IO |
+| `guildShardIndex` | Guild → shard indeksi yardımcısı |
+
+Kullanıcı (birinci parti) istemcisi için ayrı `@dracord/sdk` paketi monorepo içindedir; bot geliştiricileri için **bot-sdk** yeterlidir.

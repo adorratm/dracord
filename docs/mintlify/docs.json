@@ -7,7 +7,7 @@
     "light": "#38BDF8",
     "dark": "#0369A1"
   },
-  "favicon": "/favicon.ico",
+  "favicon": "/favicon.svg",
   "navigation": {
     "tabs": [
       {
@@ -15,28 +15,59 @@
         "groups": [
           {
             "group": "Başlangıç",
+            "pages": ["index", "quickstart", "discovery"]
+          },
+          {
+            "group": "API",
             "pages": [
-              "developer/README",
-              "developer/http-api",
-              "developer/bot-gateway"
+              "authentication",
+              "http-api",
+              "slash-commands",
+              "bot-gateway",
+              "oauth2"
             ]
           },
           {
-            "group": "Platform",
-            "pages": ["sdk", "developer/scaling"]
-          },
-          {
-            "group": "Ops",
-            "pages": ["prod-migration", "prod-guvenli-rollout"]
+            "group": "SDK",
+            "pages": ["bot-sdk", "openapi"]
           }
         ]
       }
     ]
   },
+  "redirects": [
+    {
+      "source": "/developer/README",
+      "destination": "/"
+    },
+    {
+      "source": "/developer/readme",
+      "destination": "/"
+    },
+    {
+      "source": "/developer/http-api",
+      "destination": "/http-api"
+    },
+    {
+      "source": "/developer/bot-gateway",
+      "destination": "/bot-gateway"
+    },
+    {
+      "source": "/sdk",
+      "destination": "/bot-sdk"
+    }
+  ],
   "api": {
-    "openapi": ["developer/openapi.json"]
+    "openapi": "openapi.json"
   },
   "footerSocials": {
     "github": "https://github.com/adorratm/dracord"
+  },
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "Sayfa bulunamadı",
+      "description": "[Ana sayfaya dön](/) veya [hızlı başlangıç](/quickstart) ile devam et."
+    }
   }
 }

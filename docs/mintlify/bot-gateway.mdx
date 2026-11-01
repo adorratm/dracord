@@ -1,0 +1,60 @@
+---
+title: Bot Gateway
+description: Socket.IO ile canlı bot olayları.
+---
+
+Namespace: **`/v1/gateway`** (chat gateway’den ayrı). Transport: Socket.IO, path `/socket.io`.
+
+Discovery: `endpoints.bot_gateway`.
+
+## Paket akışı
+
+| op | Anlam |
+| --- | --- |
+| 10 | Hello (`heartbeat_interval`, isteğe `shard_id` / `shard_count`) |
+| 2 | Identify `{ token, shard? }` |
+| 1 | Heartbeat |
+| 11 | Heartbeat ACK |
+| 0 | Dispatch (`t` event adı, `d` yük) |
+| 9 | Geçersiz oturum |
+
+## Örnek
+
+```js
+import { io } from 'socket.io-client';
+
+const socket = io('https://api.dracord.com.tr/v1/gateway', {
+  transports: ['websocket'],
+  path: '/socket.io',
+});
+
+socket.on('packet', (p) => {
+  if (p.op === 10) {
+    socket.emit('packet', {
+      op: 2,
+      d: { token: process.env.BOT_TOKEN },
+    });
+    setInterval(
+      () => socket.emit('packet', { op: 1, d: null }),
+      p.d.heartbeat_interval,
+    );
+  }
+  if (p.op === 0) {
+    console.log(p.t, p.d); // READY, MESSAGE_CREATE, …
+  }
+});
+```
+
+## READY
+
+Identify sonrası `t: "READY"` — bot kullanıcı bilgisi ve `session_id`.
+
+## Dispatch
+
+Webhook ile aynı event adları (ör. `MESSAGE_CREATE`). Gateway bağlıysa olaylar `packet` olarak da gelir.
+
+## Shard (isteğe bağlı)
+
+Büyük botlar için Identify’de `shard: [id, count]` kullanılabilir. Hello paketindeki dilim bilgisi yol gösterir. Çoğu bot tek bağlantı ile başlar (`shard` vermeden).
+
+SDK: `bot.connectGateway({ onReady, onDispatch })`.

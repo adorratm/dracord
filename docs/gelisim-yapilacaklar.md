@@ -45,7 +45,7 @@ P0–P3 platform olgunlaştırma **MVP tamam**. Ölçek: Redis adapter + sticky 
 - [x] Desktop overlay + Watch Party adblock (webRequest)
 - [x] `GET /.well-known/dracord` (+ `instance.shard_*` + algorithm)
 - [x] Guild-hash gateway **shard** MVP (identify `shard`, dispatch filtre, voice WRONG_SHARD)
-- [x] Mintlify publish iskeleti (`docs/docs.json` + CI check) — **hosted hesap bağlama manuel**
+- [x] Mintlify **public** site (`docs/mintlify` MDX + redirects) — dashboard path=`docs/mintlify`
 - [ ] PhotoDNA / NCMEC **yasal** ortaklık
 - [x] `@dracord/bot-sdk` publish pipeline (`publish-bot-sdk.yml` + pack) — **NPM_TOKEN ile gerçek publish manuel**
 - [x] Shard / staging smoke scriptleri (`yarn smoke:shard`, `yarn smoke:staging`)

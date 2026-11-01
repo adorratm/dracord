@@ -141,6 +141,24 @@ type DracordDesktopApi = {
   onSpotifyOAuthDone?: (
     callback: (payload: { status?: string }) => void,
   ) => () => void;
+  toggleGameOverlay?: () => Promise<unknown>;
+  isGameOverlayVisible?: () => Promise<boolean>;
+  setGameOverlayState?: (state: unknown) => Promise<unknown>;
+  setOverlayPrefs?: (prefs: {
+    enabled?: boolean;
+    hotkey?: string;
+    followDisplay?: boolean;
+    showMembers?: boolean;
+    showQuickChat?: boolean;
+    opacity?: number;
+    watchPartyAdblock?: boolean;
+  }) => Promise<unknown>;
+  getOverlayPrefs?: () => Promise<Record<string, unknown>>;
+  setWatchPartyAdblock?: (enabled: boolean) => Promise<unknown>;
+  onOverlayVoiceCommand?: (
+    callback: (payload: unknown) => void,
+  ) => () => void;
+  onOverlayQuickChat?: (callback: (payload: unknown) => void) => () => void;
 };
 
 interface Window {

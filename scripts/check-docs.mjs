@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 /**
- * Mintlify / docs bütünlük kontrolü.
- * docs/mintlify/docs.json navigation path’lerinin dosya olarak varlığını doğrular.
+ * Mintlify public docs bütünlük kontrolü.
+ * Kaynak: docs/mintlify — dahili docs/ dosyaları burada olmamalı.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const docsJsonPath = existsSync(join(root, 'docs/docs.json'))
-  ? join(root, 'docs/docs.json')
-  : join(root, 'docs/mintlify/docs.json');
+const mintRoot = join(root, 'docs/mintlify');
+const docsJsonPath = join(mintRoot, 'docs.json');
+
+let ok = true;
 
 if (!existsSync(docsJsonPath)) {
-  console.error('FAIL missing docs/docs.json');
+  console.error('FAIL missing docs/mintlify/docs.json');
   process.exit(1);
 }
 
-console.log(`Using ${docsJsonPath.replace(root + '\\', '').replace(root + '/', '')}`);
+console.log('Using docs/mintlify/docs.json');
 const cfg = JSON.parse(readFileSync(docsJsonPath, 'utf8'));
 const pages = [];
 for (const tab of cfg.navigation?.tabs ?? []) {
@@ -26,42 +27,48 @@ for (const tab of cfg.navigation?.tabs ?? []) {
   }
 }
 
-const openapi = cfg.api?.openapi ?? [];
-let ok = true;
-
 for (const p of pages) {
-  const md = join(root, 'docs', `${p}.md`);
-  const mdx = join(root, 'docs', `${p}.mdx`);
-  if (!existsSync(md) && !existsSync(mdx)) {
-    console.error(`FAIL missing page: docs/${p}.md(x)`);
+  const mdx = join(mintRoot, `${p}.mdx`);
+  const md = join(mintRoot, `${p}.md`);
+  if (!existsSync(mdx) && !existsSync(md)) {
+    console.error(`FAIL missing page: docs/mintlify/${p}.mdx`);
     ok = false;
   } else {
     console.log(`OK page ${p}`);
   }
 }
 
-for (const o of openapi) {
-  const path = join(root, 'docs', o);
+const openapi = cfg.api?.openapi;
+if (openapi) {
+  const path = join(mintRoot, openapi);
   if (!existsSync(path)) {
-    console.error(`FAIL missing openapi: docs/${o}`);
+    console.error(`FAIL missing openapi: docs/mintlify/${openapi}`);
     ok = false;
   } else {
-    console.log(`OK openapi ${o}`);
+    console.log(`OK openapi ${openapi}`);
   }
 }
 
-const required = [
-  'docs/mintlify/README.md',
-  'docs/developer/scaling.md',
-  'docs/developer/bot-gateway.md',
-  'apps/docs/package.json',
+/** Mintlify klasöründe dahili sızıntı dosyası olmasın */
+const banned = [
+  'prod-migration',
+  'prod-guvenli-rollout',
+  'gelisim-yapilacaklar',
+  'yayin-ve-buyume',
+  'native-parity',
+  'platform-api-tasarim',
+  'scaling',
+  'readme.md',
+  'contributing.md',
 ];
-for (const r of required) {
-  if (!existsSync(join(root, r))) {
-    console.error(`FAIL missing ${r}`);
-    ok = false;
-  } else {
-    console.log(`OK ${r}`);
+for (const name of readdirSync(mintRoot)) {
+  const lower = name.toLowerCase();
+  if (banned.some((b) => lower === b || lower.includes(b))) {
+    // allow openapi.json etc.; only exact sensitive names / substrings above
+    if (lower === 'readme.md' || lower === 'contributing.md' || banned.some((b) => b !== 'readme.md' && b !== 'contributing.md' && lower.includes(b))) {
+      console.error(`FAIL internal-looking file in mintlify root: ${name}`);
+      ok = false;
+    }
   }
 }
 

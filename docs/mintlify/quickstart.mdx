@@ -1,0 +1,51 @@
+---
+title: Hızlı başlangıç
+description: Birkaç dakikada bot oluşturup kanala mesaj gönder.
+---
+
+## 1. Uygulama oluştur
+
+1. Dracord’da oturum aç.
+2. **Ayarlar → Gelişmiş** → geliştirici modunu aç.
+3. **Uygulama oluştur** — bot hesabı otomatik gelir.
+4. Gösterilen **bot token**’ını kopyala (bir daha gösterilmez).
+
+## 2. Discovery
+
+Base URL uydurma; discovery kullan:
+
+```bash
+curl -s https://api.dracord.com.tr/.well-known/dracord
+```
+
+`endpoints.api_public` ve `endpoints.bot_gateway` alanlarını oku.
+
+## 3. İlk mesaj
+
+```bash
+curl -X POST "https://api.dracord.com.tr/v1/channels/CHANNEL_ID/messages" \
+  -H "Authorization: Bot BOT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"content\":\"Merhaba Dracord\"}"
+```
+
+`CHANNEL_ID`: botun yazma yetkisi olan bir metin kanalı.
+
+## 4. SDK (isteğe bağlı)
+
+```bash
+yarn add @dracord/bot-sdk
+```
+
+```ts
+import { DracordBot } from '@dracord/bot-sdk';
+
+const bot = await DracordBot.fromDiscovery(
+  'https://api.dracord.com.tr',
+  process.env.BOT_TOKEN!,
+);
+
+await bot.sendMessage('CHANNEL_ID', 'merhaba');
+```
+
+Sonraki adımlar: [Slash komutlar](/slash-commands), [Bot Gateway](/bot-gateway), [OAuth2](/oauth2).

@@ -71,7 +71,7 @@ Ayrıntılar: [`../platform-api-tasarim.md`](../platform-api-tasarim.md) · SDK:
 - [x] Instance shard stub (`INSTANCE_SHARD_*` + discovery)
 - [x] Gateway shard MVP (guild hash + identify `shard` + dispatch filtre)
 - [ ] PhotoDNA / NCMEC hash **yasal ortaklığı** (import altyapısı hazır)
-- [x] Mintlify config + CI (`docs/docs.json`, `docs-mintlify.yml`) — hosted bağlama manuel
+- [x] Mintlify public docs (`docs/mintlify`, path ayarı zorunlu) — `/developer/README` redirect → `/`
 - [x] `@dracord/bot-sdk` publish workflow — npm’e basmak için `NPM_TOKEN` + dry_run=false
 
 ## Bilinçli dışı (yapılmayacak)

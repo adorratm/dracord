@@ -1,0 +1,56 @@
+---
+title: Slash komutlar
+description: Global veya sunucu komutlarını senkronize et.
+---
+
+```http
+PUT /v1/applications/:applicationId/commands
+Authorization: Bot <token>
+```
+
+## Gövde
+
+```json
+{
+  "guildId": "global",
+  "commands": [
+    {
+      "name": "echo",
+      "description": "Metni tekrarlar",
+      "options": [
+        {
+          "type": 3,
+          "name": "text",
+          "description": "Yazılacak metin",
+          "required": true
+        }
+      ],
+      "responseTemplate": "Echo: {text}"
+    }
+  ]
+}
+```
+
+## Option tipleri
+
+| type | Anlam |
+| --- | --- |
+| 3 | STRING |
+| 4 | INTEGER |
+| 5 | BOOLEAN |
+| 6 | USER |
+| 7 | CHANNEL |
+| 8 | ROLE |
+| 9 | MENTIONABLE |
+| 10 | NUMBER |
+| 11 | ATTACHMENT |
+
+`responseTemplate` içinde `{option.name}` yer tutucuları desteklenir.
+
+SDK:
+
+```ts
+await bot.syncCommands(applicationId, 'global', [
+  { name: 'ping', description: 'Pong' },
+]);
+```

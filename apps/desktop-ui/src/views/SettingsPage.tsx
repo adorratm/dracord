@@ -34,6 +34,7 @@ import {
   saveLocalPrefs,
   mergeClientSettings,
   syncDesktopSystemPrefs,
+  syncDesktopOverlayPrefs,
 } from '../lib/client-settings';
 import {
   SettingsNote,
@@ -107,6 +108,8 @@ type Tab =
   | 'subscriptions'
   | 'gifts'
   | 'voice'
+  | 'overlay'
+  | 'games'
   | 'appearance'
   | 'accessibility'
   | 'system'
@@ -164,6 +167,41 @@ export function SettingsPage({
   const [boostBusyId, setBoostBusyId] = useState<string | null>(null);
   const [giftCode, setGiftCode] = useState('');
   const [giftMsg, setGiftMsg] = useState<string | null>(null);
+  const [overlayHotkeyDraft, setOverlayHotkeyDraft] = useState(
+    () => loadLocalPrefs().overlay?.hotkey ?? 'Control+Shift+`',
+  );
+  const [registeredGames, setRegisteredGames] = useState<
+    Array<{
+      appId: string;
+      name: string;
+      enabled?: boolean;
+      path?: string;
+      source?: string;
+    }>
+  >([]);
+  const [gamesBusy, setGamesBusy] = useState(false);
+  const [gamesMsg, setGamesMsg] = useState<string | null>(null);
+  const [runningGames, setRunningGames] = useState<string[]>([]);
+  const [platformApps, setPlatformApps] = useState<
+    Array<{
+      id: string;
+      name: string;
+      botUserId: string | null;
+      botTokenLast4: string | null;
+      webhookUrl: string | null;
+    }>
+  >([]);
+  const [platformOn, setPlatformOn] = useState<boolean | null>(null);
+  const [appName, setAppName] = useState('');
+  const [appBusy, setAppBusy] = useState(false);
+  const [lastBotToken, setLastBotToken] = useState<string | null>(null);
+
+  const OVERLAY_HOTKEY_PRESETS = [
+    'Control+Shift+`',
+    'Control+Shift+O',
+    'Alt+Shift+O',
+    'F10',
+  ] as const;
 
   useEffect(() => {
     applyPrefsDom(prefs);
@@ -234,13 +272,73 @@ export function SettingsPage({
         const merged = mergeClientSettings(remote as unknown as Record<string, unknown>);
         setPrefs(merged);
         saveLocalPrefs(merged);
+        setOverlayHotkeyDraft(merged.overlay.hotkey);
         syncDesktopSystemPrefs(merged.system);
+        syncDesktopOverlayPrefs(merged.overlay);
       })
       .catch(() => {
         /* yerel prefs yeterli */
-        syncDesktopSystemPrefs(loadLocalPrefs().system);
+        const local = loadLocalPrefs();
+        syncDesktopSystemPrefs(local.system);
+        syncDesktopOverlayPrefs(local.overlay);
       });
   }, [client]);
+
+  useEffect(() => {
+    setOverlayHotkeyDraft(prefs.overlay.hotkey);
+  }, [prefs.overlay.hotkey]);
+
+  const refreshRegisteredGames = useCallback(async () => {
+    const api = window.dracordDesktop;
+    if (!api?.getRegisteredGames) return;
+    try {
+      const res = await api.getRegisteredGames();
+      const list = Array.isArray(res)
+        ? res
+        : res && typeof res === 'object' && Array.isArray(res.games)
+          ? res.games
+          : [];
+      setRegisteredGames(
+        list.map((g) => ({
+          appId: String(g.appId ?? ''),
+          name: String(g.name ?? 'Oyun'),
+          enabled: g.enabled !== false,
+          path: typeof g.exePath === 'string' ? g.exePath : undefined,
+          source: typeof g.source === 'string' ? g.source : undefined,
+        })),
+      );
+    } catch {
+      setRegisteredGames([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'games') return;
+    void refreshRegisteredGames();
+  }, [tab, refreshRegisteredGames]);
+
+  useEffect(() => {
+    if (tab !== 'developer' || !prefs.developer.developerMode) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const health = await client.platformHealth();
+        if (cancelled) return;
+        setPlatformOn(Boolean(health.platformApi));
+        if (!health.platformApi) {
+          setPlatformApps([]);
+          return;
+        }
+        const list = await client.listPlatformApplications();
+        if (!cancelled) setPlatformApps(list);
+      } catch {
+        if (!cancelled) setPlatformOn(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, prefs.developer.developerMode, client]);
 
   const setSection = useCallback(
     <K extends keyof ClientSettings>(key: K, value: Partial<ClientSettings[K]>) => {
@@ -253,6 +351,9 @@ export function SettingsPage({
         void client.updateClientSettings({ [key]: next[key] } as Partial<ClientSettings>).catch(() => {});
         if (key === 'system') {
           syncDesktopSystemPrefs(next.system);
+        }
+        if (key === 'overlay') {
+          syncDesktopOverlayPrefs(next.overlay);
         }
         return next;
       });
@@ -306,6 +407,8 @@ export function SettingsPage({
           title: 'Deneyimler',
           items: [
             item('voice', 'Ses ve Görüntü', 'mic'),
+            item('overlay', 'Oyun Overlay', 'picture_in_picture_alt'),
+            item('games', 'Oyunlar', 'sports_esports'),
             item('appearance', 'Görünüm', 'palette'),
             item('accessibility', 'Erişilebilirlik', 'accessibility_new'),
             item('system', 'Sistem', 'dns'),
@@ -1850,6 +1953,283 @@ export function SettingsPage({
         </SettingsPageBody>
       )}
 
+      {tab === 'overlay' && (
+        <SettingsPageBody
+          title="Oyun Overlay"
+          description="Şeffaf oyun üstü pencere — ses, üyeler ve hızlı sohbet."
+        >
+          <SettingsSection title="Genel">
+            <SettingsToggle
+              label="Overlay etkin"
+              description="Kısayol ile şeffaf overlay penceresini aç/kapat."
+              checked={prefs.overlay.enabled}
+              onChange={(v) => setSection('overlay', { enabled: v })}
+            />
+            <SettingsToggle
+              label="Aktif ekranı takip et"
+              description="Monitör / oyun değişince overlay imleç ekranına taşınır."
+              checked={prefs.overlay.followDisplay}
+              disabled={!prefs.overlay.enabled}
+              onChange={(v) => setSection('overlay', { followDisplay: v })}
+            />
+            <SettingsToggle
+              label="Üye listesi"
+              description="Ses kanalındaki katılımcıları overlay’de göster."
+              checked={prefs.overlay.showMembers}
+              disabled={!prefs.overlay.enabled}
+              onChange={(v) => setSection('overlay', { showMembers: v })}
+            />
+            <SettingsToggle
+              label="Hızlı sohbet"
+              description="Overlay’den kısa toast mesajı gönder."
+              checked={prefs.overlay.showQuickChat}
+              disabled={!prefs.overlay.enabled}
+              onChange={(v) => setSection('overlay', { showQuickChat: v })}
+            />
+          </SettingsSection>
+          <SettingsSection title="Kısayol">
+            <div className="px-space-md py-space-md space-y-3">
+              <p className="font-body-sm text-on-surface-variant">
+                Electron accelerator (örn. Control+Shift+`). Değişiklik anında uygulanır.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {OVERLAY_HOTKEY_PRESETS.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    disabled={!prefs.overlay.enabled}
+                    onClick={() => {
+                      setOverlayHotkeyDraft(h);
+                      setSection('overlay', { hotkey: h });
+                    }}
+                    className={`px-space-md py-space-sm rounded-lg font-label-sm disabled:opacity-50 ${
+                      prefs.overlay.hotkey === h
+                        ? 'bg-primary-container text-on-primary-container'
+                        : 'bg-surface-container-high'
+                    }`}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={overlayHotkeyDraft}
+                  onChange={(e) => setOverlayHotkeyDraft(e.target.value)}
+                  disabled={!prefs.overlay.enabled}
+                  className="flex-1 h-10 rounded-lg bg-surface-container-highest px-3 outline-none font-mono text-[12px] disabled:opacity-50"
+                  placeholder="Control+Shift+`"
+                />
+                <button
+                  type="button"
+                  disabled={!prefs.overlay.enabled}
+                  onClick={() => {
+                    const next = overlayHotkeyDraft.trim() || 'Control+Shift+`';
+                    setOverlayHotkeyDraft(next);
+                    setSection('overlay', { hotkey: next });
+                  }}
+                  className="px-space-md rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                >
+                  Uygula
+                </button>
+              </div>
+              <button
+                type="button"
+                disabled={!prefs.overlay.enabled}
+                onClick={() => void window.dracordDesktop?.toggleGameOverlay?.()}
+                className="h-9 px-3 rounded-lg bg-surface-container-high font-label-sm disabled:opacity-50 hover:bg-surface-bright"
+              >
+                Overlay’i şimdi aç / kapat
+              </button>
+            </div>
+          </SettingsSection>
+          <SettingsSection title="Görünüm">
+            <SettingsSlider
+              label="Opaklık"
+              value={Math.round(prefs.overlay.opacity * 100)}
+              min={40}
+              max={100}
+              step={1}
+              suffix="%"
+              disabled={!prefs.overlay.enabled}
+              onChange={(v) =>
+                setSection('overlay', {
+                  opacity: Math.min(1, Math.max(0.4, v / 100)),
+                })
+              }
+            />
+          </SettingsSection>
+          <SettingsSection title="Watch Party">
+            <SettingsToggle
+              label="Reklam ağı filtresi"
+              description="Bilinen reklam/tracker host isteklerini keser (iframe DOM’una girmez)."
+              checked={prefs.overlay.watchPartyAdblock}
+              onChange={(v) => setSection('overlay', { watchPartyAdblock: v })}
+            />
+          </SettingsSection>
+          <SettingsSection>
+            <SettingsNote>
+              Exclusive fullscreen oyunlarda overlay güvenilir değildir; borderless pencere
+              önerilir.
+            </SettingsNote>
+          </SettingsSection>
+        </SettingsPageBody>
+      )}
+
+      {tab === 'games' && (
+        <SettingsPageBody
+          title="Oyunlar"
+          description="Masaüstü oyun kütüphanesi ve etkinlik paylaşımı."
+        >
+          <SettingsSection title="Paylaşım">
+            <SettingsToggle
+              label="Oyun etkinliğini paylaş"
+              description="Dracord / Watch Party oturumlarını profilde göster."
+              checked={prefs.activity.shareGames}
+              onChange={(v) => setSection('activity', { shareGames: v })}
+            />
+            <SettingsToggle
+              label="Masaüstü oyun algılamayı paylaş"
+              description="Çalışan yerel oyunları arkadaşlarına göster."
+              checked={prefs.activity.shareDesktopActivity === true}
+              onChange={(v) => setSection('activity', { shareDesktopActivity: v })}
+            />
+          </SettingsSection>
+          <SettingsSection title="Kütüphane">
+            <div className="px-space-md py-space-md space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={gamesBusy}
+                  onClick={() => {
+                    void (async () => {
+                      const api = window.dracordDesktop;
+                      if (!api?.scanGameLibrary) return;
+                      setGamesBusy(true);
+                      setGamesMsg(null);
+                      try {
+                        await api.scanGameLibrary();
+                        if (api.importGameScan) await api.importGameScan();
+                        await refreshRegisteredGames();
+                        setGamesMsg('Kütüphane tarandı ve içe aktarıldı.');
+                      } catch (e) {
+                        setGamesMsg(e instanceof Error ? e.message : 'Tarama başarısız');
+                      } finally {
+                        setGamesBusy(false);
+                      }
+                    })();
+                  }}
+                  className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                >
+                  Steam / Epic tara
+                </button>
+                <button
+                  type="button"
+                  disabled={gamesBusy}
+                  onClick={() => {
+                    void (async () => {
+                      const api = window.dracordDesktop;
+                      if (!api?.pickGameExe) return;
+                      setGamesBusy(true);
+                      try {
+                        await api.pickGameExe();
+                        await refreshRegisteredGames();
+                      } catch (e) {
+                        setGamesMsg(e instanceof Error ? e.message : 'Exe seçilemedi');
+                      } finally {
+                        setGamesBusy(false);
+                      }
+                    })();
+                  }}
+                  className="px-space-md py-space-sm rounded-lg bg-surface-container-high font-label-sm disabled:opacity-50"
+                >
+                  Exe ekle
+                </button>
+                <button
+                  type="button"
+                  disabled={gamesBusy}
+                  onClick={() => {
+                    void (async () => {
+                      const api = window.dracordDesktop;
+                      if (!api?.detectGames) return;
+                      try {
+                        const res = await api.detectGames();
+                        const list = res?.games ?? [];
+                        setRunningGames(
+                          list
+                            .map((g) => g.name || g.appId || '')
+                            .filter(Boolean)
+                            .slice(0, 12),
+                        );
+                      } catch {
+                        setRunningGames([]);
+                      }
+                    })();
+                  }}
+                  className="px-space-md py-space-sm rounded-lg bg-surface-container-high font-label-sm disabled:opacity-50"
+                >
+                  Çalışanları algıla
+                </button>
+              </div>
+              {gamesMsg && (
+                <p className="font-body-sm text-secondary">{gamesMsg}</p>
+              )}
+              {runningGames.length > 0 && (
+                <p className="font-body-sm text-on-surface-variant">
+                  Algılanan: {runningGames.join(', ')}
+                </p>
+              )}
+              {registeredGames.length === 0 ? (
+                <p className="font-body-sm text-on-surface-variant">
+                  Kayıtlı oyun yok. Tarama veya exe ekle.
+                </p>
+              ) : (
+                <ul className="divide-y divide-surface-container-high rounded-lg overflow-hidden border border-surface-container-high">
+                  {registeredGames.map((g) => (
+                    <li
+                      key={g.appId}
+                      className="px-space-md py-space-sm flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-body-md truncate">{g.name}</p>
+                        <p className="font-label-sm text-outline truncate">
+                          {g.source ?? 'manual'} · {g.appId}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 font-label-sm text-on-surface-variant">
+                          <input
+                            type="checkbox"
+                            checked={g.enabled !== false}
+                            onChange={(e) =>
+                              void window.dracordDesktop
+                                ?.setGameEnabled?.(g.appId, e.target.checked)
+                                .then(() => refreshRegisteredGames())
+                            }
+                          />
+                          Algıla
+                        </label>
+                        <button
+                          type="button"
+                          className="font-label-sm text-error hover:underline"
+                          onClick={() =>
+                            void window.dracordDesktop
+                              ?.removeRegisteredGame?.(g.appId)
+                              .then(() => refreshRegisteredGames())
+                          }
+                        >
+                          Kaldır
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </SettingsSection>
+        </SettingsPageBody>
+      )}
+
       {tab === 'system' && (
         <SettingsPageBody title="Sistem" description="Masaüstü ve performans tercihleri.">
           <SettingsSection>
@@ -1887,7 +2267,8 @@ export function SettingsPage({
           </SettingsSection>
           <SettingsSection>
             <SettingsNote>
-              Electron algılandı — başlangıç, tepsi ve güncelleme tercihleri anında uygulanır.
+              Overlay ve oyun kütüphanesi için sol menüden Oyun Overlay / Oyunlar
+              sayfalarına bak. Başlangıç, tepsi ve güncelleme tercihleri anında uygulanır.
             </SettingsNote>
           </SettingsSection>
         </SettingsPageBody>
@@ -1927,12 +2308,12 @@ export function SettingsPage({
       {tab === 'developer' && (
         <SettingsPageBody
           title="Gelişmiş"
-          description="Geliştirici araçları ve deneysel özellikler."
+          description="Geliştirici araçları, bot uygulamaları ve deneysel özellikler."
         >
           <SettingsSection>
             <SettingsToggle
               label="Geliştirici modu"
-              description="Mesaj menüsünde ID kopyalama; kanal başlığında sunucu/kanal ID."
+              description="Mesaj menüsünde ID kopyalama; bot uygulama paneli."
               checked={prefs.developer.developerMode}
               onChange={(v) => setSection('developer', { developerMode: v })}
             />
@@ -1944,26 +2325,171 @@ export function SettingsPage({
             />
           </SettingsSection>
           {prefs.developer.developerMode && (
-            <SettingsSection title="Kimlikler">
-              <div className="px-space-md py-space-md flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">Kullanıcı ID</p>
-                  <p className="text-sm text-outline font-mono">{user?.id ?? '—'}</p>
+            <>
+              <SettingsSection title="Hesap kimliği">
+                <div className="px-space-md py-space-md flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">Kullanıcı kimliği</p>
+                    <p className="text-sm text-outline font-mono break-all">
+                      {user?.id ?? '—'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-lg bg-surface-container-high font-semibold hover:bg-surface-bright"
+                    onClick={() => {
+                      if (user?.id) void navigator.clipboard.writeText(user.id);
+                    }}
+                  >
+                    Kopyala
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg bg-surface-container-high font-semibold hover:bg-surface-bright"
-                  onClick={() => {
-                    if (user?.id) void navigator.clipboard.writeText(user.id);
-                  }}
-                >
-                  Kopyala
-                </button>
-              </div>
-              <SettingsNote>
-                Kanal ve sunucu ID’leri sohbet başlığındaki kimlik düğmelerinden kopyalanır.
-              </SettingsNote>
-            </SettingsSection>
+              </SettingsSection>
+              <SettingsSection title="Uygulamalar">
+                {platformOn === false && (
+                  <SettingsNote>
+                    Uygulama ve bot oluşturma bu sunucuda şu an kapalı.
+                  </SettingsNote>
+                )}
+                {platformOn && (
+                  <div className="px-space-md py-space-md space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        value={appName}
+                        onChange={(e) => setAppName(e.target.value)}
+                        placeholder="Uygulama adı"
+                        className="h-10 flex-1 rounded-lg bg-surface-container-highest px-3 font-body-sm outline-none"
+                      />
+                      <button
+                        type="button"
+                        disabled={appBusy}
+                        className="h-10 px-4 rounded-lg bg-primary-container text-on-primary-container font-label-sm disabled:opacity-50"
+                        onClick={() => {
+                          void (async () => {
+                            setAppBusy(true);
+                            setError(null);
+                            setLastBotToken(null);
+                            try {
+                              const app = await client.createPlatformApplication({
+                                name: appName.trim() || 'Uygulamam',
+                                withBot: true,
+                              });
+                              if (app.botToken) setLastBotToken(app.botToken);
+                              setAppName('');
+                              const list = await client.listPlatformApplications();
+                              setPlatformApps(list);
+                            } catch (e) {
+                              setError(
+                                e instanceof Error ? e.message : 'Oluşturulamadı',
+                              );
+                            } finally {
+                              setAppBusy(false);
+                            }
+                          })();
+                        }}
+                      >
+                        Uygulama oluştur
+                      </button>
+                    </div>
+                    {lastBotToken && (
+                      <div className="rounded-xl border border-secondary/30 bg-secondary/10 px-3 py-2 space-y-2">
+                        <p className="font-label-sm text-secondary">
+                          Yeni bot token (bir kez)
+                        </p>
+                        <p className="font-mono text-[11px] break-all select-all">
+                          {lastBotToken}
+                        </p>
+                        <button
+                          type="button"
+                          className="h-8 px-3 rounded-lg bg-surface-container-high font-label-sm"
+                          onClick={() =>
+                            void navigator.clipboard.writeText(lastBotToken)
+                          }
+                        >
+                          Kopyala
+                        </button>
+                      </div>
+                    )}
+                    {platformApps.length === 0 ? (
+                      <p className="font-body-sm text-on-surface-variant">
+                        Henüz uygulama yok.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {platformApps.map((a) => (
+                          <li
+                            key={a.id}
+                            className="rounded-lg border border-surface-container-highest p-3 space-y-2"
+                          >
+                            <p className="font-label-md">{a.name}</p>
+                            <p className="font-mono text-[11px] text-outline break-all">
+                              {a.id}
+                            </p>
+                            {a.botTokenLast4 && (
+                              <p className="font-body-sm text-on-surface-variant">
+                                Token ···{a.botTokenLast4}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="h-8 px-3 rounded-lg bg-surface-container-high font-label-sm"
+                                onClick={() =>
+                                  void navigator.clipboard.writeText(a.id)
+                                }
+                              >
+                                Uygulama ID
+                              </button>
+                              <button
+                                type="button"
+                                className="h-8 px-3 rounded-lg bg-surface-container-high font-label-sm"
+                                onClick={() => {
+                                  void client
+                                    .resetPlatformBotToken(a.id)
+                                    .then((r) => {
+                                      if (r.botToken) setLastBotToken(r.botToken);
+                                      return client.listPlatformApplications();
+                                    })
+                                    .then(setPlatformApps)
+                                    .catch((e) =>
+                                      setError(
+                                        e instanceof Error
+                                          ? e.message
+                                          : 'Token yenilenemedi',
+                                      ),
+                                    );
+                                }}
+                              >
+                                Token yenile
+                              </button>
+                              <button
+                                type="button"
+                                className="h-8 px-3 rounded-lg bg-error/15 text-error font-label-sm"
+                                onClick={() => {
+                                  if (
+                                    !window.confirm(
+                                      'Bu uygulamayı silmek istediğine emin misin?',
+                                    )
+                                  )
+                                    return;
+                                  void client
+                                    .deletePlatformApplication(a.id)
+                                    .then(() => client.listPlatformApplications())
+                                    .then(setPlatformApps)
+                                    .catch(() => undefined);
+                                }}
+                              >
+                                Sil
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </SettingsSection>
+            </>
           )}
         </SettingsPageBody>
       )}

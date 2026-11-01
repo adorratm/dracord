@@ -48,8 +48,9 @@ GET /openapi.json`}</pre>
       </ul>
       <h2>Publish</h2>
       <p>
-        Yerel site: <code>yarn docs</code> → :3002. Mintlify cloud iskeleti:{' '}
-        <code>docs/mintlify</code>.
+        Yerel: <code>yarn docs</code> → :3002. Kamuya açık Mintlify:{' '}
+        <code>docs/mintlify</code> (dashboard path zorunlu). Ana sayfa{' '}
+        <code>/</code> — <code>/developer/README</code> kullanılmaz.
       </p>
     </>
   );

@@ -1,0 +1,40 @@
+---
+title: OAuth2
+description: Üçüncü parti uygulamalar için kullanıcı yetkilendirmesi.
+---
+
+Kullanıcıya Dracord hesabıyla giriş / yetki vermek için OAuth2 kullan.
+
+## Uçlar
+
+| Adım | URL |
+| --- | --- |
+| Consent UI | `https://dracord.com.tr/oauth/authorize` |
+| Authorize API | `POST https://api.dracord.com.tr/oauth2/authorize` |
+| Token | `POST https://api.dracord.com.tr/oauth2/token` |
+| Uygulama bilgisi | `GET /oauth2/application/:clientId` |
+
+Discovery’de `oauth_authorize` / `oauth_token` alanları da vardır.
+
+## Authorization code
+
+1. Kullanıcıyı authorize URL’sine yönlendir (`client_id`, `redirect_uri`, `scope`, `state`).
+2. Onay sonrası `code` al.
+3. `POST /oauth2/token` ile `grant_type=authorization_code` → `access_token` + `refresh_token`.
+
+## Refresh
+
+```http
+POST /oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&refresh_token=...&client_id=...&client_secret=...
+```
+
+## Scope
+
+Tipik scope’lar: `identify`, `email`, `guilds`. İstekte bulunmadığın scope’ları kullanma; consent ekranında kullanıcı görür.
+
+<Note>
+`client_secret` yalnızca sunucu tarafında tutulmalı; tarayıcıya gömme.
+</Note>
