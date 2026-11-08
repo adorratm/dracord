@@ -4,6 +4,7 @@ import { ModuleRef } from '@nestjs/core';
 import { Job } from 'bullmq';
 import type { NotificationDto } from '@dracord/types';
 import { MessagesService } from '@/messages/messages.service';
+import { ScheduledMessagesService } from '@/messages/scheduled-messages.service';
 import { ContentScanService } from '@/moderation/content-scan.service';
 import type { MediaScanJobData } from '@/moderation/content-scan.service';
 import { PushService } from '@/notifications/push.service';
@@ -33,6 +34,9 @@ export class QueuesProcessor extends WorkerHost {
       case DracordJobTypes.REMINDERS_TICK: {
         const messages = this.moduleRef.get(MessagesService, { strict: false });
         await messages.fireDueReminders();
+        // Zamanlanmış mesajlar aynı 20 sn tick'inde
+        const scheduled = this.moduleRef.get(ScheduledMessagesService, { strict: false });
+        await scheduled.fireDue();
         return;
       }
       case DracordJobTypes.PUSH_NOTIFY: {

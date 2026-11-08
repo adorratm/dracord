@@ -247,15 +247,17 @@ export function DiscoverPage({
             <div className="relative mx-3 md:mx-6 mt-4 overflow-hidden rounded-2xl min-h-[200px] md:min-h-[260px]">
               <div className="absolute inset-0 bg-gradient-to-br from-secondary-container/90 via-primary-container/50 to-surface-container-lowest" />
               <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_30%_20%,rgba(255,255,255,0.25),transparent_55%)]" />
+              {/* Okunabilirlik: metnin arkasına koyu perde (koyu/açık tema) */}
+              <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/25 to-transparent" />
               <div className="relative flex items-end md:items-center justify-between gap-4 px-6 py-10 md:py-14">
                 <div className="min-w-0 max-w-xl">
-                  <p className="font-label-sm uppercase tracking-wider text-on-primary-container/80 mb-2">
+                  <p className="font-label-sm uppercase tracking-wider text-white/80 mb-2">
                     Dracord
                   </p>
-                  <h1 className="font-headline-lg text-on-primary-container text-2xl md:text-4xl font-bold">
+                  <h1 className="font-headline-lg text-white text-2xl md:text-4xl font-bold drop-shadow-md">
                     Topluluğunu bul
                   </h1>
-                  <p className="mt-2 font-body-md text-on-primary-container/90">
+                  <p className="mt-2 font-body-md text-white/90 drop-shadow">
                     Oyun, müzik ve eğitim — senin için bir sunucu var.
                   </p>
                 </div>
@@ -345,15 +347,17 @@ export function DiscoverPage({
               <div className="relative mx-3 md:mx-6 mt-4 overflow-hidden rounded-2xl min-h-[200px] md:min-h-[260px]">
                 <div className="absolute inset-0 bg-gradient-to-br from-secondary-container/90 via-primary-container/50 to-surface-container-lowest" />
                 <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_30%_20%,rgba(255,255,255,0.25),transparent_55%)]" />
+                {/* Okunabilirlik: metnin arkasına koyu perde (koyu/açık tema) */}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/25 to-transparent" />
                 <div className="relative flex items-end md:items-center justify-between gap-4 px-6 py-10 md:py-14">
                   <div className="min-w-0 max-w-xl">
-                    <p className="font-label-sm uppercase tracking-wider text-on-primary-container/80 mb-2">
+                    <p className="font-label-sm uppercase tracking-wider text-white/80 mb-2">
                       Dracord
                     </p>
-                    <h1 className="font-headline-lg text-on-primary-container text-2xl md:text-4xl font-bold">
+                    <h1 className="font-headline-lg text-white text-2xl md:text-4xl font-bold drop-shadow-md">
                       Aktivite kısayolları
                     </h1>
-                    <p className="mt-2 font-body-md text-on-primary-container/90">
+                    <p className="mt-2 font-body-md text-white/90 drop-shadow">
                       Yerleşik oyun / watch party kısayolları — sunucu mağazası değil; mevcut sunucundaki kanallara gider.
                     </p>
                   </div>

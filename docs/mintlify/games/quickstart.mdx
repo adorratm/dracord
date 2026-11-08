@@ -1,0 +1,107 @@
+---
+title: Hızlı başlangıç
+description: İlk Dracord oyununu oluştur, yerelde çalıştır ve bir ses kanalında test et.
+---
+
+## 1. Oyunu kaydet
+
+1. Dracord'da **Ayarlar → Gelişmiş** → **Geliştirici modu**nu aç.
+2. **Oyunlarım → Yeni oyun**.
+3. **Oyun adresi**: yerel geliştirme için `http://localhost:5173`.
+4. **Oluştur** → ekranda bir kez gösterilen **oyun gizli anahtarını** (`dgs_…`) kopyala.
+
+<Warning>
+Gizli anahtar yalnız **oyun sunucunda** durur (`DRACORD_GAME_SECRET`). Tarayıcı koduna, mobil uygulamaya
+veya Git'e asla koyma. Sızarsa **Anahtarı yenile**.
+</Warning>
+
+## 2. Projeyi kur
+
+```bash
+npm create vite@latest benim-oyunum -- --template vanilla-ts
+cd benim-oyunum
+npm i @dracord/embedded-sdk
+```
+
+`src/main.ts`:
+
+```ts
+import { DracordEmbed } from '@dracord/embedded-sdk';
+
+const dracord = new DracordEmbed();
+const app = document.querySelector<HTMLDivElement>('#app')!;
+
+if (!DracordEmbed.isEmbedded()) {
+  app.textContent = 'Bu oyun Dracord içinde açılmalı.';
+} else {
+  const ctx = await dracord.ready();
+  app.innerHTML = `<h1>Merhaba ${ctx.user.displayName}!</h1>
+    <p>${ctx.participants.length} oyuncu · ${ctx.platform}${ctx.testMode ? ' · TEST' : ''}</p>`;
+
+  dracord.onSessionUpdate(({ participants }) => {
+    app.querySelector('p')!.textContent = `${participants.length} oyuncu`;
+  });
+
+  // Sunucuna kimliğini kanıtla
+  const res = await fetch('http://localhost:8787/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: ctx.token }),
+  });
+  console.log(await res.json());
+}
+```
+
+```bash
+npm run dev   # http://localhost:5173
+```
+
+## 3. Minimal sunucu
+
+```ts server.ts
+import { createServer } from 'node:http';
+import { verifyDracordToken } from '@dracord/embedded-sdk';
+
+createServer(async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.end();
+  let body = '';
+  for await (const c of req) body += c;
+  try {
+    const { token } = JSON.parse(body);
+    const who = await verifyDracordToken({ token, gameSecret: process.env.DRACORD_GAME_SECRET! });
+    res.end(JSON.stringify({ ok: true, hello: who.displayName, session: who.sessionId }));
+  } catch (e) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ ok: false, error: String(e) }));
+  }
+}).listen(8787);
+```
+
+```bash
+DRACORD_GAME_SECRET=dgs_... npx tsx server.ts
+```
+
+## 4. Ses kanalında test et
+
+1. Dracord **web** veya **desktop**'ta bir ses kanalına katıl (mobil `localhost`'a erişemez — mobil için
+   [tünel](#mobilde-test) kullan).
+2. Kontrol çubuğundaki **🎮 → Oyun başlat** → listede oyunun **TEST** etiketiyle görünür.
+3. Arkadaşını test etmek için **Oyunlarım → Testçiler**'e kullanıcı adını yaz; o da kanalda **Katıl**'a basar.
+
+### Mobilde test
+
+Telefon bilgisayarındaki `localhost`'u göremez. Geçici bir https tüneli aç ve oyun adresini onunla değiştir:
+
+```bash
+npx cloudflared tunnel --url http://localhost:5173
+# → https://xxxx.trycloudflare.com
+```
+
+## Sonraki adımlar
+
+- [SDK referansı](/games/sdk)
+- [Sunucu doğrulaması ve güvenlik](/games/authentication)
+- [Çok oyunculu mimari](/games/multiplayer)
+- [Yayına alma](/games/publishing)

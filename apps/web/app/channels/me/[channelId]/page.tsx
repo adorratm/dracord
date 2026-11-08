@@ -4,6 +4,7 @@ import {
   ChatInput,
   MessageList,
   Modal,
+  useScheduledMessages,
 } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react';
@@ -38,6 +39,7 @@ function DmChatInner({
 }) {
   const router = useRouter();
   const { client, user } = useAuth();
+  const scheduler = useScheduledMessages(client, channelId);
   const { guilds, reload } = useGuildNav(undefined);
   const { prefs } = useUserPreferences();
   const imageModeration = useImageModeration();
@@ -481,6 +483,8 @@ function DmChatInner({
           )}
           <ChatInput
           key={channelId}
+          scheduler={scheduler}
+          voiceMessages={{ client, channelId }}
           placeholder={`@${title} kullanıcısına mesaj gönder`}
           onSend={(content, meta) => {
             void sendMessage(

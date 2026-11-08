@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { cn, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { cn, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -44,6 +44,7 @@ type Tab =
   | 'members'
   | 'moderation'
   | 'slash'
+  | 'levels'
   | 'invite';
 
 const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | 'channels' | 'mod' }[] =
@@ -54,6 +55,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'members', label: 'Üyeler', icon: 'group', need: 'mod' },
     { id: 'moderation', label: 'Moderasyon', icon: 'gavel', need: 'manage' },
     { id: 'slash', label: 'Slash komutları', icon: 'terminal', need: 'manage' },
+    { id: 'levels', label: 'Seviyeler', icon: 'military_tech', need: 'manage' },
     { id: 'invite', label: 'Davet', icon: 'link' },
   ];
 
@@ -894,6 +896,26 @@ export function GuildSettingsPage({
                 ))}
               </div>
             </>
+          )}
+
+          {tab === 'levels' && (
+            <section className="max-w-2xl">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Seviyeler</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Üyeler mesaj ve ses ile XP kazanır; belirlediğin seviyelerde otomatik rol alır.
+              </p>
+              <LevelsPanel
+                client={client}
+                guildId={guildId}
+                canManage={canManage}
+                roles={roles
+                  .filter((r) => r.name !== '@everyone')
+                  .map((r) => ({ id: r.id, name: r.name, color: r.color }))}
+                channels={channels
+                  .filter((c) => c.type === 'TEXT' || c.type === 'VOICE')
+                  .map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
           )}
 
           {tab === 'slash' && (

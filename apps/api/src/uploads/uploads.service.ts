@@ -73,6 +73,17 @@ export class UploadsService {
     await this.bucketReady;
   }
 
+  /** URL bu sunucunun yükleme deposundan mı (soundboard vb. doğrulama) */
+  isOwnPublicUrl(url: string, opts?: { folder?: string; userId?: string }): boolean {
+    const base = this.publicUrl.replace(/\/$/, '') + '/';
+    if (typeof url !== 'string' || !url.startsWith(base)) return false;
+    const key = url.slice(base.length);
+    if (key.includes('..')) return false;
+    if (opts?.folder && !key.startsWith(`${opts.folder}/`)) return false;
+    if (opts?.userId && opts.folder && !key.startsWith(`${opts.folder}/${opts.userId}/`)) return false;
+    return true;
+  }
+
   async createPresignedUpload(
     userId: string,
     input: { filename: string; contentType: string; folder?: string },

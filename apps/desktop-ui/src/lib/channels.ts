@@ -38,6 +38,8 @@ function mapChannelItem(
       'contextActions' | 'participantVolume' | 'onParticipantVolumeChange'
     >;
     afkChannelId?: string | null;
+    /** channelId → ses kanalı durum metni */
+    voiceStatusByChannel?: Record<string, string>;
     onInviteChannel?: (channel: ChannelSummary) => void;
     onOpenVoiceChat?: (channel: ChannelSummary) => void;
     /** Aktivite kanallarında selfVoiceChannelId yerine oturum üyeliği */
@@ -114,6 +116,7 @@ function mapChannelItem(
       (ch.unreadCount ?? 0) > 0
         ? ch.unreadCount
         : undefined,
+    voiceStatus: isVoice || isActivity ? (extras?.voiceStatusByChannel?.[ch.id] ?? null) : null,
     viewerJoinedAt,
     showVoiceInvite: selfInChannel && Boolean(extras?.onInviteChannel),
     voiceMembers: voiceMembers?.map((m) => {
@@ -198,6 +201,8 @@ export function buildSidebarCategories(
     >;
     /** AFK kanalı — speaking gizlenir, mute/deafen zorunlu gösterilir */
     afkChannelId?: string | null;
+    /** channelId → ses kanalı durum metni */
+    voiceStatusByChannel?: Record<string, string>;
     onInviteChannel?: (channel: ChannelSummary) => void;
     onOpenVoiceChat?: (channel: ChannelSummary) => void;
     selfActivityChannelIds?: Set<string>;

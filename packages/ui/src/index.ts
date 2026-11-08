@@ -8,6 +8,47 @@ export {
 export { ActivityLine } from './components/ActivityLine';
 export { openActivityUrl } from './lib/open-activity-url';
 export {
+  useVoiceChannelStatuses,
+  voiceStatusErrorMessage,
+} from './lib/use-voice-channel-status';
+export type { VoiceChannelStatusClient } from './lib/use-voice-channel-status';
+export { VoiceChannelStatusChip } from './components/VoiceChannelStatusChip';
+export { useScheduledMessages, formatScheduleTime } from './lib/use-scheduled-messages';
+export type {
+  ScheduledMessagesClient,
+  ScheduledMessagesController,
+} from './lib/use-scheduled-messages';
+export { ScheduleMessageDialog, ScheduledMessagesBar } from './components/ScheduleMessageDialog';
+export {
+  externalTranslateUrl,
+  languageNameTr,
+  onDeviceTranslationSupported,
+  preferredTranslateTarget,
+  translateOnDevice,
+} from './lib/translate';
+export type { TranslateResult } from './lib/translate';
+export { LevelsPanel, LevelBar } from './components/LevelsPanel';
+export { VoiceMessagePlayer } from './components/VoiceMessagePlayer';
+export { SoundboardButton } from './components/SoundboardButton';
+export { CatchupButton } from './components/CatchupButton';
+export { GameFrame } from './components/GameFrame';
+export { GamesLauncherButton } from './components/GamesLauncherButton';
+export { useGameSessions } from './lib/use-game-sessions';
+export type { GamesClient } from './lib/use-game-sessions';
+export type { CatchupClient } from './components/CatchupButton';
+export { summarizeOnDevice, summarizerSupported } from './lib/summarize';
+export type { SoundboardManageClient } from './components/SoundboardButton';
+export { useSoundboard, getSoundboardVolume, setSoundboardVolume } from './lib/use-soundboard';
+export type { SoundboardClient } from './lib/use-soundboard';
+export {
+  useVoiceRecorder,
+  sendVoiceMessage,
+  voiceRecordingSupported,
+  formatVoiceDuration,
+} from './lib/use-voice-recorder';
+export type { VoiceRecording, VoiceMessageClient } from './lib/use-voice-recorder';
+export type { LevelsClient } from './components/LevelsPanel';
+export {
   APP_TOUR_STEPS,
   APP_TOUR_STORAGE_KEY,
   APP_TOUR_STORAGE_KEY_LEGACY,
@@ -98,6 +139,11 @@ export { FriendsHub } from './components/FriendsHub';
 export type { FriendsHubProps, FriendsTab, FriendRow } from './components/FriendsHub';
 
 export { VoiceStage } from './components/VoiceStage';
+export { RemoteControlSurface } from './components/RemoteControlSurface';
+export type {
+  RemoteControlPointerEvent,
+  RemoteControlKeyEvent,
+} from './components/RemoteControlSurface';
 export type {
   VoiceStageProps,
   VoiceParticipant,

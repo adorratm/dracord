@@ -1,0 +1,16 @@
+---
+title: Mobil uyum
+description: Oyununun iOS ve Android Dracord uygulamalarında iyi çalışması için.
+---
+
+Mobilde oyunun tam ekran bir **WebView** içinde açılır (iOS WKWebView, Android Chromium). Oyun ayarlarında
+**Mobil** platformunu işaretlemezsen mobil listede görünmez.
+
+- **Dokunmatik kontrol** zorunlu (sanal joystick / butonlar). Klavye varsayma.
+- `<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">` kullan.
+- **Yön:** oyun ayarındaki `Yatay/Dikey` tercihini kullanıcıya göster; CSS ile döndürme yapma.
+- **Performans:** orta seviye telefonda 30+ FPS hedefle; Three.js'te `setPixelRatio(Math.min(devicePixelRatio, 1.5))`,
+  gölgeleri ve post-process'i düşük kalite modunda kapat.
+- **Ses:** ilk dokunuştan sonra başlat (otomatik oynatma kısıtı). Oyun sesi Dracord sesli sohbetiyle karışır.
+- **Arka plan:** `onVisibilityChange(false)`'da oyunu duraklat, ağ trafiğini azalt.
+- Dış bağlantılar (`<a target=_blank>`) sistem tarayıcısında açılır; oyun yalnız kendi origin'inde gezinir.

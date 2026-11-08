@@ -374,6 +374,8 @@ export interface ChannelSummary {
   position: number;
   topic?: string | null;
   voiceMembers?: VoiceMemberSummary[];
+  /** Ses kanalı durum metni (istemci tarafında birleştirilir; VOICE_CHANNEL_STATUS) */
+  voiceStatus?: string | null;
   /** Görüntüleyen için okunmamış mesaj var mı */
   unread?: boolean;
   /** Okunmamış mesaj sayısı (TEXT / DM) */
@@ -410,6 +412,35 @@ export interface MessageAttachment {
   filename: string;
   contentType: string;
   size: number;
+  /** Sesli mesaj (A1) — oynatıcı dalga formu ile gösterilir */
+  voice?: boolean;
+  /** Ses süresi (sn) */
+  durationSec?: number;
+  /** 0–255 genlik örnekleri (≤ VOICE_WAVEFORM_POINTS) */
+  waveform?: number[];
+}
+
+export const VOICE_MESSAGE_MAX_SEC = 300;
+export const VOICE_WAVEFORM_POINTS = 48;
+
+/** Sesli mesaj ek alanlarını güvenli aralığa çek (sunucu + istemci) */
+export function sanitizeVoiceAttachment<T extends MessageAttachment>(a: T): T {
+  if (!a.voice && a.durationSec === undefined && a.waveform === undefined) return a;
+  const out = { ...a } as T;
+  const isAudio = typeof a.contentType === 'string' && a.contentType.startsWith('audio/');
+  out.voice = Boolean(a.voice) && isAudio;
+  if (a.durationSec !== undefined) {
+    const d = Number(a.durationSec);
+    out.durationSec = Number.isFinite(d) ? Math.min(VOICE_MESSAGE_MAX_SEC, Math.max(0, Math.round(d * 10) / 10)) : undefined;
+  }
+  if (a.waveform !== undefined) {
+    out.waveform = Array.isArray(a.waveform)
+      ? a.waveform
+          .slice(0, VOICE_WAVEFORM_POINTS)
+          .map((v) => Math.min(255, Math.max(0, Math.round(Number(v) || 0))))
+      : undefined;
+  }
+  return out;
 }
 
 export interface MessageEmbedAction {
@@ -520,6 +551,34 @@ export interface MessageBookmarkDto {
 }
 
 export type MessageReminderStatus = 'pending' | 'fired' | 'cancelled' | 'snoozed';
+
+/** Zamanlanmış mesaj — sendAt zamanı gelince yazar adına normal mesaj olarak gönderilir */
+export type ScheduledMessageStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
+
+export interface ScheduledMessageDto {
+  id: string;
+  channelId: string;
+  guildId: string | null;
+  channelName: string | null;
+  content: string;
+  attachments: MessageAttachment[];
+  replyToId: string | null;
+  sendAt: string;
+  status: ScheduledMessageStatus;
+  /** Gönderilince oluşan mesaj */
+  sentMessageId: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export const SCHEDULED_MESSAGE_LIMITS = {
+  /** En erken (ms) */
+  minDelayMs: 60_000,
+  /** En geç (ms) — 30 gün */
+  maxDelayMs: 30 * 24 * 60 * 60 * 1000,
+  /** Kullanıcı başına bekleyen */
+  maxPendingPerUser: 25,
+} as const;
 
 export interface MessageReminderDto {
   id: string;
@@ -655,6 +714,29 @@ export interface VoiceSyncPayload {
   guildId: string;
   /** channelId → odadaki üyeler (boş kanallar genelde yok) */
   membersByChannel: Record<string, VoiceMemberSummary[]>;
+  /** channelId → ses kanalı durum metni (yalnız dolu kanallar) */
+  statusByChannel?: Record<string, VoiceChannelStatusPayload>;
+}
+
+/** Ses kanalı durum metni — en fazla VOICE_CHANNEL_STATUS_MAX karakter */
+export const VOICE_CHANNEL_STATUS_MAX = 100;
+
+export interface VoiceChannelStatusPayload {
+  guildId: string;
+  channelId: string;
+  /** null = temizlendi */
+  status: string | null;
+  setById?: string | null;
+  setByName?: string | null;
+  updatedAt: string;
+}
+
+/** Durum metnini normalize et (istemci + sunucu aynı kural) */
+export function normalizeVoiceChannelStatus(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const t = raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  return [...t].slice(0, VOICE_CHANNEL_STATUS_MAX).join('');
 }
 
 export type NotificationType =
@@ -693,6 +775,14 @@ export const SocketEvents = {
   VOICE_STATE: 'voice:state',
   /** İstemci ister / sunucu guild roster snapshot gönderir */
   VOICE_SYNC: 'voice:sync',
+  /** Ses kanalı durum metni (ör. "Valorant ranked") — kanaldakiler ayarlar, kanal boşalınca silinir */
+  VOICE_CHANNEL_STATUS: 'voice:channel-status',
+  /** Seviye atlama (guild odası) */
+  LEVEL_UP: 'level:up',
+  /** Soundboard çal (istemci → sunucu → aynı ses kanalı) */
+  SOUNDBOARD_PLAY: 'soundboard:play',
+  /** Harici oyun oturumu (ses kanalı) güncellendi */
+  GAME_SESSION_UPDATE: 'game:session',
   /**
    * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
    * Eski istemci LiveKit’i bırakır; presence kanalda kalır.
@@ -1057,3 +1147,243 @@ export {
   serializeAppTourCompleted,
 } from './app-tour';
 export type { AppTourMood, AppTourStep } from './app-tour';
+
+
+// ─── Seviye / XP (B1) ───────────────────────────────────────────────
+
+/** n → n+1 için gereken XP (MEE6 benzeri eğri) */
+export function xpForLevelUp(level: number): number {
+  const n = Math.max(0, Math.floor(level));
+  return 5 * n * n + 50 * n + 100;
+}
+
+/** Toplam XP → seviye + seviye içi ilerleme */
+export function levelFromXp(totalXp: number): {
+  level: number;
+  xpIntoLevel: number;
+  xpForNext: number;
+} {
+  let xp = Math.max(0, Math.floor(totalXp));
+  let level = 0;
+  while (level < 1000) {
+    const need = xpForLevelUp(level);
+    if (xp < need) return { level, xpIntoLevel: xp, xpForNext: need };
+    xp -= need;
+    level += 1;
+  }
+  return { level, xpIntoLevel: 0, xpForNext: xpForLevelUp(level) };
+}
+
+export interface MemberLevelDto {
+  guildId: string;
+  userId: string;
+  displayName?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
+  xp: number;
+  level: number;
+  xpIntoLevel: number;
+  xpForNext: number;
+  messageCount: number;
+  voiceMinutes: number;
+  /** Lider tablosundaki sıra (1 tabanlı) */
+  rank?: number | null;
+}
+
+export interface LevelRoleReward {
+  level: number;
+  roleId: string;
+}
+
+export interface GuildLevelConfigDto {
+  guildId: string;
+  enabled: boolean;
+  /** Seviye atlayınca: bildirim gönder / sessiz */
+  announce: 'notification' | 'off';
+  /** Mesaj XP aralığı (cooldown başına) */
+  messageXpMin: number;
+  messageXpMax: number;
+  /** Ses dakikası başına XP (AFK kanalı hariç) */
+  voiceXpPerMinute: number;
+  roleRewards: LevelRoleReward[];
+  /** XP kazanılmayan kanallar */
+  noXpChannelIds: string[];
+}
+
+export interface LevelUpPayload {
+  guildId: string;
+  userId: string;
+  level: number;
+  grantedRoleIds: string[];
+}
+
+
+// ─── Soundboard (A2) ────────────────────────────────────────────────
+
+export const SOUNDBOARD_LIMITS = {
+  maxSoundsPerGuild: 24,
+  maxDurationSec: 5.5,
+  maxBytes: 512 * 1024,
+  nameMax: 32,
+  /** Kullanıcı başına çalma aralığı (ms) */
+  playCooldownMs: 2000,
+} as const;
+
+export interface GuildSoundDto {
+  id: string;
+  guildId: string;
+  name: string;
+  emoji: string | null;
+  url: string;
+  contentType: string;
+  durationSec: number;
+  /** 0–1 */
+  volume: number;
+  createdById: string;
+  createdAt: string;
+}
+
+export interface SoundboardPlayPayload {
+  guildId: string;
+  channelId: string;
+  soundId: string;
+  /** sunucu doldurur */
+  userId?: string;
+  userName?: string | null;
+  url?: string;
+  volume?: number;
+  name?: string;
+  emoji?: string | null;
+}
+
+
+// ─── "Ne kaçırdım?" (D1) — yapay zekâsız kanal özeti ───────────────
+
+export interface CatchupMessageRef {
+  id: string;
+  authorId: string;
+  authorName: string;
+  avatarUrl?: string | null;
+  contentPreview: string;
+  createdAt: string;
+  reactionCount?: number;
+}
+
+export interface CatchupDto {
+  channelId: string;
+  /** Bu zamandan sonrası özetlendi */
+  since: string;
+  totalNew: number;
+  /** Sana bahsedenler */
+  mentions: CatchupMessageRef[];
+  /** En çok tepki alanlar */
+  topReacted: CatchupMessageRef[];
+  pinned: CatchupMessageRef[];
+  polls: CatchupMessageRef[];
+  links: Array<{ url: string; messageId: string; authorName: string }>;
+  participants: Array<{ userId: string; name: string; avatarUrl?: string | null; count: number }>;
+  /** Cihaz üstü özetleyici için ("Ad: mesaj" satırları, en yeni sonda) */
+  transcript: string[];
+}
+
+
+// ─── Oyun platformu (C1) — herkes geliştirir, yayın admin onaylı ─────
+
+export type GameAppStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'suspended';
+export type GamePlatform = 'web' | 'desktop' | 'mobile';
+
+export interface GameAppDto {
+  id: string;
+  slug: string;
+  name: string;
+  shortDescription: string;
+  description: string;
+  iconUrl: string | null;
+  coverUrl: string | null;
+  /** Oyunun yüklendiği https adresi (iframe / WebView) */
+  entryUrl: string;
+  minPlayers: number;
+  maxPlayers: number;
+  orientation: 'any' | 'landscape' | 'portrait';
+  platforms: GamePlatform[];
+  status: GameAppStatus;
+  /** Admin notu (red / askı gerekçesi) */
+  reviewNote: string | null;
+  ownerUserId: string;
+  ownerName?: string | null;
+  /** Yalnız sahibine */
+  testerUserIds?: string[];
+  secretLast4?: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GameAppInput {
+  name?: string;
+  slug?: string;
+  shortDescription?: string;
+  description?: string;
+  iconUrl?: string | null;
+  coverUrl?: string | null;
+  entryUrl?: string;
+  minPlayers?: number;
+  maxPlayers?: number;
+  orientation?: 'any' | 'landscape' | 'portrait';
+  platforms?: GamePlatform[];
+}
+
+export interface GameSessionDto {
+  id: string;
+  gameId: string;
+  game: Pick<GameAppDto, 'id' | 'name' | 'slug' | 'iconUrl' | 'entryUrl' | 'orientation' | 'maxPlayers' | 'status'>;
+  guildId: string;
+  channelId: string;
+  hostUserId: string;
+  participantIds: string[];
+  status: 'active' | 'ended';
+  createdAt: string;
+}
+
+/** Oyun iframe'ine verilen kısa ömürlü kimlik (10 dk) */
+export interface GameLaunchDto {
+  token: string;
+  expiresAt: string;
+  session: GameSessionDto;
+  user: { id: string; username: string; displayName: string; avatarUrl: string | null };
+}
+
+/** Oyun sunucusunun POST /v1/games/verify yanıtı */
+export interface GameTokenClaims {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  gameId: string;
+  sessionId: string;
+  guildId: string;
+  channelId: string;
+  participantIds: string[];
+  /** Test modunda (onaysız oyun, sahip/testçi) */
+  testMode: boolean;
+  exp: number;
+}
+
+export const GAME_LIMITS = {
+  maxGamesPerDeveloper: 10,
+  maxTesters: 25,
+  nameMax: 40,
+  shortMax: 120,
+  descMax: 4000,
+} as const;
+
+/**
+ * Oyun gömme protokolü (host tarafı). Kaynak: packages/embedded-sdk/src/protocol.ts — DEĞİŞTİRİRKEN İKİSİNİ BİRLİKTE.
+ */
+export const GAME_EMBED = {
+  version: 1,
+  embedSource: 'dracord-embed',
+  hostSource: 'dracord-host',
+  nativeOrigin: 'dracord-native',
+} as const;

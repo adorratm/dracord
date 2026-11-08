@@ -40,6 +40,7 @@ import type {
   MessageType,
   NotificationDto,
 } from '@dracord/types';
+import { sanitizeVoiceAttachment } from '@dracord/types';
 import { toPublicUser } from '@/common/user.mapper';
 import { GuildPermissions } from '@/common/permissions';
 import { ChannelsService } from '@/channels/channels.service';
@@ -50,6 +51,7 @@ import { NotificationsRealtimeService } from '@/notifications/notifications-real
 import { SearchIndexerService } from '@/search/search-indexer.service';
 import { MusicCommandsService } from '@/music/music-commands.service';
 import { AutomodService } from '@/moderation/automod.service';
+import { LevelsService } from '@/levels/levels.service';
 import { QueuesService } from '@/queues/queues.service';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { LinkPreviewService } from './link-preview.service';
@@ -78,6 +80,7 @@ export class MessagesService {
     private readonly customSlash: CustomSlashService,
     private readonly automod: AutomodService,
     @Optional() private readonly queues?: QueuesService,
+    @Optional() private readonly levels?: LevelsService,
   ) {}
 
   async listChannelMessages(
@@ -500,7 +503,7 @@ export class MessagesService {
         pinnedAt: null,
         pinnedById: null,
         forwardedFrom: opts.forwardedFrom ?? null,
-        attachments: attachments?.length ? attachments : null,
+        attachments: attachments?.length ? attachments.map(sanitizeVoiceAttachment) : null,
         embeds: null,
         poll,
       }),
@@ -526,6 +529,10 @@ export class MessagesService {
         ? []
         : await this.createMessageNotifications(dto, channelRow, userId);
     this.realtime.emitCreate(channelId, dto);
+    // Seviye/XP — asla gönderimi bozmaz
+    if (msgType === 'default' && channelRow?.guildId) {
+      void this.levels?.onMessage(channelRow.guildId, channelId, userId).catch(() => undefined);
+    }
 
     if (wantPreview && this.queues) {
       void this.queues

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ChannelSummary } from '@dracord/types';
-import { ChatInput, MessageList, Modal } from '@dracord/ui';
+import { ChatInput, MessageList, Modal, useScheduledMessages } from '@dracord/ui';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useChatChannel } from '@/hooks/useChatChannel';
@@ -36,6 +36,7 @@ export function VoiceSideChat({
   const { prefs } = useUserPreferences();
   const imageModeration = useImageModeration();
   const effectiveId = channelId ?? textChannels[0]?.id ?? undefined;
+  const scheduler = useScheduledMessages(client, effectiveId);
   const {
     messages,
     loading,
@@ -210,6 +211,8 @@ export function VoiceSideChat({
           )}
           <ChatInput
             key={effectiveId}
+            scheduler={scheduler}
+            voiceMessages={effectiveId ? { client, channelId: effectiveId } : null}
             channelName={active?.name}
             onSend={(text) => void sendMessage(text)}
             onAttachFiles={(files) => void sendWithAttachments(files)}

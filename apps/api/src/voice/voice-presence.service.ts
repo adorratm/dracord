@@ -1,12 +1,18 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { VoiceMemberSummary, VoiceStatePayload } from '@dracord/types';
+import type {
+  VoiceChannelStatusPayload,
+  VoiceMemberSummary,
+  VoiceStatePayload,
+} from '@dracord/types';
 import Redis from 'ioredis';
 import { EntityManager } from 'typeorm';
 import { User } from '@/database/entities/user.entity';
 
 /** Presence kaydı bu süre yenilenmezse hayalet üye temizlenir. */
 const MEMBER_TTL_SEC = 90;
+/** Ses kanalı durum metni üst sınır ömrü (kanal boşalınca zaten silinir) */
+const STATUS_TTL_SEC = 12 * 60 * 60;
 
 @Injectable()
 export class VoicePresenceService implements OnModuleDestroy {
@@ -75,7 +81,17 @@ export class VoicePresenceService implements OnModuleDestroy {
     flags?: { muted?: boolean; deafened?: boolean },
   ): Promise<{ joined: VoiceStatePayload; left: VoiceStatePayload[] }> {
     const user = await this.em.findOneOrFail(User, { where: { id: userId } });
-    const existing = (await this.listChannel(guildId, channelId)).find((m) => m.id === userId);
+    const before = await this.listChannel(guildId, channelId);
+    const existing = before.find((m) => m.id === userId);
+    // Boş kanala ilk giren: eski (bayat) durum metni kalmasın
+    if (!before.length) {
+      await this.setChannelStatus({
+        guildId,
+        channelId,
+        status: null,
+        updatedAt: new Date().toISOString(),
+      });
+    }
     const member: VoiceMemberSummary = {
       id: user.id,
       displayName: user.displayName,
@@ -271,6 +287,92 @@ export class VoicePresenceService implements OnModuleDestroy {
     }
     if (ids.size === 0) this.memoryGuildChannels.delete(guildId);
     return out;
+  }
+
+  private statusKey(guildId: string, channelId: string) {
+    return `voice:status:${guildId}:${channelId}`;
+  }
+
+  /** memory: statusKey -> payload */
+  private readonly memoryStatus = new Map<string, VoiceChannelStatusPayload>();
+
+  /** Ses kanalı durumunu yaz / temizle (status=null) */
+  async setChannelStatus(payload: VoiceChannelStatusPayload): Promise<void> {
+    const key = this.statusKey(payload.guildId, payload.channelId);
+    if (this.redis?.status === 'ready') {
+      if (payload.status) await this.redis.set(key, JSON.stringify(payload), 'EX', STATUS_TTL_SEC);
+      else await this.redis.del(key);
+      return;
+    }
+    if (payload.status) this.memoryStatus.set(key, payload);
+    else this.memoryStatus.delete(key);
+  }
+
+  async getChannelStatus(
+    guildId: string,
+    channelId: string,
+  ): Promise<VoiceChannelStatusPayload | null> {
+    const key = this.statusKey(guildId, channelId);
+    if (this.redis?.status === 'ready') {
+      const raw = await this.redis.get(key);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw) as VoiceChannelStatusPayload;
+      } catch {
+        return null;
+      }
+    }
+    return this.memoryStatus.get(key) ?? null;
+  }
+
+  /** Yalnız dolu kanalların durumları (VOICE_SYNC için) */
+  async listGuildStatuses(
+    guildId: string,
+    channelIds: string[],
+  ): Promise<Record<string, VoiceChannelStatusPayload>> {
+    const out: Record<string, VoiceChannelStatusPayload> = {};
+    if (!channelIds.length) return out;
+    if (this.redis?.status === 'ready') {
+      const raws = await this.redis.mget(...channelIds.map((c) => this.statusKey(guildId, c)));
+      channelIds.forEach((c, i) => {
+        const raw = raws[i];
+        if (!raw) return;
+        try {
+          out[c] = JSON.parse(raw) as VoiceChannelStatusPayload;
+        } catch {
+          /* ignore */
+        }
+      });
+      return out;
+    }
+    for (const c of channelIds) {
+      const v = this.memoryStatus.get(this.statusKey(guildId, c));
+      if (v) out[c] = v;
+    }
+    return out;
+  }
+
+  /**
+   * Kanal boşaldıysa durumu sil. Silindiyse temizlenmiş payload döner (yayınlamak için).
+   */
+  async clearStatusIfEmpty(
+    guildId: string,
+    channelId: string,
+  ): Promise<VoiceChannelStatusPayload | null> {
+    const current = await this.getChannelStatus(guildId, channelId);
+    if (!current) return null;
+    const members = await this.listChannel(guildId, channelId);
+    if (members.length) return null;
+    const cleared: VoiceChannelStatusPayload = {
+      guildId,
+      channelId,
+      status: null,
+      setById: null,
+      setByName: null,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.setChannelStatus(cleared);
+    return cleared;
   }
 
   /** Kullanıcının bulunduğu ses kanal(lar)ı */

@@ -19,6 +19,8 @@ import {
   dataUrlToFile,
   type ChatMediaPayload,
   type SearchScope,
+  useScheduledMessages,
+  CatchupButton,
 } from '@dracord/ui';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { DracoEmpty } from '../components/Draco';
@@ -102,6 +104,17 @@ export function ChatPanel({
   onJumpAroundConsumed?: () => void;
 }) {
   const { client, user } = useAuth();
+  const scheduler = useScheduledMessages(client, channel.id);
+  /** "Ne kaçırdım?" çapası — kanal açıldığı andaki okuma durumu */
+  const catchupAnchor = useRef<{ channelId?: string; after: string | null; unread: number; at?: string }>({ after: null, unread: 0 });
+  if (catchupAnchor.current.channelId !== channel.id) {
+    catchupAnchor.current = {
+      channelId: channel.id,
+      after: channel.lastReadMessageId ?? null,
+      unread: channel.unreadCount ?? 0,
+      at: new Date().toISOString(),
+    };
+  }
   const voice = useVoiceSession();
   const inVoice = Boolean(voice.voiceChannelId);
   const isDm = !guildId;
@@ -540,6 +553,21 @@ export function ChatPanel({
               </span>
             )}
             <div className="flex-1" />
+            {!isForumView && (
+              <CatchupButton
+                client={client}
+                channelId={channel.id}
+                afterMessageId={catchupAnchor.current.after}
+                unreadCount={catchupAnchor.current.unread}
+                  openedAt={catchupAnchor.current.at}
+                onJump={(around) => {
+                  void client.getMessages(channel.id, { limit: 50, around }).then((page) => {
+                    setMessages(page.items ?? []);
+                    setHighlightMessageId(around);
+                  });
+                }}
+              />
+            )}
             <button
               type="button"
               className="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface flex items-center justify-center"
@@ -891,6 +919,8 @@ export function ChatPanel({
               <ChatInput
                 key={channel.id}
                 {...sharedInputProps}
+                scheduler={isForumView ? null : scheduler}
+                voiceMessages={isForumView ? null : { client, channelId: channel.id }}
                 placeholder={
                   editing
                     ? 'Mesajı düzenle…'

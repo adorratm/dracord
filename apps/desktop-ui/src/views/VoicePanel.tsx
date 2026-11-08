@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DRACORD_BOT_USER_ID, type ChannelSummary, type PublicUser } from '@dracord/types';
 import {
   MemberList,
+  SoundboardButton,
   VoiceStage,
+  useSoundboard,
+  GameFrame,
+  GamesLauncherButton,
+  useGameSessions,
   presenceLabelTr,
   type MemberListAction,
   type MemberListGroup,
@@ -45,9 +50,17 @@ export function VoicePanel({
   onLeaveNavigate,
   onOpenChannels,
   buildActions,
+  voiceStatus = null,
+  onSaveVoiceStatus,
+  canManageGuild = false,
 }: {
   guildId: string;
   channel: ChannelSummary;
+  /** Ses kanalı durum metni (Shell'den) */
+  voiceStatus?: string | null;
+  onSaveVoiceStatus?: (status: string | null) => Promise<{ ok: boolean; error?: string } | void>;
+  /** Soundboard yönetimi */
+  canManageGuild?: boolean;
   members?: PublicUser[];
   textChannels?: ChannelSummary[];
   muted?: boolean;
@@ -71,6 +84,31 @@ export function VoicePanel({
       : voice.activeScreenShare?.identity ?? null,
     localSharing: Boolean(voice.screenSharing),
   });
+
+  // Uzak kontrol: kontrol edende en yüksek yayın katmanı, paylaşanda metin netliği
+  const rcControlling = Boolean(
+    remote.remoteControl?.isController && remote.remoteControl.status === 'active',
+  );
+  const rcControlled = Boolean(
+    remote.remoteControl?.isSharer &&
+      remote.remoteControl.status === 'active' &&
+      voice.screenSharing,
+  );
+  const { setRemoteControlQualityBoost, setRemoteControlSharerDetail } = voice;
+  const inThisVoice = voice.voiceChannelId === channel.id;
+  const games = useGameSessions(client, inThisVoice ? guildId : null, inThisVoice ? channel.id : null);
+  const soundboard = useSoundboard(client, guildId, inThisVoice ? channel.id : null, {
+    deafened: voice.deafened,
+    outputVolume: voice.audioSettings.outputVolume,
+  });
+  useEffect(() => {
+    setRemoteControlQualityBoost(rcControlling);
+    return () => setRemoteControlQualityBoost(false);
+  }, [rcControlling, setRemoteControlQualityBoost]);
+  useEffect(() => {
+    setRemoteControlSharerDetail(rcControlled);
+    return () => setRemoteControlSharerDetail(false);
+  }, [rcControlled, setRemoteControlSharerDetail]);
   const roleColors = loadLocalPrefs().accessibility.roleColors !== false;
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(340);
@@ -252,6 +290,50 @@ export function VoicePanel({
     <VoiceStage
       className="min-h-0 flex-1"
       channelName={channel.name}
+      voiceStatus={voiceStatus}
+      canEditVoiceStatus={voice.voiceChannelId === channel.id}
+      gameLayer={
+        games.openSession ? (
+          <GameFrame
+            client={client}
+            session={games.openSession}
+            platform="desktop"
+            apiBase={client.apiBaseUrl}
+            resolveParticipant={(id) => {
+              const m = members.find((x) => x.id === id);
+              return { id, displayName: m?.displayName ?? 'Oyuncu', avatarUrl: m?.avatarUrl ?? null };
+            }}
+            onClose={(o) => void games.close(o)}
+            onSetStatus={(t) => void onSaveVoiceStatus?.(t)}
+          />
+        ) : null
+      }
+      controlsExtra={
+        inThisVoice ? (
+          <>
+          <GamesLauncherButton
+            loadCatalog={() => client.getGameCatalog()}
+            sessions={games.sessions}
+            openSessionId={games.openSession?.id}
+            platform="desktop"
+            onStart={(id) => void games.start(id)}
+            onJoin={(id) => void games.join(id)}
+            onReopen={(id) => void games.join(id)}
+            error={games.error}
+          />
+          <SoundboardButton
+            sounds={soundboard.sounds}
+            onPlay={soundboard.play}
+            guildId={guildId}
+            canManage={canManageGuild}
+            manageClient={client}
+            onChanged={() => void soundboard.reload()}
+            disabled={voice.deafened}
+          />
+          </>
+        ) : null
+      }
+      onSaveVoiceStatus={onSaveVoiceStatus}
       participants={voice.peers}
       localParticipantId={userId}
       rtcConnected={voice.connected}

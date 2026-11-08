@@ -13,6 +13,9 @@ import { useVoiceMembersByChannel } from '../hooks/useVoiceMembersByChannel';
 import {
   Avatar,
   ChannelSidebar,
+  useVoiceChannelStatuses,
+  voiceStatusErrorMessage,
+  LevelsPanel,
   ConfirmDialog,
   Modal,
   SearchableSelect,
@@ -108,6 +111,7 @@ export function Shell() {
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [levelsOpen, setLevelsOpen] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
   const [canManageChannels, setCanManageChannels] = useState(false);
   const [canManageRoles, setCanManageRoles] = useState(false);
@@ -166,6 +170,7 @@ export function Shell() {
   const inVoiceInThisGuild =
     Boolean(voice.voiceChannelId) && voice.voiceGuildId === activeGuildId;
 
+  const { voiceStatuses, setVoiceStatus } = useVoiceChannelStatuses(client, activeGuildId);
   const { voiceMembersByChannel, voiceRosterReady } = useVoiceMembersByChannel({
     client,
     user,
@@ -918,6 +923,7 @@ export function Shell() {
         selfUserId: user?.id,
         voiceMembersByChannel,
         voiceRosterReady,
+        voiceStatusByChannel: voiceStatuses,
         platformAdminIds,
         guildCategories,
         collapsedCategoryIds: collapsed,
@@ -1047,6 +1053,7 @@ export function Shell() {
       voice.setParticipantVolume,
       voiceMembersByChannel,
       voiceRosterReady,
+      voiceStatuses,
       platformAdminIds,
       voiceChannel,
       client,
@@ -1361,6 +1368,14 @@ export function Shell() {
                   <button
                     type="button"
                     className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+                    onClick={() => setLevelsOpen(true)}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">military_tech</span>
+                    Seviyeler
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
                     onClick={() => setView({ kind: 'guild-boost', guildId: activeGuild.id })}
                   >
                     <span className="material-symbols-outlined text-[16px] text-primary-container">
@@ -1559,6 +1574,12 @@ export function Shell() {
             <VoicePanel
               guildId={view.guildId}
               channel={activeChannel}
+              voiceStatus={voiceStatuses[activeChannel.id] ?? null}
+              canManageGuild={canManageGuild}
+              onSaveVoiceStatus={async (status) => {
+                const res = await setVoiceStatus(activeChannel.id, status);
+                return res.ok ? res : { ...res, error: voiceStatusErrorMessage(res.error) };
+              }}
               members={members}
               textChannels={channels.filter((c) => c.type === 'TEXT')}
               buildActions={(m) => buildMemberActions(m, activeChannel.id)}
@@ -1708,6 +1729,14 @@ export function Shell() {
             />
           )}
       </div>
+
+      {activeGuildId && (
+        <Modal open={levelsOpen} title="Seviyeler" onClose={() => setLevelsOpen(false)} className="sm:max-w-xl">
+          <div className="max-h-[70vh] overflow-y-auto pr-1">
+            {levelsOpen && <LevelsPanel client={client} guildId={activeGuildId} mode="leaderboard" />}
+          </div>
+        </Modal>
+      )}
 
       {activeGuildId && (
         <GuildEventsModal

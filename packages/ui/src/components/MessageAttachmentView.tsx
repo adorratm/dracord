@@ -3,11 +3,14 @@
 import type { MessageAttachment } from '@dracord/types';
 import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
 import { cn } from '../lib/cn';
+import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 
 function isImage(type: string, filename: string) {
   return type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(filename);
 }
 function isVideo(type: string, filename: string) {
+  // audio/webm sesli mesajlar video sanılmasın
+  if (type.startsWith('audio/')) return false;
   return type.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(filename);
 }
 function isAudio(type: string, filename: string) {
@@ -152,6 +155,10 @@ export function MessageAttachmentView({
   );
 
   const showBlur = (nsfwBlocked || nsfwPending) && !revealNsfw;
+
+  if (attachment.voice && contentType.startsWith('audio/')) {
+    return <VoiceMessagePlayer attachment={attachment} className={cn('mt-space-xs', className)} />;
+  }
 
   return (
     <>

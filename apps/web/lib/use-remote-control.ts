@@ -137,6 +137,30 @@ export function useRemoteControl(opts: {
     }
   }, [localSharing]);
 
+  // Desktop (paylaşan): kontrol aktifken global acil durdurma kısayolu (Ctrl+Shift+F12)
+  const sharerActive = Boolean(
+    localSharing && userId && state?.sharerId === userId && state.status === 'active',
+  );
+  const stopRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const desktop = (
+      window as Window & {
+        dracordDesktop?: {
+          setRemoteControlActive?: (active: boolean) => Promise<unknown>;
+          onRemoteControlEmergencyStop?: (cb: () => void) => () => void;
+        };
+      }
+    ).dracordDesktop;
+    if (!desktop?.setRemoteControlActive) return;
+    void desktop.setRemoteControlActive(sharerActive);
+    if (!sharerActive) return;
+    const off = desktop.onRemoteControlEmergencyStop?.(() => stopRef.current());
+    return () => {
+      off?.();
+      void desktop.setRemoteControlActive?.(false);
+    };
+  }, [sharerActive]);
+
   const request = useCallback(() => {
     if (!guildId || !channelId || !sharerId || !userId) return;
     client.requestRemoteControl({
@@ -194,6 +218,8 @@ export function useRemoteControl(opts: {
     setPendingName(null);
   }, [client, guildId, channelId, state?.sharerId, sharerId, userId]);
 
+  stopRef.current = stop;
+
   const sendPointer = useCallback(
     (ev: {
       type: 'move' | 'down' | 'up' | 'wheel';
@@ -206,7 +232,7 @@ export function useRemoteControl(opts: {
       if (state?.status !== 'active' || state.controllerId !== userId) return;
       if (ev.type === 'move') {
         const now = performance.now();
-        if (now - moveThrottle.current < 33) return;
+        if (now - moveThrottle.current < 16) return; // ~60 Hz
         moveThrottle.current = now;
       }
       const payload: RemoteControlInputPayload = {

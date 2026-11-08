@@ -15,7 +15,23 @@
         "groups": [
           {
             "group": "Başlangıç",
-            "pages": ["index", "quickstart", "discovery"]
+            "pages": [
+              "index",
+              "quickstart",
+              "discovery"
+            ]
+          },
+          {
+            "group": "Oyunlar",
+            "pages": [
+              "games/index",
+              "games/quickstart",
+              "games/sdk",
+              "games/authentication",
+              "games/multiplayer",
+              "games/mobile",
+              "games/publishing"
+            ]
           },
           {
             "group": "API",
@@ -29,7 +45,10 @@
           },
           {
             "group": "SDK",
-            "pages": ["bot-sdk", "openapi"]
+            "pages": [
+              "bot-sdk",
+              "openapi"
+            ]
           }
         ]
       }

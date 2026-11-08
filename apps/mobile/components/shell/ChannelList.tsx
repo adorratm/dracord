@@ -386,6 +386,16 @@ const ChannelRow = memo(function ChannelRow({
           </View>
         ) : null}
       </Pressable>
+      {channel.voiceStatus && voiceMembers.length > 0 ? (
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 34, marginRight: 12 }}
+        >
+          <Icon name="notes" size={12} color={colors.textMuted} />
+          <Text style={{ color: colors.textMuted, fontSize: 11, flex: 1 }} numberOfLines={1}>
+            {channel.voiceStatus}
+          </Text>
+        </View>
+      ) : null}
       {(channel.type === 'VOICE' ||
         channel.type === 'GAME' ||
         channel.type === 'WATCH_PARTY') &&

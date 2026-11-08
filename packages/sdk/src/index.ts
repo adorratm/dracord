@@ -1,5 +1,16 @@
 import { io, Socket } from 'socket.io-client';
 import type {
+  GameAppDto,
+  GameAppInput,
+  GameAppStatus,
+  GameLaunchDto,
+  GameSessionDto,
+  CatchupDto,
+  GuildSoundDto,
+  GuildLevelConfigDto,
+  MemberLevelDto,
+  ScheduledMessageDto,
+  VoiceChannelStatusPayload,
   AuthTokens,
   CategoryDto,
   ChannelSummary,
@@ -115,6 +126,11 @@ export class DracordClient {
   private voicePlatform: string | null = null;
   public socket: Socket | null = null;
   private reconnectHandlers = new Set<() => void>();
+
+  /** API kökü (oyun SDK'sı verify için) */
+  get apiBaseUrl(): string {
+    return this.baseUrl;
+  }
 
   constructor(baseUrl = resolveDefaultBaseUrl()) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -948,6 +964,182 @@ export class DracordClient {
     return this.request(`/users/me/bookmarks?limit=${limit}`);
   }
 
+  /** "Ne kaçırdım?" — son okumadan bu yana kanal özeti */
+  async getChannelCatchup(
+    channelId: string,
+    opts?: { since?: string; afterMessageId?: string | null; lastN?: number; until?: string },
+  ): Promise<CatchupDto> {
+    const q = new URLSearchParams();
+    if (opts?.lastN) q.set('lastN', String(opts.lastN));
+    if (opts?.until) q.set('until', opts.until);
+    if (opts?.since) q.set('since', opts.since);
+    if (opts?.afterMessageId) q.set('after', opts.afterMessageId);
+    const qs = q.toString();
+    return this.request(`/channels/${channelId}/catchup${qs ? `?${qs}` : ''}`);
+  }
+
+  // ── Oyun platformu ──
+  async getGameCatalog(): Promise<Array<GameAppDto & { testMode: boolean }>> {
+    return this.request('/games/catalog');
+  }
+  async listMyGames(): Promise<GameAppDto[]> {
+    return this.request('/games/mine');
+  }
+  async createGame(input: GameAppInput): Promise<{ game: GameAppDto; secret: string }> {
+    return this.request('/games', { method: 'POST', body: JSON.stringify(input) });
+  }
+  async updateGame(id: string, input: GameAppInput): Promise<GameAppDto> {
+    return this.request(`/games/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  async deleteGame(id: string): Promise<{ ok: true }> {
+    return this.request(`/games/${id}`, { method: 'DELETE' });
+  }
+  async submitGame(id: string): Promise<GameAppDto> {
+    return this.request(`/games/${id}/submit`, { method: 'POST' });
+  }
+  async rotateGameSecret(id: string): Promise<{ secret: string; secretLast4: string }> {
+    return this.request(`/games/${id}/secret`, { method: 'POST' });
+  }
+  async setGameTesters(id: string, usernames: string[]): Promise<GameAppDto> {
+    return this.request(`/games/${id}/testers`, { method: 'POST', body: JSON.stringify({ usernames }) });
+  }
+  async listGameSessions(guildId: string, channelId: string): Promise<GameSessionDto[]> {
+    return this.request(`/games/sessions?guildId=${encodeURIComponent(guildId)}&channelId=${encodeURIComponent(channelId)}`);
+  }
+  async startGameSession(gameId: string, guildId: string, channelId: string): Promise<GameSessionDto> {
+    return this.request(`/games/${gameId}/sessions`, { method: 'POST', body: JSON.stringify({ guildId, channelId }) });
+  }
+  async joinGameSession(sessionId: string): Promise<GameSessionDto> {
+    return this.request(`/games/sessions/${sessionId}/join`, { method: 'POST' });
+  }
+  async leaveGameSession(sessionId: string): Promise<{ ok: true }> {
+    return this.request(`/games/sessions/${sessionId}/leave`, { method: 'POST' });
+  }
+  async launchGameSession(sessionId: string): Promise<GameLaunchDto> {
+    return this.request(`/games/sessions/${sessionId}/launch`, { method: 'POST' });
+  }
+  /** Platform admin */
+  async adminListGames(status?: GameAppStatus): Promise<GameAppDto[]> {
+    return this.request(`/games/admin/list${status ? `?status=${status}` : ''}`);
+  }
+  async adminReviewGame(
+    id: string,
+    action: 'approve' | 'reject' | 'suspend' | 'unsuspend',
+    note?: string,
+  ): Promise<GameAppDto> {
+    return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
+  }
+
+  // ── Soundboard ──
+  async listGuildSounds(guildId: string): Promise<GuildSoundDto[]> {
+    return this.request(`/guilds/${guildId}/sounds`);
+  }
+
+  async createGuildSound(
+    guildId: string,
+    input: { name: string; emoji?: string | null; url: string; contentType: string; durationSec: number; volume?: number },
+  ): Promise<GuildSoundDto> {
+    return this.request(`/guilds/${guildId}/sounds`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateGuildSound(
+    guildId: string,
+    soundId: string,
+    patch: { name?: string; emoji?: string | null; volume?: number },
+  ): Promise<GuildSoundDto> {
+    return this.request(`/guilds/${guildId}/sounds/${soundId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+
+  async deleteGuildSound(guildId: string, soundId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/sounds/${soundId}`, { method: 'DELETE' });
+  }
+
+  /** Ses kanalında soundboard çal (ack) */
+  playSound(payload: { guildId: string; channelId: string; soundId: string }): Promise<{ ok: boolean; error?: string }> {
+    const sock = this.socket;
+    if (!sock) return Promise.resolve({ ok: false, error: 'offline' });
+    return new Promise((resolve) => {
+      sock.timeout(6000).emit(SocketEvents.SOUNDBOARD_PLAY, payload, (err: unknown, res: { ok: boolean; error?: string }) =>
+        resolve(err ? { ok: false, error: 'timeout' } : res ?? { ok: false }),
+      );
+    });
+  }
+
+  // ── Seviye / XP ──
+  async getLevelLeaderboard(guildId: string, opts?: { limit?: number; offset?: number }): Promise<MemberLevelDto[]> {
+    const q = new URLSearchParams();
+    if (opts?.limit) q.set('limit', String(opts.limit));
+    if (opts?.offset) q.set('offset', String(opts.offset));
+    const qs = q.toString();
+    return this.request(`/guilds/${guildId}/levels/leaderboard${qs ? `?${qs}` : ''}`);
+  }
+
+  async getMyLevel(guildId: string): Promise<MemberLevelDto> {
+    return this.request(`/guilds/${guildId}/levels/me`);
+  }
+
+  async getMemberLevel(guildId: string, userId: string): Promise<MemberLevelDto> {
+    return this.request(`/guilds/${guildId}/levels/members/${userId}`);
+  }
+
+  async getLevelConfig(guildId: string): Promise<GuildLevelConfigDto> {
+    return this.request(`/guilds/${guildId}/levels/config`);
+  }
+
+  async updateLevelConfig(
+    guildId: string,
+    patch: Partial<Omit<GuildLevelConfigDto, 'guildId'>>,
+  ): Promise<GuildLevelConfigDto> {
+    return this.request(`/guilds/${guildId}/levels/config`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async resyncLevelRewards(guildId: string): Promise<{ updated: number }> {
+    return this.request(`/guilds/${guildId}/levels/config/resync-rewards`, { method: 'POST' });
+  }
+
+  /** Zamanlanmış mesaj (sendAt ISO; ≥1 dk, ≤30 gün) */
+  async createScheduledMessage(
+    channelId: string,
+    input: {
+      content?: string;
+      sendAt: string;
+      attachments?: MessageAttachment[];
+      replyToId?: string;
+    },
+  ): Promise<ScheduledMessageDto> {
+    return this.request(`/channels/${channelId}/scheduled-messages`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async listScheduledMessages(channelId?: string): Promise<ScheduledMessageDto[]> {
+    return this.request(
+      channelId ? `/channels/${channelId}/scheduled-messages` : '/users/me/scheduled-messages',
+    );
+  }
+
+  async updateScheduledMessage(
+    id: string,
+    patch: { content?: string; sendAt?: string },
+  ): Promise<ScheduledMessageDto> {
+    return this.request(`/users/me/scheduled-messages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async sendScheduledMessageNow(id: string): Promise<ScheduledMessageDto> {
+    return this.request(`/users/me/scheduled-messages/${id}/send-now`, { method: 'POST' });
+  }
+
+  async cancelScheduledMessage(id: string): Promise<{ ok: true }> {
+    return this.request(`/users/me/scheduled-messages/${id}`, { method: 'DELETE' });
+  }
+
   async createReminder(messageId: string, remindAt: string): Promise<MessageReminderDto> {
     return this.request(`/messages/${messageId}/remind`, {
       method: 'POST',
@@ -1541,6 +1733,35 @@ export class DracordClient {
     this.socket?.emit(SocketEvents.VOICE_SYNC, { guildId });
   }
 
+  /** Ses kanalı durum metni ayarla / temizle (status=null). Yalnız kanaldaki üye. */
+  setVoiceChannelStatus(payload: {
+    guildId: string;
+    channelId: string;
+    status: string | null;
+  }): Promise<{ ok: boolean; error?: string; status?: VoiceChannelStatusPayload }> {
+    const sock = this.socket;
+    if (!sock) return Promise.resolve({ ok: false, error: 'offline' });
+    return new Promise((resolve) => {
+      sock
+        .timeout(8000)
+        .emit(
+          SocketEvents.VOICE_CHANNEL_STATUS,
+          payload,
+          (err: unknown, res: { ok: boolean; error?: string; status?: VoiceChannelStatusPayload }) => {
+            if (err) resolve({ ok: false, error: 'timeout' });
+            else resolve(res ?? { ok: false });
+          },
+        );
+    });
+  }
+
+  onVoiceChannelStatus(handler: (payload: VoiceChannelStatusPayload) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.VOICE_CHANNEL_STATUS, handler);
+    return () => sock.off(SocketEvents.VOICE_CHANNEL_STATUS, handler);
+  }
+
   requestRemoteControl(payload: RemoteControlRequestPayload) {
     this.socket?.emit(SocketEvents.REMOTE_CONTROL_REQUEST, payload);
   }
@@ -1554,7 +1775,12 @@ export class DracordClient {
   }
 
   sendRemoteControlInput(payload: RemoteControlInputPayload) {
-    this.socket?.emit(SocketEvents.REMOTE_CONTROL_INPUT, payload);
+    const sock = this.socket;
+    if (!sock) return;
+    // Fare hareketi: volatile — bağlantı tıkanınca eski hareketler birikmesin (gecikme kuyruğu yok).
+    // Tık / tuş / tekerlek: normal (kaybolmamalı).
+    if (payload.type === 'move') sock.volatile.emit(SocketEvents.REMOTE_CONTROL_INPUT, payload);
+    else sock.emit(SocketEvents.REMOTE_CONTROL_INPUT, payload);
   }
 
   onRemoteControlState(

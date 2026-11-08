@@ -22,6 +22,18 @@
             ]
           },
           {
+            "group": "Oyunlar",
+            "pages": [
+              "mintlify/games/index",
+              "mintlify/games/quickstart",
+              "mintlify/games/sdk",
+              "mintlify/games/authentication",
+              "mintlify/games/multiplayer",
+              "mintlify/games/mobile",
+              "mintlify/games/publishing"
+            ]
+          },
+          {
             "group": "API",
             "pages": [
               "mintlify/authentication",
@@ -33,7 +45,10 @@
           },
           {
             "group": "SDK",
-            "pages": ["mintlify/bot-sdk", "mintlify/openapi"]
+            "pages": [
+              "mintlify/bot-sdk",
+              "mintlify/openapi"
+            ]
           }
         ]
       }
@@ -99,6 +114,34 @@
     {
       "source": "/developer/bot-gateway",
       "destination": "/mintlify/bot-gateway"
+    },
+    {
+      "source": "/games",
+      "destination": "/mintlify/games/index"
+    },
+    {
+      "source": "/games/quickstart",
+      "destination": "/mintlify/games/quickstart"
+    },
+    {
+      "source": "/games/sdk",
+      "destination": "/mintlify/games/sdk"
+    },
+    {
+      "source": "/games/authentication",
+      "destination": "/mintlify/games/authentication"
+    },
+    {
+      "source": "/games/multiplayer",
+      "destination": "/mintlify/games/multiplayer"
+    },
+    {
+      "source": "/games/mobile",
+      "destination": "/mintlify/games/mobile"
+    },
+    {
+      "source": "/games/publishing",
+      "destination": "/mintlify/games/publishing"
     }
   ],
   "api": {

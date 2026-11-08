@@ -1452,6 +1452,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dracord/embedded-sdk@workspace:packages/embedded-sdk":
+  version: 0.0.0-use.local
+  resolution: "@dracord/embedded-sdk@workspace:packages/embedded-sdk"
+  dependencies:
+    typescript: "npm:^6.0.3"
+  languageName: unknown
+  linkType: soft
+
 "@dracord/game-core@workspace:*, @dracord/game-core@workspace:packages/game-core":
   version: 0.0.0-use.local
   resolution: "@dracord/game-core@workspace:packages/game-core"

@@ -32,6 +32,9 @@ import { ModerationModule } from '@/moderation/moderation.module';
 import { StickersModule } from '@/stickers/stickers.module';
 import { MetricsModule } from '@/metrics/metrics.module';
 import { DiscoveryModule } from '@/discovery/discovery.module';
+import { LevelsModule } from '@/levels/levels.module';
+import { SoundboardModule } from '@/soundboard/soundboard.module';
+import { GamesModule } from '@/games/games.module';
 
 @Module({
   imports: [
@@ -75,6 +78,9 @@ import { DiscoveryModule } from '@/discovery/discovery.module';
     SpotifyModule,
     StickersModule,
     DiscoveryModule,
+    LevelsModule,
+    SoundboardModule,
+    GamesModule,
   ],
 })
 export class AppModule {}

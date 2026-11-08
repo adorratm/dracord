@@ -75,6 +75,7 @@ import {
   saveScreenShareVolumes,
 } from '@/lib/participant-volumes';
 
+type LocalVideoTrackLike = { setDegradationPreference?: (p: RTCDegradationPreference) => Promise<void> | void };
 export interface ActiveScreenShare {
   identity: string;
   displayName: string;
@@ -139,6 +140,10 @@ interface VoiceSessionValue {
   setScreenShareFps: (fps: ScreenShareFps) => Promise<void>;
   /** İzleyici yayın kalitesi (kişisel; anında uygulanır) */
   setScreenShareViewQuality: (id: ScreenShareViewQualityId) => void;
+  /** Uzak kontrol aktifken izlenen yayını en yüksek kaliteye zorla (ayarı değiştirmez) */
+  setRemoteControlQualityBoost: (on: boolean) => void;
+  /** Paylaşan: kontrol edilirken metin netliği önceliği */
+  setRemoteControlSharerDetail: (on: boolean) => void;
   /** Uygunsuz içerik engeli (ekran/kamera + izleme); varsayılan açık */
   setNsfwContentFilter: (enabled: boolean) => void;
   setParticipantVolume: (identity: string, volume: number) => void;
@@ -1251,6 +1256,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Odadaki paylaşımları senkronize et; kullanıcı seçimini koru; gereksiz rebind yapma */
+  /** Uzak kontrol: odaklı yayını 'source' kaliteye zorla */
+  const remoteControlBoostRef = useRef(false);
   const applyScreenShareView = useCallback(
     (room: Room) => {
       const shares = listScreenShares(room);
@@ -1290,9 +1297,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
 
       const share = shares.find((s) => s.identity === focusId) ?? shares[0]!;
-      const viewQuality = normalizeScreenShareViewQuality(
-        audioSettingsRef.current.screenShareViewQuality,
-      );
+      const viewQuality = remoteControlBoostRef.current
+        ? 'source'
+        : normalizeScreenShareViewQuality(audioSettingsRef.current.screenShareViewQuality);
       let track: Track | null = null;
       if (share.isLocal) {
         track = room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track ?? null;
@@ -1475,9 +1482,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       if (publication.source === Track.Source.ScreenShare) {
         const focus = focusedScreenShareIdRef.current;
-        const q = normalizeScreenShareViewQuality(
-          audioSettingsRef.current.screenShareViewQuality,
-        );
+        const q = remoteControlBoostRef.current
+          ? 'source'
+          : normalizeScreenShareViewQuality(audioSettingsRef.current.screenShareViewQuality);
         const isFocused =
           !focus || focus === '__none__' || focus === participant.identity;
         applyRemoteScreenShareViewQuality(
@@ -2908,6 +2915,40 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [persistAudio, applyScreenShareView],
   );
 
+  /** Uzak kontrol edilirken paylaşımda metin netliği (contentHint=detail, çözünürlük koru) */
+  const sharerDetailPrevRef = useRef<string | null>(null);
+  const setRemoteControlSharerDetail = useCallback((on: boolean) => {
+    const room = roomRef.current;
+    const pub = room?.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    const lt = pub?.track as
+      | (LocalVideoTrackLike & { mediaStreamTrack?: MediaStreamTrack })
+      | undefined;
+    const mst = lt?.mediaStreamTrack;
+    if (!mst) return;
+    try {
+      if (on) {
+        if (sharerDetailPrevRef.current === null) sharerDetailPrevRef.current = mst.contentHint || '';
+        mst.contentHint = 'detail';
+        void lt?.setDegradationPreference?.('maintain-resolution');
+      } else if (sharerDetailPrevRef.current !== null) {
+        mst.contentHint = sharerDetailPrevRef.current;
+        sharerDetailPrevRef.current = null;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const setRemoteControlQualityBoost = useCallback(
+    (on: boolean) => {
+      if (remoteControlBoostRef.current === on) return;
+      remoteControlBoostRef.current = on;
+      const room = roomRef.current;
+      if (room) applyScreenShareView(room);
+    },
+    [applyScreenShareView],
+  );
+
   const setNsfwContentFilter = useCallback(
     (enabled: boolean) => {
       // Platform floor: Trusted değilse istemci filtreyi tamamen kapatamaz
@@ -3062,6 +3103,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareResolution,
       setScreenShareFps,
       setScreenShareViewQuality,
+      setRemoteControlQualityBoost,
+      setRemoteControlSharerDetail,
       setNsfwContentFilter,
       setParticipantVolume,
       getParticipantVolume,
@@ -3125,6 +3168,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareResolution,
       setScreenShareFps,
       setScreenShareViewQuality,
+      setRemoteControlQualityBoost,
+      setRemoteControlSharerDetail,
       setNsfwContentFilter,
       setParticipantVolume,
       getParticipantVolume,

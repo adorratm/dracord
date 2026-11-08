@@ -108,3 +108,36 @@ export class MarkReadDto {
   @IsBoolean()
   unreadFrom?: boolean;
 }
+
+/** Zamanlanmış mesaj oluştur */
+export class CreateScheduledMessageDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  content?: string;
+
+  @IsString()
+  @MinLength(10)
+  sendAt!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsMessageAttachments()
+  attachments?: MessageAttachmentInput[];
+
+  @IsOptional()
+  @IsString()
+  replyToId?: string;
+}
+
+export class UpdateScheduledMessageDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  content?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(10)
+  sendAt?: string;
+}

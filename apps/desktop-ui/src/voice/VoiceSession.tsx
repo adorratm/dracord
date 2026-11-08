@@ -247,12 +247,17 @@ type VoiceSessionApi = {
   setScreenShareResolution: (id: ScreenShareResolutionId) => Promise<void>;
   setScreenShareFps: (fps: ScreenShareFps) => Promise<void>;
   setScreenShareViewQuality: (id: ScreenShareViewQualityId) => void;
+  /** Uzak kontrol aktifken izlenen yayını en yüksek kaliteye zorla (ayarı değiştirmez) */
+  setRemoteControlQualityBoost: (on: boolean) => void;
+  /** Paylaşan: kontrol edilirken metin netliği önceliği */
+  setRemoteControlSharerDetail: (on: boolean) => void;
   setNsfwContentFilter: (enabled: boolean) => void;
   attachCamera: (identity: string, el: HTMLVideoElement | null) => void;
 };
 
 const Ctx = createContext<VoiceSessionApi | null>(null);
 
+type LocalVideoTrackLike = { setDegradationPreference?: (p: RTCDegradationPreference) => Promise<void> | void };
 export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const { client, user } = useAuth();
   const roomRef = useRef<Room | null>(null);
@@ -450,6 +455,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /** Uzak kontrol: odaklı yayını 'source' kaliteye zorla */
+  const remoteControlBoostRef = useRef(false);
   const applyScreenShareView = useCallback(
     (room: Room) => {
       const shares = listScreenShares(room);
@@ -482,9 +489,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
 
       const share = shares.find((s) => s.identity === focusId) ?? shares[0]!;
-      const viewQuality = normalizeScreenShareViewQuality(
-        audioSettingsRef.current.screenShareViewQuality,
-      );
+      const viewQuality = remoteControlBoostRef.current
+        ? 'source'
+        : normalizeScreenShareViewQuality(audioSettingsRef.current.screenShareViewQuality);
       let track: Track | null = null;
       if (share.isLocal) {
         track =
@@ -1616,6 +1623,40 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [applyScreenShareView, patchAudioSettings],
   );
 
+  /** Uzak kontrol edilirken paylaşımda metin netliği (contentHint=detail, çözünürlük koru) */
+  const sharerDetailPrevRef = useRef<string | null>(null);
+  const setRemoteControlSharerDetail = useCallback((on: boolean) => {
+    const room = roomRef.current;
+    const pub = room?.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    const lt = pub?.track as
+      | (LocalVideoTrackLike & { mediaStreamTrack?: MediaStreamTrack })
+      | undefined;
+    const mst = lt?.mediaStreamTrack;
+    if (!mst) return;
+    try {
+      if (on) {
+        if (sharerDetailPrevRef.current === null) sharerDetailPrevRef.current = mst.contentHint || '';
+        mst.contentHint = 'detail';
+        void lt?.setDegradationPreference?.('maintain-resolution');
+      } else if (sharerDetailPrevRef.current !== null) {
+        mst.contentHint = sharerDetailPrevRef.current;
+        sharerDetailPrevRef.current = null;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const setRemoteControlQualityBoost = useCallback(
+    (on: boolean) => {
+      if (remoteControlBoostRef.current === on) return;
+      remoteControlBoostRef.current = on;
+      const room = roomRef.current;
+      if (room) applyScreenShareView(room);
+    },
+    [applyScreenShareView],
+  );
+
   const setScreenShareResolution = useCallback(
     async (id: ScreenShareResolutionId) => {
       const res = normalizeScreenShareResolution(id);
@@ -1836,6 +1877,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareResolution,
       setScreenShareFps,
       setScreenShareViewQuality,
+      setRemoteControlQualityBoost,
+      setRemoteControlSharerDetail,
       setNsfwContentFilter,
       attachCamera,
     }),
@@ -1883,6 +1926,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareFps,
       setScreenShareResolution,
       setScreenShareViewQuality,
+      setRemoteControlQualityBoost,
+      setRemoteControlSharerDetail,
       setScreenShareVolume,
       setScreenVideoElement,
       setVideoDevice,

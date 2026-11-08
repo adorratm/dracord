@@ -5,6 +5,7 @@ import {
   type RemoteControlStatePayload,
   type UserActivity,
   type UserUpdatePayload,
+  type VoiceChannelStatusPayload,
   type VoiceStatePayload,
   type VoiceTakeoverPayload,
 } from '@dracord/types';
@@ -22,8 +23,31 @@ export class SocketBroadcastService {
     this.server = server;
   }
 
+  /** Ayrılma sonrası (ör. boşalan kanalın durum metnini sil) — ChatGateway bağlar */
+  private voiceLeaveHook: ((payload: VoiceStatePayload) => void) | null = null;
+
+  setVoiceLeaveHook(fn: ((payload: VoiceStatePayload) => void) | null) {
+    this.voiceLeaveHook = fn;
+  }
+
   broadcastVoiceState(payload: VoiceStatePayload) {
     this.server?.emit(SocketEvents.VOICE_STATE, payload);
+    if (payload.action === 'leave' || payload.action === 'move') {
+      try {
+        this.voiceLeaveHook?.(payload);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  /** Genel guild odası yayını */
+  emitToGuild(guildId: string, event: string, payload: unknown) {
+    this.server?.to(`guild:${guildId}`).emit(event, payload);
+  }
+
+  broadcastVoiceChannelStatus(payload: VoiceChannelStatusPayload) {
+    this.server?.to(`guild:${payload.guildId}`).emit(SocketEvents.VOICE_CHANNEL_STATUS, payload);
   }
 
   broadcastRemoteControlState(payload: RemoteControlStatePayload) {

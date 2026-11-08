@@ -11,6 +11,7 @@ export function ServerMenu({
   onInvite,
   onEvents,
   onBoost,
+  onLevels,
   onSettings,
   onCreateChannel,
   onCreateCategory,
@@ -24,6 +25,7 @@ export function ServerMenu({
   onInvite?: () => void;
   onEvents?: () => void;
   onBoost?: () => void;
+  onLevels?: () => void;
   onSettings?: () => void;
   onCreateChannel?: () => void;
   onCreateCategory?: () => void;
@@ -71,6 +73,9 @@ export function ServerMenu({
           ) : null}
           {onBoost ? (
             <MenuItem icon="rocket_launch" label="Sunucu takviyesi" onPress={onBoost} />
+          ) : null}
+          {onLevels ? (
+            <MenuItem icon="military_tech" label="Seviyeler" onPress={onLevels} />
           ) : null}
           {onCreateChannel ? (
             <MenuItem icon="tag" label="Kanal oluştur" onPress={onCreateChannel} />

@@ -28,6 +28,16 @@ import {
 } from '../lib/sticker-store';
 import { Avatar } from './Avatar';
 import { VideoStickerTrimmer } from './VideoStickerTrimmer';
+import { ScheduleMessageDialog, ScheduledMessagesBar } from './ScheduleMessageDialog';
+import type { ScheduledMessagesController } from '../lib/use-scheduled-messages';
+import {
+  formatVoiceDuration,
+  sendVoiceMessage,
+  useVoiceRecorder,
+  voiceRecordingSupported,
+  type VoiceMessageClient,
+} from '../lib/use-voice-recorder';
+import { VOICE_MESSAGE_MAX_SEC } from '@dracord/types';
 export type ChatMediaPayload =
   | { type: 'gif'; url: string; label: string }
   | { type: 'sticker'; emoji: string }
@@ -86,6 +96,10 @@ export interface ChatInputProps {
   spellCheck?: boolean;
   /** Videodan sticker: GIF’i S3’e yükle (yoksa data URL kaydedilir) */
   uploadStickerFile?: (file: File) => Promise<{ url: string; contentType?: string }>;
+  /** Mesaj zamanlama (useScheduledMessages) — + menüsü + bekleyenler çubuğu */
+  scheduler?: ScheduledMessagesController | null;
+  /** Sesli mesaj — metin boşken gönder tuşu mikrofona dönüşür */
+  voiceMessages?: { client: VoiceMessageClient; channelId: string } | null;
   className?: string;
 }
 
@@ -173,9 +187,37 @@ export function ChatInput({
   botSlashCommands,
   spellCheck = true,
   uploadStickerFile,
+  scheduler,
+  voiceMessages,
   className,
 }: ChatInputProps) {
+  const recorder = useVoiceRecorder();
+  const [voiceSending, setVoiceSending] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  // SSR/hydration uyumu: destek kontrolü yalnız istemcide
+  const [recSupported, setRecSupported] = useState(false);
+  useEffect(() => setRecSupported(voiceRecordingSupported()), []);
+  const canRecord = Boolean(voiceMessages) && recSupported;
+  const finishVoice = async () => {
+    if (!voiceMessages) return;
+    const rec = await recorder.stop();
+    if (!rec) return;
+    setVoiceSending(true);
+    setVoiceError(null);
+    try {
+      await sendVoiceMessage(voiceMessages.client, voiceMessages.channelId, rec, {
+        replyToId: replyTo?.id,
+      });
+      onCancelReply?.();
+    } catch (e) {
+      setVoiceError(e instanceof Error ? e.message : 'Sesli mesaj gönderilemedi');
+    } finally {
+      setVoiceSending(false);
+    }
+  };
   const [value, setValue] = useState('');
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const hasScheduled = Boolean(scheduler?.items.length);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachDragging, setAttachDragging] = useState(false);
@@ -818,7 +860,7 @@ export function ChatInput({
       ref={rootRef}
       className={cn(
         'px-space-md flex flex-col shrink-0 relative box-border',
-        expanded || replyTo ? 'min-h-16 justify-end py-2' : 'h-16 justify-center',
+        expanded || replyTo || hasScheduled ? 'min-h-16 justify-end py-2' : 'h-16 justify-center',
         (pickerOpen || attachOpen || mention) && 'z-[90]',
         className,
       )}
@@ -828,6 +870,14 @@ export function ChatInput({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      {scheduler && (
+        <ScheduledMessagesBar
+          items={scheduler.items}
+          onCancel={(id) => void scheduler.cancel(id)}
+          onSendNow={(id) => void scheduler.sendNow(id)}
+          className="mx-0"
+        />
+      )}
       {dragging && (
         <div className="absolute inset-1 z-30 rounded-xl border-2 border-dashed border-primary-container bg-primary-container/10 flex items-center justify-center pointer-events-none">
           <p className="font-headline-md text-primary-container">Dosyaları buraya bırak (çoklu)</p>
@@ -1444,6 +1494,27 @@ export function ChatInput({
                     </span>
                   </button>
                 )}
+                {scheduler && (
+                  <button
+                    type="button"
+                    disabled={!value.trim()}
+                    onClick={() => {
+                      setAttachOpen(false);
+                      setScheduleOpen(true);
+                    }}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left hover:bg-surface-container transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
+                  >
+                    <span className="material-symbols-outlined text-[22px] text-primary-container leading-none">
+                      schedule_send
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-label-md text-on-surface">Mesajı zamanla</span>
+                      <span className="font-body-sm text-outline text-[12px]">
+                        {value.trim() ? 'Yazdığını ileri bir saatte gönder' : 'Önce bir mesaj yaz'}
+                      </span>
+                    </span>
+                  </button>
+                )}
               </div>
               <button
                 type="button"
@@ -1553,6 +1624,23 @@ export function ChatInput({
         >
           <span className="material-symbols-outlined text-[22px] leading-none">sentiment_satisfied</span>
         </button>
+        {canRecord && !value.trim() ? (
+          <button
+            type="button"
+            onClick={() => {
+              setVoiceError(null);
+              void recorder.start();
+            }}
+            disabled={disabled || voiceSending || recorder.state === 'requesting'}
+            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg text-outline hover:text-primary-container hover:bg-surface-container transition-colors duration-200 disabled:opacity-50"
+            aria-label="Sesli mesaj kaydet"
+            title="Sesli mesaj"
+          >
+            <span className="material-symbols-outlined text-[22px] leading-none">
+              {voiceSending ? 'hourglass_top' : 'mic'}
+            </span>
+          </button>
+        ) : (
         <button
           type="button"
           onClick={submit}
@@ -1567,7 +1655,50 @@ export function ChatInput({
         >
           <span className="material-symbols-outlined text-[22px] leading-none">send</span>
         </button>
+        )}
       </div>
+      {recorder.state === 'recording' && (
+        <div
+          className="absolute inset-x-space-md bottom-2 z-[95] h-12 rounded-xl bg-surface-container-high border border-surface-container-highest flex items-center gap-3 px-3"
+          role="status"
+          aria-live="polite"
+        >
+          <button
+            type="button"
+            onClick={() => recorder.cancel()}
+            className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-outline hover:text-error hover:bg-surface-container"
+            aria-label="Kaydı iptal et"
+          >
+            <span className="material-symbols-outlined text-[22px]">delete</span>
+          </button>
+          <span className="h-2.5 w-2.5 rounded-full bg-error animate-pulse shrink-0" aria-hidden />
+          <span className="font-label-md text-on-surface tabular-nums shrink-0">
+            {formatVoiceDuration(recorder.elapsed)}
+          </span>
+          <div className="flex-1 h-2 rounded-full bg-surface-container-highest overflow-hidden" aria-hidden>
+            <div
+              className="h-full bg-primary-container transition-[width] duration-75"
+              style={{ width: `${Math.min(100, recorder.level * 140)}%` }}
+            />
+          </div>
+          <span className="hidden sm:inline font-label-sm text-outline shrink-0">
+            en fazla {Math.round(VOICE_MESSAGE_MAX_SEC / 60)} dk
+          </span>
+          <button
+            type="button"
+            onClick={() => void finishVoice()}
+            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-primary-container text-on-primary-container hover:bg-primary"
+            aria-label="Sesli mesajı gönder"
+          >
+            <span className="material-symbols-outlined text-[22px] leading-none">send</span>
+          </button>
+        </div>
+      )}
+      {(voiceError || recorder.error) && recorder.state !== 'recording' && (
+        <p className="font-label-sm text-error px-1 pt-1" role="alert">
+          {voiceError || recorder.error}
+        </p>
+      )}
       <VideoStickerTrimmer
         open={videoTrimmerOpen}
         onClose={() => setVideoTrimmerOpen(false)}
@@ -1596,6 +1727,26 @@ export function ChatInput({
           }
         }}
       />
+      {scheduler && (
+        <ScheduleMessageDialog
+          open={scheduleOpen}
+          text={value.trim()}
+          onClose={() => setScheduleOpen(false)}
+          onConfirm={async (at) => {
+            const res = await scheduler.schedule(
+              value.trim(),
+              at,
+              replyTo ? { replyToId: replyTo.id } : undefined,
+            );
+            if (res.ok) {
+              setValue('');
+              onCancelReply?.();
+              requestAnimationFrame(() => resizeTextarea());
+            }
+            return res;
+          }}
+        />
+      )}
     </div>
   );
 }

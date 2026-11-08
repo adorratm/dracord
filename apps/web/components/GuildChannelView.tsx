@@ -25,6 +25,16 @@ import {
   VoiceStage,
   VolumeSlider,
   cn,
+  useVoiceChannelStatuses,
+  useScheduledMessages,
+  voiceStatusErrorMessage,
+  LevelsPanel,
+  SoundboardButton,
+  useSoundboard,
+  CatchupButton,
+  GameFrame,
+  GamesLauncherButton,
+  useGameSessions,
   presenceLabelTr,
   type MemberListGroup,
   type MemberListAction,
@@ -148,6 +158,38 @@ export function GuildChannelView({
       : voice.activeScreenShare?.identity ?? null,
     localSharing: Boolean(voice.screenSharing),
   });
+
+  // Uzak kontrol: kontrol edende en yüksek yayın katmanı, paylaşanda metin netliği
+  const rcControlling = Boolean(
+    remote.remoteControl?.isController && remote.remoteControl.status === 'active',
+  );
+  const rcControlled = Boolean(
+    remote.remoteControl?.isSharer &&
+      remote.remoteControl.status === 'active' &&
+      voice.screenSharing,
+  );
+  const { setRemoteControlQualityBoost, setRemoteControlSharerDetail } = voice;
+  useEffect(() => {
+    setRemoteControlQualityBoost(rcControlling);
+    return () => setRemoteControlQualityBoost(false);
+  }, [rcControlling, setRemoteControlQualityBoost]);
+  useEffect(() => {
+    setRemoteControlSharerDetail(rcControlled);
+    return () => setRemoteControlSharerDetail(false);
+  }, [rcControlled, setRemoteControlSharerDetail]);
+  const { voiceStatuses, setVoiceStatus } = useVoiceChannelStatuses(client, guildId);
+  const scheduler = useScheduledMessages(client, isVoiceView || isActivityView ? null : channelId);
+  const games = useGameSessions(
+    client,
+    voice.voiceGuildId === guildId ? guildId : null,
+    voice.voiceGuildId === guildId ? voice.voiceChannelId : null,
+  );
+  const soundboard = useSoundboard(
+    client,
+    guildId,
+    voice.voiceGuildId === guildId ? voice.voiceChannelId : null,
+    { deafened: voice.deafened, outputVolume: voice.audioSettings.outputVolume },
+  );
   const { prefs } = useUserPreferences();
   const imageModeration = useImageModeration();
   const guildSkin = prefs.appearance.guildSkins?.[guildId];
@@ -287,6 +329,12 @@ export function GuildChannelView({
   const [busy, setBusy] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [levelsOpen, setLevelsOpen] = useState(false);
+  /** "Ne kaçırdım?" çapası: kanal açıldığı andaki okuma durumu (okundu işaretinden önce) */
+  const catchupAnchor = useRef<{ channelId?: string; after: string | null; unread: number; at?: string }>({
+    after: null,
+    unread: 0,
+  });
   const [membersOpen, setMembersOpen] = useState(false);
   const [guildMembers, setGuildMembers] = useState<PublicUser[]>([]);
   const [guildRoles, setGuildRoles] = useState<RoleDto[]>([]);
@@ -1927,6 +1975,7 @@ export function GuildChannelView({
       buildSidebarCategories(channels, channelId, selectChannel, {
         voiceMembersByChannel,
         voiceRosterReady,
+        voiceStatusByChannel: voiceStatuses,
         selfUserId: user?.id,
         selfVoiceChannelId: inVoiceInThisGuild ? voice.voiceChannelId : null,
         platformAdminIds,
@@ -2025,6 +2074,7 @@ export function GuildChannelView({
       selectChannel,
       voiceMembersByChannel,
       voiceRosterReady,
+      voiceStatuses,
       openEditChannel,
       user?.id,
       voice.voiceChannelId,
@@ -2572,6 +2622,8 @@ export function GuildChannelView({
 
   const chatInputProps = {
     channelName: channel?.name,
+    scheduler: isForumView ? null : scheduler,
+    voiceMessages: isForumView || !channelId ? null : { client, channelId },
     placeholder: isForumView
       ? `Yeni gönderi · #${channel?.name ?? 'forum'}`
       : undefined,
@@ -2802,6 +2854,14 @@ export function GuildChannelView({
           >
             <span className="material-symbols-outlined text-[16px]">event</span>
             Etkinlikler
+          </button>
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+            onClick={() => setLevelsOpen(true)}
+          >
+            <span className="material-symbols-outlined text-[16px]">military_tech</span>
+            Seviyeler
           </button>
           <button
             type="button"
@@ -3067,6 +3127,57 @@ export function GuildChannelView({
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
           <VoiceStage
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
+          voiceStatus={voice.voiceChannelId ? voiceStatuses[voice.voiceChannelId] ?? null : null}
+          canEditVoiceStatus={inVoiceInThisGuild && Boolean(voice.voiceChannelId)}
+          gameLayer={
+            games.openSession ? (
+              <GameFrame
+                client={client}
+                session={games.openSession}
+                platform="web"
+                apiBase={client.apiBaseUrl}
+                resolveParticipant={(id) => {
+                  const m = guildMembers.find((g) => g.id === id);
+                  return { id, displayName: m?.displayName ?? 'Oyuncu', avatarUrl: m?.avatarUrl ?? null };
+                }}
+                onClose={(o) => void games.close(o)}
+                onInvite={() => void createInvite()}
+                onSetStatus={(t) => {
+                  if (voice.voiceChannelId) void setVoiceStatus(voice.voiceChannelId, t);
+                }}
+              />
+            ) : null
+          }
+          controlsExtra={
+            inVoiceInThisGuild ? (
+              <>
+              <GamesLauncherButton
+                loadCatalog={() => client.getGameCatalog()}
+                sessions={games.sessions}
+                openSessionId={games.openSession?.id}
+                platform="web"
+                onStart={(id) => void games.start(id)}
+                onJoin={(id) => void games.join(id)}
+                onReopen={(id) => void games.join(id)}
+                error={games.error}
+              />
+              <SoundboardButton
+                sounds={soundboard.sounds}
+                onPlay={soundboard.play}
+                guildId={guildId}
+                canManage={canManageGuild}
+                manageClient={client}
+                onChanged={() => void soundboard.reload()}
+                disabled={voice.deafened}
+              />
+              </>
+            ) : null
+          }
+          onSaveVoiceStatus={async (status) => {
+            if (!voice.voiceChannelId) return;
+            const res = await setVoiceStatus(voice.voiceChannelId, status);
+            return res.ok ? res : { ...res, error: voiceStatusErrorMessage(res.error) };
+          }}
           onOpenChannels={() => setChannelsOpen(true)}
           participants={voice.participants.map((p) => {
             const m = guildMembers.find((g) => g.id === p.id);
@@ -3396,9 +3507,33 @@ export function GuildChannelView({
                 NITRO
               </span>
             )}
+            {channel && !isForumView && (() => {
+              if (catchupAnchor.current.channelId !== channel.id) {
+                catchupAnchor.current = {
+                  channelId: channel.id,
+                  after: channel.lastReadMessageId ?? null,
+                  unread: channel.unreadCount ?? 0,
+                  at: new Date().toISOString(),
+                };
+              }
+              return (
+                <CatchupButton
+                  client={client}
+                  channelId={channel.id}
+                  afterMessageId={catchupAnchor.current.after}
+                  unreadCount={catchupAnchor.current.unread}
+                  openedAt={catchupAnchor.current.at}
+                  onJump={(id) => router.push(`/channels/${guildId}/${channel.id}?around=${id}`)}
+                  className="ml-auto"
+                />
+              );
+            })()}
             <button
               type="button"
-              className="ml-auto h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              className={cn(
+                'h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface',
+                (!channel || isForumView) && 'ml-auto',
+              )}
               aria-label="Mesajlarda ara (Ctrl+F)"
               onClick={() => openMessageSearch()}
             >
@@ -4810,6 +4945,12 @@ export function GuildChannelView({
             ))}
           </ul>
         )}
+      </Modal>
+
+      <Modal open={levelsOpen} title="Seviyeler" onClose={() => setLevelsOpen(false)} className="sm:max-w-xl">
+        <div className="max-h-[70vh] overflow-y-auto pr-1">
+          {levelsOpen && <LevelsPanel client={client} guildId={guildId} mode="leaderboard" />}
+        </div>
       </Modal>
 
       <GuildEventsModal

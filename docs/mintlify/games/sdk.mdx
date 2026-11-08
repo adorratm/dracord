@@ -1,0 +1,104 @@
+---
+title: Embedded SDK
+description: "@dracord/embedded-sdk API referansı."
+---
+
+```bash
+npm i @dracord/embedded-sdk
+```
+
+Bağımlılığı yoktur, ~4 KB'tır, tarayıcı ve React Native WebView içinde aynı çalışır. Framework'ten bağımsızdır
+(Three.js, Phaser, PixiJS, Unity WebGL, Godot HTML5…).
+
+## `new DracordEmbed(options?)`
+
+| Seçenek | Varsayılan | Açıklama |
+| --- | --- | --- |
+| `allowedHostOrigins` | `[]` | Ek Dracord origin'leri (kendi Dracord kurulumun). |
+| `timeoutMs` | `15000` | `ready()` için INIT bekleme süresi. |
+| `refreshBeforeMs` | `60000` | Token bitmeden ne kadar önce yenilensin. |
+
+## `DracordEmbed.isEmbedded(): boolean`
+
+Oyun Dracord içinde mi (iframe veya mobil WebView). Dracord dışında açıldığında kendi giriş ekranını göster.
+
+## `await dracord.ready(): Promise<InitPayload>`
+
+Dracord'a hazır olduğunu bildirir ve bağlamı döner:
+
+```ts
+interface InitPayload {
+  protocol: 1;
+  token: string;          // sunucuda doğrula — /games/authentication
+  expiresAt: string;      // ISO
+  user: { id; username; displayName; avatarUrl };
+  session: { id; gameId; guildId; channelId; hostUserId; participantIds; status };
+  participants: Array<{ id; displayName; avatarUrl }>;
+  platform: 'web' | 'desktop' | 'mobile';
+  locale: string;         // "tr-TR"
+  theme: 'dark' | 'light';
+  testMode: boolean;      // onaysız oyun (sahip / testçi)
+  apiBase: string;        // "https://api.dracord.com.tr"
+}
+```
+
+<Warning>
+İstemci bağlamı **güvenilmezdir** — kötü niyetli biri oyununu kendi sayfasına gömüp sahte INIT gönderebilir.
+Puan, envanter, eşleşme gibi her şeyi sunucuda **token doğrulaması** ile yap.
+</Warning>
+
+## Olaylar
+
+```ts
+dracord.onSessionUpdate(({ session, participants }) => {});   // biri katıldı / ayrıldı / host değişti
+dracord.onTokenRefresh(({ token, expiresAt }) => {});          // yeni token (sunucuna ilet)
+dracord.onVisibilityChange((visible) => {});                    // sekme/uygulama arka planda
+dracord.onError(({ code, message }) => {});                     // ör. launch_failed
+```
+
+Her `on…` bir **abonelikten çıkma** fonksiyonu döner.
+
+## Eylemler
+
+| Metot | Ne yapar |
+| --- | --- |
+| `dracord.refreshToken()` | Hemen yeni token iste (normalde otomatik). |
+| `dracord.setStatus(text \| null)` | Ses kanalı durum metni, ör. `"COOMBIE · Dalga 7"`. |
+| `dracord.toast(text)` | Dracord'da kısa bildirim. |
+| `dracord.openInvite()` | Sunucu davet penceresini aç. |
+| `dracord.openExternal(url)` | Kullanıcı onayıyla harici `https` bağlantı aç. |
+| `dracord.close()` | Oyunu kapat ve oturumdan çık. |
+| `dracord.destroy()` | Dinleyicileri temizle. |
+
+## Sunucu yardımcısı
+
+```ts
+import { verifyDracordToken } from '@dracord/embedded-sdk';
+const claims = await verifyDracordToken({ token, gameSecret, apiBase: 'https://api.dracord.com.tr' });
+```
+
+Ayrıntı: [Sunucu doğrulaması](/games/authentication).
+
+## Sandbox ve izinler
+
+Oyun şu izinlerle çalışır: `allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-popups`,
+`allow="autoplay; fullscreen; gamepad; clipboard-write"`.
+
+- `localStorage` / IndexedDB **kendi origin'inde** çalışır (Dracord'dan ayrı).
+- Kamera ve mikrofon **yok** — sesli sohbet zaten Dracord'da.
+- Mobilde oyun yalnız kendi origin'inde gezinebilir; dışarı giden bağlantılar tarayıcıda açılır.
+- Üst pencereye (`window.top`) erişemezsin; tüm iletişim SDK üzerinden.
+
+## Protokol (SDK'sız)
+
+SDK kullanmak zorunda değilsin. Mesajlar `postMessage` ile JSON:
+
+```ts
+// Oyun → Dracord
+{ source: 'dracord-embed', type: 'READY', payload: { protocol: 1, sdk: 'custom' } }
+// Dracord → Oyun
+{ source: 'dracord-host', type: 'INIT', payload: InitPayload }
+```
+
+Mobilde oyun `window.ReactNativeWebView.postMessage(JSON.stringify(msg))` ile gönderir, Dracord
+`message` olayını `origin: 'dracord-native'` ile tetikler. Tüm tipler: `@dracord/embedded-sdk/protocol`.

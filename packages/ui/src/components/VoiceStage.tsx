@@ -1,5 +1,7 @@
 'use client';
 
+import { RemoteControlSurface } from './RemoteControlSurface';
+import { VoiceChannelStatusChip } from './VoiceChannelStatusChip';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
@@ -33,6 +35,11 @@ export interface VoiceStageScreenShareOption {
 
 export interface VoiceStageProps {
   channelName: string;
+  /** Ses kanalı durum metni */
+  voiceStatus?: string | null;
+  /** Kullanıcı kanalda → düzenleyebilir */
+  canEditVoiceStatus?: boolean;
+  onSaveVoiceStatus?: (status: string | null) => Promise<{ ok: boolean; error?: string } | void> | void;
   participants: VoiceParticipant[];
   /** Yerel katılımcı id — ses kaydırıcısı gösterilmez */
   localParticipantId?: string | null;
@@ -99,12 +106,16 @@ export interface VoiceStageProps {
   onToggleDeafen?: () => void;
   onToggleCamera?: () => void;
   onToggleScreenShare?: () => void;
+  /** Kontrol çubuğuna ek düğme (ör. SoundboardButton) */
+  controlsExtra?: ReactNode;
   onLeave?: () => void;
   onToggleParticipants?: () => void;
   onToggleChat?: () => void;
   /** Mobil kanal listesi */
   onOpenChannels?: () => void;
   stageOverlay?: ReactNode;
+  /** Sahneyi kaplayan oyun katmanı (GameFrame) */
+  gameLayer?: ReactNode;
   chatPanel?: ReactNode;
   participantsPanel?: ReactNode;
   /** Desktop sohbet paneli genişliği (px) */
@@ -153,6 +164,9 @@ function usePanelResize(
 
 export function VoiceStage({
   channelName,
+  voiceStatus = null,
+  canEditVoiceStatus = false,
+  onSaveVoiceStatus,
   participants,
   localParticipantId,
   participantVolumes,
@@ -187,11 +201,13 @@ export function VoiceStage({
   onToggleDeafen,
   onToggleCamera,
   onToggleScreenShare,
+  controlsExtra,
   onLeave,
   onToggleParticipants,
   onToggleChat,
   onOpenChannels,
   stageOverlay,
+  gameLayer,
   chatPanel,
   participantsPanel,
   chatPanelWidth = 340,
@@ -359,6 +375,12 @@ export function VoiceStage({
           )}
           <span className="material-symbols-outlined text-primary-container">volume_up</span>
           <span className="font-headline-md text-headline-md text-on-surface truncate">{channelName}</span>
+          <VoiceChannelStatusChip
+            status={voiceStatus}
+            canEdit={canEditVoiceStatus && Boolean(onSaveVoiceStatus)}
+            onSave={onSaveVoiceStatus}
+            className="hidden sm:inline-flex"
+          />
           {screenShare && (
             <span className="hidden sm:inline font-label-sm text-label-sm text-primary-container truncate">
               · {screenShare.displayName} ekran paylaşıyor
@@ -531,79 +553,11 @@ export function VoiceStage({
                     {remoteControl?.isController &&
                       remoteControl.status === 'active' &&
                       !screenShare.isLocal && (
-                        <div
-                          className="absolute inset-0 z-[3] cursor-none"
-                          tabIndex={0}
-                          role="application"
-                          aria-label="Uzak kontrol yüzeyi"
-                          onPointerMove={(e) => {
-                            const n = mapPointerToNorm(e.clientX, e.clientY);
-                            if (!n) return;
-                            onRemoteControlPointer?.({
-                              type: 'move',
-                              nx: n.nx,
-                              ny: n.ny,
-                            });
-                          }}
-                          onPointerDown={(e) => {
-                            (e.currentTarget as HTMLElement).setPointerCapture?.(
-                              e.pointerId,
-                            );
-                            const n = mapPointerToNorm(e.clientX, e.clientY);
-                            if (!n) return;
-                            onRemoteControlPointer?.({
-                              type: 'down',
-                              nx: n.nx,
-                              ny: n.ny,
-                              button: e.button,
-                            });
-                          }}
-                          onPointerUp={(e) => {
-                            const n = mapPointerToNorm(e.clientX, e.clientY);
-                            if (!n) return;
-                            onRemoteControlPointer?.({
-                              type: 'up',
-                              nx: n.nx,
-                              ny: n.ny,
-                              button: e.button,
-                            });
-                          }}
-                          onWheel={(e) => {
-                            const n = mapPointerToNorm(e.clientX, e.clientY);
-                            if (!n) return;
-                            onRemoteControlPointer?.({
-                              type: 'wheel',
-                              nx: n.nx,
-                              ny: n.ny,
-                              deltaY: e.deltaY,
-                            });
-                          }}
-                          onKeyDown={(e) => {
-                            e.preventDefault();
-                            onRemoteControlKey?.({
-                              type: 'key',
-                              keyAction: 'down',
-                              key: e.key,
-                              code: e.code,
-                              ctrl: e.ctrlKey,
-                              alt: e.altKey,
-                              shift: e.shiftKey,
-                              meta: e.metaKey,
-                            });
-                          }}
-                          onKeyUp={(e) => {
-                            e.preventDefault();
-                            onRemoteControlKey?.({
-                              type: 'key',
-                              keyAction: 'up',
-                              key: e.key,
-                              code: e.code,
-                              ctrl: e.ctrlKey,
-                              alt: e.altKey,
-                              shift: e.shiftKey,
-                              meta: e.metaKey,
-                            });
-                          }}
+                        <RemoteControlSurface
+                          mapPointerToNorm={mapPointerToNorm}
+                          onPointer={onRemoteControlPointer}
+                          onKey={onRemoteControlKey}
+                          onStop={onStopRemoteControl}
                         />
                       )}
                     {remoteControl?.isSharer &&
@@ -648,7 +602,7 @@ export function VoiceStage({
                     )}
                     <div
                       className={cn(
-                        'absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[2] flex items-center gap-2 max-w-[min(100%-8rem,32rem)] flex-wrap transition-opacity duration-300',
+                        'absolute left-space-sm bottom-space-sm px-space-sm py-1 rounded-lg bg-black/60 text-white font-label-sm z-[4] flex items-center gap-2 max-w-[min(100%-8rem,32rem)] flex-wrap transition-opacity duration-300',
                         inCinema && !cinemaChrome && 'opacity-0 pointer-events-none',
                       )}
                     >
@@ -774,7 +728,7 @@ export function VoiceStage({
                     </div>
                     <div
                       className={cn(
-                        'absolute right-space-sm bottom-space-sm z-[2] flex items-center gap-1 transition-opacity duration-300',
+                        'absolute right-space-sm bottom-space-sm z-[4] flex items-center gap-1 transition-opacity duration-300',
                         inCinema && !cinemaChrome && 'opacity-0 pointer-events-none',
                       )}
                     >
@@ -1024,6 +978,7 @@ export function VoiceStage({
             );
           })()}
           {!inCinema && stageOverlay}
+          {gameLayer && <div className="absolute inset-0 z-[20]">{gameLayer}</div>}
         </div>
 
         {/* Kullanıcılar — masaüstü yan panel */}
@@ -1171,6 +1126,7 @@ export function VoiceStage({
             {screenSharing ? 'stop_screen_share' : 'present_to_all'}
           </span>
         </button>
+        {controlsExtra}
         <button
           type="button"
           onClick={onLeave}

@@ -10,6 +10,7 @@ const nav = [
   { href: '/users', label: 'Kullanıcılar' },
   { href: '/guilds', label: 'Sunucular' },
   { href: '/developers', label: 'Geliştiriciler' },
+  { href: '/games', label: 'Oyunlar' },
   { href: '/queues', label: 'Kuyruklar' },
   { href: '/trust-safety', label: 'T&S' },
 ];

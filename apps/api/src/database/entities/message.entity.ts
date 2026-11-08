@@ -63,6 +63,9 @@ export class Message extends CuidEntity {
     filename: string;
     contentType: string;
     size: number;
+    voice?: boolean;
+    durationSec?: number;
+    waveform?: number[];
   }> | null;
 
   @Column({ type: 'jsonb', nullable: true })

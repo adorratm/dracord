@@ -11,6 +11,7 @@ const {
   desktopCapturer,
   systemPreferences,
   dialog,
+  globalShortcut,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -184,6 +185,12 @@ function registerMediaCaptureHandlers() {
             ? sources.find((s) => s.id === selection.sourceId)
             : null;
           const video = picked || sources.find((s) => s.id.startsWith('screen:')) || sources[0];
+          // Uzak kontrol: inject hedefi = paylaşılan ekran/pencere (DPI + çoklu monitör)
+          try {
+            require('./remote-input').setShareSource({ id: video.id, displayId: video.display_id });
+          } catch {
+            /* ignore */
+          }
           const wantAudio = selection ? selection.systemAudio : true;
           // Windows: loopback = masaüstü/uygulama sesleri (Chrome "sistem sesini paylaş")
           callback({
@@ -1151,10 +1158,55 @@ function registerWindowIpc() {
         width: bounds.width,
         height: bounds.height,
       };
+      remoteInput.setRendererBounds(remoteShareBounds);
       return { ok: true };
     }
     remoteShareBounds = null;
+    remoteInput.setRendererBounds(null);
     return { ok: true, cleared: true };
+  });
+
+  /** Paylaşan tarafta kontrol aktif mi — global acil durdurma kısayolu (Dracord odakta olmasa da) */
+  const REMOTE_STOP_ACCEL = 'CommandOrControl+Shift+F12';
+  let remoteStopRegistered = false;
+  const unregisterRemoteStop = () => {
+    if (!remoteStopRegistered) return;
+    try {
+      globalShortcut.unregister(REMOTE_STOP_ACCEL);
+    } catch {
+      /* ignore */
+    }
+    remoteStopRegistered = false;
+  };
+  ipcMain.handle('remote-control:set-active', (_e, payload) => {
+    const active = Boolean(payload && payload.active);
+    if (active) {
+      remoteInput.setEnabled(true);
+      if (!remoteStopRegistered) {
+        try {
+          remoteStopRegistered = globalShortcut.register(REMOTE_STOP_ACCEL, () => {
+            remoteInput.setEnabled(false);
+            unregisterRemoteStop();
+            try {
+              mainWindow?.webContents.send('remote-control:emergency-stop');
+            } catch {
+              /* ignore */
+            }
+          });
+        } catch {
+          remoteStopRegistered = false;
+        }
+      }
+      return { ok: true, accelerator: remoteStopRegistered ? REMOTE_STOP_ACCEL : null };
+    }
+    unregisterRemoteStop();
+    remoteInput.releaseAll();
+    remoteInput.setEnabled(true);
+    return { ok: true };
+  });
+  app.on('will-quit', () => {
+    unregisterRemoteStop();
+    remoteInput.disposeRemoteInput();
   });
   ipcMain.handle('remote-control:inject', (_e, ev) => {
     try {

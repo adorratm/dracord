@@ -10,6 +10,7 @@ import {
   SettingsNote,
 } from '@/components/settings/SettingsControls';
 import { useUserPreferences } from '@/lib/user-preferences';
+import { DeveloperGames } from '@/components/settings/DeveloperGames';
 
 type AppRow = {
   id: string;
@@ -364,6 +365,10 @@ export default function DeveloperSettingsPage() {
                 )}
               </>
             )}
+          </SettingsSection>
+
+          <SettingsSection title="Oyunlarım">
+            <DeveloperGames />
           </SettingsSection>
 
           <SettingsSection title="Diğer">

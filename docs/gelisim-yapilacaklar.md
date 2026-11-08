@@ -2,6 +2,8 @@
 
 Ürün / teknik roadmap. Canlıyı bozmadan büyüme.
 
+> **Yeni dönem:** [yol-haritasi.md](./yol-haritasi.md) (2026 Q4 → hatalar, optimizasyon, oyun platformu, özellik menüsü)
+
 Yayın: [yayin-ve-buyume-rehberi.md](./yayin-ve-buyume-rehberi.md) · Smoke: [native-parity-checklist.md](./native-parity-checklist.md) · [prod-migration.md](./prod-migration.md) · [platform-api-tasarim.md](./platform-api-tasarim.md) · [prod-guvenli-rollout.md](./prod-guvenli-rollout.md) · [sdk.md](./sdk.md) · [developer/README.md](./developer/README.md)
 
 ---

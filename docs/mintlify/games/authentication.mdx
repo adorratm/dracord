@@ -1,0 +1,66 @@
+---
+title: Sunucu doğrulaması
+description: Oyuncunun kimliğini oyun sunucunda Dracord ile doğrula.
+---
+
+SDK'nın verdiği `token`, **10 dakika** geçerli, yalnız **senin oyunun** için imzalanmış kısa ömürlü bir
+kimliktir. Oyun sunucun onu Dracord'a doğrulatır.
+
+## `POST /v1/games/verify`
+
+```bash
+curl -X POST https://api.dracord.com.tr/v1/games/verify \
+  -H "Authorization: Game $DRACORD_GAME_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"token":"eyJhbGciOi..."}'
+```
+
+**200 OK**
+
+```json
+{
+  "userId": "clx…",
+  "username": "emre",
+  "displayName": "Emre",
+  "avatarUrl": "https://…",
+  "gameId": "clg…",
+  "sessionId": "cls…",
+  "guildId": "…",
+  "channelId": "…",
+  "participantIds": ["clx…", "…"],
+  "testMode": false,
+  "exp": 1762700000
+}
+```
+
+| Durum | Anlamı |
+| --- | --- |
+| `401` | Anahtar yanlış, token süresi dolmuş, token başka oyunun ya da oturum bitmiş. |
+
+## Önerilen akış
+
+1. İstemci bağlanırken token'ı gönderir (WebSocket `auth` mesajı, HTTP gövdesi…).
+2. Sunucu **bir kez** doğrular, `userId` + `sessionId`'yi bağlantıya bağlar.
+3. Aynı `sessionId`'ye sahip oyuncuları aynı **odaya** koy (Dracord ses kanalı = senin oyun odan).
+4. `onTokenRefresh` ile gelen yeni token'ı uzun bağlantılarda yeniden doğrulatabilirsin (isteğe bağlı).
+
+```ts socket.io örneği
+io.use(async (socket, next) => {
+  try {
+    const c = await verifyDracordToken({ token: socket.handshake.auth.token, gameSecret: SECRET });
+    socket.data.user = c;
+    socket.join(`dracord:${c.sessionId}`);
+    next();
+  } catch {
+    next(new Error('unauthorized'));
+  }
+});
+```
+
+## Güvenlik kontrol listesi
+
+- [ ] `DRACORD_GAME_SECRET` yalnız sunucuda; istemci paketinde yok.
+- [ ] Kimlik, oda ve puan kararları **sunucu otoriter**; istemciden gelen `userId`'ye güvenme.
+- [ ] `testMode: true` oturumlarını üretim liderlik tablosuna yazma.
+- [ ] Doğrulama sonucunu kısa süre önbelleğe al (her paket için verify çağırma).
+- [ ] Sızıntıda **Oyunlarım → Anahtarı yenile**; eski anahtar anında geçersiz olur.

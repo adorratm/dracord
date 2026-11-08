@@ -1,6 +1,13 @@
 /**
- * Windows uzak kontrol — kalıcı PowerShell ile SendInput / SetCursorPos.
- * macOS: osascript tıklama (sınırlı). Diğer platformlar: no-op.
+ * Windows uzak kontrol — kalıcı PowerShell + user32 SendInput.
+ *
+ * - Per-monitor DPI aware (v2): koordinatlar fiziksel piksel; %125/%150 ölçeklemede kayma yok.
+ * - Hedef: paylaşılan EKRAN (display bounds) veya PENCERE (DWM görünür sınırları, her olayda güncel).
+ * - Klavye: KeyboardEvent.code → scancode (layout bağımsız; TR-Q / ğüşıöç doğru tuşa düşer).
+ *   code bilinmiyorsa tek karakter için KEYEVENTF_UNICODE.
+ * - Satır tabanlı metin protokolü (JSON parse yok → düşük gecikme).
+ * - setEnabled(false): sunucu yanıtını beklemeden yerel olarak inject'i anında keser (acil durdurma).
+ * macOS / Linux: şimdilik desteklenmiyor (no-op, hata döner).
  */
 const { spawn } = require('child_process');
 const { screen } = require('electron');
@@ -8,55 +15,74 @@ const { screen } = require('electron');
 /** @type {import('child_process').ChildProcessWithoutNullStreams | null} */
 let ps = null;
 let ready = false;
+/** @type {string[]} */
 const queue = [];
+let enabled = true;
+/** @type {{ id: string, displayId?: string } | null} */
+let shareSource = null;
+/** @type {{ x: number, y: number, width: number, height: number } | null} */
+let rendererBounds = null;
+let lastTargetLine = '';
+/** Basılı tuşlar (scancode|ext) — devre dışı kalınca hepsini bırak */
+const pressed = new Set();
 
-const PS_BOOT = `
+const PS_BOOT = String.raw`
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public static class DracordRC {
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
+  [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+  [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+  [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }
+  [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public INPUTUNION u; }
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
-  [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, int e);
-  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
-  public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-  public const uint MOUSEEVENTF_LEFTUP = 0x0004;
-  public const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
-  public const uint MOUSEEVENTF_RIGHTUP = 0x0010;
-  public const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
-  public const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
-  public const uint MOUSEEVENTF_WHEEL = 0x0800;
-  public const uint KEYEVENTF_KEYUP = 0x0002;
+  [DllImport("user32.dll")] public static extern uint SendInput(uint n, INPUT[] i, int size);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
+  [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT r, int s);
+  public static int TX, TY, TW = 1920, TH = 1080; public static IntPtr HW = IntPtr.Zero;
+  static void Rect() {
+    if (HW == IntPtr.Zero || !IsWindow(HW)) return;
+    RECT r;
+    if (DwmGetWindowAttribute(HW, 9, out r, Marshal.SizeOf(typeof(RECT))) != 0) GetWindowRect(HW, out r);
+    TX = r.L; TY = r.T; TW = Math.Max(1, r.R - r.L); TH = Math.Max(1, r.B - r.T);
+  }
+  public static void Pos(int nx, int ny) {
+    Rect();
+    SetCursorPos(TX + (int)Math.Round(nx / 1000000.0 * (TW - 1)), TY + (int)Math.Round(ny / 1000000.0 * (TH - 1)));
+  }
+  static void Send(INPUT i) { SendInput(1, new INPUT[] { i }, Marshal.SizeOf(typeof(INPUT))); }
+  public static void Mouse(uint flags, int data) {
+    INPUT i = new INPUT(); i.type = 0; i.u.mi.dwFlags = flags; i.u.mi.mouseData = unchecked((uint)data); Send(i);
+  }
+  public static void Key(ushort sc, bool ext, bool up) {
+    INPUT i = new INPUT(); i.type = 1; i.u.ki.wScan = sc;
+    i.u.ki.dwFlags = 0x0008u | (ext ? 0x0001u : 0u) | (up ? 0x0002u : 0u); Send(i);
+  }
+  public static void Uni(ushort ch) {
+    INPUT a = new INPUT(); a.type = 1; a.u.ki.wScan = ch; a.u.ki.dwFlags = 0x0004; Send(a);
+    INPUT b = new INPUT(); b.type = 1; b.u.ki.wScan = ch; b.u.ki.dwFlags = 0x0004 | 0x0002; Send(b);
+  }
 }
 "@
+try { [DracordRC]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null } catch {}
 Write-Output READY
 while ($true) {
   $line = [Console]::In.ReadLine()
-  if ($null -eq $line) { break }
-  if ($line -eq 'QUIT') { break }
+  if ($null -eq $line -or $line -eq 'Q') { break }
   try {
-    $j = $line | ConvertFrom-Json
-    if ($j.op -eq 'move') { [DracordRC]::SetCursorPos([int]$j.x, [int]$j.y) | Out-Null }
-    elseif ($j.op -eq 'down') {
-      [DracordRC]::SetCursorPos([int]$j.x, [int]$j.y) | Out-Null
-      if ($j.button -eq 2) { [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_RIGHTDOWN,0,0,0,0) }
-      elseif ($j.button -eq 1) { [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_MIDDLEDOWN,0,0,0,0) }
-      else { [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_LEFTDOWN,0,0,0,0) }
-    }
-    elseif ($j.op -eq 'up') {
-      [DracordRC]::SetCursorPos([int]$j.x, [int]$j.y) | Out-Null
-      if ($j.button -eq 2) { [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_RIGHTUP,0,0,0,0) }
-      elseif ($j.button -eq 1) { [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_MIDDLEUP,0,0,0,0) }
-      else { [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_LEFTUP,0,0,0,0) }
-    }
-    elseif ($j.op -eq 'wheel') {
-      [DracordRC]::SetCursorPos([int]$j.x, [int]$j.y) | Out-Null
-      $d = [uint32]([math]::Max(-1200, [math]::Min(1200, [int]$j.delta)))
-      [DracordRC]::mouse_event([DracordRC]::MOUSEEVENTF_WHEEL,0,0,$d,0)
-    }
-    elseif ($j.op -eq 'key') {
-      $vk = [byte]([int]$j.vk)
-      if ($j.down) { [DracordRC]::keybd_event($vk,0,0,0) }
-      else { [DracordRC]::keybd_event($vk,0,[DracordRC]::KEYEVENTF_KEYUP,0) }
+    $p = $line.Split(' ')
+    switch ($p[0]) {
+      'S' { [DracordRC]::HW = [IntPtr]::Zero; [DracordRC]::TX = [int]$p[1]; [DracordRC]::TY = [int]$p[2]; [DracordRC]::TW = [int]$p[3]; [DracordRC]::TH = [int]$p[4] }
+      'W' { [DracordRC]::HW = [IntPtr][long]$p[1] }
+      'm' { [DracordRC]::Pos([int]$p[1], [int]$p[2]) }
+      'd' { [DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]$p[3], 0) }
+      'u' { [DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]$p[3], 0) }
+      'w' { [DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]2048, [int]$p[3]) }
+      'k' { [DracordRC]::Key([uint16]$p[1], $p[2] -eq '1', $p[3] -eq '1') }
+      'c' { [DracordRC]::Uni([uint16]$p[1]) }
     }
   } catch {}
 }
@@ -66,129 +92,192 @@ function ensurePs() {
   if (process.platform !== 'win32') return false;
   if (ps && !ps.killed) return true;
   ready = false;
-  ps = spawn(
-    'powershell.exe',
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', PS_BOOT],
-    { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
-  );
+  lastTargetLine = '';
+  ps = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', PS_BOOT], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
   ps.stdout.on('data', (buf) => {
-    if (String(buf).includes('READY')) {
+    if (!ready && String(buf).includes('READY')) {
       ready = true;
-      while (queue.length) {
-        const line = queue.shift();
-        try {
-          ps.stdin.write(line + '\n');
-        } catch {
-          /* ignore */
-        }
-      }
+      while (queue.length) write(queue.shift());
     }
   });
   ps.on('exit', () => {
     ps = null;
     ready = false;
+    lastTargetLine = '';
   });
   return true;
 }
 
-function send(cmd) {
-  if (process.platform !== 'win32') return { ok: false, error: 'unsupported_platform' };
-  if (!ensurePs()) return { ok: false, error: 'spawn_failed' };
-  const line = JSON.stringify(cmd);
-  if (!ready) {
-    queue.push(line);
-    if (queue.length > 80) queue.shift();
-    return { ok: true, queued: true };
-  }
+function write(line) {
   try {
-    ps.stdin.write(line + '\n');
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'write_failed' };
+    ps?.stdin.write(line + '\n');
+    return true;
+  } catch {
+    return false;
   }
 }
 
-/** Web key → Windows VK */
-const VK = {
-  Backspace: 0x08,
-  Tab: 0x09,
-  Enter: 0x0d,
-  Escape: 0x1b,
-  Space: 0x20,
-  ArrowLeft: 0x25,
-  ArrowUp: 0x26,
-  ArrowRight: 0x27,
-  ArrowDown: 0x28,
-  Delete: 0x2e,
-  Home: 0x24,
-  End: 0x23,
-  PageUp: 0x21,
-  PageDown: 0x22,
+function send(line) {
+  if (!ensurePs()) return { ok: false, error: 'spawn_failed' };
+  if (!ready) {
+    queue.push(line);
+    if (queue.length > 120) queue.shift();
+    return { ok: true, queued: true };
+  }
+  return write(line) ? { ok: true } : { ok: false, error: 'write_failed' };
+}
+
+/** Paylaşılan kaynağın hedef satırı: ekran → fiziksel display rect, pencere → HWND */
+function targetLine() {
+  const id = shareSource?.id || '';
+  const m = /^window:(\d+):/.exec(id);
+  if (m) return `W ${m[1]}`;
+  let display = null;
+  const all = screen.getAllDisplays();
+  if (shareSource?.displayId) {
+    display = all.find((d) => String(d.id) === String(shareSource.displayId)) || null;
+  }
+  if (!display && rendererBounds) {
+    display = screen.getDisplayMatching({
+      x: Math.round(rendererBounds.x),
+      y: Math.round(rendererBounds.y),
+      width: Math.max(1, Math.round(rendererBounds.width)),
+      height: Math.max(1, Math.round(rendererBounds.height)),
+    });
+  }
+  if (!display) display = screen.getPrimaryDisplay();
+  let r = display.bounds;
+  try {
+    // Windows: DIP → fiziksel piksel (DPI ölçekleme)
+    if (typeof screen.dipToScreenRect === 'function') r = screen.dipToScreenRect(null, display.bounds);
+  } catch {
+    /* ignore */
+  }
+  return `S ${Math.round(r.x)} ${Math.round(r.y)} ${Math.max(1, Math.round(r.width))} ${Math.max(1, Math.round(r.height))}`;
+}
+
+function ensureTarget() {
+  const t = targetLine();
+  if (t !== lastTargetLine) {
+    const res = send(t);
+    if (res.ok) lastTargetLine = t;
+  }
+}
+
+/** KeyboardEvent.code → [scancode, extended] (Set 1) */
+const SC = {
+  Escape: [0x01], Digit1: [0x02], Digit2: [0x03], Digit3: [0x04], Digit4: [0x05], Digit5: [0x06],
+  Digit6: [0x07], Digit7: [0x08], Digit8: [0x09], Digit9: [0x0a], Digit0: [0x0b], Minus: [0x0c],
+  Equal: [0x0d], Backspace: [0x0e], Tab: [0x0f], KeyQ: [0x10], KeyW: [0x11], KeyE: [0x12],
+  KeyR: [0x13], KeyT: [0x14], KeyY: [0x15], KeyU: [0x16], KeyI: [0x17], KeyO: [0x18], KeyP: [0x19],
+  BracketLeft: [0x1a], BracketRight: [0x1b], Enter: [0x1c], ControlLeft: [0x1d], KeyA: [0x1e],
+  KeyS: [0x1f], KeyD: [0x20], KeyF: [0x21], KeyG: [0x22], KeyH: [0x23], KeyJ: [0x24], KeyK: [0x25],
+  KeyL: [0x26], Semicolon: [0x27], Quote: [0x28], Backquote: [0x29], ShiftLeft: [0x2a],
+  Backslash: [0x2b], KeyZ: [0x2c], KeyX: [0x2d], KeyC: [0x2e], KeyV: [0x2f], KeyB: [0x30],
+  KeyN: [0x31], KeyM: [0x32], Comma: [0x33], Period: [0x34], Slash: [0x35], ShiftRight: [0x36],
+  NumpadMultiply: [0x37], AltLeft: [0x38], Space: [0x39], CapsLock: [0x3a], F1: [0x3b], F2: [0x3c],
+  F3: [0x3d], F4: [0x3e], F5: [0x3f], F6: [0x40], F7: [0x41], F8: [0x42], F9: [0x43], F10: [0x44],
+  NumLock: [0x45, 1], ScrollLock: [0x46], Numpad7: [0x47], Numpad8: [0x48], Numpad9: [0x49],
+  NumpadSubtract: [0x4a], Numpad4: [0x4b], Numpad5: [0x4c], Numpad6: [0x4d], NumpadAdd: [0x4e],
+  Numpad1: [0x4f], Numpad2: [0x50], Numpad3: [0x51], Numpad0: [0x52], NumpadDecimal: [0x53],
+  IntlBackslash: [0x56], F11: [0x57], F12: [0x58],
+  NumpadEnter: [0x1c, 1], ControlRight: [0x1d, 1], NumpadDivide: [0x35, 1], PrintScreen: [0x37, 1],
+  AltRight: [0x38, 1], Home: [0x47, 1], ArrowUp: [0x48, 1], PageUp: [0x49, 1], ArrowLeft: [0x4b, 1],
+  ArrowRight: [0x4d, 1], End: [0x4f, 1], ArrowDown: [0x50, 1], PageDown: [0x51, 1], Insert: [0x52, 1],
+  Delete: [0x53, 1], MetaLeft: [0x5b, 1], MetaRight: [0x5c, 1], ContextMenu: [0x5d, 1],
+};
+/** code yoksa key adından (mobil sanal klavye vb.) */
+const KEY_TO_CODE = {
+  Escape: 'Escape', Enter: 'Enter', Backspace: 'Backspace', Tab: 'Tab', ' ': 'Space',
+  ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown',
+  Delete: 'Delete', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
+  Shift: 'ShiftLeft', Control: 'ControlLeft', Alt: 'AltLeft', Meta: 'MetaLeft',
 };
 
-function keyToVk(key, code) {
-  if (key && key.length === 1) {
-    const c = key.toUpperCase();
-    const codePoint = c.charCodeAt(0);
-    if (codePoint >= 65 && codePoint <= 90) return codePoint;
-    if (codePoint >= 48 && codePoint <= 57) return codePoint;
-  }
-  if (VK[key]) return VK[key];
-  if (code && /^Key[A-Z]$/.test(code)) return code.charCodeAt(3);
-  if (code && /^Digit[0-9]$/.test(code)) return 0x30 + Number(code.slice(5));
-  return null;
+const MOUSE_DOWN = { 0: 0x0002, 1: 0x0020, 2: 0x0008 };
+const MOUSE_UP = { 0: 0x0004, 1: 0x0040, 2: 0x0010 };
+
+function norm(v) {
+  const n = Math.min(1, Math.max(0, Number(v) || 0));
+  return Math.round(n * 1_000_000);
 }
 
 /**
  * @param {{ type: string, nx?: number, ny?: number, button?: number, deltaY?: number, key?: string, code?: string, keyAction?: string }} ev
- * @param {{ width: number, height: number, x?: number, y?: number } | null} bounds
  */
-function injectRemoteInput(ev, bounds) {
-  if (process.platform !== 'win32') {
-    return { ok: false, error: 'desktop_windows_only' };
+function injectRemoteInput(ev) {
+  if (process.platform !== 'win32') return { ok: false, error: 'desktop_windows_only' };
+  if (!enabled) return { ok: false, error: 'disabled' };
+  ensureTarget();
+  const x = norm(ev.nx);
+  const y = norm(ev.ny);
+  switch (ev.type) {
+    case 'move':
+      return send(`m ${x} ${y}`);
+    case 'down':
+      return send(`d ${x} ${y} ${MOUSE_DOWN[ev.button ?? 0] ?? MOUSE_DOWN[0]}`);
+    case 'up':
+      return send(`u ${x} ${y} ${MOUSE_UP[ev.button ?? 0] ?? MOUSE_UP[0]}`);
+    case 'wheel': {
+      const d = Math.max(-1200, Math.min(1200, Math.round(-(Number(ev.deltaY) || 0))));
+      return send(`w ${x} ${y} ${d}`);
+    }
+    case 'key': {
+      const up = ev.keyAction === 'up';
+      const code = (ev.code && SC[ev.code] && ev.code) || KEY_TO_CODE[ev.key || ''] || '';
+      const sc = SC[code];
+      if (sc) {
+        const id = `${sc[0]}|${sc[1] ? 1 : 0}`;
+        if (up) pressed.delete(id);
+        else pressed.add(id);
+        return send(`k ${sc[0]} ${sc[1] ? 1 : 0} ${up ? 1 : 0}`);
+      }
+      // Bilinmeyen fiziksel tuş: tek karakteri Unicode olarak yaz (yalnız basışta)
+      if (!up && ev.key && [...ev.key].length === 1) {
+        const cp = ev.key.codePointAt(0) || 0;
+        if (cp > 0 && cp <= 0xffff) return send(`c ${cp}`);
+      }
+      return { ok: false, error: 'unknown_key' };
+    }
+    default:
+      return { ok: false, error: 'unknown_type' };
   }
-  const display = screen.getPrimaryDisplay();
-  const b = bounds || {
-    x: display.bounds.x,
-    y: display.bounds.y,
-    width: display.bounds.width,
-    height: display.bounds.height,
-  };
-  const nx = Math.min(1, Math.max(0, Number(ev.nx) || 0));
-  const ny = Math.min(1, Math.max(0, Number(ev.ny) || 0));
-  const x = Math.round((b.x || 0) + nx * b.width);
-  const y = Math.round((b.y || 0) + ny * b.height);
+}
 
-  if (ev.type === 'move') return send({ op: 'move', x, y });
-  if (ev.type === 'down') return send({ op: 'down', x, y, button: ev.button ?? 0 });
-  if (ev.type === 'up') return send({ op: 'up', x, y, button: ev.button ?? 0 });
-  if (ev.type === 'wheel') {
-    return send({
-      op: 'wheel',
-      x,
-      y,
-      delta: Math.round(-(Number(ev.deltaY) || 0)),
-    });
+/** Takılı kalmasın: basılı tüm tuşları ve fare tuşlarını bırak */
+function releaseAll() {
+  if (process.platform !== 'win32' || !ps) return;
+  for (const id of pressed) {
+    const [sc, ext] = id.split('|');
+    send(`k ${sc} ${ext} 1`);
   }
-  if (ev.type === 'key') {
-    const vk = keyToVk(ev.key, ev.code);
-    if (vk == null) return { ok: false, error: 'unknown_key' };
-    return send({
-      op: 'key',
-      vk,
-      down: ev.keyAction !== 'up',
-    });
-  }
-  return { ok: false, error: 'unknown_type' };
+  pressed.clear();
+}
+
+/** Paylaşım kaynağı (main displayMedia handler'dan) */
+function setShareSource(src) {
+  shareSource = src && src.id ? { id: String(src.id), displayId: src.displayId ? String(src.displayId) : '' } : null;
+  lastTargetLine = '';
+}
+
+/** Eski renderer API: pencerenin ekranını bulmak için ipucu */
+function setRendererBounds(b) {
+  rendererBounds = b;
+  lastTargetLine = '';
+}
+
+function setEnabled(on) {
+  enabled = Boolean(on);
+  if (!enabled) releaseAll();
 }
 
 function disposeRemoteInput() {
+  releaseAll();
   if (!ps) return;
-  try {
-    ps.stdin.write('QUIT\n');
-  } catch {
-    /* ignore */
-  }
+  write('Q');
   try {
     ps.kill();
   } catch {
@@ -198,4 +287,13 @@ function disposeRemoteInput() {
   ready = false;
 }
 
-module.exports = { injectRemoteInput, disposeRemoteInput };
+module.exports = {
+  injectRemoteInput,
+  disposeRemoteInput,
+  setShareSource,
+  setRendererBounds,
+  setEnabled,
+  releaseAll,
+  /** test: scripts/remote-input-smoke.js */
+  _PS_BOOT: PS_BOOT,
+};

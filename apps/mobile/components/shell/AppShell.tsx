@@ -25,6 +25,7 @@ import type {
 import { DRACORD_BOT_USER_ID, SocketEvents } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { useVoiceChannelStatuses } from '../../lib/useVoiceChannelStatuses';
 import { leaveActivityFully } from '../../lib/leaveActivityFully';
 import { rememberChannel, readGuildLastChannel, readLastChannel } from '../../lib/lastChannel';
 import { ActionsSheet, type ActionSheetItem } from '../ActionsSheet';
@@ -82,6 +83,11 @@ type AppShellCtx = {
   openCreateChannel: (categoryId?: string | null) => void;
   canManageChannels: boolean;
   guildPermissions: GuildPermissionsDto | null;
+  /** Ses kanalı durum metni ayarla (null = temizle) */
+  setVoiceStatus: (
+    channelId: string,
+    status: string | null,
+  ) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const Ctx = createContext<AppShellCtx | null>(null);
@@ -141,7 +147,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   const [joinOpen, setJoinOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
-  const [extrasTab, setExtrasTab] = useState<'events' | 'boost'>('events');
+  const [extrasTab, setExtrasTab] = useState<'events' | 'boost' | 'levels'>('events');
   const [favoriteGuildIds, setFavoriteGuildIds] = useState<string[]>([]);
   const [guildOrderIds, setGuildOrderIds] = useState<string[]>([]);
 
@@ -1180,7 +1186,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
   ]);
 
   /** Overlay: aktivite + bağlı ses kanalında self/üyeleri birleştir */
-  const channelsForList = useMemo(() => {
+  const channelsForListBase = useMemo(() => {
     const aid = activity?.activityChannelId;
     const agid = activity?.activityGuildId;
     const vid = voice?.voiceChannelId;
@@ -1317,6 +1323,15 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     voice?.deafened,
     voice?.peers,
   ]);
+  const { voiceStatuses, setVoiceStatus } = useVoiceChannelStatuses(client, guildId);
+  const channelsForList = useMemo(
+    () =>
+      channelsForListBase.map((ch) => {
+        const st = voiceStatuses[ch.id] ?? null;
+        return (ch.voiceStatus ?? null) === st ? ch : { ...ch, voiceStatus: st };
+      }),
+    [channelsForListBase, voiceStatuses],
+  );
 
   useEffect(() => {
     const tick = () => {
@@ -1412,6 +1427,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       openCreateChannel,
       canManageChannels,
       guildPermissions,
+      setVoiceStatus,
     }),
     [
       mode,
@@ -1436,6 +1452,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       openCreateChannel,
       canManageChannels,
       guildPermissions,
+      setVoiceStatus,
     ],
   );
 
@@ -1649,6 +1666,11 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         onBoost={() => {
           setServerMenuOpen(false);
           setExtrasTab('boost');
+          setExtrasOpen(true);
+        }}
+        onLevels={() => {
+          setServerMenuOpen(false);
+          setExtrasTab('levels');
           setExtrasOpen(true);
         }}
         onCreateChannel={

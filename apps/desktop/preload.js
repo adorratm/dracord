@@ -66,6 +66,14 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
     ipcRenderer.invoke('remote-control:set-bounds', bounds),
   injectRemoteControlInput: (ev) =>
     ipcRenderer.invoke('remote-control:inject', ev),
+  /** Paylaşan: kontrol aktif/pasif → global acil durdurma kısayolu (Ctrl+Shift+F12) */
+  setRemoteControlActive: (active) =>
+    ipcRenderer.invoke('remote-control:set-active', { active: Boolean(active) }),
+  onRemoteControlEmergencyStop: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('remote-control:emergency-stop', handler);
+    return () => ipcRenderer.removeListener('remote-control:emergency-stop', handler);
+  },
   onOverlayVoiceCommand: (callback) => {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on('overlay:voice-command', handler);

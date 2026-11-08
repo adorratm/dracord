@@ -1,0 +1,48 @@
+---
+title: Çok oyunculu mimari
+description: Ses kanalı = oyun odası. Gerçek zamanlı oyunlar için önerilen yapı.
+---
+
+Dracord **kimlik, oda ve sesli sohbeti** sağlar; oyun durumunu **senin sunucun** yönetir. Bu sayede:
+
+- Gecikme yalnız oyuncu ↔ senin sunucun arasındadır.
+- Hile koruması sende (sunucu otoriter).
+- Aynı sunucu Steam / kendi siten gibi başka dağıtımlarına da hizmet eder.
+
+## Oda eşleme
+
+| Dracord | Senin oyunun |
+| --- | --- |
+| `session.id` | Oda / maç kimliği |
+| `session.hostUserId` | Oda sahibi (ilk başlatan; ayrılırsa devredilir) |
+| `participants` | Lobi listesi (katılan/ayrılan `onSessionUpdate` ile gelir) |
+| Ses kanalından ayrılma | Oyuncu oturumdan otomatik düşer |
+| Son oyuncu çıkınca | Oturum biter (`status: 'ended'`) |
+
+## Önerilen yığın
+
+- **Taşıma:** WebSocket (socket.io, ws, Colyseus, Nakama…). WebRTC data channel da olur.
+- **Tick:** gerçek zamanlı aksiyon için 20–30 Hz sunucu tick'i, istemcide ara değerleme (interpolation).
+- **Yeniden bağlanma:** mobilde uygulama arka plana düşünce bağlantı kopar → `onVisibilityChange(true)`'da
+  yeniden bağlan, token süresi dolduysa `refreshToken()`.
+
+## Örnek: COOMBIE (PROTOCOL-Z)
+
+Ko-op zombi savunma oyunu; NestJS + socket.io sunucu, Three.js istemci.
+
+```ts game-client/src/dracord.ts
+import { DracordEmbed } from '@dracord/embedded-sdk';
+
+export async function connectFromDracord(connect: (token: string) => void) {
+  if (!DracordEmbed.isEmbedded()) return false;     // Steam/web sürümü: kendi girişi
+  const d = new DracordEmbed();
+  const ctx = await d.ready();
+  connect(ctx.token);                               // socket.io auth.token
+  d.onTokenRefresh(({ token }) => connect(token));
+  d.onSessionUpdate(({ participants }) => updateLobby(participants));
+  return true;
+}
+```
+
+Sunucu tarafında `verifyDracordToken` sonucu `sessionId` → oyun odası; `participantIds` dışındaki bağlantıları
+reddet. Dalga ilerledikçe `d.setStatus('COOMBIE · Dalga 7')` ile ses kanalında ilerleme görünür.

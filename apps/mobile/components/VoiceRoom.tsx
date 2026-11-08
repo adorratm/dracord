@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import type { ChannelSummary, VoiceMemberSummary } from '@dracord/types';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { VOICE_CHANNEL_STATUS_MAX, type ChannelSummary, type GameSessionDto, type VoiceMemberSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
 import { ChatView } from './ChatView';
@@ -12,6 +12,8 @@ import { useActivitySessionOptional } from './activity/ActivitySession';
 import { useAppShellOptional } from './shell/AppShell';
 import { useElapsedLabel } from '../lib/formatElapsed';
 import { primaryBtn, primaryBtnText } from '../lib/ui';
+import { useSoundboard } from '../lib/useSoundboard';
+import { GamesStrip, MobileGameFrame, useMobileGameSessions } from './GameRoom';
 
 /** Ses odası — kontroller alt VoiceConnectionBar’da */
 export function VoiceRoom({
@@ -26,6 +28,21 @@ export function VoiceRoom({
   const activity = useActivitySessionOptional();
   const shell = useAppShellOptional();
   const [showChat, setShowChat] = useState(false);
+  const [statusEditing, setStatusEditing] = useState(false);
+  const soundboard = useSoundboard(client, guildId, voice.voiceChannelId === channel.id ? channel.id : null, {
+    deafened: voice.deafened,
+  });
+  const [sbMsg, setSbMsg] = useState<string | null>(null);
+  const gameSessions = useMobileGameSessions(
+    client,
+    voice.voiceChannelId === channel.id ? guildId : null,
+    voice.voiceChannelId === channel.id ? channel.id : null,
+  );
+  const [openGame, setOpenGame] = useState<GameSessionDto | null>(null);
+  const liveOpenGame = openGame ? gameSessions.find((g) => g.id === openGame.id) ?? openGame : null;
+  const [statusDraft, setStatusDraft] = useState('');
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [liveChannel, setLiveChannel] = useState(channel);
   /** Bu odadan bilinçli ayrılınca otomatik tekrar join etme */
   const declinedAutoJoinRef = useRef(false);
@@ -152,6 +169,28 @@ export function VoiceRoom({
     });
   };
 
+  const saveStatus = async (value: string | null) => {
+    if (!shell?.setVoiceStatus) return;
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const res = await shell.setVoiceStatus(channel.id, value && value.trim() ? value : null);
+      if (!res.ok) {
+        setStatusError(
+          res.error === 'not_in_channel'
+            ? 'Durumu yalnızca kanaldakiler değiştirebilir.'
+            : res.error === 'rate_limited'
+              ? 'Biraz yavaş — birkaç saniye sonra tekrar dene.'
+              : 'Durum kaydedilemedi.',
+        );
+        return;
+      }
+      setStatusEditing(false);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
   if (showChat && guildId) {
     return (
       <View style={{ flex: 1 }}>
@@ -222,6 +261,135 @@ export function VoiceRoom({
           </Pressable>
         ) : null}
       </View>
+
+      {/* Ses kanalı durum metni */}
+      {liveChannel.voiceStatus || (inThisChannel && shell?.setVoiceStatus) ? (
+        <View
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.surfaceHigh,
+            gap: 6,
+          }}
+        >
+          {statusEditing ? (
+            <>
+              <TextInput
+                value={statusDraft}
+                onChangeText={setStatusDraft}
+                maxLength={VOICE_CHANNEL_STATUS_MAX}
+                autoFocus
+                editable={!statusBusy}
+                placeholder="Ne yapıyorsunuz? (ör. Valorant ranked)"
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="done"
+                onSubmitEditing={() => void saveStatus(statusDraft)}
+                style={{
+                  color: colors.text,
+                  backgroundColor: colors.surfaceHigh,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  fontSize: 14,
+                }}
+                accessibilityLabel="Ses kanalı durumu"
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable style={primaryBtn} disabled={statusBusy} onPress={() => void saveStatus(statusDraft)}>
+                  <Text style={primaryBtnText}>Kaydet</Text>
+                </Pressable>
+                {liveChannel.voiceStatus ? (
+                  <Pressable disabled={statusBusy} onPress={() => void saveStatus(null)} style={{ padding: 10 }}>
+                    <Text style={{ color: colors.textMuted, fontWeight: '600' }}>Temizle</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable disabled={statusBusy} onPress={() => setStatusEditing(false)} style={{ padding: 10 }}>
+                  <Text style={{ color: colors.textMuted, fontWeight: '600' }}>Vazgeç</Text>
+                </Pressable>
+              </View>
+              {statusError ? (
+                <Text style={{ color: colors.danger, fontSize: 12 }}>{statusError}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Pressable
+              disabled={!inThisChannel || !shell?.setVoiceStatus}
+              onPress={() => {
+                setStatusDraft(liveChannel.voiceStatus ?? '');
+                setStatusError(null);
+                setStatusEditing(true);
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              accessibilityLabel="Ses kanalı durumunu düzenle"
+            >
+              <Icon
+                name={liveChannel.voiceStatus ? 'notes' : 'edit'}
+                size={16}
+                color={colors.textMuted}
+              />
+              <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }} numberOfLines={2}>
+                {liveChannel.voiceStatus || 'Durum ekle'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      ) : null}
+
+      {inThisChannel && guildId ? (
+        <GamesStrip client={client} guildId={guildId} channelId={channel.id} sessions={gameSessions} onOpen={setOpenGame} />
+      ) : null}
+      {liveOpenGame ? (
+        <MobileGameFrame
+          client={client}
+          session={liveOpenGame}
+          resolveParticipant={(id) => {
+            const m = members.find((x) => x.id === id);
+            return { id, displayName: m?.displayName ?? 'Oyuncu', avatarUrl: m?.avatarUrl ?? null };
+          }}
+          onClose={(o) => {
+            const id = liveOpenGame.id;
+            setOpenGame(null);
+            if (o?.leave !== false) void client.leaveGameSession(id).catch(() => undefined);
+          }}
+          onSetStatus={(t) => void shell?.setVoiceStatus?.(channel.id, t)}
+        />
+      ) : null}
+
+      {inThisChannel && soundboard.sounds.length > 0 ? (
+        <View style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.surfaceHigh }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}>
+            {soundboard.sounds.map((snd) => (
+              <Pressable
+                key={snd.id}
+                disabled={voice.deafened}
+                onPress={() =>
+                  void soundboard.play(snd.id).then((r) =>
+                    setSbMsg(r.ok ? null : r.error === 'rate_limited' ? 'Biraz bekle…' : 'Çalınamadı'),
+                  )
+                }
+                accessibilityLabel={`${snd.name} sesini çal`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  backgroundColor: colors.surfaceHigh,
+                  opacity: voice.deafened ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>{snd.emoji || '🔊'}</Text>
+                <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
+                  {snd.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {sbMsg ? <Text style={{ color: colors.textMuted, fontSize: 12, paddingHorizontal: 14, marginTop: 4 }}>{sbMsg}</Text> : null}
+        </View>
+      ) : null}
 
       {!inThisChannel && !browsingOther ? (
         <View

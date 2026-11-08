@@ -49,6 +49,7 @@ type WebViewProps = {
   sharedCookiesEnabled?: boolean;
   thirdPartyCookiesEnabled?: boolean;
   injectedJavaScriptBeforeContentLoaded?: string;
+  onShouldStartLoadWithRequest?: (req: { url: string; isTopFrame?: boolean; mainDocumentURL?: string }) => boolean;
 };
 
 type WebViewComponent = ComponentType<WebViewProps & { ref?: unknown }>;
@@ -152,6 +153,8 @@ export const SafeWebView = forwardRef<
     /** Ham HTML (oyun bootstrap vb.) — uri yerine */
     html?: string | null;
     baseUrl?: string;
+    /** Harici oyun: yalnız bu origin'de gezin; dışarı giden üst çerçeve gezinmeleri tarayıcıda açılır */
+    lockToOrigin?: string | null;
   }
 >(function SafeWebView(
   {
@@ -164,6 +167,7 @@ export const SafeWebView = forwardRef<
     onBridgeMessage,
     html,
     baseUrl,
+    lockToOrigin,
   },
   ref,
 ) {
@@ -248,6 +252,21 @@ export const SafeWebView = forwardRef<
       sharedCookiesEnabled
       thirdPartyCookiesEnabled
       originWhitelist={['*']}
+      onShouldStartLoadWithRequest={
+        lockToOrigin
+          ? (req) => {
+              if (req.isTopFrame === false) return true;
+              if (req.url === 'about:blank') return true;
+              try {
+                if (new URL(req.url).origin === lockToOrigin) return true;
+              } catch {
+                return false;
+              }
+              void Linking.openURL(req.url).catch(() => undefined);
+              return false;
+            }
+          : undefined
+      }
       onMessage={(ev) => {
         try {
           const msg = JSON.parse(ev.nativeEvent.data) as Record<string, unknown>;

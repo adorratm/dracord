@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Pressable, Text, View } from 'react-native';
-import type { GuildEventDto, GuildSummary } from '@dracord/types';
+import type { GuildEventDto, GuildSummary, MemberLevelDto } from '@dracord/types';
 import { guildBoostLevel } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
@@ -18,11 +18,13 @@ export function GuildExtrasSheet({
   onClose: () => void;
   guildId: string | null;
   guild: GuildSummary | null;
-  initialTab?: 'events' | 'boost';
+  initialTab?: 'events' | 'boost' | 'levels';
   onGuildUpdated?: (g: GuildSummary) => void;
 }) {
   const { client } = useAuth();
-  const [tab, setTab] = useState<'events' | 'boost'>(initialTab);
+  const [tab, setTab] = useState<'events' | 'boost' | 'levels'>(initialTab);
+  const [board, setBoard] = useState<MemberLevelDto[]>([]);
+  const [myLevel, setMyLevel] = useState<MemberLevelDto | null>(null);
   const [events, setEvents] = useState<GuildEventDto[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,12 @@ export function GuildExtrasSheet({
       .then(setEvents)
       .catch((e) => setError(e instanceof Error ? e.message : 'Yüklenemedi'));
   }, [open, guildId, client, initialTab]);
+
+  useEffect(() => {
+    if (!open || !guildId || tab !== 'levels') return;
+    void client.getLevelLeaderboard(guildId, { limit: 50 }).then(setBoard).catch(() => setBoard([]));
+    void client.getMyLevel(guildId).then(setMyLevel).catch(() => setMyLevel(null));
+  }, [open, guildId, client, tab]);
 
   const boostCount = guild?.boostCount ?? 0;
   const boostLevel = guild?.boostLevel ?? guildBoostLevel(boostCount);
@@ -93,12 +101,52 @@ export function GuildExtrasSheet({
           >
             <Chip label="Etkinlikler" active={tab === 'events'} onPress={() => setTab('events')} />
             <Chip label="Takviye" active={tab === 'boost'} onPress={() => setTab('boost')} />
+            <Chip label="Seviyeler" active={tab === 'levels'} onPress={() => setTab('levels')} />
             <Pressable onPress={onClose} style={{ marginLeft: 'auto', padding: 8 }}>
               <Text style={{ color: colors.textMuted }}>Kapat</Text>
             </Pressable>
           </View>
 
-          {tab === 'events' ? (
+          {tab === 'levels' ? (
+            <FlatList
+              data={board}
+              keyExtractor={(r) => r.userId}
+              contentContainerStyle={{ padding: 12, gap: 6 }}
+              ListHeaderComponent={
+                myLevel ? (
+                  <View style={{ padding: 12, borderRadius: 12, backgroundColor: colors.surfaceHigh, marginBottom: 8, gap: 6 }}>
+                    <Text style={{ color: colors.text, fontWeight: '800' }}>
+                      Senin seviyen: {myLevel.level}
+                      {myLevel.rank ? `  ·  #${myLevel.rank}` : ''}
+                    </Text>
+                    <LevelProgress dto={myLevel} />
+                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                      {myLevel.messageCount} mesaj · {myLevel.voiceMinutes} dk ses
+                    </Text>
+                  </View>
+                ) : undefined
+              }
+              ListEmptyComponent={
+                <Text style={{ color: colors.textMuted, padding: 8 }}>
+                  Henüz kimse XP kazanmadı. Mesaj yaz, seste takıl!
+                </Text>
+              }
+              renderItem={({ item: r }) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
+                  <Text style={{ color: colors.textMuted, width: 28, textAlign: 'right', fontWeight: '700' }}>
+                    {r.rank}
+                  </Text>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={{ color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+                      {r.displayName || r.username}
+                    </Text>
+                    <LevelProgress dto={r} />
+                  </View>
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>{r.xp} XP</Text>
+                </View>
+              )}
+            />
+          ) : tab === 'events' ? (
             <FlatList
               data={events}
               keyExtractor={(e) => e.id}
@@ -201,5 +249,17 @@ function Chip({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+function LevelProgress({ dto }: { dto: Pick<MemberLevelDto, 'level' | 'xpIntoLevel' | 'xpForNext'> }) {
+  const pct = dto.xpForNext > 0 ? Math.min(100, (dto.xpIntoLevel / dto.xpForNext) * 100) : 0;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>Sv. {dto.level}</Text>
+      <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.surface, overflow: 'hidden' }}>
+        <View style={{ width: `${pct}%`, height: '100%', backgroundColor: colors.primary }} />
+      </View>
+    </View>
   );
 }

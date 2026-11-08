@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 import type { MessageDto } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { Icon } from './Icon';
+import { externalTranslateUrl } from '../lib/translate';
 
 const MENU_QUICK = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
 const REACT_MORE = [
@@ -189,6 +191,18 @@ export function MessageActionsSheet({
         label: 'Uygulamalar',
         chevron: true,
         onPress: () => setAppsOpen((v) => !v),
+      });
+    }
+    if (!isHeading && message.content?.trim()) {
+      list.push({
+        id: 'translate',
+        icon: 'translate',
+        label: 'Çevir',
+        onPress: () => {
+          // Sunucu maliyeti yok: cihazdaki Google Çeviri uygulaması / tarayıcı açılır
+          void Linking.openURL(externalTranslateUrl(message.content ?? '')).catch(() => undefined);
+          onClose();
+        },
       });
     }
     list.push({

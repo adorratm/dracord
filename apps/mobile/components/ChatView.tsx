@@ -43,6 +43,11 @@ import { resolveMediaUrl } from '../lib/mediaUrl';
 import { uploadImageFromUri } from '../lib/uploadMobile';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 import { ActionsSheet } from './ActionsSheet';
+import { ScheduleMessageSheet } from './ScheduleMessageSheet';
+import { CatchupSheet } from './CatchupSheet';
+import { VoiceMessageBubble, VoiceRecorderBar } from './VoiceMessage';
+import { useVoiceSessionOptional } from './voice/VoiceSession';
+import { useScheduledMessages } from '../lib/useScheduledMessages';
 import { Icon } from './Icon';
 import { LinkifiedText } from './LinkifiedText';
 import { UserAvatar } from './UserAvatar';
@@ -89,6 +94,16 @@ export function ChatView({
   guildId?: string | null;
 }) {
   const { client, user } = useAuth();
+  const scheduler = useScheduledMessages(client, channel.id);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  const [catchupOpen, setCatchupOpen] = useState(false);
+  /** Kanal açıldığı andaki okunmamış sayısı (okundu işaretinden önce) */
+  const catchupAnchor = useRef<{ id?: string; unread: number; at: string }>({ unread: 0, at: '' });
+  if (catchupAnchor.current.id !== channel.id) {
+    catchupAnchor.current = { id: channel.id, unread: channel.unreadCount ?? 0, at: new Date().toISOString() };
+  }
+  const voiceSession = useVoiceSessionOptional();
   const router = useRouter();
   const [messages, setMessages] = useState<MessageDto[]>([]);
   const [text, setText] = useState('');
@@ -780,6 +795,13 @@ export function ChatView({
             <Text style={{ color: colors.text, fontWeight: '700' }}>{channel.name}</Text>
           </View>
           <Pressable
+            onPress={() => setCatchupOpen(true)}
+            style={{ ...chipBtn, marginRight: 6 }}
+            accessibilityLabel="Ne kaçırdım?"
+          >
+            <Icon name="summarize" size={16} color={catchupAnchor.current.unread >= 15 ? colors.primary : colors.text} />
+          </Pressable>
+          <Pressable
             onPress={() => {
               router.push({
                 pathname: '/(app)/search',
@@ -1188,10 +1210,21 @@ export function ChatView({
             onPress={() => setPollOpen((v) => !v)}
             accessibilityLabel="Anket"
           />
+          <ToolBtn
+            icon="schedule_send"
+            active={scheduleOpen}
+            onPress={() => setScheduleOpen(true)}
+            accessibilityLabel={
+              scheduler.items.length
+                ? `Zamanlanmış mesajlar (${scheduler.items.length})`
+                : 'Mesajı zamanla'
+            }
+          />
         </ScrollView>
       </View>
 
       <View style={composerInputRow}>
+        {!voiceRecording ? (
         <TextInput
           value={text}
           onChangeText={(v) => {
@@ -1207,9 +1240,28 @@ export function ChatView({
           style={{ ...inputStyle, flex: 1, minHeight: 44, maxHeight: 120, paddingVertical: 10 }}
           multiline
         />
+        ) : null}
+        {!text.trim() && !pendingAtt && !editing && !threadRoot ? (
+          <VoiceRecorderBar
+            client={client}
+            channelId={channel.id}
+            replyToId={replyTo?.id}
+            disabledReason={
+              voiceSession?.voiceChannelId ? 'Sesli sohbetteyken sesli mesaj kaydedilemez.' : null
+            }
+            onSent={() => setReplyTo(null)}
+            onRecordingChange={setVoiceRecording}
+          />
+        ) : null}
+        {voiceRecording || (!text.trim() && !pendingAtt && !editing && !threadRoot) ? null : (
         <Pressable
           disabled={!canSend}
           onPress={() => void sendComposer()}
+          onLongPress={() => {
+            // Uzun bas: zamanla (düzenleme / thread / ek hariç)
+            if (!editing && !threadRoot && !pendingAtt && text.trim()) setScheduleOpen(true);
+          }}
+          delayLongPress={400}
           style={{
             ...primaryBtn,
             width: 52,
@@ -1223,7 +1275,35 @@ export function ChatView({
             <Icon name={editing ? 'check' : 'send'} size={22} color={colors.primaryOn} />
           )}
         </Pressable>
+        )}
       </View>
+
+      <CatchupSheet
+        visible={catchupOpen}
+        onClose={() => setCatchupOpen(false)}
+        client={client}
+        channelId={channel.id}
+        unreadAtOpen={catchupAnchor.current.unread}
+        openedAt={catchupAnchor.current.at}
+        onJump={(around) => {
+          void client.getMessages(channel.id, { limit: 50, around }).then((page) => {
+            setMessages([...(page.items ?? [])].filter((m) => !m.viewerHide).reverse());
+            setHighlightId(around);
+          });
+        }}
+      />
+
+      <ScheduleMessageSheet
+        visible={scheduleOpen}
+        text={!editing && !threadRoot && !pendingAtt ? text.trim() : ''}
+        replyToId={replyTo?.id}
+        scheduler={scheduler}
+        onClose={() => setScheduleOpen(false)}
+        onScheduled={() => {
+          setText('');
+          setReplyTo(null);
+        }}
+      />
 
       <Modal visible={emojiModal} animationType="fade" transparent onRequestClose={() => setEmojiModal(false)}>
         <Pressable
@@ -1579,7 +1659,9 @@ const MessageRow = memo(function MessageRow({
         ) : null}
 
         {m.attachments?.map((a) =>
-          a.contentType?.startsWith('image/') || /\.(gif|png|jpe?g|webp)(\?|$)/i.test(a.url) ? (
+          a.voice && a.contentType?.startsWith('audio/') ? (
+            <VoiceMessageBubble key={a.id} attachment={a} />
+          ) : a.contentType?.startsWith('image/') || /\.(gif|png|jpe?g|webp)(\?|$)/i.test(a.url) ? (
             <RemoteImage
               key={a.id}
               uri={a.url}

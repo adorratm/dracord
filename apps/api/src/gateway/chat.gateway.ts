@@ -14,11 +14,14 @@ import {
 } from '@nestjs/websockets';
 import {
   SocketEvents,
+  normalizeVoiceChannelStatus,
   type DmCallPayload,
   type RemoteControlInputPayload,
   type RemoteControlRequestPayload,
   type RemoteControlResponsePayload,
   type RemoteControlRevokePayload,
+  type SoundboardPlayPayload,
+  type VoiceChannelStatusPayload,
   type VoiceStatePayload,
   type VoiceSyncPayload,
 } from '@dracord/types';
@@ -33,6 +36,9 @@ import { NotificationsRealtimeService } from '@/notifications/notifications-real
 import { PresenceService } from '@/presence/presence.service';
 import { RemoteControlService } from '@/voice/remote-control.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
+import { LevelsService } from '@/levels/levels.service';
+import { SoundboardService } from '@/soundboard/soundboard.service';
+import { GamesService } from '@/games/games.service';
 import { WsJwtGuard } from './ws-jwt.guard';
 import { GatewayMetricsService } from './gateway-metrics.service';
 import { SocketAdapterStateService } from './socket-adapter-state.service';
@@ -82,6 +88,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly presence: PresenceService,
     private readonly voicePresence: VoicePresenceService,
     private readonly remoteControl: RemoteControlService,
+    private readonly levels: LevelsService,
+    private readonly soundboard: SoundboardService,
+    private readonly games: GamesService,
     private readonly channels: ChannelsService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly messagesRealtime: MessagesRealtimeService,
@@ -94,6 +103,23 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.notificationsRealtime.setServer(server);
     this.messagesRealtime.setServer(server);
     this.broadcast.setServer(server);
+    this.broadcast.setVoiceLeaveHook((p) => {
+      if (!p.guildId || !p.channelId) return;
+      // Harici oyun oturumundan düş
+      void this.games.onVoiceLeave(p.guildId, p.channelId, p.user.id).catch(() => undefined);
+      // Ses XP (oturum süresi)
+      if (!p.user.isBot) {
+        void this.levels
+          .onVoiceSession(p.guildId, p.channelId, p.user.id, p.user.joinedAt)
+          .catch(() => undefined);
+      }
+      void this.voicePresence
+        .clearStatusIfEmpty(p.guildId, p.channelId)
+        .then((cleared) => {
+          if (cleared) this.broadcast.broadcastVoiceChannelStatus(cleared);
+        })
+        .catch(() => undefined);
+    });
     const redisUrl = this.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
     const redisRequired =
       this.config.get<string>('SOCKET_REDIS_REQUIRED') === 'true';
@@ -249,7 +275,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         if (left.length > 0) {
           this.gatewayMetrics.recordVoiceOrphanClear(left.length);
           for (const payload of left) {
-            this.server.emit(SocketEvents.VOICE_STATE, payload);
+            this.broadcast.broadcastVoiceState(payload);
           }
           this.logger.log(
             `Voice orphan cleaned user=${userId} channels=${left.length}`,
@@ -398,7 +424,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
     void client.join(this.guildRoom(body.guildId));
     const membersByChannel = await this.voicePresence.listGuildVoice(body.guildId);
-    const payload: VoiceSyncPayload = { guildId: body.guildId, membersByChannel };
+    const statusByChannel = await this.voicePresence
+      .listGuildStatuses(body.guildId, Object.keys(membersByChannel))
+      .catch(() => ({}));
+    const payload: VoiceSyncPayload = { guildId: body.guildId, membersByChannel, statusByChannel };
     this.gatewayMetrics.recordVoiceSync();
     client.emit(SocketEvents.VOICE_SYNC, payload);
     return payload;
@@ -427,7 +456,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         { muted: body.muted, deafened: body.deafened },
       );
       for (const left of result.left) {
-        this.server.emit(SocketEvents.VOICE_STATE, left);
+        this.broadcast.broadcastVoiceState(left);
       }
       payload = result.joined;
       void client.join(this.guildRoom(body.guildId));
@@ -441,7 +470,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
 
     if (payload) {
-      this.server.emit(SocketEvents.VOICE_STATE, payload);
+      this.broadcast.broadcastVoiceState(payload);
     }
     // Ses kanalı değişince uzak kontrol oturumlarını temizle
     if (!body.channelId) {
@@ -450,6 +479,72 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       }
     }
     return payload;
+  }
+
+  /** Soundboard: kanaldaki üye çalar → aynı guild odasına (istemci kanal filtresi) */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.SOUNDBOARD_PLAY)
+  async handleSoundboardPlay(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: SoundboardPlayPayload,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const user = client.data.user as WsUser;
+    if (!body?.guildId || !body?.channelId || !body?.soundId) return { ok: false, error: 'bad_request' };
+    const members = await this.voicePresence.listChannel(body.guildId, body.channelId);
+    const me = members.find((m) => m.id === user.sub);
+    if (!me) return { ok: false, error: 'not_in_channel' };
+    if (me.deafened) return { ok: false, error: 'deafened' };
+    try {
+      const sound = await this.soundboard.resolvePlay(body.guildId, body.soundId, user.sub);
+      const payload: SoundboardPlayPayload = {
+        guildId: body.guildId,
+        channelId: body.channelId,
+        soundId: sound.id,
+        userId: user.sub,
+        userName: me.displayName ?? null,
+        url: sound.url,
+        volume: sound.volume,
+        name: sound.name,
+        emoji: sound.emoji,
+      };
+      this.broadcast.emitToGuild(body.guildId, SocketEvents.SOUNDBOARD_PLAY, payload);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'error' };
+    }
+  }
+
+  /** Ses kanalı durum metni — yalnız o kanalda olan üye ayarlar/temizler */
+  private readonly voiceStatusRate = new Map<string, number>();
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.VOICE_CHANNEL_STATUS)
+  async handleVoiceChannelStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { guildId: string; channelId: string; status: string | null },
+  ): Promise<{ ok: boolean; error?: string; status?: VoiceChannelStatusPayload }> {
+    const user = client.data.user as WsUser;
+    if (!body?.guildId || !body?.channelId) return { ok: false, error: 'bad_request' };
+    const now = Date.now();
+    const last = this.voiceStatusRate.get(user.sub) ?? 0;
+    if (now - last < 1500) return { ok: false, error: 'rate_limited' };
+    this.voiceStatusRate.set(user.sub, now);
+    if (this.voiceStatusRate.size > 5000) this.voiceStatusRate.clear();
+
+    const members = await this.voicePresence.listChannel(body.guildId, body.channelId);
+    const me = members.find((m) => m.id === user.sub);
+    if (!me) return { ok: false, error: 'not_in_channel' };
+    const payload: VoiceChannelStatusPayload = {
+      guildId: body.guildId,
+      channelId: body.channelId,
+      status: normalizeVoiceChannelStatus(body.status),
+      setById: user.sub,
+      setByName: me.displayName ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.voicePresence.setChannelStatus(payload);
+    this.broadcast.broadcastVoiceChannelStatus(payload);
+    return { ok: true, status: payload };
   }
 
   @UseGuards(WsJwtGuard)

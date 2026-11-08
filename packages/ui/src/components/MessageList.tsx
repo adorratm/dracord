@@ -14,6 +14,12 @@ import {
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { contentHasSelfMention, tokenizeMessageContent } from '../lib/mentions';
+import {
+  externalTranslateUrl,
+  languageNameTr,
+  onDeviceTranslationSupported,
+  translateOnDevice,
+} from '../lib/translate';
 import { Avatar } from './Avatar';
 import {
   MediaLightbox,
@@ -312,6 +318,38 @@ export function MessageItem({
   const [linkCopied, setLinkCopied] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
   const [contentCopied, setContentCopied] = useState(false);
+  /** Çeviri (cihaz üstü) */
+  const [translation, setTranslation] = useState<
+    | { state: 'loading'; progress?: number }
+    | { state: 'done'; text: string; source: string }
+    | { state: 'error'; message: string }
+    | null
+  >(null);
+  const runTranslate = useCallback(async () => {
+    const text = (message.content || '').trim();
+    if (!text) return;
+    if (!onDeviceTranslationSupported()) {
+      window.open(externalTranslateUrl(text), '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setTranslation({ state: 'loading' });
+    const res = await translateOnDevice(text, {
+      onProgress: (p) => setTranslation({ state: 'loading', progress: p }),
+    });
+    if (res.ok) {
+      setTranslation({ state: 'done', text: res.text, source: res.source });
+    } else if (res.reason === 'same_language') {
+      setTranslation({ state: 'error', message: 'Mesaj zaten senin dilinde.' });
+    } else {
+      setTranslation({
+        state: 'error',
+        message:
+          res.reason === 'unavailable_pair'
+            ? `${res.source ? languageNameTr(res.source) : 'Bu dil'} için cihaz üstü çeviri yok.`
+            : 'Çeviri yapılamadı.',
+      });
+    }
+  }, [message.content]);
   const [reportDone, setReportDone] = useState(false);
   const [stickerLightbox, setStickerLightbox] = useState<string | null>(null);
   /** Popover: aşağıda yer yoksa yukarı aç */
@@ -560,6 +598,49 @@ export function MessageItem({
                 {renderMessageContent(message.content, mentionNames, channelNames, {
                   onStickerClick: (url) => setStickerLightbox(url),
                 })}
+              </div>
+            )}
+            {translation && (
+              <div className="mt-1 rounded-lg border-l-2 border-primary-container/60 bg-surface-container-low px-2 py-1">
+                {translation.state === 'loading' ? (
+                  <p className="font-label-sm text-outline">
+                    Çevriliyor…
+                    {translation.progress !== undefined && translation.progress < 1
+                      ? ` (dil paketi %${Math.round(translation.progress * 100)})`
+                      : ''}
+                  </p>
+                ) : translation.state === 'done' ? (
+                  <>
+                    <p className="font-body-md text-on-surface whitespace-pre-wrap break-words">
+                      {translation.text}
+                    </p>
+                    <p className="font-label-sm text-outline flex items-center gap-2">
+                      <span>{languageNameTr(translation.source)} dilinden · cihazında çevrildi</span>
+                      <button
+                        type="button"
+                        className="hover:text-on-surface underline"
+                        onClick={() => setTranslation(null)}
+                      >
+                        Orijinali göster
+                      </button>
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-label-sm text-outline flex flex-wrap items-center gap-2">
+                    <span>{translation.message}</span>
+                    <a
+                      className="underline hover:text-on-surface"
+                      href={externalTranslateUrl(message.content || '')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Tarayıcıda çevir
+                    </a>
+                    <button type="button" className="hover:text-on-surface" onClick={() => setTranslation(null)}>
+                      Kapat
+                    </button>
+                  </p>
+                )}
               </div>
             )}
           </>
@@ -940,6 +1021,16 @@ export function MessageItem({
                       </div>
                     )}
                   </div>
+                )}
+                {!isHeading && Boolean(message.content?.trim()) && (
+                  <MenuRow
+                    icon="translate"
+                    label={onDeviceTranslationSupported() ? 'Çevir' : 'Çevir (tarayıcıda aç)'}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void runTranslate();
+                    }}
+                  />
                 )}
                 {!isHeading && (
                   <div className="relative">

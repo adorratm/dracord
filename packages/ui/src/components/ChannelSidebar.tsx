@@ -96,6 +96,8 @@ export interface SidebarChannelItem {
   badgeCount?: number;
   memberCount?: string;
   voiceMembers?: SidebarVoiceMember[];
+  /** Ses kanalı durum metni (üye varken gösterilir) */
+  voiceStatus?: string | null;
   /** Görüntüleyenin bu kanaldaki katılım zamanı — süre sayacı için */
   viewerJoinedAt?: string | null;
   /** Aktif ses/aktivite kanalındaysa davet butonu */
@@ -1299,6 +1301,17 @@ function ChannelRow({
 
       {isVoiceLike && (voiceMembers.length > 0 || channel.showVoiceInvite) && (
         <div className="ml-5 flex flex-col gap-1 mt-0.5">
+          {channel.voiceStatus && voiceMembers.length > 0 && (
+            <p
+              className="flex items-center gap-1 pl-1 font-label-sm text-[11px] text-on-surface-variant min-w-0"
+              title={channel.voiceStatus}
+            >
+              <span className="material-symbols-outlined text-[13px] shrink-0" aria-hidden>
+                notes
+              </span>
+              <span className="truncate">{channel.voiceStatus}</span>
+            </p>
+          )}
           {voiceMembers.length > 0 && (
             <ul className="flex flex-col gap-1">
               {voiceMembers.map((m) => {
