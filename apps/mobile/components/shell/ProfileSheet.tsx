@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import type { PublicUser, UserActivity } from '@dracord/types';
+import type { PublicUser, UserActivity, UserShowcaseDto } from '@dracord/types';
+import { useAuth } from '../../lib/auth';
 import { colors } from '@dracord/app-theme';
 import { noticeDialog } from '../ConfirmModal';
 import { ActivityLine } from '../ActivityLine';
@@ -35,6 +37,21 @@ export function ProfileSheet({
   onJoinActivity?: (activity: UserActivity) => void;
 }) {
   const elapsed = useElapsedLabel(joinedAt);
+  const { client } = useAuth();
+  const [showcase, setShowcase] = useState<UserShowcaseDto | null>(null);
+  const uid = user && !user.isBot ? user.id : null;
+  useEffect(() => {
+    setShowcase(null);
+    if (!uid) return;
+    let alive = true;
+    void client
+      .getUserShowcase(uid)
+      .then((d) => alive && setShowcase(d))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [client, uid]);
   if (!user) return null;
   const st = normalizePresence(user.status);
 
@@ -174,6 +191,32 @@ export function ProfileSheet({
               <Text style={{ color: colors.primary, fontSize: 12, marginTop: 4, fontWeight: '700' }}>
                 Seste · {elapsed}
               </Text>
+            ) : null}
+            {showcase?.badge ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  gap: 6,
+                  marginTop: 10,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 8,
+                  backgroundColor: colors.surfaceHigh,
+                }}
+                accessibilityLabel={`${showcase.badge.name} sunucu rozeti`}
+              >
+                {showcase.badge.iconUrl ? (
+                  <Image source={{ uri: resolveMediaUrl(showcase.badge.iconUrl) ?? showcase.badge.iconUrl }} style={{ width: 16, height: 16, borderRadius: 4 }} />
+                ) : null}
+                {showcase.badge.emoji ? <Text>{showcase.badge.emoji}</Text> : null}
+                <Text style={{ color: colors.text, fontWeight: '800', letterSpacing: 0.5 }}>{showcase.badge.tag}</Text>
+                <Text style={{ color: colors.textMuted }} numberOfLines={1}>
+                  · {showcase.badge.name}
+                  {showcase.level ? ` · Sv. ${showcase.level}` : ''}
+                </Text>
+              </View>
             ) : null}
             {user.bio ? (
               <Text style={{ color: colors.text, lineHeight: 20, marginTop: 10 }}>{user.bio}</Text>

@@ -352,6 +352,46 @@ export interface GuildSummary {
   /** Herkese açık tanıtım sayfası (B3) */
   publicPage?: boolean;
   publicDescription?: string | null;
+  /** Sunucu rozeti (B4) — üyeler profilinde gösterebilir */
+  badgeTag?: string | null;
+  badgeEmoji?: string | null;
+}
+
+// ── Sunucu rozeti + profil vitrini (B4) ──
+export const GUILD_BADGE_LIMITS = { tagMin: 2, tagMax: 5, emojiMax: 16 } as const;
+const BADGE_RESERVED = new Set(['DRCD', 'DRACO', 'ADMIN', 'MOD', 'STAFF', 'RESMI', 'SYS']);
+/** Büyük harf; A-Z, 0-9 ve Türkçe harfler. Geçersizse null. */
+export function normalizeBadgeTag(raw: string): string | null {
+  const t = String(raw ?? '').trim().toLocaleUpperCase('tr-TR').replace(/\s+/g, '');
+  if (t.length < GUILD_BADGE_LIMITS.tagMin || t.length > GUILD_BADGE_LIMITS.tagMax) return null;
+  if (!/^[A-Z0-9ÇĞİÖŞÜ]+$/.test(t)) return null;
+  if (BADGE_RESERVED.has(t)) return null;
+  return t;
+}
+/** Tek emoji (veya boş). Harf/rakam/URL içeremez. */
+export function normalizeBadgeEmoji(raw: string | null | undefined): string | null {
+  const e = String(raw ?? '').trim();
+  if (!e) return null;
+  if (e.length > GUILD_BADGE_LIMITS.emojiMax) return null;
+  if (/[\p{L}\p{N}\s<>:/]/u.test(e.replace(/[\u200d\ufe0f]/g, ''))) return null;
+  return e;
+}
+
+export interface GuildBadgeDto {
+  guildId: string;
+  name: string;
+  iconUrl: string | null;
+  tag: string;
+  emoji: string | null;
+  /** Tanıtım sayfası açıksa */
+  vanityCode: string | null;
+}
+
+export interface UserShowcaseDto {
+  userId: string;
+  badge: GuildBadgeDto | null;
+  /** O sunucudaki seviye (varsa) */
+  level: number | null;
 }
 
 // ── Sunucu tanıtım sayfası + özel URL (B3) ──

@@ -331,7 +331,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 ### Öncelik 2 — Faz 3 menüsünün kalanı
 - [x] B2 Sunucu istatistik paneli — `GET guilds/:id/stats?days=7|30|90` (MANAGE_GUILD, 5 dk önbellek). Mesajlar mevcut tablodan (geçmiş dahil); katılan/ayrılan + ses dakikası yeni `guild_stats_daily` sayaçlarından (bu sürümden itibaren). Web/desktop: Sunucu ayarları › İstatistikler; mobil: Sunucu menüsü › İstatistik.
 - [x] B3 Sunucu tanıtım sayfası + özel adres — `dracord.com.tr/s/<adres>` (SSR, OG önizleme) ve `/invite/<adres>` süresiz davet. Ayar: web Sunucu ayarları › Tanıtım sayfası, desktop ayrı sekme (MANAGE_GUILD). Sayfa yalnız açıkça açılırsa görünür; mesaj göstermez, yalnız kilitsiz/izin kısıtı olmayan metin kanalı adları. Ayrıca: girişsiz davet açılınca girişten sonra davete dönülür; `returnUrl` açık yönlendirme (`//`) kapatıldı.
-- [ ] B4 Sunucu rozetleri / profil vitrini.
+- [x] B4 Sunucu rozeti + profil vitrini — yönetici rozet etiketi (2–5 harf) + emoji belirler (Tanıtım sayfası bölümü); üye Ayarlar › Profil'de bir sunucu rozetini seçer; profil kartında (web/desktop/mobil) rozet + o sunucudaki seviye görünür. Üyelikten çıkınca / rozet kalkınca otomatik gizlenir. API: `showcase/*`.
 - [ ] C2 Turnuva modu (braket; okey/tavla/bilardo + harici oyunlar).
 - [ ] C3 Haftalık meydan okuma / sezon skor tablosu (seviye sistemiyle bağlantılı).
 - [ ] C4 Oyun overlay iyileştirme (FPS, konuşanlar).

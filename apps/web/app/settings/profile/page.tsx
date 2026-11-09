@@ -1,7 +1,7 @@
 'use client';
 
 import type { SocialLinks } from '@dracord/types';
-import { SOCIAL_LINK_KEYS, type SocialLinkKey } from '@dracord/ui';
+import { SOCIAL_LINK_KEYS, ShowcasePicker, type SocialLinkKey } from '@dracord/ui';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAccessToken, getRefreshToken, persistSession } from '@/lib/storage';
@@ -305,6 +305,13 @@ export default function ProfileSettingsPage() {
           ))}
         </div>
       </div>
+
+      {user ? (
+        <div>
+          <p className="font-label-sm text-on-surface-variant mb-space-sm">Profil rozeti</p>
+          <ShowcasePicker client={client} userId={user.id} />
+        </div>
+      ) : null}
 
       {message && <p className="text-dracula-green font-body-sm">{message}</p>}
       {error && <p className="text-error font-body-sm">{error}</p>}

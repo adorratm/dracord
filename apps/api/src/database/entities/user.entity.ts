@@ -48,6 +48,10 @@ export class User extends CuidEntity {
   @Column({ type: 'jsonb', nullable: true })
   socialLinks!: Record<string, string> | null;
 
+  /** Profil vitrini: rozeti gösterilen sunucu (B4) */
+  @Column({ type: 'varchar', nullable: true })
+  featuredGuildId!: string | null;
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.OFFLINE })
   status!: UserStatus;
 

@@ -4963,6 +4963,7 @@ export function GuildChannelView({
       <UserProfileCard
         open={Boolean(profileUser)}
         onClose={() => setProfileUser(null)}
+        loadShowcase={(id) => client.getUserShowcase(id)}
         variant="popout"
         user={{
           id: profileUser?.id ?? '',

@@ -598,6 +598,8 @@ export class DracordClient {
       vanityCode?: string | null;
       publicPage?: boolean;
       publicDescription?: string | null;
+      badgeTag?: string | null;
+      badgeEmoji?: string | null;
     },
   ): Promise<GuildSummary> {
     return this.request(`/guilds/${guildId}`, {
@@ -1033,6 +1035,22 @@ export class DracordClient {
     note?: string,
   ): Promise<GameAppDto> {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
+  }
+
+  // ── Profil vitrini (B4) ──
+  async getShowcaseOptions(): Promise<{
+    featuredGuildId: string | null;
+    options: import('@dracord/types').GuildBadgeDto[];
+  }> {
+    return this.request('/showcase/options');
+  }
+
+  async setShowcaseGuild(guildId: string | null): Promise<import('@dracord/types').UserShowcaseDto> {
+    return this.request('/showcase', { method: 'PUT', body: JSON.stringify({ guildId }) });
+  }
+
+  async getUserShowcase(userId: string): Promise<import('@dracord/types').UserShowcaseDto> {
+    return this.request(`/showcase/users/${encodeURIComponent(userId)}`);
   }
 
   /** Herkese açık tanıtım sayfası (giriş gerekmez) */

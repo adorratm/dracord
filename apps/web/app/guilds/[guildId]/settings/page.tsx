@@ -780,7 +780,7 @@ export default function GuildSettingsPage({ params }: PageProps) {
 
           {canManage && (detail ?? guild) && (
             <section className="max-w-2xl mt-space-2xl" id="tanitim">
-              <h2 className="font-headline-lg text-on-surface mb-space-sm">Tanıtım sayfası ve özel adres</h2>
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Tanıtım sayfası, özel adres ve rozet</h2>
               <p className="font-body-sm text-on-surface-variant mb-space-md">
                 Sunucuna kısa, akılda kalan bir adres ver; istersen giriş yapmadan görülebilen bir tanıtım sayfası aç.
               </p>

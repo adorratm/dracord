@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  UserShowcaseDto,
   MemberRoleSummary,
   PresenceStatus,
   RoleProfileBgKey,
@@ -13,6 +14,7 @@ import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
 import { SocialLinksRow } from './SocialLinksRow';
 import { ActivityLine } from './ActivityLine';
+import { GuildBadgeChip, useUserShowcase } from './GuildBadge';
 import { openActivityUrl } from '../lib/open-activity-url';
 import { presenceLabelTr } from '../lib/presence';
 
@@ -40,6 +42,8 @@ export interface UserProfileCardProps {
   };
   actions?: Array<{ id: string; label: string; danger?: boolean; onClick: () => void }>;
   onJoinActivity?: (activity: UserActivity) => void;
+  /** Profil vitrini (B4) — verilirse sunucu rozeti gösterilir */
+  loadShowcase?: (userId: string) => Promise<UserShowcaseDto>;
 }
 
 function pickBg(roles?: MemberRoleSummary[]): RoleProfileBgKey {
@@ -56,7 +60,9 @@ export function UserProfileCard({
   actions = [],
   variant = 'modal',
   onJoinActivity,
+  loadShowcase,
 }: UserProfileCardProps) {
+  const showcase = useUserShowcase(open && !user.isBot ? user.id : null, loadShowcase);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (document.getElementById('dracord-role-badge-styles')) return;
@@ -234,6 +240,11 @@ export function UserProfileCard({
                 {user.bio}
               </p>
             )}
+            {showcase?.badge ? (
+              <div className="mt-space-md">
+                <GuildBadgeChip badge={showcase.badge} level={showcase.level} showName />
+              </div>
+            ) : null}
             <SocialLinksRow links={user.socialLinks} className="mt-space-md" />
             {topRoles.length > 0 && (
               <div className="mt-space-lg">

@@ -140,6 +140,8 @@ export class GuildsController {
       vanityCode?: string | null;
       publicPage?: boolean;
       publicDescription?: string | null;
+      badgeTag?: string | null;
+      badgeEmoji?: string | null;
     },
   ) {
     return this.guildsService.updateGuild(guildId, user.sub, body);

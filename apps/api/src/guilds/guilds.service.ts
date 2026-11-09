@@ -15,7 +15,13 @@ import type {
   GuildSummary,
   PublicUser,
 } from '@dracord/types';
-import { VANITY_LIMITS, normalizeVanityCode } from '@dracord/types';
+import {
+  GUILD_BADGE_LIMITS,
+  VANITY_LIMITS,
+  normalizeBadgeEmoji,
+  normalizeBadgeTag,
+  normalizeVanityCode,
+} from '@dracord/types';
 import { createId } from '@paralleldrive/cuid2';
 
 const DISCOVER_CATEGORY_SET = new Set<DiscoverCategory>([
@@ -623,6 +629,8 @@ export class GuildsService {
       vanityCode?: string | null;
       publicPage?: boolean;
       publicDescription?: string | null;
+      badgeTag?: string | null;
+      badgeEmoji?: string | null;
     },
   ): Promise<GuildSummary> {
     await this.ensureMember(guildId, userId);
@@ -654,7 +662,13 @@ export class GuildsService {
       const mins = Math.max(0, Math.min(120, Math.floor(data.afkTimeoutMinutes)));
       guild.afkTimeoutMinutes = mins;
     }
-    if (data.vanityCode !== undefined || data.publicPage !== undefined || data.publicDescription !== undefined) {
+    if (
+      data.vanityCode !== undefined ||
+      data.publicPage !== undefined ||
+      data.publicDescription !== undefined ||
+      data.badgeTag !== undefined ||
+      data.badgeEmoji !== undefined
+    ) {
       await this.requirePermission(guildId, userId, PERM_MANAGE_GUILD);
     }
     if (data.vanityCode !== undefined) {
@@ -679,6 +693,23 @@ export class GuildsService {
     if (data.publicDescription !== undefined) {
       const d = String(data.publicDescription ?? '').trim().slice(0, VANITY_LIMITS.descMax);
       guild.publicDescription = d || null;
+    }
+    if (data.badgeTag !== undefined) {
+      if (data.badgeTag === null || data.badgeTag === '') guild.badgeTag = null;
+      else {
+        const t = normalizeBadgeTag(data.badgeTag);
+        if (!t) {
+          throw new BadRequestException(
+            `Rozet ${GUILD_BADGE_LIMITS.tagMin}–${GUILD_BADGE_LIMITS.tagMax} karakter olmalı (harf/rakam) ve ayrılmış olmamalı`,
+          );
+        }
+        guild.badgeTag = t;
+      }
+    }
+    if (data.badgeEmoji !== undefined) {
+      const e = normalizeBadgeEmoji(data.badgeEmoji);
+      if (data.badgeEmoji && !e) throw new BadRequestException('Rozet simgesi tek bir emoji olmalı');
+      guild.badgeEmoji = e;
     }
     if (guild.publicPage && !guild.vanityCode) {
       throw new BadRequestException('Tanıtım sayfası için önce özel adres belirle');
@@ -1248,6 +1279,8 @@ export class GuildsService {
       vanityCode: guild.vanityCode ?? null,
       publicPage: Boolean(guild.publicPage),
       publicDescription: guild.publicDescription ?? null,
+      badgeTag: guild.badgeTag ?? null,
+      badgeEmoji: guild.badgeEmoji ?? null,
     };
   }
 

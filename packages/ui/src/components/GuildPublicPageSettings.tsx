@@ -1,13 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { VANITY_LIMITS, normalizeVanityCode, type GuildSummary } from '@dracord/types';
+import {
+  GUILD_BADGE_LIMITS,
+  VANITY_LIMITS,
+  normalizeBadgeEmoji,
+  normalizeBadgeTag,
+  normalizeVanityCode,
+  type GuildSummary,
+} from '@dracord/types';
+import { GuildBadgeChip } from './GuildBadge';
 import { cn } from '../lib/cn';
 
 export type GuildPublicPageClient = {
   updateGuild(
     guildId: string,
-    data: { vanityCode?: string | null; publicPage?: boolean; publicDescription?: string | null },
+    data: {
+      vanityCode?: string | null;
+      publicPage?: boolean;
+      publicDescription?: string | null;
+      badgeTag?: string | null;
+      badgeEmoji?: string | null;
+    },
   ): Promise<GuildSummary>;
 };
 
@@ -31,6 +45,8 @@ export function GuildPublicPageSettings({
   const [code, setCode] = useState(guild.vanityCode ?? '');
   const [desc, setDesc] = useState(guild.publicDescription ?? '');
   const [pub, setPub] = useState(Boolean(guild.publicPage));
+  const [tag, setTag] = useState(guild.badgeTag ?? '');
+  const [emoji, setEmoji] = useState(guild.badgeEmoji ?? '');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -39,11 +55,19 @@ export function GuildPublicPageSettings({
     setCode(guild.vanityCode ?? '');
     setDesc(guild.publicDescription ?? '');
     setPub(Boolean(guild.publicPage));
-  }, [guild.id, guild.vanityCode, guild.publicDescription, guild.publicPage]);
+    setTag(guild.badgeTag ?? '');
+    setEmoji(guild.badgeEmoji ?? '');
+  }, [guild.id, guild.vanityCode, guild.publicDescription, guild.publicPage, guild.badgeTag, guild.badgeEmoji]);
 
   const normalized = code.trim() ? normalizeVanityCode(code) : null;
   const invalid = Boolean(code.trim()) && !normalized;
+  const tagNorm = tag.trim() ? normalizeBadgeTag(tag) : null;
+  const tagInvalid = Boolean(tag.trim()) && !tagNorm;
+  const emojiNorm = normalizeBadgeEmoji(emoji);
+  const emojiInvalid = Boolean(emoji.trim()) && !emojiNorm;
   const dirty =
+    (tagNorm ?? '') !== (guild.badgeTag ?? '') ||
+    (emojiNorm ?? '') !== (guild.badgeEmoji ?? '') ||
     (normalized ?? '') !== (guild.vanityCode ?? '') ||
     desc.trim() !== (guild.publicDescription ?? '') ||
     pub !== Boolean(guild.publicPage);
@@ -52,7 +76,7 @@ export function GuildPublicPageSettings({
   const invite = guild.vanityCode ? `${base}/invite/${guild.vanityCode}` : null;
 
   const save = async () => {
-    if (invalid) return;
+    if (invalid || tagInvalid || emojiInvalid) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -60,6 +84,8 @@ export function GuildPublicPageSettings({
         vanityCode: normalized,
         publicDescription: desc.trim() || null,
         publicPage: normalized ? pub : false,
+        badgeTag: tagNorm,
+        badgeEmoji: emojiNorm,
       });
       onSaved?.(g);
       setMsg({ ok: true, text: 'Kaydedildi.' });
@@ -130,10 +156,54 @@ export function GuildPublicPageSettings({
         </span>
       </label>
 
+      <fieldset className="space-y-2 rounded-lg border border-outline-variant/40 p-space-md">
+        <legend className="px-1 font-label-md text-on-surface">Sunucu rozeti</legend>
+        <p className="font-body-sm text-on-surface-variant">
+          Üyeler bu rozeti profillerinde gösterebilir (Ayarlar › Profil). Kısa bir etiket ve isteğe bağlı bir emoji seç.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1">
+            <span className="block font-label-sm text-on-surface-variant">Emoji</span>
+            <input
+              value={emoji}
+              onChange={(e) => setEmoji(e.target.value)}
+              maxLength={GUILD_BADGE_LIMITS.emojiMax}
+              placeholder="🐉"
+              className="w-16 rounded-lg border border-outline-variant/60 bg-surface-container-low px-2 py-2 text-center font-body-md text-on-surface outline-none focus:border-primary"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block font-label-sm text-on-surface-variant">Etiket</span>
+            <input
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              maxLength={GUILD_BADGE_LIMITS.tagMax + 2}
+              placeholder="TAG"
+              spellCheck={false}
+              className="w-28 rounded-lg border border-outline-variant/60 bg-surface-container-low px-3 py-2 font-body-md uppercase tracking-wide text-on-surface outline-none focus:border-primary"
+            />
+          </label>
+          {tagNorm ? (
+            <div className="pb-2">
+              <GuildBadgeChip badge={{ name: guild.name, iconUrl: guild.iconUrl, tag: tagNorm, emoji: emojiNorm }} />
+            </div>
+          ) : null}
+        </div>
+        {tagInvalid || emojiInvalid ? (
+          <p className="font-label-sm text-error">
+            {tagInvalid
+              ? `Etiket ${GUILD_BADGE_LIMITS.tagMin}–${GUILD_BADGE_LIMITS.tagMax} harf/rakam olmalı.`
+              : 'Simge tek bir emoji olmalı.'}
+          </p>
+        ) : (
+          <p className="font-label-sm text-outline">Etiketi boşaltırsan rozet kapanır ve profillerden kalkar.</p>
+        )}
+      </fieldset>
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={!dirty || invalid || busy}
+          disabled={!dirty || invalid || tagInvalid || emojiInvalid || busy}
           onClick={() => void save()}
           className="rounded-lg bg-primary px-4 py-2 font-label-md text-on-primary disabled:opacity-50"
         >

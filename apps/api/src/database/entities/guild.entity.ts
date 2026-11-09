@@ -60,6 +60,13 @@ export class Guild extends CuidEntity {
   @Column({ type: 'text', nullable: true })
   publicDescription!: string | null;
 
+  /** Sunucu rozeti (B4) */
+  @Column({ type: 'varchar', length: 8, nullable: true })
+  badgeTag!: string | null;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  badgeEmoji!: string | null;
+
   /** Aktif sunucu takviyesi sayısı */
   @Column({ type: 'int', default: 0 })
   boostCount!: number;

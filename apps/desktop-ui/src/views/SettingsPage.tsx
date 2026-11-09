@@ -13,6 +13,7 @@ import {
   SOCIAL_LINK_KEYS,
   presenceLabelTr,
   type SocialLinkKey,
+  ShowcasePicker,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -752,6 +753,13 @@ export function SettingsPage({
                 ))}
               </div>
             </div>
+
+            {user ? (
+              <div>
+                <p className="font-label-sm text-on-surface-variant mb-space-sm">Profil rozeti</p>
+                <ShowcasePicker client={client} userId={user.id} />
+              </div>
+            ) : null}
 
             {msg && tab === 'profile' && (
               <p className="text-dracula-green font-body-sm">{msg}</p>
