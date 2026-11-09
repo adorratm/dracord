@@ -61,6 +61,10 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     showQuickChat: true,
     opacity: 0.94,
     watchPartyAdblock: true,
+    hudEnabled: true,
+    hudPosition: 'top-left',
+    hudMax: 3,
+    perfHud: false,
   },
   language: {
     locale: 'tr',

@@ -1113,6 +1113,13 @@ export interface ClientSettings {
     opacity: number;
     /** Watch Party session reklam ağı filtresi */
     watchPartyAdblock: boolean;
+    /** Konuşan HUD (overlay kapalıyken de görünür, tıklanamaz) */
+    hudEnabled: boolean;
+    hudPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    /** Aynı anda gösterilen konuşan sayısı (1–6) */
+    hudMax: number;
+    /** HUD altında CPU / RAM / saat */
+    perfHud: boolean;
   };
   language: {
     locale: 'tr' | 'en';

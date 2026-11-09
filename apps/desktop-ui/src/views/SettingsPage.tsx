@@ -2067,6 +2067,56 @@ export function SettingsPage({
               }
             />
           </SettingsSection>
+          <SettingsSection title="Konuşan HUD">
+            <SettingsToggle
+              label="Konuşanları göster"
+              description="Seste konuşan kişiler ekranın köşesinde görünür; tıklanamaz, oyunu engellemez."
+              checked={prefs.overlay.hudEnabled !== false}
+              onChange={(v) => setSection('overlay', { hudEnabled: v })}
+            />
+            <div className="px-space-md py-space-sm flex flex-wrap items-center gap-2">
+              <span className="font-label-md text-on-surface w-28">Konum</span>
+              {(
+                [
+                  ['top-left', 'Sol üst'],
+                  ['top-right', 'Sağ üst'],
+                  ['bottom-left', 'Sol alt'],
+                  ['bottom-right', 'Sağ alt'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={prefs.overlay.hudEnabled === false}
+                  onClick={() => setSection('overlay', { hudPosition: id })}
+                  className={`px-space-md py-space-xs rounded-lg font-label-sm disabled:opacity-50 ${
+                    (prefs.overlay.hudPosition ?? 'top-left') === id
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'bg-surface-container-high text-on-surface hover:bg-surface-bright'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <SettingsSlider
+              label="Aynı anda gösterilen"
+              value={prefs.overlay.hudMax ?? 3}
+              min={1}
+              max={6}
+              step={1}
+              suffix=" kişi"
+              disabled={prefs.overlay.hudEnabled === false}
+              onChange={(v) => setSection('overlay', { hudMax: Math.round(v) })}
+            />
+            <SettingsToggle
+              label="Performans göstergesi"
+              description="HUD altında sistem CPU ve RAM kullanımı ile saat. Oyunun FPS değeri ölçülemez (oyuna müdahale gerektirir)."
+              checked={Boolean(prefs.overlay.perfHud)}
+              disabled={prefs.overlay.hudEnabled === false}
+              onChange={(v) => setSection('overlay', { perfHud: v })}
+            />
+          </SettingsSection>
           <SettingsSection title="Watch Party">
             <SettingsToggle
               label="Reklam ağı filtresi"

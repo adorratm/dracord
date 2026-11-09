@@ -4,6 +4,7 @@
  * Exclusive fullscreen oyunlarda güvenilir değildir; borderless önerilir.
  */
 const { BrowserWindow, globalShortcut, screen, ipcMain } = require('electron');
+const os = require('os');
 const path = require('path');
 
 /** @type {BrowserWindow | null} */
@@ -14,7 +15,8 @@ let visible = false;
 let currentAccelerator = 'Control+Shift+`';
 const DEFAULT_ACCELERATOR = 'Control+Shift+`';
 const SPEAK_HOLD_MS = 2600;
-const HUD_MAX = 3;
+const HUD_MAX_DEFAULT = 3;
+const HUD_POSITIONS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
 
 /** @type {{
  *  enabled: boolean,
@@ -24,6 +26,10 @@ const HUD_MAX = 3;
  *  showQuickChat: boolean,
  *  opacity: number,
  *  watchPartyAdblock: boolean,
+ *  hudEnabled: boolean,
+ *  hudPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
+ *  hudMax: number,
+ *  perfHud: boolean,
  * }} */
 let prefs = {
   enabled: true,
@@ -33,6 +39,10 @@ let prefs = {
   showQuickChat: true,
   opacity: 0.94,
   watchPartyAdblock: true,
+  hudEnabled: true,
+  hudPosition: 'top-left',
+  hudMax: HUD_MAX_DEFAULT,
+  perfHud: false,
 };
 
 /** @type {{
@@ -213,64 +223,102 @@ function overlayHtml() {
 </html>`;
 }
 
-function speakingHudHtml(speakers) {
-  const rows = (speakers || [])
-    .map((s) => {
-      const name = escapeHtml(s.name || 'Üye');
-      const live = s.speaking ? 'live' : 'fade';
-      const av = s.avatarUrl
-        ? `<img class="av" src="${escapeHtml(s.avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
-        : `<div class="av letter">${escapeHtml((s.name || '?').trim().slice(0, 1).toUpperCase())}</div>`;
-      return `<div class="row ${live}">${av}<span class="name">${name}</span></div>`;
-    })
-    .join('');
+/**
+ * Konuşan HUD — bir kez yüklenir, içerik `window.__hud(data)` ile yerinde güncellenir
+ * (her değişimde sayfa yeniden yüklenmez → titreme yok).
+ */
+function speakingHudHtml() {
   return `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
   <style>
     html, body {
-      margin: 0; background: transparent !important; overflow: hidden;
+      margin: 0; background: transparent !important; overflow: hidden; height: 100%;
       font-family: "Segoe UI", system-ui, sans-serif;
       pointer-events: none; user-select: none;
     }
-    #root {
-      padding: 14px 12px; display: flex; flex-direction: column; gap: 8px;
-      width: 220px;
-    }
+    #root { padding: 12px; display: flex; flex-direction: column; gap: 8px; width: 216px; box-sizing: border-box; }
+    body.right #root { align-items: flex-end; margin-left: auto; }
+    body.bottom #root { position: absolute; bottom: 0; }
+    body.bottom.right #root { right: 0; }
     .row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 4px 8px 4px 4px;
-      border-radius: 999px;
-      background: rgba(10, 12, 18, 0.42);
-      backdrop-filter: blur(6px);
-      transition: opacity .35s ease, transform .35s ease;
+      display: flex; align-items: center; gap: 10px; max-width: 100%;
+      padding: 4px 10px 4px 4px; border-radius: 999px;
+      background: rgba(10, 12, 18, 0.45); backdrop-filter: blur(6px);
+      transition: opacity .35s ease;
     }
-    .row.live { opacity: 1; transform: translateX(0); }
     .row.fade { opacity: 0.55; }
     .av {
-      width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
+      width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
       box-shadow: 0 0 0 2px rgba(35, 165, 90, 0.95), 0 0 10px rgba(35, 165, 90, 0.55);
-      background: #44475a; flex-shrink: 0;
+      background: #44475a; display: grid; place-items: center; color: #f8f8f2; font-size: 14px; font-weight: 600;
     }
-    .row.fade .av {
-      box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
-    }
-    .letter {
-      display: grid; place-items: center; color: #f8f8f2; font-size: 14px; font-weight: 600;
-    }
-    .name {
-      color: #fff; font-size: 13px; font-weight: 600;
-      text-shadow: 0 1px 3px rgba(0,0,0,.85);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      max-width: 150px;
-    }
+    .row.fade .av { box-shadow: 0 0 0 2px rgba(255,255,255,0.2); }
+    .name { color: #fff; font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.85);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+    .self { color: #ffb86c; font-size: 12px; font-weight: 700; }
+    .perf { display: inline-flex; gap: 10px; padding: 3px 10px; border-radius: 8px; background: rgba(10,12,18,0.55);
+      color: #e6e6f0; font-size: 11px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    .perf b { color: #fff; font-weight: 700; }
   </style>
 </head>
 <body>
-  <div id="root">${rows}</div>
+  <div id="root"></div>
+  <script>
+    (function () {
+      var root = document.getElementById('root');
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+      window.__hud = function (d) {
+        document.body.className = (d.position || 'top-left').split('-').join(' ');
+        root.textContent = '';
+        var rows = d.speakers || [];
+        for (var i = 0; i < rows.length; i++) {
+          var s = rows[i];
+          var row = el('div', 'row' + (s.speaking ? '' : ' fade'));
+          var av;
+          if (s.avatarUrl && /^https:/.test(s.avatarUrl)) { av = el('img', 'av'); av.src = s.avatarUrl; av.alt = ''; av.referrerPolicy = 'no-referrer'; }
+          else av = el('div', 'av', (s.name || '?').trim().slice(0, 1).toUpperCase());
+          row.appendChild(av);
+          row.appendChild(el('span', 'name', s.name || 'Üye'));
+          root.appendChild(row);
+        }
+        if (d.self) root.appendChild(el('div', 'row self', d.self));
+        if (d.perf) {
+          var p = el('div', 'perf');
+          [['CPU', d.perf.cpu + '%'], ['RAM', d.perf.ram + '%'], ['', d.perf.time]].forEach(function (x) {
+            var span = el('span'); if (x[0]) span.appendChild(document.createTextNode(x[0] + ' ')); span.appendChild(el('b', '', x[1])); p.appendChild(span);
+          });
+          root.appendChild(p);
+        }
+      };
+    })();
+  </script>
 </body>
 </html>`;
+}
+
+/** Sistem CPU kullanımı (örnekler arası fark) */
+let lastCpu = null;
+function sampleCpuPercent() {
+  const cpus = os.cpus();
+  let idle = 0;
+  let total = 0;
+  for (const c of cpus) {
+    for (const k of Object.keys(c.times)) total += c.times[k];
+    idle += c.times.idle;
+  }
+  const prev = lastCpu;
+  lastCpu = { idle, total };
+  if (!prev || total <= prev.total) return 0;
+  return Math.max(0, Math.min(100, Math.round(100 * (1 - (idle - prev.idle) / (total - prev.total)))));
+}
+function perfSnapshot() {
+  const ram = Math.round(100 * (1 - os.freemem() / Math.max(1, os.totalmem())));
+  const d = new Date();
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return { cpu: sampleCpuPercent(), ram, time };
 }
 
 function pushStateToOverlay() {
@@ -310,8 +358,15 @@ function positionSpeakingHud(win) {
   const display = targetDisplay();
   const { x, y, width, height } = display.workArea;
   const w = Math.min(240, width);
-  const h = Math.min(200, height);
-  win.setBounds({ x: x + 10, y: y + 10, width: w, height: h }, false);
+  const h = Math.min(60 + 46 * hudMax() + (prefs.perfHud ? 30 : 0), height);
+  const pos = HUD_POSITIONS.has(prefs.hudPosition) ? prefs.hudPosition : 'top-left';
+  const nx = pos.endsWith('right') ? x + width - w - 10 : x + 10;
+  const ny = pos.startsWith('bottom') ? y + height - h - 10 : y + 10;
+  win.setBounds({ x: nx, y: ny, width: w, height: h }, false);
+}
+
+function hudMax() {
+  return Math.max(1, Math.min(6, Math.floor(Number(prefs.hudMax) || HUD_MAX_DEFAULT)));
 }
 
 function applyFullscreenAffinity(win) {
@@ -406,11 +461,16 @@ function createSpeakingHudWindow() {
   } catch {
     speakingHudWindow.setIgnoreMouseEvents(true);
   }
-  speakingHudWindow.loadURL(
-    `data:text/html;charset=utf-8,${encodeURIComponent(speakingHudHtml([]))}`,
-  );
+  hudReady = false;
+  speakingHudWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(speakingHudHtml())}`);
+  speakingHudWindow.webContents.on('did-finish-load', () => {
+    hudReady = true;
+    lastHudFingerprint = '';
+    renderSpeakingHud();
+  });
   speakingHudWindow.on('closed', () => {
     speakingHudWindow = null;
+    hudReady = false;
   });
   return speakingHudWindow;
 }
@@ -420,12 +480,16 @@ function listHudSpeakers() {
   const all = [...recentSpeakers.values()]
     .filter((s) => s.speaking || now - s.lastSpokeAt <= SPEAK_HOLD_MS)
     .sort((a, b) => b.lastSpokeAt - a.lastSpokeAt)
-    .slice(0, HUD_MAX);
+    .slice(0, hudMax());
   return all;
 }
 
 /** @type {string} */
 let lastHudFingerprint = '';
+let hudReady = false;
+let lastPerfAt = 0;
+/** @type {{ cpu: number; ram: number; time: string } | null} */
+let lastPerf = null;
 
 function hudFingerprint(speakers) {
   return (speakers || [])
@@ -435,9 +499,23 @@ function hudFingerprint(speakers) {
 
 function renderSpeakingHud() {
   const win = createSpeakingHudWindow();
-  const speakers = overlayState.inVoice ? listHudSpeakers() : [];
-  const show = speakers.length > 0;
-  const fp = hudFingerprint(speakers);
+  const speakers = overlayState.inVoice && prefs.hudEnabled ? listHudSpeakers() : [];
+  const self =
+    overlayState.inVoice && prefs.hudEnabled
+      ? overlayState.selfDeafened
+        ? 'Sağırlaştırıldın'
+        : overlayState.selfMuted
+          ? 'Mikrofonun kapalı'
+          : ''
+      : '';
+  const perfOn = prefs.hudEnabled && prefs.perfHud && overlayState.inVoice;
+  if (perfOn && Date.now() - lastPerfAt > 1500) {
+    lastPerf = perfSnapshot();
+    lastPerfAt = Date.now();
+  }
+  const perf = perfOn ? lastPerf : null;
+  const show = speakers.length > 0 || Boolean(self) || Boolean(perf);
+  const fp = `${hudFingerprint(speakers)}#${self}#${perf ? `${perf.cpu}/${perf.ram}/${perf.time}` : ''}#${prefs.hudPosition}`;
   if (prefs.followDisplay) positionSpeakingHud(win);
   applyFullscreenAffinity(win);
   try {
@@ -445,10 +523,11 @@ function renderSpeakingHud() {
   } catch {
     win.setIgnoreMouseEvents(true);
   }
-  if (fp !== lastHudFingerprint) {
+  if (hudReady && fp !== lastHudFingerprint) {
     lastHudFingerprint = fp;
-    const html = speakingHudHtml(speakers);
-    win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const data = JSON.stringify({ speakers, self, perf, position: prefs.hudPosition });
+    // JSON → JS literal; </script> enjeksiyonu yok (DOM API ile basılır)
+    win.webContents.executeJavaScript(`window.__hud && window.__hud(${data})`, false).catch(() => undefined);
   }
   if (show) {
     if (!win.isVisible()) win.showInactive();
@@ -571,6 +650,10 @@ function applyPrefs(next) {
     showQuickChat: next?.showQuickChat !== false,
     opacity: Math.min(1, Math.max(0.4, Number(next?.opacity) || 0.94)),
     watchPartyAdblock: next?.watchPartyAdblock !== false,
+    hudEnabled: next?.hudEnabled !== false,
+    hudPosition: HUD_POSITIONS.has(next?.hudPosition) ? next.hudPosition : 'top-left',
+    hudMax: Math.max(1, Math.min(6, Math.floor(Number(next?.hudMax) || HUD_MAX_DEFAULT))),
+    perfHud: Boolean(next?.perfHud),
   };
   if (prev.hotkey !== prefs.hotkey || prev.enabled !== prefs.enabled) {
     registerHotkey(prefs.hotkey);
@@ -587,6 +670,11 @@ function applyPrefs(next) {
     reloadOverlayUi();
   } else {
     pushStateToOverlay();
+  }
+  if (speakingHudWindow && !speakingHudWindow.isDestroyed()) {
+    positionSpeakingHud(speakingHudWindow);
+    lastHudFingerprint = '';
+    renderSpeakingHud();
   }
   return { ...prefs };
 }
