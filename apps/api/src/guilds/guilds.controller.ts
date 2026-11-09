@@ -137,6 +137,9 @@ export class GuildsController {
       discoverCategory?: string;
       afkChannelId?: string | null;
       afkTimeoutMinutes?: number;
+      vanityCode?: string | null;
+      publicPage?: boolean;
+      publicDescription?: string | null;
     },
   ) {
     return this.guildsService.updateGuild(guildId, user.sub, body);
@@ -315,6 +318,17 @@ export class GuildsController {
   ) {
     await this.guildsService.deleteSlashCommand(guildId, commandId, user.sub);
     return { ok: true };
+  }
+}
+
+/** Herkese açık tanıtım sayfası verisi (giriş gerekmez) */
+@Controller('public/guilds')
+export class PublicGuildsController {
+  constructor(private readonly guildsService: GuildsService) {}
+
+  @Get(':slug')
+  page(@Param('slug') slug: string) {
+    return this.guildsService.getPublicPage(slug);
   }
 }
 

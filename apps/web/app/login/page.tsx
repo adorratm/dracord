@@ -20,7 +20,7 @@ function LoginInner() {
 
   useEffect(() => {
     if (ready && (user || hasSession())) {
-      router.replace(returnUrl.startsWith('/') ? returnUrl : '/channels/@me');
+      router.replace(returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/channels/@me');
     }
   }, [ready, user, router, returnUrl]);
 
@@ -49,7 +49,7 @@ function LoginInner() {
       client.connectSocket();
       persistSession(result.accessToken, result.refreshToken, result.user);
       setUser(result.user);
-      router.replace(returnUrl.startsWith('/') ? returnUrl : '/channels/@me');
+      router.replace(returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/channels/@me');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Apple girişi başarısız');
     } finally {

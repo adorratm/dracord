@@ -347,6 +347,50 @@ export interface GuildSummary {
   boostCount?: number;
   /** 0–3 (eşikler: 2 / 7 / 14) */
   boostLevel?: number;
+  /** Özel davet adresi: dracord.com.tr/s/<vanityCode> ve /invite/<vanityCode> */
+  vanityCode?: string | null;
+  /** Herkese açık tanıtım sayfası (B3) */
+  publicPage?: boolean;
+  publicDescription?: string | null;
+}
+
+// ── Sunucu tanıtım sayfası + özel URL (B3) ──
+export const VANITY_LIMITS = { min: 3, max: 32, descMax: 1000 } as const;
+/** Ürün yolları / marka ile çakışmasın */
+export const VANITY_RESERVED = new Set([
+  'admin', 'api', 'app', 'auth', 'channels', 'dracord', 'destek', 'discover', 'download', 'embed', 'help',
+  'invite', 'kesfet', 'legal', 'login', 'logout', 'me', 'oauth', 'official', 'resmi', 'settings', 'support',
+  'status', 'staff', 'team', 'www', 'yardim', 'moderator', 'mod', 'system', 'sistem', 'everyone', 'here',
+]);
+/** Küçük harf, a-z 0-9 ve tire; baş/son tire yok. Geçersizse null. */
+export function normalizeVanityCode(raw: string): string | null {
+  const v = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\u0307/g, '')
+    .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/\s+/g, '-');
+  if (v.length < VANITY_LIMITS.min || v.length > VANITY_LIMITS.max) return null;
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(v) || v.includes('--')) return null;
+  if (VANITY_RESERVED.has(v)) return null;
+  return v;
+}
+
+export interface GuildPublicPageDto {
+  id: string;
+  name: string;
+  vanityCode: string;
+  iconUrl: string | null;
+  bannerUrl: string | null;
+  description: string | null;
+  category: DiscoverCategory;
+  memberCount: number;
+  /** Şu an ses kanallarında olan kişi */
+  inVoiceCount: number;
+  boostLevel: number;
+  createdAt: string;
+  /** Herkese açık metin kanalı adları (en fazla 8) */
+  channels: string[];
 }
 
 export function guildBoostLevel(boostCount: number): number {

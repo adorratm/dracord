@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -46,6 +47,18 @@ export class Guild extends CuidEntity {
   /** 0 = AFK kapalı. Tipik: 5–60 dk */
   @Column({ type: 'int', default: 0 })
   afkTimeoutMinutes!: number;
+
+  /** Özel davet / tanıtım adresi (B3); küçük harf, benzersiz */
+  @Index('IDX_guilds_vanity_code', { unique: true, where: '"vanityCode" IS NOT NULL' })
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  vanityCode!: string | null;
+
+  /** Tanıtım sayfası herkese açık mı */
+  @Column({ type: 'boolean', default: false })
+  publicPage!: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  publicDescription!: string | null;
 
   /** Aktif sunucu takviyesi sayısı */
   @Column({ type: 'int', default: 0 })

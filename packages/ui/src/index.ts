@@ -29,6 +29,8 @@ export {
 export type { TranslateResult } from './lib/translate';
 export { LevelsPanel, LevelBar } from './components/LevelsPanel';
 export { GuildStatsPanel } from './components/GuildStatsPanel';
+export { GuildPublicPageSettings } from './components/GuildPublicPageSettings';
+export type { GuildPublicPageClient } from './components/GuildPublicPageSettings';
 export type { GuildStatsClient } from './components/GuildStatsPanel';
 export { VoiceMessagePlayer } from './components/VoiceMessagePlayer';
 export { SoundboardButton } from './components/SoundboardButton';

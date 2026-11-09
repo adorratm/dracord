@@ -17,7 +17,8 @@ export default function InviteJoinPage() {
   useEffect(() => {
     if (!ready) return;
     if (!user) {
-      router.replace('/login');
+      // Girişten sonra davete geri dön
+      router.replace(params.code ? `/login?returnUrl=${encodeURIComponent(`/invite/${params.code}`)}` : '/login');
       return;
     }
     const code = params.code;

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -10,9 +11,11 @@ import type {
   DiscoverCategory,
   GuildInviteDto,
   GuildPermissionsDto,
+  GuildPublicPageDto,
   GuildSummary,
   PublicUser,
 } from '@dracord/types';
+import { VANITY_LIMITS, normalizeVanityCode } from '@dracord/types';
 import { createId } from '@paralleldrive/cuid2';
 
 const DISCOVER_CATEGORY_SET = new Set<DiscoverCategory>([
@@ -617,6 +620,9 @@ export class GuildsService {
       discoverCategory?: string;
       afkChannelId?: string | null;
       afkTimeoutMinutes?: number;
+      vanityCode?: string | null;
+      publicPage?: boolean;
+      publicDescription?: string | null;
     },
   ): Promise<GuildSummary> {
     await this.ensureMember(guildId, userId);
@@ -648,7 +654,42 @@ export class GuildsService {
       const mins = Math.max(0, Math.min(120, Math.floor(data.afkTimeoutMinutes)));
       guild.afkTimeoutMinutes = mins;
     }
-    await this.em.save(Guild, guild);
+    if (data.vanityCode !== undefined || data.publicPage !== undefined || data.publicDescription !== undefined) {
+      await this.requirePermission(guildId, userId, PERM_MANAGE_GUILD);
+    }
+    if (data.vanityCode !== undefined) {
+      if (data.vanityCode === null || data.vanityCode === '') {
+        guild.vanityCode = null;
+      } else {
+        const v = normalizeVanityCode(data.vanityCode);
+        if (!v) {
+          throw new BadRequestException(
+            `Özel adres ${VANITY_LIMITS.min}–${VANITY_LIMITS.max} karakter olmalı (a-z, 0-9, tire) ve ayrılmış bir kelime olmamalı`,
+          );
+        }
+        if (v !== guild.vanityCode) {
+          const taken = await this.em.findOne(Guild, { where: { vanityCode: v } });
+          const inviteClash = await this.em.findOne(GuildInvite, { where: { code: v } });
+          if ((taken && taken.id !== guild.id) || inviteClash) throw new ConflictException('Bu adres kullanımda');
+        }
+        guild.vanityCode = v;
+      }
+    }
+    if (data.publicPage !== undefined) guild.publicPage = Boolean(data.publicPage);
+    if (data.publicDescription !== undefined) {
+      const d = String(data.publicDescription ?? '').trim().slice(0, VANITY_LIMITS.descMax);
+      guild.publicDescription = d || null;
+    }
+    if (guild.publicPage && !guild.vanityCode) {
+      throw new BadRequestException('Tanıtım sayfası için önce özel adres belirle');
+    }
+    try {
+      await this.em.save(Guild, guild);
+    } catch (e) {
+      // Eşzamanlı aynı adres (unique index)
+      if (String((e as { code?: string })?.code) === '23505') throw new ConflictException('Bu adres kullanımda');
+      throw e;
+    }
     void this.indexer.indexGuild(guild).catch(() => undefined);
     return this.toSummary(guild);
   }
@@ -737,7 +778,13 @@ export class GuildsService {
       where: { code },
       relations: { guild: true },
     });
-    if (!invite) throw new NotFoundException('Davet bulunamadı');
+    if (!invite) {
+      // Özel adres (vanity) — sabit, süresiz davet
+      const v = normalizeVanityCode(code);
+      const guild = v ? await this.em.findOne(Guild, { where: { vanityCode: v } }) : null;
+      if (!guild) throw new NotFoundException('Davet bulunamadı');
+      return this.joinViaVanity(guild, userId, v!);
+    }
     if (invite.expiresAt && invite.expiresAt < new Date()) {
       throw new BadRequestException('Davet süresi dolmuş');
     }
@@ -762,6 +809,59 @@ export class GuildsService {
     }
     this.funnel.record('invite_accept', { guildId: invite.guildId, code });
     return this.toSummary(invite.guild);
+  }
+
+  private async joinViaVanity(guild: Guild, userId: string, code: string): Promise<GuildSummary> {
+    await this.assertNotBanned(guild.id, userId);
+    const existing = await this.em.findOne(GuildMember, { where: { guildId: guild.id, userId } });
+    if (!existing) {
+      const member = await this.em.save(GuildMember, this.em.create(GuildMember, { guildId: guild.id, userId }));
+      await this.ensureEveryoneRole(guild.id, member.id);
+    } else {
+      await this.ensureEveryoneRole(guild.id, existing.id);
+    }
+    this.funnel.record('invite_accept', { guildId: guild.id, code });
+    return this.toSummary(guild);
+  }
+
+  /** Herkese açık tanıtım sayfası (giriş gerekmez). Kapalıysa 404. */
+  async getPublicPage(slug: string): Promise<GuildPublicPageDto> {
+    const v = normalizeVanityCode(slug);
+    const guild = v ? await this.em.findOne(Guild, { where: { vanityCode: v } }) : null;
+    if (!guild || !guild.publicPage) throw new NotFoundException('Sayfa bulunamadı');
+    const [memberCount, voice, channels] = await Promise.all([
+      this.em.count(GuildMember, { where: { guildId: guild.id } }),
+      this.voicePresence.listGuildVoice(guild.id).catch(() => ({}) as Record<string, unknown[]>),
+      this.em.find(Channel, {
+        where: { guildId: guild.id, type: ChannelType.TEXT },
+        order: { position: 'ASC' },
+        take: 40,
+      }),
+    ]);
+    const visible = channels
+      .filter(
+        (c) =>
+          !c.locked &&
+          !c.passwordHash &&
+          !(c.permissionOverwrites ?? []).some((o) => o.deny?.includes(GuildPermissions.VIEW_CHANNELS)),
+      )
+      .slice(0, 8)
+      .map((c) => c.name);
+    const sum = this.toSummary(guild);
+    return {
+      id: guild.id,
+      name: guild.name,
+      vanityCode: guild.vanityCode!,
+      iconUrl: guild.iconUrl,
+      bannerUrl: guild.bannerUrl ?? null,
+      description: guild.publicDescription ?? null,
+      category: normalizeDiscoverCategory(guild.discoverCategory),
+      memberCount,
+      inVoiceCount: Object.values(voice).reduce((n, arr) => n + (Array.isArray(arr) ? arr.length : 0), 0),
+      boostLevel: sum.boostLevel ?? 0,
+      createdAt: guild.createdAt.toISOString(),
+      channels: visible,
+    };
   }
 
   async joinDiscoverable(guildId: string, userId: string): Promise<GuildSummary> {
@@ -1145,6 +1245,9 @@ export class GuildsService {
       afkTimeoutMinutes: guild.afkTimeoutMinutes ?? 0,
       boostCount,
       boostLevel,
+      vanityCode: guild.vanityCode ?? null,
+      publicPage: Boolean(guild.publicPage),
+      publicDescription: guild.publicDescription ?? null,
     };
   }
 

@@ -595,6 +595,9 @@ export class DracordClient {
       discoverCategory?: string;
       afkChannelId?: string | null;
       afkTimeoutMinutes?: number;
+      vanityCode?: string | null;
+      publicPage?: boolean;
+      publicDescription?: string | null;
     },
   ): Promise<GuildSummary> {
     return this.request(`/guilds/${guildId}`, {
@@ -1030,6 +1033,11 @@ export class DracordClient {
     note?: string,
   ): Promise<GameAppDto> {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
+  }
+
+  /** Herkese açık tanıtım sayfası (giriş gerekmez) */
+  async getPublicGuildPage(slug: string): Promise<import('@dracord/types').GuildPublicPageDto> {
+    return this.request(`/public/guilds/${encodeURIComponent(slug)}`);
   }
 
   // ── Sunucu istatistikleri (B2, MANAGE_GUILD) ──

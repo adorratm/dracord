@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { cn, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { cn, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -46,6 +46,7 @@ type Tab =
   | 'slash'
   | 'levels'
   | 'stats'
+  | 'public'
   | 'invite';
 
 const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | 'channels' | 'mod' }[] =
@@ -58,6 +59,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'slash', label: 'Slash komutları', icon: 'terminal', need: 'manage' },
     { id: 'levels', label: 'Seviyeler', icon: 'military_tech', need: 'manage' },
     { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
+    { id: 'public', label: 'Tanıtım sayfası', icon: 'public', need: 'manage' },
     { id: 'invite', label: 'Davet', icon: 'link' },
   ];
 
@@ -898,6 +900,25 @@ export function GuildSettingsPage({
                 ))}
               </div>
             </>
+          )}
+
+          {tab === 'public' && canManage && guild && (
+            <section className="max-w-2xl">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Tanıtım sayfası ve özel adres</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Sunucuna kısa, akılda kalan bir adres ver; istersen giriş yapmadan görülebilen bir tanıtım sayfası aç.
+              </p>
+              <GuildPublicPageSettings
+                client={client}
+                guild={guild}
+                onSaved={setGuild}
+                openExternal={(u) => {
+                  const ext = window.dracordDesktop?.openExternal;
+                  if (ext) void ext(u);
+                  else window.open(u, '_blank', 'noopener,noreferrer');
+                }}
+              />
+            </section>
           )}
 
           {tab === 'stats' && canManage && (

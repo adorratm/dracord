@@ -6,6 +6,7 @@ import { MemberLevels1762710000000 } from './migrations/1762710000000-MemberLeve
 import { GuildSounds1762720000000 } from './migrations/1762720000000-GuildSounds';
 import { GamePlatform1762730000000 } from './migrations/1762730000000-GamePlatform';
 import { GuildStats1762740000000 } from './migrations/1762740000000-GuildStats';
+import { GuildVanity1762750000000 } from './migrations/1762750000000-GuildVanity';
 
 loadEnv();
 
@@ -17,6 +18,6 @@ export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   entities: [],
-  migrations: [InitPlatformExtras1730000000000, ScheduledMessages1762700000000, MemberLevels1762710000000, GuildSounds1762720000000, GamePlatform1762730000000, GuildStats1762740000000],
+  migrations: [InitPlatformExtras1730000000000, ScheduledMessages1762700000000, MemberLevels1762710000000, GuildSounds1762720000000, GamePlatform1762730000000, GuildStats1762740000000, GuildVanity1762750000000],
   synchronize: false,
 });

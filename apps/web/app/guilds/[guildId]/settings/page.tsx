@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { GuildStatsPanel, LevelsPanel } from '@dracord/ui';
+import { GuildPublicPageSettings, GuildStatsPanel, LevelsPanel } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -777,6 +777,24 @@ export default function GuildSettingsPage({ params }: PageProps) {
               </>
             )}
           </section>
+
+          {canManage && (detail ?? guild) && (
+            <section className="max-w-2xl mt-space-2xl" id="tanitim">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Tanıtım sayfası ve özel adres</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Sunucuna kısa, akılda kalan bir adres ver; istersen giriş yapmadan görülebilen bir tanıtım sayfası aç.
+              </p>
+              <GuildPublicPageSettings
+                client={client}
+                guild={(detail ?? guild)!}
+                onSaved={(g) => {
+                  patchGuild(g);
+                  setDetail(g);
+                }}
+                siteUrl={typeof window !== 'undefined' ? window.location.origin : undefined}
+              />
+            </section>
+          )}
 
           {canManage && (
             <section className="max-w-3xl mt-space-2xl" id="istatistik">

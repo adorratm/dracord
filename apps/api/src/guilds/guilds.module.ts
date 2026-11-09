@@ -7,7 +7,7 @@ import { QueuesModule } from '@/queues/queues.module';
 import { SearchModule } from '@/search/search.module';
 import { VoicePresenceModule } from '@/voice/voice-presence.module';
 import { EveryoneRoleBootstrapService } from './everyone-role-bootstrap.service';
-import { GuildsController, InvitesController } from './guilds.controller';
+import { GuildsController, InvitesController, PublicGuildsController } from './guilds.controller';
 import { GuildsService } from './guilds.service';
 
 @Module({
@@ -20,7 +20,7 @@ import { GuildsService } from './guilds.service';
     ModerationModule,
     QueuesModule,
   ],
-  controllers: [GuildsController, InvitesController],
+  controllers: [GuildsController, InvitesController, PublicGuildsController],
   providers: [GuildsService, EveryoneRoleBootstrapService],
   exports: [GuildsService],
 })
