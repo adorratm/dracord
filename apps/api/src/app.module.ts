@@ -35,6 +35,7 @@ import { DiscoveryModule } from '@/discovery/discovery.module';
 import { LevelsModule } from '@/levels/levels.module';
 import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
 import { ShowcaseModule } from '@/showcase/showcase.module';
+import { TournamentsModule } from '@/tournaments/tournaments.module';
 import { SoundboardModule } from '@/soundboard/soundboard.module';
 import { GamesModule } from '@/games/games.module';
 
@@ -83,6 +84,7 @@ import { GamesModule } from '@/games/games.module';
     LevelsModule,
     GuildStatsModule,
     ShowcaseModule,
+    TournamentsModule,
     SoundboardModule,
     GamesModule,
   ],

@@ -16,6 +16,7 @@ import {
   useVoiceChannelStatuses,
   voiceStatusErrorMessage,
   LevelsPanel,
+  TournamentsPanel,
   ConfirmDialog,
   Modal,
   SearchableSelect,
@@ -112,6 +113,7 @@ export function Shell() {
   const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
   const [levelsOpen, setLevelsOpen] = useState(false);
+  const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
   const [canManageChannels, setCanManageChannels] = useState(false);
   const [canManageRoles, setCanManageRoles] = useState(false);
@@ -1376,6 +1378,14 @@ export function Shell() {
                   <button
                     type="button"
                     className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+                    onClick={() => setTournamentsOpen(true)}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">emoji_events</span>
+                    Turnuvalar
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
                     onClick={() => setView({ kind: 'guild-boost', guildId: activeGuild.id })}
                   >
                     <span className="material-symbols-outlined text-[16px] text-primary-container">
@@ -1731,11 +1741,20 @@ export function Shell() {
       </div>
 
       {activeGuildId && (
+        <>
+        <Modal open={tournamentsOpen} title="Turnuvalar" onClose={() => setTournamentsOpen(false)} className="sm:max-w-3xl">
+          <div className="max-h-[75vh] overflow-y-auto pr-1">
+            {tournamentsOpen && user && (
+              <TournamentsPanel client={client} guildId={activeGuildId} meId={user.id} canManage={canManageGuild} />
+            )}
+          </div>
+        </Modal>
         <Modal open={levelsOpen} title="Seviyeler" onClose={() => setLevelsOpen(false)} className="sm:max-w-xl">
           <div className="max-h-[70vh] overflow-y-auto pr-1">
             {levelsOpen && <LevelsPanel client={client} guildId={activeGuildId} mode="leaderboard" />}
           </div>
         </Modal>
+        </>
       )}
 
       {activeGuildId && (

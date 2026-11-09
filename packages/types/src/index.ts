@@ -867,6 +867,8 @@ export const SocketEvents = {
   SOUNDBOARD_PLAY: 'soundboard:play',
   /** Harici oyun oturumu (ses kanalı) güncellendi */
   GAME_SESSION_UPDATE: 'game:session',
+  /** C2 turnuva oluşturuldu / güncellendi (guild odası) */
+  TOURNAMENT_UPDATE: 'tournament:update',
   /**
    * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
    * Eski istemci LiveKit’i bırakır; presence kanalda kalır.
@@ -1303,6 +1305,120 @@ export interface LevelUpPayload {
 
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
+
+// ── Turnuva modu (C2) — tek eleme, 1v1 ──
+export const TOURNAMENT_GAMES = ['tavla', 'billiards', 'bowling', 'words', 'trivia', 'external'] as const;
+export type TournamentGame = (typeof TOURNAMENT_GAMES)[number];
+export const TOURNAMENT_GAME_LABEL: Record<TournamentGame, string> = {
+  tavla: 'Tavla',
+  billiards: 'Bilardo',
+  bowling: 'Bowling',
+  words: 'Kelime',
+  trivia: 'Bilgi yarışması',
+  external: 'Harici oyun',
+};
+export const TOURNAMENT_LIMITS = { nameMax: 60, descMax: 500, minPlayers: 3, maxPlayers: 64, activePerGuild: 5 } as const;
+export type TournamentStatus = 'registration' | 'running' | 'finished' | 'cancelled';
+export type TournamentMatchStatus = 'waiting' | 'ready' | 'disputed' | 'done';
+
+export interface TournamentMatch {
+  id: string;
+  /** 1 = ilk tur */
+  round: number;
+  index: number;
+  p1: string | null;
+  p2: string | null;
+  winnerId: string | null;
+  status: TournamentMatchStatus;
+  /** oyuncuId → bildirdiği kazanan */
+  reports: Record<string, string>;
+  /** Rakipsiz geçiş */
+  bye?: boolean;
+}
+
+export interface TournamentParticipant {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface TournamentDto {
+  id: string;
+  guildId: string;
+  name: string;
+  description: string | null;
+  game: TournamentGame;
+  /** game = external iken oyun adı */
+  externalGameName: string | null;
+  status: TournamentStatus;
+  maxPlayers: number;
+  creatorId: string;
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[];
+  rounds: number;
+  winnerId: string | null;
+  startsAt: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+/** Tek eleme sıralaması: 1. ve 2. tohum ancak finalde karşılaşır */
+export function bracketSeedOrder(size: number): number[] {
+  let order = [1];
+  while (order.length < size) {
+    const n = order.length * 2;
+    order = order.flatMap((s) => [s, n + 1 - s]);
+  }
+  return order;
+}
+
+/**
+ * Tohumlanmış oyunculardan (sıralı) tek eleme ağacı. Boşluklar (bye) üst tohumlara düşer
+ * ve otomatik ilerletilir; iki boş aynı maçta asla olmaz.
+ */
+export function buildSingleElimination(seeded: string[]): { matches: TournamentMatch[]; rounds: number } {
+  const n = seeded.length;
+  let size = 2;
+  while (size < n) size *= 2;
+  const rounds = Math.log2(size);
+  const order = bracketSeedOrder(size);
+  const matches: TournamentMatch[] = [];
+  for (let r = 1; r <= rounds; r++) {
+    const count = size / 2 ** r;
+    for (let i = 0; i < count; i++) {
+      matches.push({ id: `r${r}m${i}`, round: r, index: i, p1: null, p2: null, winnerId: null, status: 'waiting', reports: {} });
+    }
+  }
+  for (let i = 0; i < size / 2; i++) {
+    const m = matches[i]!;
+    m.p1 = seeded[order[2 * i]! - 1] ?? null;
+    m.p2 = seeded[order[2 * i + 1]! - 1] ?? null;
+  }
+  for (let i = 0; i < size / 2; i++) {
+    const m = matches[i]!;
+    if (m.p1 && m.p2) m.status = 'ready';
+    else {
+      m.bye = true;
+      advanceTournament(matches, m.id, (m.p1 ?? m.p2)!);
+    }
+  }
+  return { matches, rounds };
+}
+
+/** Maçı bitir, kazananı sonraki tura taşı. Final bittiyse şampiyonu döndürür. */
+export function advanceTournament(matches: TournamentMatch[], matchId: string, winnerId: string): string | null {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) throw new Error('match_not_found');
+  m.winnerId = winnerId;
+  m.status = 'done';
+  const next = matches.find((x) => x.round === m.round + 1 && x.index === Math.floor(m.index / 2));
+  if (!next) return winnerId;
+  if (m.index % 2 === 0) next.p1 = winnerId;
+  else next.p2 = winnerId;
+  if (next.p1 && next.p2 && next.status === 'waiting') next.status = 'ready';
+  return null;
+}
 
 // ── Sunucu istatistikleri (B2) ──
 export const GUILD_STATS_RANGES = [7, 30, 90] as const;

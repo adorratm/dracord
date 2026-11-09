@@ -1037,6 +1037,52 @@ export class DracordClient {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
   }
 
+  // ── Turnuvalar (C2) ──
+  async listTournaments(guildId: string): Promise<import('@dracord/types').TournamentDto[]> {
+    return this.request(`/guilds/${guildId}/tournaments`);
+  }
+
+  async createTournament(
+    guildId: string,
+    input: {
+      name: string;
+      description?: string | null;
+      game: import('@dracord/types').TournamentGame;
+      externalGameName?: string | null;
+      maxPlayers?: number;
+      startsAt?: string | null;
+    },
+  ): Promise<import('@dracord/types').TournamentDto> {
+    return this.request(`/guilds/${guildId}/tournaments`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async getTournament(id: string): Promise<import('@dracord/types').TournamentDto> {
+    return this.request(`/tournaments/${id}`);
+  }
+
+  async tournamentAction(
+    id: string,
+    action: 'join' | 'leave' | 'start' | 'cancel',
+  ): Promise<import('@dracord/types').TournamentDto> {
+    return this.request(`/tournaments/${id}/${action}`, { method: 'POST', body: '{}' });
+  }
+
+  async kickFromTournament(id: string, userId: string): Promise<import('@dracord/types').TournamentDto> {
+    return this.request(`/tournaments/${id}/kick`, { method: 'POST', body: JSON.stringify({ userId }) });
+  }
+
+  async reportTournamentMatch(
+    id: string,
+    matchId: string,
+    winnerId: string,
+    force = false,
+  ): Promise<import('@dracord/types').TournamentDto> {
+    return this.request(`/tournaments/${id}/matches/${matchId}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ winnerId, force }),
+    });
+  }
+
   // ── Profil vitrini (B4) ──
   async getShowcaseOptions(): Promise<{
     featuredGuildId: string | null;
@@ -1793,6 +1839,14 @@ export class DracordClient {
     if (!sock) return () => undefined;
     sock.on(SocketEvents.VOICE_CHANNEL_STATUS, handler);
     return () => sock.off(SocketEvents.VOICE_CHANNEL_STATUS, handler);
+  }
+
+  /** Turnuva canlı güncellemesi (C2) */
+  onTournamentUpdate(handler: (t: import('@dracord/types').TournamentDto) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.TOURNAMENT_UPDATE, handler);
+    return () => sock.off(SocketEvents.TOURNAMENT_UPDATE, handler);
   }
 
   requestRemoteControl(payload: RemoteControlRequestPayload) {

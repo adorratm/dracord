@@ -6,6 +6,7 @@ import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
 import { SoundsTab } from './SoundsTab';
 import { StatsTab } from './StatsTab';
+import { TournamentsTab } from './TournamentsTab';
 
 /** Sunucu etkinlikleri + boost — web sidebar menü parity */
 export function GuildExtrasSheet({
@@ -22,15 +23,15 @@ export function GuildExtrasSheet({
   onClose: () => void;
   guildId: string | null;
   guild: GuildSummary | null;
-  initialTab?: 'events' | 'boost' | 'levels' | 'sounds' | 'stats';
+  initialTab?: 'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments';
   onGuildUpdated?: (g: GuildSummary) => void;
   /** MANAGE_GUILD — soundboard ses ekle/sil */
   canManage?: boolean;
   /** Ses kanalındaysa kayıt kapalı */
   inCall?: boolean;
 }) {
-  const { client } = useAuth();
-  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds' | 'stats'>(initialTab);
+  const { client, user } = useAuth();
+  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments'>(initialTab);
   const [board, setBoard] = useState<MemberLevelDto[]>([]);
   const [myLevel, setMyLevel] = useState<MemberLevelDto | null>(null);
   const [events, setEvents] = useState<GuildEventDto[]>([]);
@@ -113,13 +114,16 @@ export function GuildExtrasSheet({
             <Chip label="Takviye" active={tab === 'boost'} onPress={() => setTab('boost')} />
             <Chip label="Seviyeler" active={tab === 'levels'} onPress={() => setTab('levels')} />
             <Chip label="Sesler" active={tab === 'sounds'} onPress={() => setTab('sounds')} />
+            <Chip label="Turnuva" active={tab === 'tournaments'} onPress={() => setTab('tournaments')} />
             {canManage ? <Chip label="İstatistik" active={tab === 'stats'} onPress={() => setTab('stats')} /> : null}
             <Pressable onPress={onClose} style={{ marginLeft: 'auto', padding: 8 }}>
               <Text style={{ color: colors.textMuted }}>Kapat</Text>
             </Pressable>
           </View>
 
-          {tab === 'stats' && guildId && canManage ? (
+          {tab === 'tournaments' && guildId && user ? (
+            <TournamentsTab client={client} guildId={guildId} meId={user.id} canManage={canManage} />
+          ) : tab === 'stats' && guildId && canManage ? (
             <StatsTab client={client} guildId={guildId} />
           ) : tab === 'sounds' && guildId ? (
             <SoundsTab client={client} guildId={guildId} canManage={canManage} inCall={inCall} />

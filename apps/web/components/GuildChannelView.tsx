@@ -29,6 +29,7 @@ import {
   useScheduledMessages,
   voiceStatusErrorMessage,
   LevelsPanel,
+  TournamentsPanel,
   SoundboardButton,
   useSoundboard,
   CatchupButton,
@@ -330,6 +331,17 @@ export function GuildChannelView({
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
   const [levelsOpen, setLevelsOpen] = useState(false);
+  const [tournamentsOpen, setTournamentsOpen] = useState(false);
+  const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
+  // Bildirim bağlantısı: ?tournament=<id>
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const id = new URLSearchParams(window.location.search).get('tournament');
+    if (id) {
+      setTournamentFocus(id);
+      setTournamentsOpen(true);
+    }
+  }, [guildId]);
   /** "Ne kaçırdım?" çapası: kanal açıldığı andaki okuma durumu (okundu işaretinden önce) */
   const catchupAnchor = useRef<{ channelId?: string; after: string | null; unread: number; at?: string }>({
     after: null,
@@ -2866,6 +2878,14 @@ export function GuildChannelView({
           <button
             type="button"
             className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+            onClick={() => setTournamentsOpen(true)}
+          >
+            <span className="material-symbols-outlined text-[16px]">emoji_events</span>
+            Turnuvalar
+          </button>
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
             onClick={() => router.push(`/guilds/${guildId}/boost`)}
           >
             <span className="material-symbols-outlined text-[16px] text-primary-container">
@@ -4947,6 +4967,13 @@ export function GuildChannelView({
         )}
       </Modal>
 
+      <Modal open={tournamentsOpen} title="Turnuvalar" onClose={() => setTournamentsOpen(false)} className="sm:max-w-3xl">
+        <div className="max-h-[75vh] overflow-y-auto pr-1">
+          {tournamentsOpen && user && (
+            <TournamentsPanel client={client} guildId={guildId} meId={user.id} canManage={canManageGuild} initialId={tournamentFocus} />
+          )}
+        </div>
+      </Modal>
       <Modal open={levelsOpen} title="Seviyeler" onClose={() => setLevelsOpen(false)} className="sm:max-w-xl">
         <div className="max-h-[70vh] overflow-y-auto pr-1">
           {levelsOpen && <LevelsPanel client={client} guildId={guildId} mode="leaderboard" />}
