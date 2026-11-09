@@ -55,6 +55,7 @@
       "desktop-overlay.js",
       "desktop-adblock.js",
       "remote-input.js",
+      "remote-input-mac.js",
       "steam-games.js",
       "package.json",
       "ui/**/*",

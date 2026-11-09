@@ -92,6 +92,8 @@ export type VoicePeer = {
   name: string;
   speaking?: boolean;
   camera?: boolean;
+  /** Ekran paylaşıyor (uzak katılımcı) */
+  screenShare?: boolean;
 };
 
 type VoiceSessionApi = {
@@ -124,6 +126,10 @@ type VoiceSessionApi = {
   toggleScreenShare: () => Promise<void>;
   /** Kamera VideoView için LiveKit track (yoksa null) */
   getCameraTrack: (identity: string) => LocalVideoTrack | RemoteTrack | null;
+  /** Uzak ekran paylaşımı track + boyut (uzak kontrol koordinatları için) */
+  getScreenShareTrack: (
+    identity: string,
+  ) => { track: RemoteTrack; width: number; height: number } | null;
 };
 
 const Ctx = createContext<VoiceSessionApi | null>(null);
@@ -257,6 +263,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         name: p.name || p.identity,
         speaking: p.isSpeaking,
         camera: hasCam(p.trackPublications.values()),
+        screenShare: Array.from(p.trackPublications.values()).some(
+          (pub) => pub.source === Track.Source.ScreenShare && pub.track != null,
+        ),
       }));
       // Gerçek user id — 'self' ayrı satır üretir (API üyesi + (sen) çifti)
       if (user?.id) {
@@ -718,6 +727,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     return (track as RemoteTrack | undefined) ?? null;
   }, [user?.id]);
 
+  const getScreenShareTrack = useCallback((identity: string) => {
+    const room = roomRef.current;
+    const p = room?.remoteParticipants.get(identity);
+    const pub = p?.getTrackPublication(Track.Source.ScreenShare);
+    const track = pub?.track as RemoteTrack | undefined;
+    if (!pub || !track) return null;
+    const dims = (pub as unknown as { dimensions?: { width: number; height: number } }).dimensions;
+    return { track, width: dims?.width || 1920, height: dims?.height || 1080 };
+  }, []);
+
   // Bildirim / ada butonları
   useEffect(() => {
     return setupVoiceCallServiceListeners({
@@ -969,6 +988,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       flipCamera,
       toggleScreenShare,
       getCameraTrack,
+      getScreenShareTrack,
     }),
     [
       voiceChannelId,
@@ -994,6 +1014,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       flipCamera,
       toggleScreenShare,
       getCameraTrack,
+      getScreenShareTrack,
     ],
   );
 

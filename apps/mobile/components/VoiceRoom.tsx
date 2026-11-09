@@ -14,6 +14,7 @@ import { useElapsedLabel } from '../lib/formatElapsed';
 import { primaryBtn, primaryBtnText } from '../lib/ui';
 import { useSoundboard } from '../lib/useSoundboard';
 import { GamesStrip, MobileGameFrame, useMobileGameSessions } from './GameRoom';
+import { ScreenShareViewer } from './voice/ScreenShareViewer';
 
 /** Ses odası — kontroller alt VoiceConnectionBar’da */
 export function VoiceRoom({
@@ -336,6 +337,22 @@ export function VoiceRoom({
         </View>
       ) : null}
 
+      {inThisChannel && guildId && user
+        ? voice.peers
+            .filter((p) => p.screenShare && p.id !== user.id)
+            .slice(0, 1)
+            .map((p) => (
+              <ScreenShareViewer
+                key={p.id}
+                client={client}
+                userId={user.id}
+                guildId={guildId}
+                channelId={channel.id}
+                sharerId={p.id}
+                sharerName={p.name}
+              />
+            ))
+        : null}
       {inThisChannel && guildId ? (
         <GamesStrip client={client} guildId={guildId} channelId={channel.id} sessions={gameSessions} onOpen={setOpenGame} />
       ) : null}

@@ -1702,6 +1702,12 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         guildId={guildId}
         guild={activeGuild}
         initialTab={extrasTab}
+        canManage={Boolean(
+          guildPermissions?.owner ||
+            guildPermissions?.platformAdmin ||
+            (guildPermissions?.permissions ?? []).includes('MANAGE_GUILD'),
+        )}
+        inCall={Boolean(voice?.voiceChannelId)}
         onGuildUpdated={(g) => {
           setGuilds((prev) => prev.map((x) => (x.id === g.id ? { ...x, ...g } : x)));
         }}

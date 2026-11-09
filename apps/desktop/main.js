@@ -1167,6 +1167,13 @@ function registerWindowIpc() {
   });
 
   /** Paylaşan tarafta kontrol aktif mi — global acil durdurma kısayolu (Dracord odakta olmasa da) */
+  remoteInput.setUserOverrideListener(() => {
+    try {
+      mainWindow?.webContents.send('remote-control:user-override');
+    } catch {
+      /* ignore */
+    }
+  });
   const REMOTE_STOP_ACCEL = 'CommandOrControl+Shift+F12';
   let remoteStopRegistered = false;
   const unregisterRemoteStop = () => {

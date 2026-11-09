@@ -1,0 +1,57 @@
+name: Publish @dracord/embedded-sdk
+
+# Manuel: Actions → Publish embedded-sdk → Run workflow
+# Gerekli secret: NPM_TOKEN (Automation veya Publish token)
+# Önce packages/embedded-sdk/package.json sürümünü artır.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Sadece npm pack (publish yok)'
+        type: boolean
+        default: true
+      tag:
+        description: 'npm dist-tag'
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install
+        run: yarn install --immutable
+      - name: Build + pack
+        working-directory: packages/embedded-sdk
+        run: |
+          yarn build
+          test -f dist/index.js && test -f dist/index.d.ts && test -f dist/protocol.js
+          npm pack
+          VER=$(node -p "require('./package.json').version")
+          if npm view "@dracord/embedded-sdk@${VER}" version >/dev/null 2>&1; then
+            echo "::warning::@dracord/embedded-sdk@${VER} zaten yayında — package.json sürümünü artır"
+          fi
+      - name: Publish
+        if: ${{ inputs.dry_run == false }}
+        working-directory: packages/embedded-sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret yok — publish atlandı"
+            exit 1
+          fi
+          npm publish --access public --tag "${{ inputs.tag }}"

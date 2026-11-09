@@ -77,6 +77,7 @@ export interface VoiceStageProps {
     isSharer?: boolean;
     controllerName?: string | null;
     pendingFromName?: string | null;
+    notice?: string | null;
   } | null;
   onRequestRemoteControl?: () => void;
   onAcceptRemoteControl?: () => void;
@@ -725,6 +726,9 @@ export function VoiceStage({
                             {remoteControl.controllerName} kontrol ediyor · Durdur
                           </button>
                         )}
+                      {screenShare.isLocal && remoteControl?.notice && (
+                        <span className="basis-full font-label-sm text-dracula-orange">{remoteControl.notice}</span>
+                      )}
                     </div>
                     <div
                       className={cn(

@@ -13,6 +13,8 @@ export type RemoteControlUi = {
   isSharer: boolean;
   controllerName: string | null;
   pendingFromName: string | null;
+  /** Paylaşan tarafta uyarı (ör. macOS Erişilebilirlik izni) */
+  notice?: string | null;
 };
 
 /**
@@ -32,6 +34,7 @@ export function useRemoteControl(opts: {
   const [state, setState] = useState<RemoteControlStatePayload | null>(null);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const moveThrottle = useRef(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const offState = client.onRemoteControlState((payload) => {
@@ -73,7 +76,7 @@ export function useRemoteControl(opts: {
         }
       ).dracordDesktop;
       if (!desktop?.injectRemoteControlInput) return;
-      void desktop.injectRemoteControlInput({
+      void (desktop.injectRemoteControlInput({
         type: payload.type,
         nx: payload.nx,
         ny: payload.ny,
@@ -82,7 +85,15 @@ export function useRemoteControl(opts: {
         key: payload.key,
         code: payload.code,
         keyAction: payload.keyAction,
-      });
+      }) as Promise<{ ok?: boolean; error?: string } | undefined>).then((r) => {
+        if (r && r.ok === false && r.error === 'mac_accessibility_required') {
+          setNotice('Uzak kontrol için Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik → Dracord iznini aç.');
+        } else if (r && r.ok === false && r.error === 'mac_window_share_unsupported') {
+          setNotice('macOS’ta uzak kontrol yalnız tüm ekran paylaşımında çalışır.');
+        } else if (r && r.ok === false && r.error === 'unsupported_platform') {
+          setNotice('Bu işletim sisteminde uzak kontrol desteklenmiyor.');
+        }
+      }).catch(() => undefined);
     });
     return () => {
       offState();
@@ -291,8 +302,9 @@ export function useRemoteControl(opts: {
       isSharer,
       controllerName: state?.controllerName ?? null,
       pendingFromName: isSharer && status === 'pending' ? pendingName : null,
+      notice: isSharer && status === 'active' ? notice : null,
     };
-  }, [state, userId, localSharing, sharerId, pendingName]);
+  }, [state, userId, localSharing, sharerId, pendingName, notice]);
 
   return {
     remoteControl: ui,

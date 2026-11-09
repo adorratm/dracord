@@ -323,9 +323,10 @@ export function MessageItem({
     | { state: 'loading'; progress?: number }
     | { state: 'done'; text: string; source: string }
     | { state: 'error'; message: string }
+    | { state: 'consent'; mb: number; source: string }
     | null
   >(null);
-  const runTranslate = useCallback(async () => {
+  const runTranslate = useCallback(async (allowDownload = false) => {
     const text = (message.content || '').trim();
     if (!text) return;
     if (!onDeviceTranslationSupported()) {
@@ -334,10 +335,13 @@ export function MessageItem({
     }
     setTranslation({ state: 'loading' });
     const res = await translateOnDevice(text, {
+      allowDownload,
       onProgress: (p) => setTranslation({ state: 'loading', progress: p }),
     });
     if (res.ok) {
       setTranslation({ state: 'done', text: res.text, source: res.source });
+    } else if (res.reason === 'needs_consent') {
+      setTranslation({ state: 'consent', mb: res.downloadMb, source: res.source });
     } else if (res.reason === 'same_language') {
       setTranslation({ state: 'error', message: 'Mesaj zaten senin dilinde.' });
     } else {
@@ -608,6 +612,31 @@ export function MessageItem({
                     {translation.progress !== undefined && translation.progress < 1
                       ? ` (dil paketi %${Math.round(translation.progress * 100)})`
                       : ''}
+                  </p>
+                ) : translation.state === 'consent' ? (
+                  <p className="font-label-sm text-outline flex flex-wrap items-center gap-2">
+                    <span>
+                      {languageNameTr(translation.source)} çevirisi için cihazına bir kez ~{translation.mb} MB dil paketi
+                      inecek. Sonra çeviri tamamen cihazında yapılır.
+                    </span>
+                    <button
+                      type="button"
+                      className="underline text-primary hover:text-on-surface"
+                      onClick={() => void runTranslate(true)}
+                    >
+                      İndir ve çevir
+                    </button>
+                    <a
+                      className="underline hover:text-on-surface"
+                      href={externalTranslateUrl(message.content || '')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Tarayıcıda çevir
+                    </a>
+                    <button type="button" className="hover:text-on-surface" onClick={() => setTranslation(null)}>
+                      Kapat
+                    </button>
                   </p>
                 ) : translation.state === 'done' ? (
                   <>

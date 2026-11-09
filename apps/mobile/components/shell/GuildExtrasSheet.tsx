@@ -4,6 +4,7 @@ import type { GuildEventDto, GuildSummary, MemberLevelDto } from '@dracord/types
 import { guildBoostLevel } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../lib/auth';
+import { SoundsTab } from './SoundsTab';
 
 /** Sunucu etkinlikleri + boost — web sidebar menü parity */
 export function GuildExtrasSheet({
@@ -13,16 +14,22 @@ export function GuildExtrasSheet({
   guild,
   initialTab = 'events',
   onGuildUpdated,
+  canManage = false,
+  inCall = false,
 }: {
   open: boolean;
   onClose: () => void;
   guildId: string | null;
   guild: GuildSummary | null;
-  initialTab?: 'events' | 'boost' | 'levels';
+  initialTab?: 'events' | 'boost' | 'levels' | 'sounds';
   onGuildUpdated?: (g: GuildSummary) => void;
+  /** MANAGE_GUILD — soundboard ses ekle/sil */
+  canManage?: boolean;
+  /** Ses kanalındaysa kayıt kapalı */
+  inCall?: boolean;
 }) {
   const { client } = useAuth();
-  const [tab, setTab] = useState<'events' | 'boost' | 'levels'>(initialTab);
+  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds'>(initialTab);
   const [board, setBoard] = useState<MemberLevelDto[]>([]);
   const [myLevel, setMyLevel] = useState<MemberLevelDto | null>(null);
   const [events, setEvents] = useState<GuildEventDto[]>([]);
@@ -93,6 +100,8 @@ export function GuildExtrasSheet({
           <View
             style={{
               flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
               padding: 12,
               gap: 8,
               borderBottomWidth: 1,
@@ -102,12 +111,15 @@ export function GuildExtrasSheet({
             <Chip label="Etkinlikler" active={tab === 'events'} onPress={() => setTab('events')} />
             <Chip label="Takviye" active={tab === 'boost'} onPress={() => setTab('boost')} />
             <Chip label="Seviyeler" active={tab === 'levels'} onPress={() => setTab('levels')} />
+            <Chip label="Sesler" active={tab === 'sounds'} onPress={() => setTab('sounds')} />
             <Pressable onPress={onClose} style={{ marginLeft: 'auto', padding: 8 }}>
               <Text style={{ color: colors.textMuted }}>Kapat</Text>
             </Pressable>
           </View>
 
-          {tab === 'levels' ? (
+          {tab === 'sounds' && guildId ? (
+            <SoundsTab client={client} guildId={guildId} canManage={canManage} inCall={inCall} />
+          ) : tab === 'levels' ? (
             <FlatList
               data={board}
               keyExtractor={(r) => r.userId}

@@ -5,53 +5,99 @@
     "version": "1.0.0",
     "description": "Özet OpenAPI — tam Nest dekoratör generate sonraki aşama. Canlı: GET /openapi.json · Discovery: GET /.well-known/dracord"
   },
-  "servers": [{ "url": "/", "description": "API kökü" }],
+  "servers": [
+    {
+      "url": "/",
+      "description": "API kökü"
+    }
+  ],
   "paths": {
     "/.well-known/dracord": {
       "get": {
         "summary": "Endpoint discovery",
-        "responses": { "200": { "description": "Discovery nesnesi" } }
+        "responses": {
+          "200": {
+            "description": "Discovery nesnesi"
+          }
+        }
       }
     },
     "/openapi.json": {
       "get": {
         "summary": "Bu OpenAPI belgesi",
-        "responses": { "200": { "description": "OpenAPI 3 JSON" } }
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3 JSON"
+          }
+        }
       }
     },
     "/v1/health": {
       "get": {
         "summary": "Platform health",
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
     "/v1/users/@me": {
       "get": {
         "summary": "Bot @me",
-        "security": [{ "bot": [] }],
-        "responses": { "200": { "description": "Bot kullanıcı" } }
+        "security": [
+          {
+            "bot": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bot kullanıcı"
+          }
+        }
       }
     },
     "/v1/guilds/{id}": {
       "get": {
         "summary": "Guild (bot üye)",
-        "security": [{ "bot": [] }],
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        "security": [
+          {
+            "bot": []
+          }
         ],
-        "responses": { "200": { "description": "Guild" } }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guild"
+          }
+        }
       }
     },
     "/v1/channels/{channelId}/messages": {
       "post": {
         "summary": "Bot mesaj gönder",
-        "security": [{ "bot": [] }],
+        "security": [
+          {
+            "bot": []
+          }
+        ],
         "parameters": [
           {
             "name": "channelId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -59,22 +105,45 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": { "content": { "type": "string" } }
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
         },
-        "responses": { "201": { "description": "Message" } }
+        "responses": {
+          "201": {
+            "description": "Message"
+          }
+        }
       }
     },
     "/v1/applications/{id}/commands": {
       "put": {
         "summary": "Slash komut sync",
-        "security": [{ "bot": [] }],
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        "security": [
+          {
+            "bot": []
+          }
         ],
-        "responses": { "200": { "description": "Synced" } }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synced"
+          }
+        }
       }
     },
     "/oauth2/application/{clientId}": {
@@ -85,38 +154,74 @@
             "name": "clientId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "name, scopes" } }
+        "responses": {
+          "200": {
+            "description": "name, scopes"
+          }
+        }
       }
     },
     "/oauth2/authorize": {
       "post": {
         "summary": "OAuth code (Bearer kullanıcı)",
-        "security": [{ "bearer": [] }],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "client_id": { "type": "string" },
-                  "redirect_uri": { "type": "string" },
-                  "response_type": { "type": "string", "enum": ["code"] },
-                  "state": { "type": "string" },
-                  "scope": { "type": "string", "description": "Boşlukla ayrılmış scope’lar" }
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "redirect_uri": {
+                    "type": "string"
+                  },
+                  "response_type": {
+                    "type": "string",
+                    "enum": [
+                      "code"
+                    ]
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "description": "Boşlukla ayrılmış scope’lar"
+                  }
                 }
               }
             }
           }
         },
-        "responses": { "200": { "description": "code + redirect" } }
+        "responses": {
+          "200": {
+            "description": "code + redirect"
+          }
+        }
       },
       "get": {
         "summary": "OAuth authorize redirect",
-        "security": [{ "bearer": [] }],
-        "responses": { "302": { "description": "Redirect with code" } }
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect with code"
+          }
+        }
       }
     },
     "/oauth2/token": {
@@ -127,16 +232,30 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["grant_type", "client_id"],
+                "required": [
+                  "grant_type",
+                  "client_id"
+                ],
                 "properties": {
                   "grant_type": {
                     "type": "string",
-                    "enum": ["authorization_code", "refresh_token"]
+                    "enum": [
+                      "authorization_code",
+                      "refresh_token"
+                    ]
                   },
-                  "client_id": { "type": "string" },
-                  "code": { "type": "string" },
-                  "redirect_uri": { "type": "string" },
-                  "refresh_token": { "type": "string" }
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "redirect_uri": {
+                    "type": "string"
+                  },
+                  "refresh_token": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -152,159 +271,427 @@
     "/billing/me": {
       "get": {
         "summary": "Billing özeti",
-        "security": [{ "bearer": [] }],
-        "responses": { "200": { "description": "billing" } }
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "billing"
+          }
+        }
       }
     },
     "/billing/gifts": {
       "get": {
         "summary": "Hediye envanteri",
-        "security": [{ "bearer": [] }],
-        "responses": { "200": { "description": "gifts[]" } }
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "gifts[]"
+          }
+        }
       },
       "post": {
         "summary": "Hediye kodu oluştur",
-        "security": [{ "bearer": [] }],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "kind": { "type": "string", "enum": ["nitro", "boost"] }
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "nitro",
+                      "boost"
+                    ]
+                  }
                 }
               }
             }
           }
         },
-        "responses": { "200": { "description": "gift" } }
+        "responses": {
+          "200": {
+            "description": "gift"
+          }
+        }
       }
     },
     "/billing/gifts/redeem": {
       "post": {
         "summary": "Hediye kodu kullan",
-        "security": [{ "bearer": [] }],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": { "code": { "type": "string" } }
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
         },
-        "responses": { "200": { "description": "billing + kind" } }
+        "responses": {
+          "200": {
+            "description": "billing + kind"
+          }
+        }
       }
     },
     "/reports": {
       "post": {
         "summary": "Kullanıcı şikayet → T&S",
-        "security": [{ "bearer": [] }],
-        "responses": { "200": { "description": "report" } }
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "report"
+          }
+        }
       }
     },
     "/media/tenor/search": {
       "get": {
         "summary": "GIF arama (Klipy)",
         "parameters": [
-          { "name": "q", "in": "query", "schema": { "type": "string" } }
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
-        "responses": { "200": { "description": "results" } }
+        "responses": {
+          "200": {
+            "description": "results"
+          }
+        }
       }
     },
     "/platform-admin/trust-safety/hashes": {
       "get": {
         "summary": "İçerik hash DB listesi",
-        "security": [{ "bearer": [] }],
-        "responses": { "200": { "description": "hashes" } }
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "hashes"
+          }
+        }
       },
       "post": {
         "summary": "Hash ekle (yerel DB; PhotoDNA ortaklığı değil)",
-        "security": [{ "bearer": [] }],
-        "responses": { "200": { "description": "created" } }
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "created"
+          }
+        }
       }
     },
     "/platform-admin/trust-safety/hashes/import": {
       "post": {
         "summary": "Toplu hash import (text satırları veya items[])",
-        "security": [{ "bearer": [] }],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "text": { "type": "string" },
-                  "items": { "type": "array" }
+                  "text": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array"
+                  }
                 }
               }
             }
           }
         },
-        "responses": { "200": { "description": "imported/skipped" } }
+        "responses": {
+          "200": {
+            "description": "imported/skipped"
+          }
+        }
       }
     },
     "/platform-admin/platform-audit": {
       "get": {
         "summary": "Platform / bot audit log",
-        "security": [{ "bearer": [] }],
-        "parameters": [
-          { "name": "applicationId", "in": "query", "schema": { "type": "string" } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        "security": [
+          {
+            "bearer": []
+          }
         ],
-        "responses": { "200": { "description": "audit rows" } }
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "audit rows"
+          }
+        }
       }
     },
     "/bots/commands": {
       "get": {
         "summary": "Slash komut listesi (builtin + guild/global + options)",
-        "security": [{ "bearer": [] }],
-        "parameters": [
-          { "name": "guildId", "in": "query", "schema": { "type": "string" } }
+        "security": [
+          {
+            "bearer": []
+          }
         ],
-        "responses": { "200": { "description": "commands[]" } }
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "commands[]"
+          }
+        }
       }
     },
     "/health/funnel": {
       "get": {
         "summary": "Funnel metrik snapshot (kalıcı counts)",
-        "responses": { "200": { "description": "counts + recent" } }
+        "responses": {
+          "200": {
+            "description": "counts + recent"
+          }
+        }
+      }
+    },
+    "/v1/games/verify": {
+      "post": {
+        "summary": "Oyun başlatma token'ını doğrula",
+        "description": "Oyun sunucusu, iframe/WebView'dan gelen kısa ömürlü launch token'ını bu uçla doğrular ve oyuncu kimliğini alır. Ayrıntı: /games/authentication",
+        "security": [
+          {
+            "game": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "DracordEmbed.ready() ile gelen launch token"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Geçerli — oyuncu ve oturum bilgisi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameTokenClaims"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Anahtar geçersiz, token süresi dolmuş, başka oyuna ait ya da oturum bitmiş"
+          }
+        }
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
       "bot": {
         "type": "apiKey",
         "in": "header",
         "name": "Authorization",
         "description": "Bot <token>"
+      },
+      "game": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Game <oyun_anahtarı> — yalnız oyun sunucusunda, istemciye koyma"
       }
     },
     "schemas": {
       "SlashCommandOption": {
         "type": "object",
-        "required": ["type", "name", "description"],
+        "required": [
+          "type",
+          "name",
+          "description"
+        ],
         "properties": {
           "type": {
             "type": "integer",
-            "enum": [3, 4, 5, 6, 7, 8, 9, 10, 11],
+            "enum": [
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
             "description": "3 STRING · 4 INTEGER · 5 BOOLEAN · 6 USER · 7 CHANNEL · 8 ROLE · 9 MENTIONABLE · 10 NUMBER · 11 ATTACHMENT"
           },
-          "name": { "type": "string" },
-          "description": { "type": "string" },
-          "required": { "type": "boolean" },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
           "choices": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "name": { "type": "string" },
-                "value": { "oneOf": [{ "type": "string" }, { "type": "number" }] }
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
               }
             }
+          }
+        }
+      },
+      "GameTokenClaims": {
+        "type": "object",
+        "required": [
+          "userId",
+          "username",
+          "displayName",
+          "gameId",
+          "sessionId",
+          "guildId",
+          "channelId",
+          "participantIds",
+          "testMode",
+          "exp"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "gameId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "guildId": {
+            "type": "string"
+          },
+          "channelId": {
+            "type": "string"
+          },
+          "participantIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "testMode": {
+            "type": "boolean",
+            "description": "Onaysız oyunda sahip/testçi oturumu"
+          },
+          "exp": {
+            "type": "integer",
+            "description": "Unix saniye; token ~10 dk geçerli"
           }
         }
       }

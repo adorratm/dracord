@@ -7,10 +7,11 @@
  *   code bilinmiyorsa tek karakter için KEYEVENTF_UNICODE.
  * - Satır tabanlı metin protokolü (JSON parse yok → düşük gecikme).
  * - setEnabled(false): sunucu yanıtını beklemeden yerel olarak inject'i anında keser (acil durdurma).
- * macOS / Linux: şimdilik desteklenmiyor (no-op, hata döner).
+ * macOS: remote-input-mac.js (JXA + CGEvent, Erişilebilirlik izni). Linux: desteklenmiyor.
  */
 const { spawn } = require('child_process');
-const { screen } = require('electron');
+const { screen, systemPreferences } = require('electron');
+const mac = process.platform === 'darwin' ? require('./remote-input-mac') : null;
 
 /** @type {import('child_process').ChildProcessWithoutNullStreams | null} */
 let ps = null;
@@ -23,6 +24,12 @@ let shareSource = null;
 /** @type {{ x: number, y: number, width: number, height: number } | null} */
 let rendererBounds = null;
 let lastTargetLine = '';
+/** Paylaşanın fiziksel faresi kontrolü devraldığında (main → renderer bildirimi) */
+/** @type {(() => void) | null} */
+let onUserOverride = null;
+function setUserOverrideListener(fn) {
+  onUserOverride = typeof fn === 'function' ? fn : null;
+}
 /** Basılı tuşlar (scancode|ext) — devre dışı kalınca hepsini bırak */
 const pressed = new Set();
 
@@ -32,6 +39,8 @@ using System;
 using System.Runtime.InteropServices;
 public static class DracordRC {
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
   [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
   [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
   [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }
@@ -49,9 +58,22 @@ public static class DracordRC {
     if (DwmGetWindowAttribute(HW, 9, out r, Marshal.SizeOf(typeof(RECT))) != 0) GetWindowRect(HW, out r);
     TX = r.L; TY = r.T; TW = Math.Max(1, r.R - r.L); TH = Math.Max(1, r.B - r.T);
   }
-  public static void Pos(int nx, int ny) {
+  // Fiziksel fare önceliği: paylaşan kendi faresini oynatırsa uzaktan hareket 1,5 sn duraklar
+  public static int LX = int.MinValue, LY = 0; public static long PauseUntil = 0; public static bool Notify = false;
+  static long Now() { return DateTime.UtcNow.Ticks / 10000; }
+  public static bool Pos(int nx, int ny) {
+    long now = Now();
+    if (now < PauseUntil) return false;
+    POINT c;
+    if (LX != int.MinValue && GetCursorPos(out c) && (Math.Abs(c.X - LX) > 12 || Math.Abs(c.Y - LY) > 12)) {
+      PauseUntil = now + 1500; LX = int.MinValue; Notify = true; return false;
+    }
     Rect();
-    SetCursorPos(TX + (int)Math.Round(nx / 1000000.0 * (TW - 1)), TY + (int)Math.Round(ny / 1000000.0 * (TH - 1)));
+    int x = TX + (int)Math.Round(nx / 1000000.0 * (TW - 1));
+    int y = TY + (int)Math.Round(ny / 1000000.0 * (TH - 1));
+    SetCursorPos(x, y);
+    LX = x; LY = y;
+    return true;
   }
   static void Send(INPUT i) { SendInput(1, new INPUT[] { i }, Marshal.SizeOf(typeof(INPUT))); }
   public static void Mouse(uint flags, int data) {
@@ -77,13 +99,14 @@ while ($true) {
     switch ($p[0]) {
       'S' { [DracordRC]::HW = [IntPtr]::Zero; [DracordRC]::TX = [int]$p[1]; [DracordRC]::TY = [int]$p[2]; [DracordRC]::TW = [int]$p[3]; [DracordRC]::TH = [int]$p[4] }
       'W' { [DracordRC]::HW = [IntPtr][long]$p[1] }
-      'm' { [DracordRC]::Pos([int]$p[1], [int]$p[2]) }
-      'd' { [DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]$p[3], 0) }
-      'u' { [DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]$p[3], 0) }
-      'w' { [DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]2048, [int]$p[3]) }
+      'm' { [void][DracordRC]::Pos([int]$p[1], [int]$p[2]) }
+      'd' { if ([DracordRC]::Pos([int]$p[1], [int]$p[2])) { [DracordRC]::Mouse([uint32]$p[3], 0) } }
+      'u' { [void][DracordRC]::Pos([int]$p[1], [int]$p[2]); [DracordRC]::Mouse([uint32]$p[3], 0) }
+      'w' { if ([DracordRC]::Pos([int]$p[1], [int]$p[2])) { [DracordRC]::Mouse([uint32]2048, [int]$p[3]) } }
       'k' { [DracordRC]::Key([uint16]$p[1], $p[2] -eq '1', $p[3] -eq '1') }
       'c' { [DracordRC]::Uni([uint16]$p[1]) }
     }
+    if ([DracordRC]::Notify) { [DracordRC]::Notify = $false; [Console]::Out.WriteLine('U'); [Console]::Out.Flush() }
   } catch {}
 }
 `;
@@ -98,7 +121,15 @@ function ensurePs() {
     windowsHide: true,
   });
   ps.stdout.on('data', (buf) => {
-    if (!ready && String(buf).includes('READY')) {
+    const text = String(buf);
+    if (ready && /(^|\n)U\r?(\n|$)/.test(text)) {
+      try {
+        onUserOverride?.();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!ready && text.includes('READY')) {
       ready = true;
       while (queue.length) write(queue.shift());
     }
@@ -208,9 +239,29 @@ function norm(v) {
 /**
  * @param {{ type: string, nx?: number, ny?: number, button?: number, deltaY?: number, key?: string, code?: string, keyAction?: string }} ev
  */
+/** macOS: paylaşılan ekranın global (DIP) dikdörtgeni */
+function macTargetRect() {
+  const all = screen.getAllDisplays();
+  let d = null;
+  if (shareSource?.displayId) d = all.find((x) => String(x.id) === String(shareSource.displayId)) || null;
+  if (!d && rendererBounds) {
+    d = screen.getDisplayMatching({
+      x: Math.round(rendererBounds.x),
+      y: Math.round(rendererBounds.y),
+      width: Math.max(1, Math.round(rendererBounds.width)),
+      height: Math.max(1, Math.round(rendererBounds.height)),
+    });
+  }
+  return (d || screen.getPrimaryDisplay()).bounds;
+}
+
 function injectRemoteInput(ev) {
-  if (process.platform !== 'win32') return { ok: false, error: 'desktop_windows_only' };
   if (!enabled) return { ok: false, error: 'disabled' };
+  if (process.platform === 'darwin' && mac) {
+    if (shareSource?.id && /^window:/.test(shareSource.id)) return { ok: false, error: 'mac_window_share_unsupported' };
+    return mac.injectMac(ev, macTargetRect(), systemPreferences);
+  }
+  if (process.platform !== 'win32') return { ok: false, error: 'unsupported_platform' };
   ensureTarget();
   const x = norm(ev.nx);
   const y = norm(ev.ny);
@@ -249,6 +300,7 @@ function injectRemoteInput(ev) {
 
 /** Takılı kalmasın: basılı tüm tuşları ve fare tuşlarını bırak */
 function releaseAll() {
+  if (mac) mac.releaseAllMac();
   if (process.platform !== 'win32' || !ps) return;
   for (const id of pressed) {
     const [sc, ext] = id.split('|');
@@ -276,6 +328,7 @@ function setEnabled(on) {
 
 function disposeRemoteInput() {
   releaseAll();
+  if (mac) mac.disposeMac();
   if (!ps) return;
   write('Q');
   try {
@@ -294,6 +347,7 @@ module.exports = {
   setRendererBounds,
   setEnabled,
   releaseAll,
+  setUserOverrideListener,
   /** test: scripts/remote-input-smoke.js */
   _PS_BOOT: PS_BOOT,
 };

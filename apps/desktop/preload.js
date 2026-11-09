@@ -69,6 +69,12 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   /** Paylaşan: kontrol aktif/pasif → global acil durdurma kısayolu (Ctrl+Shift+F12) */
   setRemoteControlActive: (active) =>
     ipcRenderer.invoke('remote-control:set-active', { active: Boolean(active) }),
+  /** Paylaşanın fiziksel faresi kontrolü 1,5 sn devraldı */
+  onRemoteControlUserOverride: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('remote-control:user-override', handler);
+    return () => ipcRenderer.removeListener('remote-control:user-override', handler);
+  },
   onRemoteControlEmergencyStop: (callback) => {
     const handler = () => callback();
     ipcRenderer.on('remote-control:emergency-stop', handler);

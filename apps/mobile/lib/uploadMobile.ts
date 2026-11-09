@@ -7,7 +7,7 @@ export async function uploadImageFromUri(
   uri: string,
   filename: string,
   contentType: string,
-  folder: 'attachments' | 'stickers' | 'avatars' | 'banners' = 'attachments',
+  folder: 'attachments' | 'stickers' | 'avatars' | 'banners' | 'sounds' = 'attachments',
 ): Promise<MessageAttachment> {
   const res = await fetch(uri);
   const blob = await res.blob();

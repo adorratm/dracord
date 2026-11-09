@@ -45,7 +45,7 @@ Plan:
 
 **B. Paylaşan kişi** — `apps/desktop/main.js`, `apps/desktop/remote-input.js`
 - [x] Global acil durdurma **Ctrl+Shift+F12** (Dracord odakta olmasa da). Önce yerelde inject'i keser, sonra oturumu kapatır.
-- [ ] Paylaşanın kendi faresi hareket edince kontrolü geçici durdur (fiziksel girişe öncelik) — low-level hook gerekir, sonraki adım.
+- [x] Paylaşanın kendi faresi hareket edince kontrolü 1,5 sn durdur (GetCursorPos sapması >12 px; hook gerektirmeden). UI'a `remote-control:user-override` gider.
 
 **C. İmleç yanlış yere gidiyor (yüksek ihtimal)**
 - Sınırlar `window.screen`'den alınıyor (DIP), `SetCursorPos` fiziksel piksel istiyor →
@@ -81,7 +81,7 @@ Manuel: %150 ölçekli ekranda tık konumu · pencere paylaşımı · Ctrl+C/V �
 **G. Platform kapsamı**
 - Karar (2026-11-09): **önce Windows sağlamlaştırılır**, ardından:
 - [~] Mobil **kontrol eden**: mobil **web** hazır (dokunuş/uzun bas/sürükle/iki parmak). Expo uygulaması sonraki adım.
-- [ ] macOS **kontrol edilen** olabilir (Accessibility izni + CGEvent).
+- [x] macOS **kontrol edilen** (`remote-input-mac.js`: JXA + CGEvent, Accessibility izni; şimdilik yalnız tüm ekran paylaşımı). Test: `node apps/desktop/scripts/remote-input-smoke-mac.js`.
 - Karar (2026-11-09): **hiçbir şey ertelenmiyor** — 0.2 başladı.
 
 ---
@@ -320,13 +320,13 @@ Tamamlananlar: Faz 0.1 banner · 0.2 uzak kontrol (Windows) · Dalga 1 (A6, A5, 
 Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 
 ### Öncelik 1 — yarım kalan kenarlar
-- [ ] Uzak kontrol: **Expo uygulamasında kontrol eden** (dokunmatik yüzey; web'deki `RemoteControlSurface` mantığı).
-- [ ] Uzak kontrol: **macOS kontrol edilen** (Accessibility izni + CGEvent; `remote-input.js` darwin dalı).
-- [ ] Uzak kontrol: paylaşanın fiziksel faresi oynayınca kontrolü geçici durdur (low-level hook).
-- [ ] Çeviri: Electron/Firefox'ta cihaz üstü (transformers.js + opus-mt, Web Worker, isteğe bağlı indirme).
-- [ ] Soundboard: mobilde ses ekleme (şu an yalnız çalma).
-- [ ] `@dracord/embedded-sdk` npm publish + OpenAPI'ye `/v1/games/verify`.
-- [ ] COOMBIE: `connectFromDracord` entegrasyonu (oyun reposunda) + oyunu Dracord'a kaydet/incelemeye gönder.
+- [x] Uzak kontrol: **Expo uygulamasında kontrol eden** — mobil artık ekran paylaşımını da gösteriyor (`voice/ScreenShareViewer.tsx`): dokun = tık, uzun bas = sağ tık, sürükle, iki parmak = kaydır, ⌨ klavye, tam ekran. Cihazda test bekliyor.
+- [x] Uzak kontrol: **macOS kontrol edilen** (kod tamam, Mac'te test bekliyor; pencere paylaşımı henüz desteklenmiyor).
+- [x] Uzak kontrol: paylaşanın fiziksel faresi oynayınca kontrolü geçici durdur.
+- [x] Çeviri: Electron/Firefox/Safari'de cihaz üstü — `packages/ui/src/lib/translate-local.ts`: transformers.js 3.8.1 (jsDelivr, npm bağımlılığı yok) + opus-mt, Web Worker; ilk kullanımda boyut gösterip onay ister (→en ~110 MB, →tr ~300 MB ek). Hedef dil: tr/en. Mobil uygulama hâlâ tarayıcıya yönlendirir.
+- [x] Soundboard: mobilde ses ekleme — Sunucu menüsü › **Sesler** sekmesi: mikrofondan ≤5 sn kayıt, dinle, sil (dosya seçici native modül ister → OTA'yı bozmamak için kayıt; dosyadan ekleme web/desktop'ta).
+- [x] `@dracord/embedded-sdk` npm publish workflow (`.github/workflows/publish-embedded-sdk.yml`, manuel, `NPM_TOKEN` secret) + OpenAPI'ye `/v1/games/verify` (`game` güvenlik şeması, `GameTokenClaims`).
+- [~] COOMBIE: Dracord köprüsü + sunucu doğrulaması + oturum başına ortak oda (oyun reposu, `docs/dracord.md`). Kalan: maç ağ kodu (oyun tarafıyla birlikte) ve oyunu portalda kaydet + `DRACORD_GAME_SECRET` (senin hesabınla).
 
 ### Öncelik 2 — Faz 3 menüsünün kalanı
 - [ ] B2 Sunucu istatistik paneli (aktiflik, büyüme, en aktif kanallar).
@@ -368,3 +368,4 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - 2026-11-09 — Dalga 1 (A6 ses durumu, A5 zamanlama, D3 çeviri) kodu tamamlandı; typecheck: api/web/desktop-ui/mobile/ui/sdk temiz.
 - 2026-11-09 — Dalga 2 (B1 seviye/XP, A1 sesli mesaj, A2 soundboard, D1 ne kaçırdım) kodu tamamlandı; typecheck temiz.
 - 2026-11-09 — C1 oyun platformu: API + embedded SDK + web/desktop/mobil host + geliştirici portalı + admin onay + Mintlify belgeleri.
+- 2026-11-09 — Öncelik 1 kapandı: mobil uzak kontrol (kontrol eden + ekran izleme), macOS kontrol edilen, fiziksel fare önceliği, mobil soundboard kaydı, embedded-sdk publish + OpenAPI, Electron/Firefox çevirisi, COOMBIE köprüsü (oyun reposunda).
