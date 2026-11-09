@@ -22,6 +22,7 @@ import { useRemoteControl } from '../hooks/useRemoteControl';
 import { loadLocalPrefs } from '../lib/client-settings';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
+import { ClipButton } from '../components/ClipButton';
 
 function memberRoleExtras(m: PublicUser | undefined, roleColors: boolean) {
   const roles = m?.roles;
@@ -329,6 +330,11 @@ export function VoicePanel({
             manageClient={client}
             onChanged={() => void soundboard.reload()}
             disabled={voice.deafened}
+          />
+          <ClipButton
+            shareKey={focused ? `${focused.identity}:${focused.isLocal ? 'l' : 'r'}` : null}
+            shareName={focused ? (focused.isLocal ? 'Ekranım' : focused.displayName) : ''}
+            getStream={() => (focused ? voice.getScreenShareStream(focused.identity) : null)}
           />
           </>
         ) : null

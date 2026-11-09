@@ -1185,6 +1185,68 @@ function registerWindowIpc() {
     }
     remoteStopRegistered = false;
   };
+  // ── Klip kaydı (A3) ──
+  const CLIP_ACCEL = 'Control+Shift+K';
+  let clipHotkeyOn = false;
+  const clipsDir = () => path.join(app.getPath('videos'), 'Dracord Klipleri');
+  ipcMain.handle('clips:set-armed', (_e, payload) => {
+    const armed = Boolean(payload && payload.armed);
+    if (armed && !clipHotkeyOn) {
+      try {
+        clipHotkeyOn = globalShortcut.register(CLIP_ACCEL, () => {
+          try {
+            mainWindow?.webContents.send('clips:hotkey');
+          } catch {
+            /* ignore */
+          }
+        });
+      } catch {
+        clipHotkeyOn = false;
+      }
+    } else if (!armed && clipHotkeyOn) {
+      try {
+        globalShortcut.unregister(CLIP_ACCEL);
+      } catch {
+        /* ignore */
+      }
+      clipHotkeyOn = false;
+    }
+    return { ok: true, accelerator: clipHotkeyOn ? CLIP_ACCEL : null };
+  });
+  ipcMain.handle('clips:save', async (_e, payload) => {
+    try {
+      const data = payload && payload.data;
+      if (!(data instanceof Uint8Array) && !(data instanceof ArrayBuffer)) return { ok: false, error: 'bad_data' };
+      const buf = Buffer.from(data instanceof ArrayBuffer ? new Uint8Array(data) : data);
+      if (buf.length < 1024 || buf.length > 1024 * 1024 * 1024) return { ok: false, error: 'bad_size' };
+      // Dosya adı yalnız güvenli karakterler; klasör dışına çıkamaz
+      const base = String((payload && payload.name) || 'klip')
+        .replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ _-]+/g, '')
+        .trim()
+        .slice(0, 60) || 'klip';
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const dir = clipsDir();
+      await fs.promises.mkdir(dir, { recursive: true });
+      const file = path.join(dir, `${base} ${stamp}.webm`);
+      await fs.promises.writeFile(file, buf);
+      return { ok: true, path: file };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'write_failed' };
+    }
+  });
+  ipcMain.handle('clips:open-folder', async (_e, filePath) => {
+    try {
+      const dir = clipsDir();
+      await fs.promises.mkdir(dir, { recursive: true });
+      const p = typeof filePath === 'string' && path.resolve(filePath).startsWith(path.resolve(dir)) ? filePath : null;
+      if (p) shell.showItemInFolder(p);
+      else await shell.openPath(dir);
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  });
+
   ipcMain.handle('remote-control:set-active', (_e, payload) => {
     const active = Boolean(payload && payload.active);
     if (active) {

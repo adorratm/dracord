@@ -69,6 +69,15 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   /** Paylaşan: kontrol aktif/pasif → global acil durdurma kısayolu (Ctrl+Shift+F12) */
   setRemoteControlActive: (active) =>
     ipcRenderer.invoke('remote-control:set-active', { active: Boolean(active) }),
+  /** Klip kaydı (A3): arabellek açık → global kısayol (Ctrl+Shift+K) */
+  setClipArmed: (armed) => ipcRenderer.invoke('clips:set-armed', { armed: Boolean(armed) }),
+  saveClip: (data, name) => ipcRenderer.invoke('clips:save', { data, name }),
+  openClipsFolder: (filePath) => ipcRenderer.invoke('clips:open-folder', filePath ?? null),
+  onClipHotkey: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('clips:hotkey', handler);
+    return () => ipcRenderer.removeListener('clips:hotkey', handler);
+  },
   /** Paylaşanın fiziksel faresi kontrolü 1,5 sn devraldı */
   onRemoteControlUserOverride: (callback) => {
     const handler = () => callback();

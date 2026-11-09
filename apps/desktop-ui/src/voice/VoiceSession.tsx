@@ -251,6 +251,8 @@ type VoiceSessionApi = {
   setRemoteControlQualityBoost: (on: boolean) => void;
   /** Paylaşan: kontrol edilirken metin netliği önceliği */
   setRemoteControlSharerDetail: (on: boolean) => void;
+  /** Klip kaydı (A3): ekran paylaşımının görüntü + ses izleri */
+  getScreenShareStream: (identity: string) => MediaStream | null;
   setNsfwContentFilter: (enabled: boolean) => void;
   attachCamera: (identity: string, el: HTMLVideoElement | null) => void;
 };
@@ -1625,6 +1627,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   /** Uzak kontrol edilirken paylaşımda metin netliği (contentHint=detail, çözünürlük koru) */
   const sharerDetailPrevRef = useRef<string | null>(null);
+  const getScreenShareStream = useCallback((identity: string): MediaStream | null => {
+    const room = roomRef.current;
+    if (!room) return null;
+    const p = room.localParticipant.identity === identity ? room.localParticipant : room.remoteParticipants.get(identity);
+    if (!p) return null;
+    const video = p.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack;
+    if (!video || video.readyState !== 'live') return null;
+    const audio = p.getTrackPublication(Track.Source.ScreenShareAudio)?.track?.mediaStreamTrack;
+    return new MediaStream(audio && audio.readyState === 'live' ? [video, audio] : [video]);
+  }, []);
+
   const setRemoteControlSharerDetail = useCallback((on: boolean) => {
     const room = roomRef.current;
     const pub = room?.localParticipant.getTrackPublication(Track.Source.ScreenShare);
@@ -1879,6 +1892,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareViewQuality,
       setRemoteControlQualityBoost,
       setRemoteControlSharerDetail,
+      getScreenShareStream,
       setNsfwContentFilter,
       attachCamera,
     }),
@@ -1928,6 +1942,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setScreenShareViewQuality,
       setRemoteControlQualityBoost,
       setRemoteControlSharerDetail,
+      getScreenShareStream,
       setScreenShareVolume,
       setScreenVideoElement,
       setVideoDevice,

@@ -175,6 +175,11 @@ type DracordDesktopApi = {
     callback: (payload: unknown) => void,
   ) => () => void;
   onOverlayQuickChat?: (callback: (payload: unknown) => void) => () => void;
+  /** Klip kaydı (A3) */
+  setClipArmed?: (armed: boolean) => Promise<{ ok: boolean; accelerator: string | null }>;
+  saveClip?: (data: Uint8Array, name: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
+  openClipsFolder?: (filePath?: string | null) => Promise<{ ok: boolean }>;
+  onClipHotkey?: (callback: () => void) => () => void;
 };
 
 interface Window {

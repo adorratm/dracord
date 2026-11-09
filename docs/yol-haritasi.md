@@ -337,7 +337,8 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] C3 Haftalık görevler + sezon — her sunucuya her hafta 3 görev (mesaj / ses dakikası / XP; kademe hafta+sunucuya göre belirlenimli), tamamlanınca "Ödülü al" ile bir kez bonus XP (seviye atlatır). Haftalık ve aylık sezon skor tablosu (puan = kazanılan XP + görev ödülü), geçen sezonun ilk üçü. Yeni `member_weekly_stats` + `challenge_claims`; seviye sistemi kapalıysa kapalı. Web/desktop: Seviyeler penceresi; mobil: Seviyeler sekmesi. Sayım bu sürümden itibaren başlar.
 - [x] C4 Oyun overlay iyileştirme — konuşan HUD artık sayfayı yeniden yüklemiyor (titreme yok, yerinde güncelleme); konum (4 köşe), aynı anda 1–6 kişi, aç/kapat; kendi mikrofon kapalı / sağır uyarısı; isteğe bağlı CPU/RAM/saat göstergesi. Ayar: Masaüstü › Ayarlar › Overlay › Konuşan HUD.
   - [ ] Oyun FPS'i: Electron'dan ölçülemez; Windows'ta PresentMon (MIT) gibi harici araçla entegrasyon gerekir — ayrı karar.
-- [ ] A3 Klip kaydı — son 30 sn (desktop).
+- [x] A3 Klip kaydı (desktop) — ses kanalında ekran paylaşımı varken kontrol çubuğunda **Klip**: arabelleği açar; "Klibi kaydet" ya da **Ctrl+Shift+K** (oyundayken de) son 30–60 sn'yi `Videolar/Dracord Klipleri` klasörüne .webm olarak yazar. Kendi paylaşımın ya da izlediğin paylaşım (görüntü + paylaşım sesi). İki kademeli MediaRecorder; ek kodlama yok. İzlenen paylaşımda kalite izlediğin kaliteyle aynıdır.
+  - [ ] Sonraki: paylaşım yokken doğrudan oyun penceresinden klip, kırpma/paylaşma (kanala yükle).
 - [ ] A4 Ekran paylaşımında çizim/işaretleme.
 - [ ] A7 Canlı altyazı (cihaz üstü — bütçe 0).
 - [ ] D2 Moderasyon iyileştirme (kural/regex/spam skoru; model yok).
