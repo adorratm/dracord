@@ -175,6 +175,9 @@ type DracordDesktopApi = {
     callback: (payload: unknown) => void,
   ) => () => void;
   onOverlayQuickChat?: (callback: (payload: unknown) => void) => () => void;
+  /** A4 çizim aynası */
+  renderAnnotations?: (strokes: Array<{ c: number; a: number; n: string; p: number[] }>) => Promise<{ ok: boolean; error?: string }>;
+  hideAnnotations?: () => Promise<unknown>;
   /** Klip kaydı (A3) */
   setClipArmed?: (armed: boolean) => Promise<{ ok: boolean; accelerator: string | null }>;
   saveClip?: (data: Uint8Array, name: string) => Promise<{ ok: boolean; path?: string; error?: string }>;

@@ -1,6 +1,8 @@
 'use client';
 
 import { RemoteControlSurface } from './RemoteControlSurface';
+import { AnnotationLayer, AnnotationToolbar } from './AnnotationLayer';
+import type { ScreenAnnotationController } from '../lib/use-screen-annotations';
 import { VoiceChannelStatusChip } from './VoiceChannelStatusChip';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { cn } from '../lib/cn';
@@ -117,6 +119,8 @@ export interface VoiceStageProps {
   stageOverlay?: ReactNode;
   /** Sahneyi kaplayan oyun katmanı (GameFrame) */
   gameLayer?: ReactNode;
+  /** A4 — odaktaki paylaşıma çizim (yalnız ses kanalındayken) */
+  annotations?: ScreenAnnotationController | null;
   chatPanel?: ReactNode;
   participantsPanel?: ReactNode;
   /** Desktop sohbet paneli genişliği (px) */
@@ -209,6 +213,7 @@ export function VoiceStage({
   onOpenChannels,
   stageOverlay,
   gameLayer,
+  annotations = null,
   chatPanel,
   participantsPanel,
   chatPanelWidth = 340,
@@ -551,6 +556,13 @@ export function VoiceStage({
                         muted={screenShare.isLocal}
                       />
                     )}
+                    {annotations && !(screenShare.isLocal && (inCinema || isFullscreen)) &&
+                      !(remoteControl?.isController && remoteControl.status === 'active') ? (
+                      <>
+                        <AnnotationLayer ctl={annotations} videoRef={videoElRef} />
+                        <AnnotationToolbar ctl={annotations} className="absolute bottom-space-sm left-space-sm z-[4]" />
+                      </>
+                    ) : null}
                     {remoteControl?.isController &&
                       remoteControl.status === 'active' &&
                       !screenShare.isLocal && (

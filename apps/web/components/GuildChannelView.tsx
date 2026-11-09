@@ -37,6 +37,7 @@ import {
   GameFrame,
   GamesLauncherButton,
   useGameSessions,
+  useScreenAnnotations,
   presenceLabelTr,
   type MemberListGroup,
   type MemberListAction,
@@ -181,6 +182,18 @@ export function GuildChannelView({
   }, [rcControlled, setRemoteControlSharerDetail]);
   const { voiceStatuses, setVoiceStatus } = useVoiceChannelStatuses(client, guildId);
   const scheduler = useScheduledMessages(client, isVoiceView || isActivityView ? null : channelId);
+  const annotSharer = voice.activeScreenShare
+    ? voice.activeScreenShare.isLocal
+      ? user?.id ?? null
+      : voice.activeScreenShare.identity
+    : null;
+  const annotations = useScreenAnnotations(
+    client,
+    voice.voiceGuildId && voice.voiceChannelId && annotSharer
+      ? { guildId: voice.voiceGuildId, channelId: voice.voiceChannelId, sharerId: annotSharer }
+      : null,
+    user?.id,
+  );
   const games = useGameSessions(
     client,
     voice.voiceGuildId === guildId ? guildId : null,
@@ -3147,6 +3160,7 @@ export function GuildChannelView({
       ) : showingVoiceStage ? (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
           <VoiceStage
+          annotations={inVoiceInThisGuild && annotSharer ? annotations : null}
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
           voiceStatus={voice.voiceChannelId ? voiceStatuses[voice.voiceChannelId] ?? null : null}
           canEditVoiceStatus={inVoiceInThisGuild && Boolean(voice.voiceChannelId)}

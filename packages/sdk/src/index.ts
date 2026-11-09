@@ -1850,6 +1850,20 @@ export class DracordClient {
     return () => sock.off(SocketEvents.VOICE_CHANNEL_STATUS, handler);
   }
 
+  /** A4: ekran paylaşımına çizim (kayıp tolere edilir → volatile) */
+  sendScreenAnnotation(payload: import('@dracord/types').ScreenAnnotationPayload) {
+    // Ara noktalar düşebilir; bitiş/temizle düşmemeli
+    if (payload.end || payload.clear) this.socket?.emit(SocketEvents.SCREEN_ANNOTATE, payload);
+    else this.socket?.volatile.emit(SocketEvents.SCREEN_ANNOTATE, payload);
+  }
+
+  onScreenAnnotation(handler: (p: import('@dracord/types').ScreenAnnotationPayload) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.SCREEN_ANNOTATE, handler);
+    return () => sock.off(SocketEvents.SCREEN_ANNOTATE, handler);
+  }
+
   /** Turnuva canlı güncellemesi (C2) */
   onTournamentUpdate(handler: (t: import('@dracord/types').TournamentDto) => void): () => void {
     const sock = this.socket;

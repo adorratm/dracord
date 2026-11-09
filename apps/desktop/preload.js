@@ -69,6 +69,9 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   /** Paylaşan: kontrol aktif/pasif → global acil durdurma kısayolu (Ctrl+Shift+F12) */
   setRemoteControlActive: (active) =>
     ipcRenderer.invoke('remote-control:set-active', { active: Boolean(active) }),
+  /** A4: paylaşanın gerçek ekranında çizimler (normalize, düz dizi) */
+  renderAnnotations: (strokes) => ipcRenderer.invoke('annotations:render', strokes),
+  hideAnnotations: () => ipcRenderer.invoke('annotations:hide'),
   /** Klip kaydı (A3): arabellek açık → global kısayol (Ctrl+Shift+K) */
   setClipArmed: (armed) => ipcRenderer.invoke('clips:set-armed', { armed: Boolean(armed) }),
   saveClip: (data, name) => ipcRenderer.invoke('clips:save', { data, name }),

@@ -1456,6 +1456,13 @@ if (!gotLock) {
     } catch (err) {
       console.warn('[overlay]', err);
     }
+    try {
+      require('./annotation-overlay').registerAnnotationOverlay({
+        getShareDisplayBounds: () => require('./remote-input').getShareDisplayBounds(),
+      });
+    } catch (err) {
+      console.warn('[annotations]', err);
+    }
 
     app.on('activate', () => {
       if (!mainWindow || mainWindow.isDestroyed()) {

@@ -339,7 +339,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
   - [ ] Oyun FPS'i: Electron'dan ölçülemez; Windows'ta PresentMon (MIT) gibi harici araçla entegrasyon gerekir — ayrı karar.
 - [x] A3 Klip kaydı (desktop) — ses kanalında ekran paylaşımı varken kontrol çubuğunda **Klip**: arabelleği açar; "Klibi kaydet" ya da **Ctrl+Shift+K** (oyundayken de) son 30–60 sn'yi `Videolar/Dracord Klipleri` klasörüne .webm olarak yazar. Kendi paylaşımın ya da izlediğin paylaşım (görüntü + paylaşım sesi). İki kademeli MediaRecorder; ek kodlama yok. İzlenen paylaşımda kalite izlediğin kaliteyle aynıdır.
   - [ ] Sonraki: paylaşım yokken doğrudan oyun penceresinden klip, kırpma/paylaşma (kanala yükle).
-- [ ] A4 Ekran paylaşımında çizim/işaretleme.
+- [x] A4 Ekran paylaşımına çizim — paylaşımın sol altında kalem: 6 renk, "çizimlerimi sil"; çizgiler herkeste canlı görünür, ~3,5 sn sonra solar (lazer kalem). Yalnız aynı ses kanalındakilere gider (sunucu doğrular, saniyede 40 mesaj sınırı). Desktop'ta paylaşan kişi çizimleri **kendi gerçek ekranında** da görür (şeffaf, tıklanamaz, yakalamaya girmeyen pencere; ekran paylaşımı — pencere paylaşımında yok). Mobil: çizimleri görür (çizim yok).
 - [ ] A7 Canlı altyazı (cihaz üstü — bütçe 0).
 - [ ] D2 Moderasyon iyileştirme (kural/regex/spam skoru; model yok).
 - [ ] D4 Draco asistan bot (SSS, komutlar; kural tabanlı).

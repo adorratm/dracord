@@ -8,6 +8,7 @@ import {
   GameFrame,
   GamesLauncherButton,
   useGameSessions,
+  useScreenAnnotations,
   presenceLabelTr,
   type MemberListAction,
   type MemberListGroup,
@@ -23,6 +24,7 @@ import { loadLocalPrefs } from '../lib/client-settings';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
 import { ClipButton } from '../components/ClipButton';
+import { useAnnotationMirror } from '../hooks/useAnnotationMirror';
 
 function memberRoleExtras(m: PublicUser | undefined, roleColors: boolean) {
   const roles = m?.roles;
@@ -97,6 +99,19 @@ export function VoicePanel({
   );
   const { setRemoteControlQualityBoost, setRemoteControlSharerDetail } = voice;
   const inThisVoice = voice.voiceChannelId === channel.id;
+  const annotSharer = voice.activeScreenShare
+    ? voice.activeScreenShare.isLocal
+      ? user?.id ?? null
+      : voice.activeScreenShare.identity
+    : null;
+  const annotations = useScreenAnnotations(
+    client,
+    voice.voiceGuildId && voice.voiceChannelId && annotSharer
+      ? { guildId: voice.voiceGuildId, channelId: voice.voiceChannelId, sharerId: annotSharer }
+      : null,
+    user?.id,
+  );
+  useAnnotationMirror(annotations, inThisVoice && Boolean(voice.activeScreenShare?.isLocal));
   const games = useGameSessions(client, inThisVoice ? guildId : null, inThisVoice ? channel.id : null);
   const soundboard = useSoundboard(client, guildId, inThisVoice ? channel.id : null, {
     deafened: voice.deafened,
@@ -289,6 +304,7 @@ export function VoicePanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
     <VoiceStage
+      annotations={inThisVoice && annotSharer ? annotations : null}
       className="min-h-0 flex-1"
       channelName={channel.name}
       voiceStatus={voiceStatus}

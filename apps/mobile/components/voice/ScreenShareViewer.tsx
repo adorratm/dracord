@@ -15,6 +15,7 @@ import type { RemoteControlStatePayload } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { Icon } from '../Icon';
 import { useVoiceSession } from './VoiceSession';
+import { AnnotationsView } from './AnnotationsView';
 
 const LONG_PRESS_MS = 550;
 const SLOP = 8;
@@ -98,6 +99,17 @@ export function ScreenShareViewer({
       enabled={controlling}
       onInput={(ev) => client.sendRemoteControlInput({ guildId, channelId, sharerId, ...ev })}
       style={full ? { flex: 1 } : { height: 220 }}
+      overlay={(box) => (
+        <AnnotationsView
+          client={client}
+          guildId={guildId}
+          channelId={channelId}
+          sharerId={sharerId}
+          box={box}
+          videoW={share.width}
+          videoH={share.height}
+        />
+      )}
     />
   );
 
@@ -185,13 +197,16 @@ function ControlSurface({
   enabled,
   onInput,
   style,
+  overlay,
 }: {
   share: { track: unknown; width: number; height: number };
   enabled: boolean;
   onInput: (ev: PointerEv) => void;
   style: { height?: number; flex?: number };
+  overlay?: (box: { w: number; h: number }) => React.ReactNode;
 }) {
   const box = useRef({ w: 1, h: 1 });
+  const [boxState, setBoxState] = useState({ w: 1, h: 1 });
   const onInputRef = useRef(onInput);
   onInputRef.current = onInput;
   const dims = useRef({ w: share.width, h: share.height });
@@ -284,9 +299,11 @@ function ControlSurface({
       style={style}
       onLayout={(e: LayoutChangeEvent) => {
         box.current = { w: e.nativeEvent.layout.width || 1, h: e.nativeEvent.layout.height || 1 };
+        setBoxState(box.current);
       }}
     >
       <LiveKitVideoView style={{ flex: 1 }} videoTrack={share.track as never} objectFit="contain" />
+      {overlay ? overlay(boxState) : null}
       {enabled ? <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} {...pan.panHandlers} /> : null}
     </View>
   );

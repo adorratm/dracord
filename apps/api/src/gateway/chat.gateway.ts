@@ -15,6 +15,7 @@ import {
 import {
   SocketEvents,
   normalizeVoiceChannelStatus,
+  sanitizeAnnotation,
   type DmCallPayload,
   type RemoteControlInputPayload,
   type RemoteControlRequestPayload,
@@ -515,6 +516,41 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'error' };
     }
+  }
+
+  /** A4: ekran paylaşımına çizim — yalnız aynı ses kanalındakilere (üyelik 5 sn önbellek) */
+  private readonly annotateMembers = new Map<string, { at: number; ids: string[]; me: string | null }>();
+  private readonly annotateRate = new Map<string, { sec: number; n: number }>();
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.SCREEN_ANNOTATE)
+  async handleScreenAnnotate(@ConnectedSocket() client: Socket, @MessageBody() body: unknown): Promise<{ ok: boolean; error?: string }> {
+    const user = client.data.user as WsUser;
+    const p = sanitizeAnnotation(body);
+    if (!p) return { ok: false, error: 'bad_request' };
+    // Saniyede en fazla 40 mesaj
+    const sec = Math.floor(Date.now() / 1000);
+    const rate = this.annotateRate.get(user.sub);
+    if (rate && rate.sec === sec) {
+      if (++rate.n > 40) return { ok: false, error: 'rate_limited' };
+    } else this.annotateRate.set(user.sub, { sec, n: 1 });
+    if (this.annotateRate.size > 5000) this.annotateRate.clear();
+
+    const key = `${p.guildId}:${p.channelId}:${user.sub}`;
+    let cached = this.annotateMembers.get(key);
+    if (!cached || Date.now() - cached.at > 5000) {
+      const members = await this.voicePresence.listChannel(p.guildId, p.channelId);
+      const me = members.find((m) => m.id === user.sub);
+      cached = { at: Date.now(), ids: members.map((m) => m.id), me: me ? (me.displayName ?? '') : null };
+      this.annotateMembers.set(key, cached);
+      if (this.annotateMembers.size > 5000) this.annotateMembers.clear();
+    }
+    if (cached.me === null) return { ok: false, error: 'not_in_channel' };
+    if (!cached.ids.includes(p.sharerId)) return { ok: false, error: 'sharer_not_here' };
+    const out = { ...p, userId: user.sub, userName: cached.me || null };
+    const rooms = cached.ids.filter((id) => id !== user.sub).map((id) => `user:${id}`);
+    if (rooms.length) this.server.to(rooms).emit(SocketEvents.SCREEN_ANNOTATE, out);
+    return { ok: true };
   }
 
   /** Ses kanalı durum metni — yalnız o kanalda olan üye ayarlar/temizler */

@@ -869,6 +869,8 @@ export const SocketEvents = {
   GAME_SESSION_UPDATE: 'game:session',
   /** C2 turnuva oluşturuldu / güncellendi (guild odası) */
   TOURNAMENT_UPDATE: 'tournament:update',
+  /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
+  SCREEN_ANNOTATE: 'screen:annotate',
   /**
    * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
    * Eski istemci LiveKit’i bırakır; presence kanalda kalır.
@@ -1312,6 +1314,55 @@ export interface LevelUpPayload {
 
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
+
+// ── Ekran paylaşımına çizim (A4) ──
+export const ANNOTATION_COLORS = ['#ff5555', '#f1fa8c', '#50fa7b', '#8be9fd', '#ff79c6', '#ffffff'] as const;
+export const ANNOTATION_LIMITS = { pointsPerMessage: 48, strokeIdMax: 24, holdMs: 3500, fadeMs: 900 } as const;
+
+export interface ScreenAnnotationPayload {
+  guildId: string;
+  channelId: string;
+  /** Hangi paylaşımın üzerine (paylaşanın kullanıcı id'si) */
+  sharerId: string;
+  strokeId: string;
+  /** ANNOTATION_COLORS indeksi */
+  color: number;
+  /** Normalize [x, y] (0–1, paylaşılan görüntüye göre) */
+  points: Array<[number, number]>;
+  /** Çizgi bitti */
+  end?: boolean;
+  /** Bu kullanıcının bu paylaşımdaki tüm çizgilerini sil */
+  clear?: boolean;
+  /** Sunucu doldurur */
+  userId?: string;
+  userName?: string | null;
+}
+
+/** İstemciden gelen çizim mesajını güvenli hale getir (sunucu + istemci) */
+export function sanitizeAnnotation(raw: unknown): ScreenAnnotationPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
+  const guildId = str(r.guildId, 64);
+  const channelId = str(r.channelId, 64);
+  const sharerId = str(r.sharerId, 64);
+  const strokeId = str(r.strokeId, ANNOTATION_LIMITS.strokeIdMax);
+  if (!guildId || !channelId || !sharerId || !strokeId || !/^[A-Za-z0-9_-]+$/.test(strokeId)) return null;
+  const color = Math.max(0, Math.min(ANNOTATION_COLORS.length - 1, Math.floor(Number(r.color) || 0)));
+  const pts: Array<[number, number]> = [];
+  if (Array.isArray(r.points)) {
+    for (const p of r.points.slice(0, ANNOTATION_LIMITS.pointsPerMessage)) {
+      if (!Array.isArray(p)) continue;
+      const x = Number(p[0]);
+      const y = Number(p[1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      pts.push([Math.round(Math.min(1, Math.max(0, x)) * 10000) / 10000, Math.round(Math.min(1, Math.max(0, y)) * 10000) / 10000]);
+    }
+  }
+  const clear = r.clear === true;
+  if (!clear && pts.length === 0 && r.end !== true) return null;
+  return { guildId, channelId, sharerId, strokeId, color, points: pts, end: r.end === true, clear };
+}
 
 // ── Turnuva modu (C2) — tek eleme, 1v1 ──
 export const TOURNAMENT_GAMES = ['tavla', 'billiards', 'bowling', 'words', 'trivia', 'external'] as const;

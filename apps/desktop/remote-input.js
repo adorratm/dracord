@@ -340,7 +340,14 @@ function disposeRemoteInput() {
   ready = false;
 }
 
+/** A4: paylaşılan ekranın DIP sınırları (pencere paylaşımında null) */
+function getShareDisplayBounds() {
+  if (!shareSource || /^window:/.test(shareSource.id || '')) return null;
+  return macTargetRect();
+}
+
 module.exports = {
+  getShareDisplayBounds,
   injectRemoteInput,
   disposeRemoteInput,
   setShareSource,
