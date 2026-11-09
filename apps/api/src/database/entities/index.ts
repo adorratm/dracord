@@ -29,6 +29,8 @@ export { GameApp } from './game-app.entity';
 export { GameSession } from './game-session.entity';
 export { GuildStatsDaily } from './guild-stats-daily.entity';
 export { Tournament } from './tournament.entity';
+export { MemberWeeklyStats } from './member-weekly-stats.entity';
+export { ChallengeClaim } from './challenge-claim.entity';
 export { OauthConnection } from './oauth-connection.entity';
 export { ChannelReadState } from './channel-read-state.entity';
 export { PushSubscription } from './push-subscription.entity';

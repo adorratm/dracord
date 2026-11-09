@@ -1037,6 +1037,15 @@ export class DracordClient {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
   }
 
+  // ── Haftalık görevler + sezon (C3) ──
+  async getChallenges(guildId: string): Promise<import('@dracord/types').ChallengesDto> {
+    return this.request(`/guilds/${guildId}/challenges`);
+  }
+
+  async claimChallenge(guildId: string, challengeId: string): Promise<import('@dracord/types').ChallengesDto> {
+    return this.request(`/guilds/${guildId}/challenges/${encodeURIComponent(challengeId)}/claim`, { method: 'POST', body: '{}' });
+  }
+
   // ── Turnuvalar (C2) ──
   async listTournaments(guildId: string): Promise<import('@dracord/types').TournamentDto[]> {
     return this.request(`/guilds/${guildId}/tournaments`);

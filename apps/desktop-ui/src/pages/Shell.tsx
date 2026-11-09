@@ -17,6 +17,7 @@ import {
   voiceStatusErrorMessage,
   LevelsPanel,
   TournamentsPanel,
+  ChallengesPanel,
   ConfirmDialog,
   Modal,
   SearchableSelect,
@@ -1749,8 +1750,9 @@ export function Shell() {
             )}
           </div>
         </Modal>
-        <Modal open={levelsOpen} title="Seviyeler" onClose={() => setLevelsOpen(false)} className="sm:max-w-xl">
-          <div className="max-h-[70vh] overflow-y-auto pr-1">
+        <Modal open={levelsOpen} title="Seviyeler ve görevler" onClose={() => setLevelsOpen(false)} className="sm:max-w-xl">
+          <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-space-lg">
+            {levelsOpen && user && <ChallengesPanel client={client} guildId={activeGuildId} meId={user.id} />}
             {levelsOpen && <LevelsPanel client={client} guildId={activeGuildId} mode="leaderboard" />}
           </div>
         </Modal>

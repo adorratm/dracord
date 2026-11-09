@@ -30,6 +30,8 @@ export type { TranslateResult } from './lib/translate';
 export { LevelsPanel, LevelBar } from './components/LevelsPanel';
 export { GuildStatsPanel } from './components/GuildStatsPanel';
 export { TournamentsPanel } from './components/TournamentsPanel';
+export { ChallengesPanel } from './components/ChallengesPanel';
+export type { ChallengesClient } from './components/ChallengesPanel';
 export type { TournamentsClient } from './components/TournamentsPanel';
 export { GuildPublicPageSettings } from './components/GuildPublicPageSettings';
 export { GuildBadgeChip, ShowcasePicker, invalidateUserShowcase, useUserShowcase } from './components/GuildBadge';

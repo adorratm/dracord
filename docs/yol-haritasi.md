@@ -334,7 +334,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] B4 Sunucu rozeti + profil vitrini — yönetici rozet etiketi (2–5 harf) + emoji belirler (Tanıtım sayfası bölümü); üye Ayarlar › Profil'de bir sunucu rozetini seçer; profil kartında (web/desktop/mobil) rozet + o sunucudaki seviye görünür. Üyelikten çıkınca / rozet kalkınca otomatik gizlenir. API: `showcase/*`.
 - [x] C2 Turnuva modu — tek eleme 1v1 (tavla, bilardo, bowling, kelime, bilgi yarışması, harici oyun). Kayıt → rastgele tohum + otomatik bye → maç hazır bildirimi → iki oyuncu sonucu bildirir (uyuşursa ya da kaybeden kabul ederse biter; uyuşmazsa düzenleyiciye bildirim) → şampiyon bildirimi. Canlı güncelleme `tournament:update`. Web/desktop: sunucu menüsü › Turnuvalar (oluştur/yönet); mobil: Sunucu menüsü › Turnuva (katıl/bildir/yönet, oluşturma yok).
   - [ ] Sonraki: okey (4'lü masa) formatı, maçı doğrudan etkinlikten başlatıp sonucu oyundan otomatik alma, çift eleme / round-robin.
-- [ ] C3 Haftalık meydan okuma / sezon skor tablosu (seviye sistemiyle bağlantılı).
+- [x] C3 Haftalık görevler + sezon — her sunucuya her hafta 3 görev (mesaj / ses dakikası / XP; kademe hafta+sunucuya göre belirlenimli), tamamlanınca "Ödülü al" ile bir kez bonus XP (seviye atlatır). Haftalık ve aylık sezon skor tablosu (puan = kazanılan XP + görev ödülü), geçen sezonun ilk üçü. Yeni `member_weekly_stats` + `challenge_claims`; seviye sistemi kapalıysa kapalı. Web/desktop: Seviyeler penceresi; mobil: Seviyeler sekmesi. Sayım bu sürümden itibaren başlar.
 - [ ] C4 Oyun overlay iyileştirme (FPS, konuşanlar).
 - [ ] A3 Klip kaydı — son 30 sn (desktop).
 - [ ] A4 Ekran paylaşımında çizim/işaretleme.

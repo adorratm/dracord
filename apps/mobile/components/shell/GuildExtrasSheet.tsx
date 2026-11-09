@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { SoundsTab } from './SoundsTab';
 import { StatsTab } from './StatsTab';
 import { TournamentsTab } from './TournamentsTab';
+import { ChallengesCard } from './ChallengesCard';
 
 /** Sunucu etkinlikleri + boost — web sidebar menü parity */
 export function GuildExtrasSheet({
@@ -134,6 +135,8 @@ export function GuildExtrasSheet({
               contentContainerStyle={{ padding: 12, gap: 6 }}
               ListHeaderComponent={
                 myLevel ? (
+                  <View>
+                  {guildId ? <ChallengesCard client={client} guildId={guildId} /> : null}
                   <View style={{ padding: 12, borderRadius: 12, backgroundColor: colors.surfaceHigh, marginBottom: 8, gap: 6 }}>
                     <Text style={{ color: colors.text, fontWeight: '800' }}>
                       Senin seviyen: {myLevel.level}
@@ -144,6 +147,9 @@ export function GuildExtrasSheet({
                       {myLevel.messageCount} mesaj · {myLevel.voiceMinutes} dk ses
                     </Text>
                   </View>
+                  </View>
+                ) : guildId ? (
+                  <ChallengesCard client={client} guildId={guildId} />
                 ) : undefined
               }
               ListEmptyComponent={

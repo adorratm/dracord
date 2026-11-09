@@ -159,7 +159,10 @@ export class LevelsService {
         [guildId, userId, gain, MESSAGE_COOLDOWN_SEC],
       );
       const r = Array.isArray(rows[0]) ? (rows[0] as unknown as Array<{ xp: number; level: number }>)[0] : rows[0];
-      if (r) await this.checkLevelUp(guildId, userId, Number(r.xp), Number(r.level), cfg);
+      if (r) {
+        await this.trackWeekly(guildId, userId, { xp: gain, messages: 1 });
+        await this.checkLevelUp(guildId, userId, Number(r.xp), Number(r.level), cfg);
+      }
     } catch (e) {
       this.log.debug(`message xp skipped: ${e instanceof Error ? e.message : e}`);
     }
@@ -193,10 +196,51 @@ export class LevelsService {
         [guildId, userId, minutes * cfg.voiceXpPerMinute, minutes],
       );
       const r = Array.isArray(rows[0]) ? (rows[0] as unknown as Array<{ xp: number; level: number }>)[0] : rows[0];
-      if (r) await this.checkLevelUp(guildId, userId, Number(r.xp), Number(r.level), cfg);
+      if (r) {
+        await this.trackWeekly(guildId, userId, { xp: minutes * cfg.voiceXpPerMinute, voiceMinutes: minutes });
+        await this.checkLevelUp(guildId, userId, Number(r.xp), Number(r.level), cfg);
+      }
     } catch (e) {
       this.log.debug(`voice xp skipped: ${e instanceof Error ? e.message : e}`);
     }
+  }
+
+  /** Haftalık sayaç (C3) — hafta = Europe/Istanbul pazartesi */
+  async trackWeekly(
+    guildId: string,
+    userId: string,
+    d: { xp?: number; bonusXp?: number; messages?: number; voiceMinutes?: number },
+  ) {
+    try {
+      await this.em.query(
+        `INSERT INTO member_weekly_stats (id, "guildId", "userId", week, xp, "bonusXp", messages, "voiceMinutes")
+           VALUES ($1, $2, $3, date_trunc('week', now() AT TIME ZONE 'Europe/Istanbul')::date, $4, $5, $6, $7)
+         ON CONFLICT ("guildId", "userId", week) DO UPDATE SET
+           xp = member_weekly_stats.xp + EXCLUDED.xp,
+           "bonusXp" = member_weekly_stats."bonusXp" + EXCLUDED."bonusXp",
+           messages = member_weekly_stats.messages + EXCLUDED.messages,
+           "voiceMinutes" = member_weekly_stats."voiceMinutes" + EXCLUDED."voiceMinutes"`,
+        [createId(), guildId, userId, d.xp ?? 0, d.bonusXp ?? 0, d.messages ?? 0, d.voiceMinutes ?? 0],
+      );
+    } catch (e) {
+      this.log.debug(`weekly track skipped: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  /** Ödül XP'si (haftalık görev vb.) — seviye atlamayı da tetikler */
+  async addBonusXp(guildId: string, userId: string, amount: number): Promise<void> {
+    if (amount <= 0) return;
+    const cfg = await this.getConfig(guildId);
+    await this.ensureRow(guildId, userId);
+    const rows: Array<{ xp: number; level: number }> = await this.em.query(
+      `UPDATE member_levels SET xp = xp + $3, "updatedAt" = now()
+        WHERE "guildId" = $1 AND "userId" = $2
+      RETURNING xp, level`,
+      [guildId, userId, Math.floor(amount)],
+    );
+    const r = Array.isArray(rows[0]) ? (rows[0] as unknown as Array<{ xp: number; level: number }>)[0] : rows[0];
+    await this.trackWeekly(guildId, userId, { bonusXp: Math.floor(amount) });
+    if (r) await this.checkLevelUp(guildId, userId, Number(r.xp), Number(r.level), cfg);
   }
 
   private async ensureRow(guildId: string, userId: string) {

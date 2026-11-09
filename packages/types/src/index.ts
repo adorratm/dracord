@@ -1420,6 +1420,87 @@ export function advanceTournament(matches: TournamentMatch[], matchId: string, w
   return null;
 }
 
+// ── Haftalık görevler + sezon (C3) ──
+export type ChallengeKind = 'messages' | 'voice' | 'xp';
+export interface ChallengeDef {
+  id: string;
+  kind: ChallengeKind;
+  target: number;
+  rewardXp: number;
+}
+/** Kademeli havuz — her hafta her türden biri seçilir */
+export const CHALLENGE_POOL: Record<ChallengeKind, Array<{ target: number; rewardXp: number }>> = {
+  messages: [
+    { target: 25, rewardXp: 150 },
+    { target: 50, rewardXp: 300 },
+    { target: 100, rewardXp: 550 },
+  ],
+  voice: [
+    { target: 30, rewardXp: 150 },
+    { target: 90, rewardXp: 350 },
+    { target: 180, rewardXp: 600 },
+  ],
+  xp: [
+    { target: 500, rewardXp: 200 },
+    { target: 1200, rewardXp: 400 },
+    { target: 2500, rewardXp: 700 },
+  ],
+};
+
+/** Sunucu + hafta için belirlenimli görev seti (istemci ve sunucu aynı sonucu üretir) */
+export function weeklyChallenges(guildId: string, week: string): ChallengeDef[] {
+  let h = 2166136261;
+  for (const ch of `${guildId}:${week}`) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (['messages', 'voice', 'xp'] as const).map((kind, i) => {
+    const tiers = CHALLENGE_POOL[kind];
+    const tier = tiers[((h >>> (i * 5)) & 31) % tiers.length]!;
+    return { id: `${week}:${kind}`, kind, target: tier.target, rewardXp: tier.rewardXp };
+  });
+}
+
+export function challengeLabel(c: Pick<ChallengeDef, 'kind' | 'target'>): string {
+  return c.kind === 'messages'
+    ? `${c.target} mesaj yaz`
+    : c.kind === 'voice'
+      ? `${c.target} dakika seste kal`
+      : `${c.target} XP kazan`;
+}
+
+export interface ChallengeProgressDto extends ChallengeDef {
+  label: string;
+  progress: number;
+  done: boolean;
+  claimed: boolean;
+}
+
+export interface SeasonEntryDto {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  score: number;
+  rank: number;
+}
+
+export interface ChallengesDto {
+  guildId: string;
+  /** Haftanın pazartesisi (YYYY-MM-DD, Europe/Istanbul) */
+  week: string;
+  weekEndsAt: string;
+  /** YYYY-MM — sezon = takvim ayı */
+  season: string;
+  seasonEndsAt: string;
+  enabled: boolean;
+  challenges: ChallengeProgressDto[];
+  weekly: SeasonEntryDto[];
+  seasonBoard: SeasonEntryDto[];
+  me: { weekScore: number; weekRank: number | null; seasonScore: number; seasonRank: number | null };
+  /** Geçen sezonun ilk üçü */
+  lastSeasonTop: SeasonEntryDto[];
+}
+
 // ── Sunucu istatistikleri (B2) ──
 export const GUILD_STATS_RANGES = [7, 30, 90] as const;
 export type GuildStatsRange = (typeof GUILD_STATS_RANGES)[number];
