@@ -27,6 +27,7 @@ export { GuildLevelConfig } from './guild-level-config.entity';
 export { GuildSound } from './guild-sound.entity';
 export { GameApp } from './game-app.entity';
 export { GameSession } from './game-session.entity';
+export { GuildStatsDaily } from './guild-stats-daily.entity';
 export { OauthConnection } from './oauth-connection.entity';
 export { ChannelReadState } from './channel-read-state.entity';
 export { PushSubscription } from './push-subscription.entity';

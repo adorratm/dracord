@@ -28,6 +28,8 @@ export {
 } from './lib/translate';
 export type { TranslateResult } from './lib/translate';
 export { LevelsPanel, LevelBar } from './components/LevelsPanel';
+export { GuildStatsPanel } from './components/GuildStatsPanel';
+export type { GuildStatsClient } from './components/GuildStatsPanel';
 export { VoiceMessagePlayer } from './components/VoiceMessagePlayer';
 export { SoundboardButton } from './components/SoundboardButton';
 export { CatchupButton } from './components/CatchupButton';

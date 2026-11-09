@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { cn, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { cn, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -45,6 +45,7 @@ type Tab =
   | 'moderation'
   | 'slash'
   | 'levels'
+  | 'stats'
   | 'invite';
 
 const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | 'channels' | 'mod' }[] =
@@ -56,6 +57,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'moderation', label: 'Moderasyon', icon: 'gavel', need: 'manage' },
     { id: 'slash', label: 'Slash komutları', icon: 'terminal', need: 'manage' },
     { id: 'levels', label: 'Seviyeler', icon: 'military_tech', need: 'manage' },
+    { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
     { id: 'invite', label: 'Davet', icon: 'link' },
   ];
 
@@ -896,6 +898,16 @@ export function GuildSettingsPage({
                 ))}
               </div>
             </>
+          )}
+
+          {tab === 'stats' && canManage && (
+            <section className="max-w-3xl">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">İstatistikler</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Sunucunun aktifliği ve büyümesi. Yalnız sunucuyu yönetenler görür.
+              </p>
+              <GuildStatsPanel client={client} guildId={guildId} />
+            </section>
           )}
 
           {tab === 'levels' && (

@@ -7,6 +7,8 @@ import type {
   GameSessionDto,
   CatchupDto,
   GuildSoundDto,
+  GuildStatsDto,
+  GuildStatsRange,
   GuildLevelConfigDto,
   MemberLevelDto,
   ScheduledMessageDto,
@@ -1028,6 +1030,11 @@ export class DracordClient {
     note?: string,
   ): Promise<GameAppDto> {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
+  }
+
+  // ── Sunucu istatistikleri (B2, MANAGE_GUILD) ──
+  async getGuildStats(guildId: string, days: GuildStatsRange = 30): Promise<GuildStatsDto> {
+    return this.request(`/guilds/${guildId}/stats?days=${days}`);
   }
 
   // ── Soundboard ──

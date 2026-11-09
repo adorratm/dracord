@@ -329,7 +329,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [~] COOMBIE: Dracord köprüsü + sunucu doğrulaması + oturum başına ortak oda (oyun reposu, `docs/dracord.md`). Kalan: maç ağ kodu (oyun tarafıyla birlikte) ve oyunu portalda kaydet + `DRACORD_GAME_SECRET` (senin hesabınla).
 
 ### Öncelik 2 — Faz 3 menüsünün kalanı
-- [ ] B2 Sunucu istatistik paneli (aktiflik, büyüme, en aktif kanallar).
+- [x] B2 Sunucu istatistik paneli — `GET guilds/:id/stats?days=7|30|90` (MANAGE_GUILD, 5 dk önbellek). Mesajlar mevcut tablodan (geçmiş dahil); katılan/ayrılan + ses dakikası yeni `guild_stats_daily` sayaçlarından (bu sürümden itibaren). Web/desktop: Sunucu ayarları › İstatistikler; mobil: Sunucu menüsü › İstatistik.
 - [ ] B3 Sunucu tanıtım sayfası + vanity URL.
 - [ ] B4 Sunucu rozetleri / profil vitrini.
 - [ ] C2 Turnuva modu (braket; okey/tavla/bilardo + harici oyunlar).

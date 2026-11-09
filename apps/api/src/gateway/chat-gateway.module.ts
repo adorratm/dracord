@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ChannelsModule } from '@/channels/channels.module';
 import { LevelsModule } from '@/levels/levels.module';
+import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
 import { SoundboardModule } from '@/soundboard/soundboard.module';
 import { GamesModule } from '@/games/games.module';
 import { MessagesModule } from '@/messages/messages.module';
@@ -22,6 +23,7 @@ import { WsJwtGuard } from './ws-jwt.guard';
     NotificationsModule,
     SocketBroadcastModule,
     LevelsModule,
+    GuildStatsModule,
     SoundboardModule,
     GamesModule,
   ],

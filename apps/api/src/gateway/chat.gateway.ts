@@ -37,6 +37,7 @@ import { PresenceService } from '@/presence/presence.service';
 import { RemoteControlService } from '@/voice/remote-control.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { LevelsService } from '@/levels/levels.service';
+import { GuildStatsService } from '@/guild-stats/guild-stats.service';
 import { SoundboardService } from '@/soundboard/soundboard.service';
 import { GamesService } from '@/games/games.service';
 import { WsJwtGuard } from './ws-jwt.guard';
@@ -89,6 +90,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly voicePresence: VoicePresenceService,
     private readonly remoteControl: RemoteControlService,
     private readonly levels: LevelsService,
+    private readonly guildStats: GuildStatsService,
     private readonly soundboard: SoundboardService,
     private readonly games: GamesService,
     private readonly channels: ChannelsService,
@@ -112,6 +114,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         void this.levels
           .onVoiceSession(p.guildId, p.channelId, p.user.id, p.user.joinedAt)
           .catch(() => undefined);
+        void this.guildStats.onVoiceSession(p.guildId, p.user.joinedAt).catch(() => undefined);
       }
       void this.voicePresence
         .clearStatusIfEmpty(p.guildId, p.channelId)

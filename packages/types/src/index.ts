@@ -1220,6 +1220,44 @@ export interface LevelUpPayload {
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
 
+// ── Sunucu istatistikleri (B2) ──
+export const GUILD_STATS_RANGES = [7, 30, 90] as const;
+export type GuildStatsRange = (typeof GUILD_STATS_RANGES)[number];
+
+export interface GuildStatsDay {
+  /** YYYY-MM-DD (Europe/Istanbul) */
+  day: string;
+  messages: number;
+  /** O gün mesaj yazan farklı üye */
+  activeMembers: number;
+  joins: number;
+  leaves: number;
+  voiceMinutes: number;
+}
+
+export interface GuildStatsDto {
+  guildId: string;
+  days: GuildStatsRange;
+  generatedAt: string;
+  memberCount: number;
+  totals: {
+    messages: number;
+    activeMembers: number;
+    joins: number;
+    leaves: number;
+    voiceMinutes: number;
+  };
+  /** Önceki eşit dönem (yüzde değişim için) */
+  previous: { messages: number; activeMembers: number; joins: number };
+  daily: GuildStatsDay[];
+  topChannels: Array<{ channelId: string; name: string; messages: number }>;
+  topMembers: Array<{ userId: string; displayName: string; avatarUrl: string | null; messages: number }>;
+  /** Saat başına mesaj (0–23, Europe/Istanbul) */
+  hourly: number[];
+  /** Ayrılan/ses sayaçlarının tutulmaya başladığı gün (öncesi 0 görünür) */
+  trackingSince: string | null;
+}
+
 export const SOUNDBOARD_LIMITS = {
   maxSoundsPerGuild: 24,
   maxDurationSec: 5.5,

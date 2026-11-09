@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { LevelsPanel } from '@dracord/ui';
+import { GuildStatsPanel, LevelsPanel } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -777,6 +777,16 @@ export default function GuildSettingsPage({ params }: PageProps) {
               </>
             )}
           </section>
+
+          {canManage && (
+            <section className="max-w-3xl mt-space-2xl" id="istatistik">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">İstatistikler</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Sunucunun aktifliği ve büyümesi. Yalnız sunucuyu yönetenler görür.
+              </p>
+              <GuildStatsPanel client={client} guildId={guildId} />
+            </section>
+          )}
 
           {canManage && (
             <section className="max-w-2xl mt-space-2xl">
