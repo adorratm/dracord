@@ -1798,6 +1798,37 @@ export class DracordClient {
     });
   }
 
+  private readonly sessionRevokedHandlers = new Set<() => void>();
+
+  /** E2 — oturum kapatıldığında (ör. "diğer cihazlardan çıkış") */
+  onSessionRevoked(handler: () => void): () => void {
+    this.sessionRevokedHandlers.add(handler);
+    return () => this.sessionRevokedHandlers.delete(handler);
+  }
+
+  // ── E2: oturum / cihaz yönetimi ──
+  async listSessions(): Promise<import('@dracord/types').SessionDeviceDto[]> {
+    return this.request('/auth/sessions');
+  }
+
+  async revokeSession(id: string): Promise<{ ok: true }> {
+    return this.request(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async revokeOtherSessions(): Promise<{ ok: true; revoked: number }> {
+    return this.request('/auth/sessions/others', { method: 'DELETE' });
+  }
+
+  /** Çıkışta sunucudaki oturumu da kapat (hata yutulur) */
+  async logoutServer(): Promise<void> {
+    if (!this.accessToken) return;
+    try {
+      await this.request('/auth/sessions/current', { method: 'DELETE' });
+    } catch {
+      /* çevrimdışı / eski API */
+    }
+  }
+
   connectSocket() {
     if (this.socket) {
       this.socket.auth = { token: this.accessToken };
@@ -1812,6 +1843,16 @@ export class DracordClient {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 800,
       reconnectionDelayMax: 8_000,
+    });
+    // E2 — bu oturum başka cihazdan kapatıldı
+    this.socket.on('session:revoked', () => {
+      for (const h of this.sessionRevokedHandlers) {
+        try {
+          h();
+        } catch {
+          /* ignore */
+        }
+      }
     });
     this.socket.on('reconnect', () => {
       if (this.socket) this.socket.auth = { token: this.accessToken };

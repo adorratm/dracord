@@ -1317,6 +1317,35 @@ export interface LevelUpPayload {
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
 
+// ── Oturum / cihaz yönetimi (E2) ──
+export interface SessionDeviceDto {
+  id: string;
+  /** Bu istekteki oturum */
+  current: boolean;
+  platform: 'web' | 'desktop' | 'mobile' | null;
+  userAgent: string | null;
+  /** Son kısmı gizli */
+  ip: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+}
+
+/** User-Agent → okunur cihaz adı (ör. "Chrome · Windows") */
+export function describeUserAgent(ua: string | null | undefined, platform?: string | null): string {
+  const u = String(ua ?? '');
+  const os = /Windows/.test(u) ? 'Windows' : /Android/.test(u) ? 'Android' : /iPhone|iPad|iOS|CFNetwork/.test(u) ? 'iOS' : /Mac OS X|Macintosh/.test(u) ? 'macOS' : /Linux/.test(u) ? 'Linux' : '';
+  let app = '';
+  if (platform === 'desktop' || /Electron\//.test(u)) app = 'Dracord masaüstü';
+  else if (platform === 'mobile' || /okhttp|CFNetwork|Expo/.test(u)) app = 'Dracord mobil';
+  else if (/Edg\//.test(u)) app = 'Edge';
+  else if (/OPR\//.test(u)) app = 'Opera';
+  else if (/Firefox\//.test(u)) app = 'Firefox';
+  else if (/Chrome\//.test(u)) app = 'Chrome';
+  else if (/Safari\//.test(u)) app = 'Safari';
+  const parts = [app, os].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Bilinmeyen cihaz';
+}
+
 // ── Draco yardımcı bot + sunucu SSS (D4) — kural tabanlı ──
 export const FAQ_LIMITS = { entries: 60, questionMax: 120, answerMax: 1500, keywords: 12, autoChannels: 20 } as const;
 

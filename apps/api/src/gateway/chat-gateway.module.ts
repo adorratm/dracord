@@ -13,6 +13,7 @@ import { ChatGateway } from './chat.gateway';
 import { SocketBroadcastModule } from './socket-broadcast.module';
 import { WsJwtGuard } from './ws-jwt.guard';
 
+import { SessionStatusService } from '@/auth/session-status.service';
 @Module({
   imports: [
     JwtModule.register({}),
@@ -27,7 +28,7 @@ import { WsJwtGuard } from './ws-jwt.guard';
     SoundboardModule,
     GamesModule,
   ],
-  providers: [ChatGateway, WsJwtGuard],
+  providers: [SessionStatusService, ChatGateway, WsJwtGuard],
   exports: [ChatGateway],
 })
 export class ChatGatewayModule {}

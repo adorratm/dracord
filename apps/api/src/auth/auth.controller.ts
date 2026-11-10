@@ -10,10 +10,12 @@ import {
   UnauthorizedException,
   UseFilters,
   UseGuards,
+  Param,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { CurrentUser, type JwtPayloadUser } from '@/common/decorators/current-user.decorator';
+import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { toPublicUser } from '@/common/user.mapper';
 import { AuthService } from './auth.service';
@@ -35,7 +37,43 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly config: ConfigService,
+    private readonly broadcast: SocketBroadcastService,
   ) {}
+
+  // ── E2: oturum / cihaz yönetimi ──
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  listSessions(@CurrentUser() user: JwtPayloadUser) {
+    return this.authService.listSessions(user.sub, user.sid);
+  }
+
+  @Delete('sessions/others')
+  @UseGuards(JwtAuthGuard)
+  async revokeOthers(@CurrentUser() user: JwtPayloadUser) {
+    const ids = await this.authService.revokeOtherSessions(user.sub, user.sid);
+    void this.broadcast.disconnectSessions(user.sub, ids);
+    return { ok: true, revoked: ids.length };
+  }
+
+  /** Bu cihazdan çıkış: oturumu sunucuda da kapat */
+  @Delete('sessions/current')
+  @UseGuards(JwtAuthGuard)
+  async revokeCurrent(@CurrentUser() user: JwtPayloadUser, @Res({ passthrough: true }) res: Response) {
+    if (user.sid) {
+      await this.authService.revokeSession(user.sub, user.sid).catch(() => undefined);
+      void this.broadcast.disconnectSessions(user.sub, [user.sid]);
+    }
+    res.clearCookie('refreshToken');
+    return { ok: true };
+  }
+
+  @Delete('sessions/:id')
+  @UseGuards(JwtAuthGuard)
+  async revokeOne(@CurrentUser() user: JwtPayloadUser, @Param('id') id: string) {
+    const ids = await this.authService.revokeSession(user.sub, id);
+    void this.broadcast.disconnectSessions(user.sub, ids);
+    return { ok: true };
+  }
 
   private assertDevLoginEnabled() {
     if (this.config.get<string>('NODE_ENV') === 'production') {

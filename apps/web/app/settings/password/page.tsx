@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { SessionsPanel } from '@dracord/ui';
 import { useAuth } from '@/components/AuthProvider';
 import {
   SettingsPage,
@@ -408,6 +409,11 @@ export default function PasswordSecurityPage() {
               </div>
             </div>
           )}
+        </div>
+      </SettingsSection>
+      <SettingsSection title="Oturumlar ve cihazlar">
+        <div className="px-space-md py-space-md">
+          <SessionsPanel client={client} />
         </div>
       </SettingsSection>
     </SettingsPage>

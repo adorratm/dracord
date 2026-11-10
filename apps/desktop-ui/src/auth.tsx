@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [client]);
 
   const logout = useCallback(() => {
+    void client.logoutServer();
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
     client.setToken(null);
@@ -117,6 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.socket = null;
     setStickerCloudBridge(null);
     setUser(null);
+  }, [client]);
+
+  // E2 — oturum başka cihazdan kapatıldı
+  useEffect(() => {
+    return client.onSessionRevoked(() => {
+      localStorage.removeItem(ACCESS_KEY);
+      localStorage.removeItem(REFRESH_KEY);
+      client.setToken(null);
+      client.socket?.disconnect();
+      client.socket = null;
+      setUser(null);
+    });
   }, [client]);
 
   useEffect(() => {

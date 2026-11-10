@@ -35,6 +35,8 @@ export { AnnotationLayer, AnnotationToolbar } from './components/AnnotationLayer
 export { CaptionsButton, CaptionsOverlay } from './components/Captions';
 export { AutomodSettings } from './components/AutomodSettings';
 export { GuildFaqSettings } from './components/GuildFaqSettings';
+export { SessionsPanel } from './components/SessionsPanel';
+export type { SessionsClient } from './components/SessionsPanel';
 export type { GuildFaqClient } from './components/GuildFaqSettings';
 export type { AutomodClient } from './components/AutomodSettings';
 export { useVoiceCaptions } from './lib/use-voice-captions';

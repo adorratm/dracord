@@ -87,6 +87,7 @@ type Tab =
   | 'cookies';
 
 type NavItem = { id: Tab; labelKey: string; icon: string };
+import { SessionsList } from '../../components/SessionsList';
 type NavSection = { id: string; titleKey?: string; items: NavItem[] };
 
 const NAV: NavSection[] = [
@@ -642,6 +643,8 @@ export default function SettingsScreen() {
             <Text style={{ color: colors.textMuted, marginTop: 8, lineHeight: 20, marginBottom: 12 }}>
               2FA: {user?.twoFactorEnabled ? 'Aktif' : 'Kapalı — web’den etkinleştirilebilir'}
             </Text>
+            <Label>Oturumlar ve cihazlar</Label>
+            <SessionsList client={client} />
             <Label>Durum</Label>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               {STATUS_OPTIONS.map((o) => (

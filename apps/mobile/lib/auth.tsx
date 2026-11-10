@@ -261,6 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [client]);
 
   const logout = useCallback(async () => {
+    void client.logoutServer();
     await SecureStore.deleteItemAsync(ACCESS_KEY);
     await SecureStore.deleteItemAsync(REFRESH_KEY);
     refreshMem.current = null;
@@ -268,6 +269,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.socket?.disconnect();
     client.socket = null;
     setUser(null);
+  }, [client]);
+
+  // E2 — oturum başka cihazdan kapatıldı
+  useEffect(() => {
+    return client.onSessionRevoked(() => {
+      void SecureStore.deleteItemAsync(ACCESS_KEY);
+      void SecureStore.deleteItemAsync(REFRESH_KEY);
+      refreshMem.current = null;
+      client.setToken(null);
+      client.socket?.disconnect();
+      client.socket = null;
+      setUser(null);
+    });
   }, [client]);
 
   const getSessionTokens = useCallback(async (): Promise<AuthTokens | null> => {

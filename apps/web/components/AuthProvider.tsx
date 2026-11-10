@@ -42,10 +42,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   const logout = useCallback(() => {
+    void client.logoutServer();
     client.setToken(null);
     client.socket?.disconnect();
     clearSession();
     setUser(null);
+  }, [client]);
+
+  // E2 — oturum başka cihazdan kapatıldı → yerelde de çıkış
+  useEffect(() => {
+    return client.onSessionRevoked(() => {
+      client.setToken(null);
+      client.socket?.disconnect();
+      clearSession();
+      setUser(null);
+    });
   }, [client]);
 
   const applyTokens = useCallback(

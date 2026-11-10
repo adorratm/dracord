@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -30,12 +31,14 @@ import {
   verifyTotpCode,
 } from '@/common/totp';
 
+import { SessionStatusService } from './session-status.service';
 @Injectable()
 export class AuthService {
   constructor(
     private readonly em: EntityManager,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly sessionStatus: SessionStatusService,
   ) {}
 
   assertAdminEmail(email: string | null | undefined): void {
@@ -521,8 +524,42 @@ export class AuthService {
     }
 
     const user = await this.em.findOneOrFail(User, { where: { id: userId } });
-    await this.em.delete(Session, session.id);
-    return this.issueTokens(user);
+    // E2 — aynı oturum kimliği korunur (cihaz listesi), yenileme belirteci döndürülür
+    return this.issueTokens(user, session);
+  }
+
+  /** E2 — kullanıcının açık oturumları */
+  async listSessions(userId: string, currentSid: string | undefined) {
+    const rows = await this.em.find(Session, { where: { userId }, order: { lastUsedAt: 'DESC', createdAt: 'DESC' }, take: 100 });
+    const now = new Date();
+    return rows
+      .filter((r) => r.expiresAt > now)
+      .map((r) => ({
+        id: r.id,
+        current: r.id === currentSid,
+        platform: r.platform ?? null,
+        userAgent: r.userAgent ?? null,
+        ip: r.ip ? maskIp(r.ip) : null,
+        createdAt: r.createdAt.toISOString(),
+        lastUsedAt: (r.lastUsedAt ?? r.createdAt).toISOString(),
+      }));
+  }
+
+  /** E2 — tek oturumu kapat. Dönüş: kapatılan oturum kimlikleri */
+  async revokeSession(userId: string, sessionId: string): Promise<string[]> {
+    const res = await this.em.delete(Session, { id: sessionId, userId });
+    if (!res.affected) throw new NotFoundException('Oturum bulunamadı');
+    this.sessionStatus.invalidate(sessionId);
+    return [sessionId];
+  }
+
+  /** E2 — bu cihaz dışındaki tüm oturumları kapat */
+  async revokeOtherSessions(userId: string, currentSid: string | undefined): Promise<string[]> {
+    const rows = await this.em.find(Session, { where: { userId }, select: { id: true } });
+    const ids = rows.map((r) => r.id).filter((id) => id !== currentSid);
+    if (ids.length) await this.em.delete(Session, ids);
+    for (const id of ids) this.sessionStatus.invalidate(id);
+    return ids;
   }
 
   async getUserById(userId: string): Promise<User> {
@@ -533,26 +570,32 @@ export class AuthService {
     return user;
   }
 
-  private async issueTokens(user: User): Promise<AuthTokens> {
+  private async issueTokens(user: User, existing?: Session): Promise<AuthTokens> {
     if (user.disabledAt) {
       throw new UnauthorizedException('Hesap devre dışı. Yeniden etkinleştirmek için destekle iletişime geç.');
     }
-    const sessionId = randomBytes(16).toString('hex');
+    const sessionId = existing?.id ?? randomBytes(16).toString('hex');
     const refreshToken = randomBytes(32).toString('hex');
     const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
 
     const refreshExpires = this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d';
     const expiresAt = this.addDuration(new Date(), refreshExpires);
 
-    await this.em.save(
-      Session,
-      this.em.create(Session, {
-        id: sessionId,
-        userId: user.id,
-        refreshTokenHash,
-        expiresAt,
-      }),
-    );
+    if (existing) {
+      // Döndürme: eski yenileme belirteci artık geçersiz (hash değişti)
+      await this.em.update(Session, { id: existing.id }, { refreshTokenHash, expiresAt, lastUsedAt: new Date() });
+    } else {
+      await this.em.save(
+        Session,
+        this.em.create(Session, {
+          id: sessionId,
+          userId: user.id,
+          refreshTokenHash,
+          expiresAt,
+          lastUsedAt: new Date(),
+        }),
+      );
+    }
 
     const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
     const refreshSecret = this.config.getOrThrow<string>('JWT_REFRESH_SECRET');
@@ -565,6 +608,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         username: user.username,
+        sid: sessionId,
       },
       { secret: accessSecret, expiresIn: accessExpires },
     );
@@ -608,4 +652,12 @@ export class AuthService {
       raw: parts[parts.length - 1]!,
     };
   }
+}
+
+/** IP'nin son kısmını gizle (gizlilik) */
+function maskIp(ip: string): string {
+  const v4 = /^(?:::ffff:)?(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip);
+  if (v4) return `${v4[1]}.${v4[2]}.${v4[3]}.x`;
+  const parts = ip.split(':').filter(Boolean);
+  return parts.length > 3 ? `${parts.slice(0, 3).join(':')}:…` : ip;
 }

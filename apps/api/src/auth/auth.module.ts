@@ -13,6 +13,7 @@ const googleEnabled = (): boolean => {
   return Boolean(process.env.GOOGLE_CLIENT_ID?.trim());
 };
 
+import { SessionStatusService } from './session-status.service';
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -24,10 +25,11 @@ const googleEnabled = (): boolean => {
     AuthService,
     PlatformAdminService,
     JwtStrategy,
+    SessionStatusService,
     JwtRefreshStrategy,
     ...(googleEnabled() ? [GoogleStrategy] : []),
   ],
-  exports: [AuthService, PlatformAdminService, JwtModule],
+  exports: [AuthService, PlatformAdminService, JwtModule, SessionStatusService],
 })
 export class AuthModule {
   constructor(private readonly config: ConfigService) {

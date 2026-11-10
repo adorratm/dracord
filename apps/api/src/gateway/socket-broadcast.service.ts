@@ -42,6 +42,24 @@ export class SocketBroadcastService {
   }
 
   /** Genel guild odası yayını */
+  /** E2 — kapatılan oturumların soketlerini düşür (istemci oturumu kapatır) */
+  async disconnectSessions(userId: string, sessionIds: string[]) {
+    if (!this.server || !sessionIds.length) return;
+    const set = new Set(sessionIds);
+    try {
+      const socks = await this.server.in(`user:${userId}`).fetchSockets();
+      for (const s of socks) {
+        const sid = (s.data as { user?: { sid?: string } })?.user?.sid;
+        if (sid && set.has(sid)) {
+          s.emit('session:revoked', { sessionId: sid });
+          s.disconnect(true);
+        }
+      }
+    } catch {
+      /* adapter yoksa yok say */
+    }
+  }
+
   emitToGuild(guildId: string, event: string, payload: unknown) {
     this.server?.to(`guild:${guildId}`).emit(event, payload);
   }

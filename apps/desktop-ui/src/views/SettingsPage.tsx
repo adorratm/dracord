@@ -14,6 +14,7 @@ import {
   presenceLabelTr,
   type SocialLinkKey,
   ShowcasePicker,
+  SessionsPanel,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -908,6 +909,11 @@ export function SettingsPage({
                   2FA’yı kapat
                 </button>
               )}
+            </div>
+          </SettingsSection>
+          <SettingsSection title="Oturumlar ve cihazlar">
+            <div className="px-space-md py-space-md">
+              <SessionsPanel client={client} />
             </div>
           </SettingsSection>
         </SettingsPageBody>

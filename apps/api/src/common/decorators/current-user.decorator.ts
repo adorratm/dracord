@@ -5,6 +5,8 @@ export interface JwtPayloadUser {
   sub: string;
   email: string;
   username: string;
+  /** E2 — oturum kimliği (eski belirteçlerde yok) */
+  sid?: string;
 }
 
 export const CurrentUser = createParamDecorator(

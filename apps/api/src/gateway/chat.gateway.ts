@@ -40,6 +40,7 @@ import { RemoteControlService } from '@/voice/remote-control.service';
 import { VoicePresenceService } from '@/voice/voice-presence.service';
 import { LevelsService } from '@/levels/levels.service';
 import { GuildStatsService } from '@/guild-stats/guild-stats.service';
+import { SessionStatusService } from '@/auth/session-status.service';
 import { SoundboardService } from '@/soundboard/soundboard.service';
 import { GamesService } from '@/games/games.service';
 import { WsJwtGuard } from './ws-jwt.guard';
@@ -56,6 +57,7 @@ interface WsUser {
   sub: string;
   email: string;
   username: string;
+  sid?: string;
 }
 
 const OFFLINE_GRACE_MS = 25_000;
@@ -93,6 +95,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly remoteControl: RemoteControlService,
     private readonly levels: LevelsService,
     private readonly guildStats: GuildStatsService,
+    private readonly sessionStatus: SessionStatusService,
     private readonly soundboard: SoundboardService,
     private readonly games: GamesService,
     private readonly channels: ChannelsService,
@@ -173,6 +176,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       const user = this.jwt.verify<WsUser>(token, {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
+      // E2 — kapatılmış oturumla bağlanılamaz
+      if (user.sid && !(await this.sessionStatus.isActive(user.sid, user.sub))) {
+        client.emit('session:revoked', { sessionId: user.sid });
+        client.disconnect(true);
+        return;
+      }
       client.data.user = user;
       void client.join(`user:${user.sub}`);
 
