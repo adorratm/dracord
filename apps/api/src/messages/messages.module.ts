@@ -17,6 +17,7 @@ import { ScheduledMessagesController } from './scheduled-messages.controller';
 import { ScheduledMessagesService } from './scheduled-messages.service';
 import { CatchupService } from './catchup.service';
 
+import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
 @Module({
   imports: [
     ChannelsModule,
@@ -26,6 +27,7 @@ import { CatchupService } from './catchup.service';
     NotificationsModule,
     QueuesModule,
     LevelsModule,
+    AutomodRulesModule,
     forwardRef(() => MusicModule),
   ],
   controllers: [MessagesController, ScheduledMessagesController],

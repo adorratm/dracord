@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { GuildPublicPageSettings, GuildStatsPanel, LevelsPanel } from '@dracord/ui';
+import { AutomodSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -777,6 +777,21 @@ export default function GuildSettingsPage({ params }: PageProps) {
               </>
             )}
           </section>
+
+          {canManage && (
+            <section className="max-w-2xl mt-space-2xl" id="otomatik-moderasyon">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Otomatik moderasyon</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Yasaklı kelimeler, spam ve tekrarlayan ihlaller. Model kullanılmaz; kurallar ve basit kontroller.
+              </p>
+              <AutomodSettings
+                client={client}
+                guildId={guildId}
+                roles={roles.filter((r) => r.name !== '@everyone').map((r) => ({ id: r.id, name: r.name }))}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+          )}
 
           {canManage && (detail ?? guild) && (
             <section className="max-w-2xl mt-space-2xl" id="tanitim">

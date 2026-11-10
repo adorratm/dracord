@@ -37,6 +37,7 @@ import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
 import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
 import { ChallengesModule } from '@/challenges/challenges.module';
+import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
 import { SoundboardModule } from '@/soundboard/soundboard.module';
 import { GamesModule } from '@/games/games.module';
 
@@ -87,6 +88,7 @@ import { GamesModule } from '@/games/games.module';
     ShowcaseModule,
     TournamentsModule,
     ChallengesModule,
+    AutomodRulesModule,
     SoundboardModule,
     GamesModule,
   ],

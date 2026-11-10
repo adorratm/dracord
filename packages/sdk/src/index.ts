@@ -1037,6 +1037,22 @@ export class DracordClient {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
   }
 
+  // ── Otomatik moderasyon kuralları (D2, MANAGE_GUILD) ──
+  async getAutomodConfig(guildId: string): Promise<import('@dracord/types').GuildAutomodConfigDto> {
+    return this.request(`/guilds/${guildId}/automod`);
+  }
+
+  async updateAutomodConfig(
+    guildId: string,
+    patch: Partial<Omit<import('@dracord/types').GuildAutomodConfigDto, 'guildId'>>,
+  ): Promise<import('@dracord/types').GuildAutomodConfigDto> {
+    return this.request(`/guilds/${guildId}/automod`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+
+  async listAutomodEvents(guildId: string, limit = 100): Promise<import('@dracord/types').AutomodEventDto[]> {
+    return this.request(`/guilds/${guildId}/automod/events?limit=${limit}`);
+  }
+
   // ── Haftalık görevler + sezon (C3) ──
   async getChallenges(guildId: string): Promise<import('@dracord/types').ChallengesDto> {
     return this.request(`/guilds/${guildId}/challenges`);

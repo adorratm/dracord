@@ -1317,6 +1317,178 @@ export interface LevelUpPayload {
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
 
+// ── Otomatik moderasyon kuralları (D2) — model yok, kural + sezgisel ──
+export const AUTOMOD_LIMITS = { rules: 100, patternMax: 120, exempt: 50, eventsKept: 500 } as const;
+
+export interface AutomodRule {
+  id: string;
+  /** word = kelime/ifade (normalize edilerek), regex = düzenli ifade */
+  kind: 'word' | 'regex';
+  pattern: string;
+}
+
+export interface GuildAutomodConfigDto {
+  guildId: string;
+  enabled: boolean;
+  rules: AutomodRule[];
+  /** Spam sezgileri */
+  spam: {
+    enabled: boolean;
+    /** 10 sn içinde en fazla mesaj */
+    maxPerTenSeconds: number;
+    /** 30 sn içinde aynı mesaj tekrarı */
+    maxDuplicates: number;
+    maxMentions: number;
+    maxLinks: number;
+    /** Büyük harf oranı sınırı (0–1, 12+ harfli mesajlarda) */
+    capsRatio: number;
+    blockInvites: boolean;
+    blockZalgo: boolean;
+  };
+  /** Kısa sürede tekrarlayan ihlalde zaman aşımı */
+  timeout: { enabled: boolean; violations: number; windowMinutes: number; minutes: number };
+  exemptRoleIds: string[];
+  exemptChannelIds: string[];
+}
+
+export const AUTOMOD_DEFAULTS: Omit<GuildAutomodConfigDto, 'guildId'> = {
+  enabled: false,
+  rules: [],
+  spam: {
+    enabled: true,
+    maxPerTenSeconds: 8,
+    maxDuplicates: 3,
+    maxMentions: 6,
+    maxLinks: 5,
+    capsRatio: 0.85,
+    blockInvites: false,
+    blockZalgo: true,
+  },
+  timeout: { enabled: false, violations: 3, windowMinutes: 10, minutes: 10 },
+  exemptRoleIds: [],
+  exemptChannelIds: [],
+};
+
+export type AutomodReason =
+  | 'word'
+  | 'regex'
+  | 'rate'
+  | 'duplicate'
+  | 'mentions'
+  | 'links'
+  | 'caps'
+  | 'invite'
+  | 'zalgo';
+
+export const AUTOMOD_REASON_TR: Record<AutomodReason, string> = {
+  word: 'Yasaklı kelime',
+  regex: 'Yasaklı kalıp',
+  rate: 'Çok hızlı mesaj',
+  duplicate: 'Tekrarlanan mesaj',
+  mentions: 'Çok fazla etiket',
+  links: 'Çok fazla bağlantı',
+  caps: 'Aşırı büyük harf',
+  invite: 'Başka sunucu daveti',
+  zalgo: 'Bozuk (zalgo) metin',
+};
+
+export interface AutomodEventDto {
+  id: string;
+  guildId: string;
+  userId: string;
+  userName: string;
+  channelId: string | null;
+  reason: AutomodReason;
+  detail: string | null;
+  preview: string;
+  action: 'blocked' | 'timeout';
+  createdAt: string;
+}
+
+/**
+ * Eşleştirme için normalize: Türkçe küçük harf, aksan/leet dönüşümü,
+ * ayırıcıları sil (s.p.a.m), tekrar harfleri tekle (spaaam → spam).
+ */
+export function automodNormalize(text: string): string {
+  return String(text ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/[0@4]/g, (c) => (c === '0' ? 'o' : 'a'))
+    .replace(/[1!|]/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/[5$]/g, 's')
+    .replace(/7/g, 't')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/(.)\1+/g, '$1');
+}
+
+/** Felaket geri izleme (ReDoS) riski taşıyan kalıpları reddet */
+export function isSafeAutomodRegex(pattern: string): boolean {
+  if (!pattern || pattern.length > AUTOMOD_LIMITS.patternMax) return false;
+  // İç içe nicelik: (a+)+, (a*)*, (a|aa)+ vb.
+  if (/\([^)]*[+*{][^)]*\)\s*[+*{]/.test(pattern)) return false;
+  if (/\([^)]*\|[^)]*\)\s*[+*{]/.test(pattern)) return false;
+  // Geri başvurular
+  if (/\\[1-9]/.test(pattern)) return false;
+  try {
+    new RegExp(pattern, 'iu');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const URL_RE = /\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+/gi;
+const INVITE_RE = /\b(?:dracord\.com\.tr\/(?:invite|s)\/|discord(?:\.gg|(?:app)?\.com\/invite)\/)[A-Za-z0-9-]+/i;
+const ZALGO_RE = /[̀-ͯ҃-҉᷀-᷿⃐-⃿︠-︯]{3,}/;
+
+/** İçerik bazlı kontroller (durum gerektirmeyen). İhlal yoksa null. */
+export function automodCheckContent(
+  content: string,
+  cfg: Pick<GuildAutomodConfigDto, 'rules' | 'spam'>,
+  opts?: { ownInvitePrefix?: string | null },
+): { reason: AutomodReason; detail: string | null } | null {
+  const text = String(content ?? '');
+  if (!text.trim()) return null;
+  if (cfg.rules.length) {
+    const norm = automodNormalize(text);
+    // "s a l a k" gibi aralıklı yazımı birleştir (yalnız tek harfli parça dizileri)
+    const joined = norm.replace(/(?:^|\s)((?:[a-z0-9]\s+){2,}[a-z0-9])(?=\s|$)/g, (m, run: string) => ` ${run.replace(/\s+/g, '')}`);
+    for (const r of cfg.rules) {
+      if (r.kind === 'word') {
+        const w = automodNormalize(r.pattern).trim();
+        if (!w) continue;
+        // Tek kelime: sınırlı eşleşme (ör. "ass" → "class" yakalanmasın); ayrık harflerle yazılmışsa da yakala
+        const re = new RegExp(`(^|\\s)${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')}($|\\s)`);
+        if (re.test(norm) || re.test(joined)) return { reason: 'word', detail: r.pattern };
+      } else if (isSafeAutomodRegex(r.pattern)) {
+        if (new RegExp(r.pattern, 'iu').test(text.slice(0, 4000))) return { reason: 'regex', detail: r.pattern };
+      }
+    }
+  }
+  const sp = cfg.spam;
+  if (!sp.enabled) return null;
+  if (sp.blockZalgo && ZALGO_RE.test(text)) return { reason: 'zalgo', detail: null };
+  const mentions = (text.match(/<@[!&]?[A-Za-z0-9]+>|@everyone|@here/g) ?? []).length;
+  if (sp.maxMentions > 0 && mentions > sp.maxMentions) return { reason: 'mentions', detail: String(mentions) };
+  const links = text.match(URL_RE) ?? [];
+  if (sp.maxLinks > 0 && links.length > sp.maxLinks) return { reason: 'links', detail: String(links.length) };
+  if (sp.blockInvites) {
+    const m = INVITE_RE.exec(text);
+    if (m && !(opts?.ownInvitePrefix && m[0].toLowerCase().includes(opts.ownInvitePrefix.toLowerCase()))) {
+      return { reason: 'invite', detail: m[0] };
+    }
+  }
+  const letters = text.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü]/g, '');
+  if (sp.capsRatio < 1 && letters.length >= 12) {
+    const upper = letters.replace(/[^A-ZÇĞİÖŞÜ]/g, '').length;
+    if (upper / letters.length > sp.capsRatio) return { reason: 'caps', detail: null };
+  }
+  return null;
+}
+
 // ── Canlı altyazı (A7) ──
 export const CAPTION_LIMITS = { textMax: 300, holdMs: 6000 } as const;
 export interface VoiceCaptionPayload {

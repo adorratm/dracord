@@ -33,6 +33,8 @@ export { TournamentsPanel } from './components/TournamentsPanel';
 export { ChallengesPanel } from './components/ChallengesPanel';
 export { AnnotationLayer, AnnotationToolbar } from './components/AnnotationLayer';
 export { CaptionsButton, CaptionsOverlay } from './components/Captions';
+export { AutomodSettings } from './components/AutomodSettings';
+export type { AutomodClient } from './components/AutomodSettings';
 export { useVoiceCaptions } from './lib/use-voice-captions';
 export type { CaptionLine, CaptionsClient, VoiceCaptionsController } from './lib/use-voice-captions';
 export { useScreenAnnotations, strokeAlpha } from './lib/use-screen-annotations';

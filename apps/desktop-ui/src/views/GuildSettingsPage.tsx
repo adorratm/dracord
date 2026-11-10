@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { cn, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -856,7 +856,18 @@ export function GuildSettingsPage({
           {tab === 'moderation' && (
             <>
               <h2 className="font-headline-lg text-headline-lg mt-0 mb-2">Moderasyon</h2>
-              <p className="text-on-surface-variant mb-4">Denetim kayıtları ve yasaklar.</p>
+              <p className="text-on-surface-variant mb-4">Otomatik moderasyon, denetim kayıtları ve yasaklar.</p>
+              {canManage ? (
+                <section className="mb-8 max-w-2xl rounded-xl bg-surface-container-low p-space-md">
+                  <h3 className="font-semibold mb-3">Otomatik moderasyon</h3>
+                  <AutomodSettings
+                    client={client}
+                    guildId={guildId}
+                    roles={roles.filter((r) => r.name !== '@everyone').map((r) => ({ id: r.id, name: r.name }))}
+                    channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+                  />
+                </section>
+              ) : null}
               <h3 className="font-semibold mb-2">Yasaklar</h3>
               <div className="rounded-xl bg-surface-container-low divide-y divide-surface-container-high overflow-hidden mb-6">
                 {bans.length === 0 && (
