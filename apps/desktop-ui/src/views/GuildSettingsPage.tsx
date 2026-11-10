@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { AutomodSettings, cn, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildFaqSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -47,6 +47,7 @@ type Tab =
   | 'levels'
   | 'stats'
   | 'public'
+  | 'faq'
   | 'invite';
 
 const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | 'channels' | 'mod' }[] =
@@ -60,6 +61,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'levels', label: 'Seviyeler', icon: 'military_tech', need: 'manage' },
     { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
     { id: 'public', label: 'Tanıtım sayfası', icon: 'public', need: 'manage' },
+    { id: 'faq', label: 'SSS ve Draco', icon: 'quiz', need: 'manage' },
     { id: 'invite', label: 'Davet', icon: 'link' },
   ];
 
@@ -928,6 +930,17 @@ export function GuildSettingsPage({
                   if (ext) void ext(u);
                   else window.open(u, '_blank', 'noopener,noreferrer');
                 }}
+              />
+            </section>
+          )}
+
+          {tab === 'faq' && canManage && (
+            <section className="max-w-2xl">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">SSS ve Draco</h2>
+              <GuildFaqSettings
+                client={client}
+                guildId={guildId}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
             </section>
           )}

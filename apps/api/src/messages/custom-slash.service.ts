@@ -192,7 +192,8 @@ export class CustomSlashService {
     return lines.join('\n');
   }
 
-  private async reply(channelId: string, content: string) {
+  /** Bot olarak kanala yanıt yaz (Draco da kullanır) */
+  async reply(channelId: string, content: string) {
     const botId = this.bot.getBotUserId();
     await this.bot.ensureBotUser();
     const author = await this.em.findOneOrFail(User, { where: { id: botId } });

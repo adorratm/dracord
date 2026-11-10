@@ -1317,6 +1317,75 @@ export interface LevelUpPayload {
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
 
+// ── Draco yardımcı bot + sunucu SSS (D4) — kural tabanlı ──
+export const FAQ_LIMITS = { entries: 60, questionMax: 120, answerMax: 1500, keywords: 12, autoChannels: 20 } as const;
+
+export interface GuildFaqEntry {
+  id: string;
+  question: string;
+  /** Ek anahtar kelimeler (eşleşmeyi güçlendirir) */
+  keywords: string[];
+  answer: string;
+}
+
+export interface GuildFaqConfigDto {
+  guildId: string;
+  entries: GuildFaqEntry[];
+  /** "?" ile biten mesajlara güçlü eşleşmede otomatik yanıt */
+  autoAnswer: boolean;
+  /** Boşsa tüm metin kanalları */
+  autoChannelIds: string[];
+}
+
+const FAQ_STOP = new Set(
+  'bir bu şu o ve ile mi mı mu mü de da ne nasıl neden niye için ama veya ya ki çok daha en gibi var yok ben sen biz siz onlar nedir nerede nereden hangi kim istiyorum isterim olur yapılır yapabilir miyim misin mısın edebilir lazım acaba bana beni the a an is are how what why where to of in on for and or can i you'.split(' '),
+);
+
+/** Basit Türkçe kök: yaygın ekleri kırp (kural tabanlı eşleşme için yeterli) */
+function faqStem(w: string): string {
+  const suffixes = ['larının', 'lerinin', 'ların', 'lerin', 'ları', 'leri', 'lar', 'ler', 'yı', 'yi', 'yu', 'yü', 'ya', 'ye', 'ını', 'ini', 'unu', 'ünü', 'ında', 'inde', 'ımı', 'imi', 'mak', 'mek', 'yor', 'dır', 'dir', 'nın', 'nin', 'ın', 'in', 'un', 'ün', 'da', 'de', 'ta', 'te', 'ı', 'i', 'u', 'ü', 'a', 'e'];
+  // İki tur: "altyazıyı" → "altyazı" → "altyaz"
+  for (let pass = 0; pass < 2; pass++) {
+    const s = suffixes.find((x) => w.length - x.length >= 4 && w.endsWith(x));
+    if (!s) break;
+    w = w.slice(0, -s.length);
+  }
+  return w;
+}
+
+export function faqTokens(text: string): string[] {
+  return String(text ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/[^a-zçğıöşü0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2 && !FAQ_STOP.has(w))
+    .map(faqStem);
+}
+
+/** 0–1 arası benzerlik: sorgu kelimelerinin girdide kapsanma oranı (anahtar kelime ağırlıklı) */
+export function faqScore(query: string, entry: Pick<GuildFaqEntry, 'question' | 'keywords'>): number {
+  const q = [...new Set(faqTokens(query))];
+  if (!q.length) return 0;
+  const qs = new Set(faqTokens(entry.question));
+  const ks = new Set(entry.keywords.flatMap((k) => faqTokens(k)));
+  let hit = 0;
+  for (const t of q) {
+    if (ks.has(t)) hit += 1.25;
+    else if (qs.has(t)) hit += 1;
+    else if ([...qs, ...ks].some((x) => x.length >= 4 && t.length >= 4 && (x.startsWith(t) || t.startsWith(x)))) hit += 0.6;
+  }
+  return Math.min(1, hit / Math.max(2, q.length));
+}
+
+export function faqBestMatch<T extends Pick<GuildFaqEntry, 'question' | 'keywords'>>(query: string, entries: T[]): { entry: T; score: number } | null {
+  let best: { entry: T; score: number } | null = null;
+  for (const e of entries) {
+    const score = faqScore(query, e);
+    if (!best || score > best.score) best = { entry: e, score };
+  }
+  return best && best.score > 0 ? best : null;
+}
+
 // ── Otomatik moderasyon kuralları (D2) — model yok, kural + sezgisel ──
 export const AUTOMOD_LIMITS = { rules: 100, patternMax: 120, exempt: 50, eventsKept: 500 } as const;
 

@@ -18,6 +18,8 @@ import { ScheduledMessagesService } from './scheduled-messages.service';
 import { CatchupService } from './catchup.service';
 
 import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
+import { DracoController } from '@/draco/draco.controller';
+import { DracoService } from '@/draco/draco.service';
 @Module({
   imports: [
     ChannelsModule,
@@ -30,7 +32,7 @@ import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
     AutomodRulesModule,
     forwardRef(() => MusicModule),
   ],
-  controllers: [MessagesController, ScheduledMessagesController],
+  controllers: [MessagesController, ScheduledMessagesController, DracoController],
   providers: [
     MessagesService,
     LinkPreviewService,
@@ -39,6 +41,7 @@ import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
     ReminderSchedulerService,
     ScheduledMessagesService,
     CatchupService,
+    DracoService,
   ],
   exports: [MessagesService, MessagesRealtimeService, ScheduledMessagesService],
 })

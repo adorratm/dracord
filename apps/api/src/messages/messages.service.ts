@@ -52,6 +52,7 @@ import { SearchIndexerService } from '@/search/search-indexer.service';
 import { MusicCommandsService } from '@/music/music-commands.service';
 import { AutomodService } from '@/moderation/automod.service';
 import { AutomodRulesService } from '@/automod-rules/automod-rules.service';
+import { DracoService } from '@/draco/draco.service';
 import { LevelsService } from '@/levels/levels.service';
 import { QueuesService } from '@/queues/queues.service';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
@@ -81,6 +82,7 @@ export class MessagesService {
     private readonly customSlash: CustomSlashService,
     private readonly automod: AutomodService,
     private readonly automodRules: AutomodRulesService,
+    private readonly draco: DracoService,
     @Optional() private readonly queues?: QueuesService,
     @Optional() private readonly levels?: LevelsService,
   ) {}
@@ -596,8 +598,12 @@ export class MessagesService {
     ) {
       void (async () => {
         const music = await this.musicCommands.tryHandle(userId, channelId, trimmed);
-        if (!music) await this.customSlash.tryHandle(userId, channelId, trimmed);
+        if (music) return;
+        if (await this.draco.tryHandle(userId, channelId, trimmed)) return;
+        await this.customSlash.tryHandle(userId, channelId, trimmed);
       })().catch(() => undefined);
+    } else if (userId !== DRACORD_BOT_USER_ID && msgType === 'default' && channelRow?.guildId && trimmed.endsWith('?')) {
+      void this.draco.maybeAutoAnswer(channelId, trimmed).catch(() => undefined);
     }
 
     return { message: dto, notifications };

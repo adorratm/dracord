@@ -1037,6 +1037,18 @@ export class DracordClient {
     return this.request(`/games/admin/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) });
   }
 
+  // ── Draco SSS (D4) ──
+  async getGuildFaq(guildId: string): Promise<import('@dracord/types').GuildFaqConfigDto> {
+    return this.request(`/guilds/${guildId}/faq`);
+  }
+
+  async updateGuildFaq(
+    guildId: string,
+    patch: Partial<Omit<import('@dracord/types').GuildFaqConfigDto, 'guildId'>>,
+  ): Promise<import('@dracord/types').GuildFaqConfigDto> {
+    return this.request(`/guilds/${guildId}/faq`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+
   // ── Otomatik moderasyon kuralları (D2, MANAGE_GUILD) ──
   async getAutomodConfig(guildId: string): Promise<import('@dracord/types').GuildAutomodConfigDto> {
     return this.request(`/guilds/${guildId}/automod`);

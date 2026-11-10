@@ -34,6 +34,8 @@ export { ChallengesPanel } from './components/ChallengesPanel';
 export { AnnotationLayer, AnnotationToolbar } from './components/AnnotationLayer';
 export { CaptionsButton, CaptionsOverlay } from './components/Captions';
 export { AutomodSettings } from './components/AutomodSettings';
+export { GuildFaqSettings } from './components/GuildFaqSettings';
+export type { GuildFaqClient } from './components/GuildFaqSettings';
 export type { AutomodClient } from './components/AutomodSettings';
 export { useVoiceCaptions } from './lib/use-voice-captions';
 export type { CaptionLine, CaptionsClient, VoiceCaptionsController } from './lib/use-voice-captions';
