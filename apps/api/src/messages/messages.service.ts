@@ -40,7 +40,8 @@ import type {
   MessageType,
   NotificationDto,
 } from '@dracord/types';
-import { sanitizeVoiceAttachment } from '@dracord/types';
+import { sanitizeVoiceAttachment, validateE2eePayload, type E2eePayload } from '@dracord/types';
+import { DMChannel } from '@/database/entities/dm-channel.entity';
 import { toPublicUser } from '@/common/user.mapper';
 import { GuildPermissions } from '@/common/permissions';
 import { ChannelsService } from '@/channels/channels.service';
@@ -385,9 +386,29 @@ export class MessagesService {
       threadRootId?: string;
       type?: MessageType;
       forwardedFrom?: MessageForwardedFrom | null;
+      /** E3 — uçtan uca şifreli zarf */
+      e2ee?: unknown;
     } = {},
   ): Promise<{ message: MessageDto; notifications: NotificationDto[] }> {
     const channelRow = await this.channels.assertChannelAccess(channelId, userId);
+    // E3 — şifreli DM kuralları
+    let e2ee: E2eePayload | null = null;
+    if (opts.e2ee !== undefined || channelRow?.dmChannelId) {
+      const dm = channelRow?.dmChannelId
+        ? await this.em.findOne(DMChannel, { where: { id: channelRow.dmChannelId }, select: { id: true, e2eeEnabled: true } })
+        : null;
+      if (opts.e2ee !== undefined) {
+        if (!dm) throw new BadRequestException('Şifreli mesaj yalnız özel mesajlarda gönderilebilir');
+        if (!dm.e2eeEnabled) throw new BadRequestException('Bu sohbette uçtan uca şifreleme kapalı');
+        e2ee = validateE2eePayload(opts.e2ee);
+        if (!e2ee) throw new BadRequestException('Geçersiz şifreli mesaj');
+        if (content.trim() || attachments?.length || pollInput || opts.forwardedFrom || opts.type === 'heading') {
+          throw new BadRequestException('Şifreli mesajda yalnız şifreli metin olabilir');
+        }
+      } else if (dm?.e2eeEnabled && userId !== DRACORD_BOT_USER_ID) {
+        throw new BadRequestException('Bu sohbet uçtan uca şifreli — mesaj göndermek için uygulamanı güncelle');
+      }
+    }
     if (channelRow?.guildId) {
       await this.guilds.assertNotTimedOut(channelRow.guildId, userId);
       const canSend = await this.channels.memberCanInChannel(
@@ -445,6 +466,7 @@ export class MessagesService {
       !trimmed &&
       (!attachments || attachments.length === 0) &&
       !poll &&
+      !e2ee &&
       msgType === 'default' &&
       !opts.forwardedFrom
     ) {
@@ -501,7 +523,8 @@ export class MessagesService {
       this.em.create(Message, {
         channelId,
         authorId: userId,
-        content: trimmed || (poll || opts.forwardedFrom ? ' ' : ' '),
+        content: e2ee ? '' : trimmed || (poll || opts.forwardedFrom ? ' ' : ' '),
+        e2ee,
         type: msgType,
         replyToId,
         threadRootId,
@@ -522,12 +545,15 @@ export class MessagesService {
       reactions: [],
       replyTo: replyRef,
     });
-    void this.indexer
-      .indexMessage(dto, {
-        guildId: channelRow?.guildId ?? null,
-        dmChannelId: channelRow?.dmChannelId ?? null,
-      })
-      .catch(() => undefined);
+    // Şifreli içerik aranamaz — dizine ekleme
+    if (!e2ee) {
+      void this.indexer
+        .indexMessage(dto, {
+          guildId: channelRow?.guildId ?? null,
+          dmChannelId: channelRow?.dmChannelId ?? null,
+        })
+        .catch(() => undefined);
+    }
 
     const notifications =
       msgType === 'heading'
@@ -800,6 +826,7 @@ export class MessagesService {
     if (message.authorId !== userId) {
       throw new ForbiddenException('Yalnızca kendi mesajını düzenleyebilirsin');
     }
+    if (message.e2ee) throw new BadRequestException('Şifreli mesajlar düzenlenemez; silip yeniden gönder');
     const trimmed = content.trim();
     if (!trimmed && !message.poll) throw new BadRequestException('Mesaj boş olamaz');
     message.content = trimmed || ' ';
@@ -1287,7 +1314,7 @@ export class MessagesService {
     authorId: string,
   ): Promise<NotificationDto[]> {
     const inputs: Parameters<NotificationsService['createMany']>[0] = [];
-    const snippet = message.content.trim().slice(0, 120) || 'Yeni mesaj';
+    const snippet = message.e2ee ? '🔒 Şifreli mesaj' : message.content.trim().slice(0, 120) || 'Yeni mesaj';
     const authorName = message.author.displayName;
     const linkBase =
       channel?.guildId
@@ -1552,6 +1579,7 @@ export class MessagesService {
           ? null
           : this.toPollDto(message.poll, opts.viewerId, opts.pollVoters),
       viewerHide: hidden ? 'hidden' : null,
+      ...(message.e2ee && !hidden ? { e2ee: message.e2ee } : {}),
       // Viewer-specific — yalnızca bilinçli set edildiğinde gönder (socket broadcast’te yok)
       ...(opts.bookmarked !== undefined ? { bookmarked: Boolean(opts.bookmarked) } : {}),
       ...(opts.reminderAt !== undefined ? { reminderAt: opts.reminderAt } : {}),

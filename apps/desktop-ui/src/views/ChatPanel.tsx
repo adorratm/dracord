@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ChannelSummary,
   MessageAttachment,
@@ -21,6 +21,7 @@ import {
   type SearchScope,
   useScheduledMessages,
   CatchupButton,
+  type E2eeDmController,
 } from '@dracord/ui';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { DracoEmpty } from '../components/Draco';
@@ -90,6 +91,7 @@ export function ChatPanel({
   className,
   jumpAroundId = null,
   onJumpAroundConsumed,
+  e2ee = null,
 }: {
   guildId: string;
   channel: ChannelSummary;
@@ -102,6 +104,8 @@ export function ChatPanel({
   /** Global aramadan gelen mesaj id — around fetch + highlight */
   jumpAroundId?: string | null;
   onJumpAroundConsumed?: () => void;
+  /** DM uçtan uca şifreleme denetleyicisi (yalnız DM'lerde) */
+  e2ee?: E2eeDmController | null;
 }) {
   const { client, user } = useAuth();
   const scheduler = useScheduledMessages(client, channel.id);
@@ -138,6 +142,12 @@ export function ChatPanel({
   const [forwardBusy, setForwardBusy] = useState(false);
   const [threadRoot, setThreadRoot] = useState<MessageDto | null>(null);
   const [threadMsgs, setThreadMsgs] = useState<MessageDto[]>([]);
+  const e2eeOn = Boolean(isDm && e2ee?.enabled);
+  const e2eeView = useCallback(
+    (list: MessageDto[]) => (e2ee ? e2ee.transform(list) : list),
+    [e2ee],
+  );
+  const e2eeMessages = useMemo(() => e2eeView(messages), [e2eeView, messages]);
   const [threadBusy, setThreadBusy] = useState(false);
   const [threadReplyTo, setThreadReplyTo] = useState<MessageDto | null>(null);
   const [threadEditing, setThreadEditing] = useState<MessageDto | null>(null);
@@ -412,6 +422,29 @@ export function ChatPanel({
     content: string,
     meta?: { replyToId?: string; threadRootId?: string },
   ) => {
+    if (e2eeOn) {
+      if (editing && !meta?.threadRootId) {
+        setEditing(null);
+        window.alert('Şifreli mesajlar düzenlenemez');
+        return;
+      }
+      try {
+        const sent = await e2ee!.send(content, {
+          replyToId: meta?.replyToId ?? (meta?.threadRootId ? undefined : replyTo?.id),
+          threadRootId: meta?.threadRootId,
+        });
+        if (meta?.threadRootId) {
+          setThreadMsgs((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+        } else {
+          setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+        }
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : 'Şifreli mesaj gönderilemedi');
+        return;
+      }
+      if (!meta?.threadRootId) setReplyTo(null);
+      return;
+    }
     if (editing && !meta?.threadRootId) {
       await client.updateMessage(editing.id, content);
       setEditing(null);
@@ -698,18 +731,18 @@ export function ChatPanel({
               </button>
             </div>
             <p className="px-4 pt-2 font-body-sm text-on-surface-variant line-clamp-2 shrink-0">
-              {threadRoot.content?.trim() || 'Ek / medya'}
+              {(e2eeView([threadRoot])[0]?.content ?? threadRoot.content)?.trim() || 'Ek / medya'}
             </p>
             {threadBusy && (
               <p className="px-4 py-2 font-body-sm text-on-surface-variant">Yükleniyor…</p>
             )}
             <MessageList
               className="flex-1 min-h-0"
-              messages={
+              messages={e2eeView(
                 threadMsgs.some((m) => m.id === threadRoot.id)
                   ? threadMsgs
-                  : [threadRoot, ...threadMsgs]
-              }
+                  : [threadRoot, ...threadMsgs],
+              )}
               scrollKey={`thread-${threadRoot.id}`}
               mentionNames={members.map((m) => m.username)}
               channelNames={[channel.name]}
@@ -781,6 +814,7 @@ export function ChatPanel({
                   threadEditing ? 'Mesajı düzenle…' : 'Thread’e yanıt yaz…'
                 }
                 {...sharedInputProps}
+                textOnly={e2eeOn}
                 replyTo={
                   threadReplyTo
                     ? {
@@ -795,7 +829,7 @@ export function ChatPanel({
                   setThreadEditing(null);
                 }}
                 onSend={(text, meta) => {
-                  if (threadEditing) {
+                  if (threadEditing && !e2eeOn) {
                     void client.updateMessage(threadEditing.id, text).then((msg) => {
                       patchThreadMsg(msg);
                       setThreadEditing(null);
@@ -807,14 +841,19 @@ export function ChatPanel({
                     replyToId: meta?.replyToId ?? threadReplyTo?.id,
                   }).then(() => setThreadReplyTo(null));
                 }}
-                onAttachFiles={(files) =>
-                  void uploadFiles(files, {
-                    threadRootId: threadRoot.id,
-                    replyToId: threadReplyTo?.id,
-                  }).then(() => setThreadReplyTo(null))
+                onAttachFiles={
+                  e2eeOn
+                    ? undefined
+                    : (files) =>
+                        void uploadFiles(files, {
+                          threadRootId: threadRoot.id,
+                          replyToId: threadReplyTo?.id,
+                        }).then(() => setThreadReplyTo(null))
                 }
-                onSendMedia={(payload) =>
-                  void sendMedia(payload, { threadRootId: threadRoot.id })
+                onSendMedia={
+                  e2eeOn
+                    ? undefined
+                    : (payload) => void sendMedia(payload, { threadRootId: threadRoot.id })
                 }
               />
             </div>
@@ -824,7 +863,7 @@ export function ChatPanel({
             <div className="flex flex-1 min-h-0 min-w-0 flex-col">
               <MessageList
                 className="flex-1 min-h-0"
-                messages={messages}
+                messages={e2eeMessages}
                 scrollKey={channel.id}
                 highlightMessageId={highlightMessageId}
                 onHighlightSettled={() => setHighlightMessageId(null)}
@@ -919,11 +958,14 @@ export function ChatPanel({
               <ChatInput
                 key={channel.id}
                 {...sharedInputProps}
-                scheduler={isForumView ? null : scheduler}
-                voiceMessages={isForumView ? null : { client, channelId: channel.id }}
+                textOnly={e2eeOn}
+                scheduler={isForumView || e2eeOn ? null : scheduler}
+                voiceMessages={isForumView || e2eeOn ? null : { client, channelId: channel.id }}
                 placeholder={
                   editing
                     ? 'Mesajı düzenle…'
+                    : e2eeOn
+                      ? `🔒 @${titleOverride ?? channel.name ?? 'DM'} kullanıcısına şifreli mesaj`
                     : isForumView
                       ? `Yeni gönderi · #${channel.name}`
                       : !guildId
@@ -943,7 +985,7 @@ export function ChatPanel({
                   setReplyTo(null);
                   setEditing(null);
                 }}
-                onAttachFiles={(files) => void uploadFiles(files)}
+                onAttachFiles={e2eeOn ? undefined : (files) => void uploadFiles(files)}
                 onSend={(text, meta) => {
                   if (editing) {
                     void sendText(text);
@@ -951,7 +993,7 @@ export function ChatPanel({
                   }
                   void sendText(text, meta);
                 }}
-                onSendMedia={(payload) => void sendMedia(payload)}
+                onSendMedia={e2eeOn ? undefined : (payload) => void sendMedia(payload)}
               />
               {editing && (
                 <div className="px-4 pb-2 text-xs text-on-surface-variant flex justify-between">

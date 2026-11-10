@@ -38,6 +38,7 @@ import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
 import { ChallengesModule } from '@/challenges/challenges.module';
 import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
+import { E2eeModule } from '@/e2ee/e2ee.module';
 import { SoundboardModule } from '@/soundboard/soundboard.module';
 import { GamesModule } from '@/games/games.module';
 
@@ -89,6 +90,7 @@ import { GamesModule } from '@/games/games.module';
     TournamentsModule,
     ChallengesModule,
     AutomodRulesModule,
+    E2eeModule,
     SoundboardModule,
     GamesModule,
   ],

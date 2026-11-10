@@ -96,7 +96,7 @@ export class MessagesController {
       dto.content ?? '',
       dto.attachments,
       dto.poll,
-      { replyToId: dto.replyToId, threadRootId: dto.threadRootId, type: dto.type },
+      { replyToId: dto.replyToId, threadRootId: dto.threadRootId, type: dto.type, e2ee: dto.e2ee },
     );
     return message;
   }

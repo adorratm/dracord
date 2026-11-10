@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ChannelSummary } from '@dracord/types';
 import { DM_CALL_GUILD_ID } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
-import { ActivityLine } from '@dracord/ui';
+import { ActivityLine, E2eeDmBar, browserE2eeManager, useE2eeDm } from '@dracord/ui';
 import { useAuth } from '../auth';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
@@ -24,6 +24,16 @@ export function DmPanel({
     voice.voiceChannelId === channelId && voice.voiceGuildId === DM_CALL_GUILD_ID;
   const selfNotes = Boolean(channel?.selfNotes);
   const peerOffline = channel?.peerStatus === 'OFFLINE';
+  const e2eeManager = useMemo(
+    () => (user ? browserE2eeManager(client, user.id, 'desktop') : null),
+    [client, user],
+  );
+  const e2ee = useE2eeDm(
+    client,
+    e2eeManager,
+    channel && !selfNotes ? channelId : null,
+    user?.id ?? null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -229,8 +239,10 @@ export function DmPanel({
           </span>
         </div>
       )}
+      {!selfNotes ? <E2eeDmBar ctl={e2ee} peerName={channel.name || 'DM'} /> : null}
       <div className="flex-1 min-h-0">
         <ChatPanel
+          e2ee={selfNotes ? null : e2ee}
           guildId=""
           channel={channel}
           hideHeader

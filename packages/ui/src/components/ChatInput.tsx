@@ -98,6 +98,8 @@ export interface ChatInputProps {
   uploadStickerFile?: (file: File) => Promise<{ url: string; contentType?: string }>;
   /** Mesaj zamanlama (useScheduledMessages) — + menüsü + bekleyenler çubuğu */
   scheduler?: ScheduledMessagesController | null;
+  /** E3 — yalnız metin (şifreli DM): ekle (+), GIF ve sticker gizlenir; emoji kalır */
+  textOnly?: boolean;
   /** Sesli mesaj — metin boşken gönder tuşu mikrofona dönüşür */
   voiceMessages?: { client: VoiceMessageClient; channelId: string } | null;
   className?: string;
@@ -189,6 +191,7 @@ export function ChatInput({
   uploadStickerFile,
   scheduler,
   voiceMessages,
+  textOnly = false,
   className,
 }: ChatInputProps) {
   const recorder = useVoiceRecorder();
@@ -222,6 +225,9 @@ export function ChatInput({
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachDragging, setAttachDragging] = useState(false);
   const [tab, setTab] = useState<PickerTab>('emoji');
+  useEffect(() => {
+    if (textOnly) setTab('emoji');
+  }, [textOnly]);
   const [emojiCat, setEmojiCat] = useState(EMOJI_CATEGORIES[0]!.id);
   const [stickerSection, setStickerSection] = useState<StickerSection>('recent');
   const [customStickers, setCustomStickers] = useState<StoredSticker[]>([]);
@@ -674,6 +680,7 @@ export function ChatInput({
     if (!list || (Array.isArray(list) ? list.length === 0 : list.length === 0)) return;
     const files = Array.isArray(list) ? list : Array.from(list);
     if (!files.length) return;
+    if (textOnly) return;
     onAttachFiles?.(files);
     setAttachOpen(false);
     setAttachDragging(false);
@@ -919,11 +926,13 @@ export function ChatInput({
         >
           <div className="flex border-b border-surface-container-highest shrink-0">
             {(
-              [
-                ['emoji', 'Emoji'],
-                ['gif', 'GIF'],
-                ['sticker', 'Sticker'],
-              ] as const
+              (textOnly
+                ? [['emoji', 'Emoji']]
+                : [
+                    ['emoji', 'Emoji'],
+                    ['gif', 'GIF'],
+                    ['sticker', 'Sticker'],
+                  ]) as ReadonlyArray<readonly [PickerTab, string]>
             ).map(([id, label]) => (
               <button
                 key={id}
@@ -1420,7 +1429,7 @@ export function ChatInput({
             e.target.value = '';
           }}
         />
-        <div ref={attachRef} className="relative shrink-0">
+        <div ref={attachRef} className={cn('relative shrink-0', textOnly && 'hidden')}>
           <button
             type="button"
             data-attach-trigger

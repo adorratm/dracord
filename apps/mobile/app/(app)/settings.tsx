@@ -88,6 +88,7 @@ type Tab =
 
 type NavItem = { id: Tab; labelKey: string; icon: string };
 import { SessionsList } from '../../components/SessionsList';
+import { E2eeDevicesList } from '../../components/E2eeDevicesList';
 type NavSection = { id: string; titleKey?: string; items: NavItem[] };
 
 const NAV: NavSection[] = [
@@ -645,6 +646,8 @@ export default function SettingsScreen() {
             </Text>
             <Label>Oturumlar ve cihazlar</Label>
             <SessionsList client={client} />
+            <Label>Şifreli DM cihazları</Label>
+            <E2eeDevicesList client={client} userId={user?.id ?? null} />
             <Label>Durum</Label>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               {STATUS_OPTIONS.map((o) => (

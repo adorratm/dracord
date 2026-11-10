@@ -15,6 +15,8 @@ import {
   type SocialLinkKey,
   ShowcasePicker,
   SessionsPanel,
+  E2eeDevicesPanel,
+  browserE2eeManager,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -914,6 +916,14 @@ export function SettingsPage({
           <SettingsSection title="Oturumlar ve cihazlar">
             <div className="px-space-md py-space-md">
               <SessionsPanel client={client} />
+            </div>
+          </SettingsSection>
+          <SettingsSection title="Şifreli DM cihazları">
+            <div className="px-space-md py-space-md">
+              <E2eeDevicesPanel
+                client={client}
+                manager={user ? browserE2eeManager(client, user.id, 'desktop') : null}
+              />
             </div>
           </SettingsSection>
         </SettingsPageBody>

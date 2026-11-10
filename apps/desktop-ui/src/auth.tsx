@@ -11,6 +11,7 @@ import { DracordClient, SocketEvents } from '@dracord/sdk';
 import type { AuthTokens, PublicUser } from '@dracord/types';
 import {
   applyStickerCloudState,
+  browserE2eeManager,
   pullStickersFromCloud,
   setStickerCloudBridge,
 } from '@dracord/ui';
@@ -119,6 +120,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStickerCloudBridge(null);
     setUser(null);
   }, [client]);
+
+  // E3 — bu cihazın şifreleme anahtarını kaydet (karşı taraf E2EE açabilsin)
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    const t = window.setTimeout(() => {
+      void browserE2eeManager(client, user.id, 'desktop')
+        .ensureIdentity()
+        .catch(() => undefined);
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [ready, user?.id, client]);
 
   // E2 — oturum başka cihazdan kapatıldı
   useEffect(() => {

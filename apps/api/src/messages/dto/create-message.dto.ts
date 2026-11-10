@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -85,6 +86,11 @@ export class CreateMessageDto {
   @IsOptional()
   @IsIn(['default', 'heading'])
   type?: 'default' | 'heading';
+
+  /** E3 — uçtan uca şifreli zarf (şekli serviste doğrulanır) */
+  @IsOptional()
+  @IsObject()
+  e2ee?: Record<string, unknown>;
 }
 
 export class ForwardMessageDto {

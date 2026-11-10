@@ -1806,6 +1806,51 @@ export class DracordClient {
     return () => this.sessionRevokedHandlers.delete(handler);
   }
 
+  // ── E3: uçtan uca şifreli DM ──
+  async listE2eeDevices(): Promise<import('@dracord/types').E2eeDeviceDto[]> {
+    return this.request('/e2ee/devices');
+  }
+
+  async registerE2eeDevice(input: { publicKey: string; name: string; platform: string }): Promise<import('@dracord/types').E2eeDeviceDto> {
+    return this.request('/e2ee/devices', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async deleteE2eeDevice(id: string): Promise<import('@dracord/types').E2eeDeviceDto[]> {
+    return this.request(`/e2ee/devices/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async getChannelE2ee(channelId: string): Promise<import('@dracord/types').ChannelE2eeDto> {
+    return this.request(`/e2ee/channels/${channelId}`);
+  }
+
+  async setChannelE2ee(channelId: string, enabled: boolean): Promise<import('@dracord/types').ChannelE2eeDto> {
+    return this.request(`/e2ee/channels/${channelId}`, { method: 'POST', body: JSON.stringify({ enabled }) });
+  }
+
+  /** Şifreli mesaj gönder (içerik boş, zarf e2ee'de) */
+  async sendEncryptedMessage(
+    channelId: string,
+    payload: import('@dracord/types').E2eePayload,
+    opts?: { replyToId?: string; threadRootId?: string },
+  ): Promise<MessageDto> {
+    return this.request(`/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        content: '',
+        e2ee: payload,
+        replyToId: opts?.replyToId,
+        threadRootId: opts?.threadRootId,
+      }),
+    });
+  }
+
+  onDmE2eeUpdate(handler: (p: { channelId: string; enabled?: boolean; by?: string; devicesChangedBy?: string }) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.DM_E2EE_UPDATE, handler);
+    return () => sock.off(SocketEvents.DM_E2EE_UPDATE, handler);
+  }
+
   // ── E1: passkey (WebAuthn) ──
   async listPasskeys(): Promise<Array<{ id: string; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }>> {
     return this.request('/auth/passkeys');
@@ -2392,4 +2437,10 @@ export class DracordClient {
 }
 
 export { SocketEvents };
+export {
+  E2eeManager,
+  type E2eeApi,
+  type E2eeStorage,
+} from './e2ee-manager';
+export { e2eeAvailable, e2eeSafetyNumber, setE2eeRandomSource, type E2eeDecryptResult, type E2eeIdentity } from './e2ee';
 export * from '@dracord/types';

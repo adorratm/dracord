@@ -23,6 +23,7 @@ export type MessageForwardedFrom = {
   createdAt: string;
 };
 
+import type { E2eePayload } from '@dracord/types';
 @Entity('messages')
 @Index(['channelId', 'createdAt'])
 @Index(['threadRootId', 'createdAt'])
@@ -82,6 +83,10 @@ export class Message extends CuidEntity {
       action?: 'replay' | 'lyrics' | 'open' | null;
     }>;
   }> | null;
+
+  /** E3 — uçtan uca şifreli zarf (content boş) */
+  @Column({ type: 'jsonb', nullable: true })
+  e2ee!: E2eePayload | null;
 
   /** Anket: soru, seçenekler ve oy veren kullanıcı id'leri */
   @Column({ type: 'jsonb', nullable: true })

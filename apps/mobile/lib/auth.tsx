@@ -17,6 +17,7 @@ import type { AuthTokens, PresenceStatus, PublicUser } from '@dracord/types';
 import { SocketEvents } from '@dracord/types';
 import { API_URL } from './config';
 import { syncStickersWithCloud } from './sticker-sync';
+import { mobileE2eeManager } from './e2ee';
 
 /** Socket açıkken API’nin stale OFFLINE’ını ONLINE say (web AuthProvider parity) */
 function liveSelfStatus(me: PublicUser, socketConnected: boolean): PublicUser {
@@ -137,6 +138,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [client]);
+
+  // E3 — bu cihazın şifreleme anahtarını kaydet (karşı taraf E2EE açabilsin)
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    const uid = user.id;
+    const t = setTimeout(() => {
+      void mobileE2eeManager(client, uid)?.ensureIdentity().catch(() => undefined);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [ready, user?.id, client]);
 
   // Presence — bağlanınca ONLINE; kendi OFFLINE event’ini yok say (reconnect race)
   useEffect(() => {

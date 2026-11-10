@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  browserE2eeManager,
   ChatInput,
+  E2eeDmBar,
   MessageList,
   Modal,
+  useE2eeDm,
   useScheduledMessages,
 } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
@@ -111,11 +114,17 @@ function DmChatInner({
     error,
     typingUsers,
     notifyTyping,
+    upsertMessage,
   } = useChatChannel(channelId, aroundMessageId);
 
+  // E3 — uçtan uca şifreli DM (kendine notlar hariç)
+  const e2eeManager = useMemo(() => (user ? browserE2eeManager(client, user.id, 'web') : null), [client, user]);
+  const e2ee = useE2eeDm(client, e2eeManager, selfNotes ? null : channelId, user?.id ?? null);
+  const plainMessages = useMemo(() => e2ee.transform(messages), [e2ee, messages]);
+
   const displayMessages = useMemo(() => {
-    if (!prefs.messaging.filterExplicit) return messages;
-    return messages.map((msg) => {
+    if (!prefs.messaging.filterExplicit) return plainMessages;
+    return plainMessages.map((msg) => {
       const content = filterMessageContent(msg.content, true);
       const embeds = msg.embeds?.filter((e) => {
         const probe = [e.url, e.imageUrl, e.title, e.description]
@@ -128,7 +137,7 @@ function DmChatInner({
       }
       return { ...msg, content, embeds };
     });
-  }, [messages, prefs.messaging.filterExplicit]);
+  }, [plainMessages, prefs.messaging.filterExplicit]);
 
   useEffect(() => {
     setReplyTo(null);
@@ -382,6 +391,7 @@ function DmChatInner({
           />
         )}
         {error && <p className="px-space-md py-space-sm text-error font-body-sm">{error}</p>}
+        {!selfNotes ? <E2eeDmBar ctl={e2ee} peerName={title} /> : null}
         {loading && messages.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-outline">Yükleniyor…</div>
         ) : (
@@ -483,19 +493,30 @@ function DmChatInner({
           )}
           <ChatInput
           key={channelId}
-          scheduler={scheduler}
-          voiceMessages={{ client, channelId }}
-          placeholder={`@${title} kullanıcısına mesaj gönder`}
+          textOnly={e2ee.enabled}
+          scheduler={e2ee.enabled ? undefined : scheduler}
+          voiceMessages={e2ee.enabled ? undefined : { client, channelId }}
+          placeholder={e2ee.enabled ? `🔒 @${title} kullanıcısına şifreli mesaj` : `@${title} kullanıcısına mesaj gönder`}
           onSend={(content, meta) => {
+            if (e2ee.enabled) {
+              void e2ee
+                .send(content, meta?.replyToId ? { replyToId: meta.replyToId } : undefined)
+                .then((m) => {
+                  upsertMessage(m);
+                  setReplyTo(null);
+                })
+                .catch((err: unknown) => window.alert(err instanceof Error ? err.message : 'Şifreli mesaj gönderilemedi'));
+              return;
+            }
             void sendMessage(
               content,
               undefined,
               meta?.replyToId ? { replyToId: meta.replyToId } : undefined,
             ).then(() => setReplyTo(null));
           }}
-          onAttachFiles={(files) => void sendWithAttachments(files)}
-          onSendMedia={(payload) => void sendMedia(payload)}
-          onHeadingClick={() => {
+          onAttachFiles={e2ee.enabled ? undefined : (files) => void sendWithAttachments(files)}
+          onSendMedia={e2ee.enabled ? undefined : (payload) => void sendMedia(payload)}
+          onHeadingClick={e2ee.enabled ? undefined : () => {
             setHeadingText('');
             setHeadingOpen(true);
           }}
@@ -699,7 +720,7 @@ function DmChatInner({
       >
         {threadRoot && (
           <p className="font-body-sm text-outline mb-space-sm line-clamp-2">
-            {threadRoot.content.trim() || 'Ek / medya'}
+            {(e2ee.transform([threadRoot])[0]?.content ?? threadRoot.content).trim() || 'Ek / medya'}
           </p>
         )}
         {threadBusy && <p className="font-body-sm text-outline mb-space-sm">Yükleniyor…</p>}
@@ -707,7 +728,7 @@ function DmChatInner({
           ref={setThreadScrollEl}
           className="max-h-72 overflow-y-auto space-y-space-sm mb-space-md"
         >
-          {threadMessages.map((m, idx) => {
+          {e2ee.transform(threadMessages).map((m, idx) => {
             const isRoot = idx === 0 && m.id === threadRoot?.id;
             return (
               <div
@@ -738,18 +759,37 @@ function DmChatInner({
           <ChatInput
             key={`thread-${threadRoot.id}`}
             placeholder="Thread’e yanıt yaz…"
+            textOnly={e2ee.enabled}
             onSend={(text) => {
+              if (e2ee.enabled) {
+                void e2ee
+                  .send(text, { threadRootId: threadRoot.id })
+                  .then((m) =>
+                    setThreadMessages((prev) =>
+                      prev.some((x) => x.id === m.id) ? prev : [...prev, m],
+                    ),
+                  )
+                  .catch((err: unknown) =>
+                    window.alert(err instanceof Error ? err.message : 'Şifreli mesaj gönderilemedi'),
+                  );
+                return;
+              }
               void sendMessage(text, undefined, {
                 threadRootId: threadRoot.id,
               });
             }}
-            onAttachFiles={(files) =>
-              void sendWithAttachments(files, {
-                threadRootId: threadRoot.id,
-              })
+            onAttachFiles={
+              e2ee.enabled
+                ? undefined
+                : (files) =>
+                    void sendWithAttachments(files, {
+                      threadRootId: threadRoot.id,
+                    })
             }
-            onSendMedia={(payload) =>
-              void sendMedia(payload, { threadRootId: threadRoot.id })
+            onSendMedia={
+              e2ee.enabled
+                ? undefined
+                : (payload) => void sendMedia(payload, { threadRootId: threadRoot.id })
             }
             onTyping={notifyTyping}
             searchGifs={searchGifs}

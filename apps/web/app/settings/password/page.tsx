@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { PasskeysPanel, SessionsPanel } from '@dracord/ui';
+import { E2eeDevicesPanel, PasskeysPanel, SessionsPanel, browserE2eeManager } from '@dracord/ui';
 import { useAuth } from '@/components/AuthProvider';
 import {
   SettingsPage,
@@ -419,6 +419,14 @@ export default function PasswordSecurityPage() {
       <SettingsSection title="Oturumlar ve cihazlar">
         <div className="px-space-md py-space-md">
           <SessionsPanel client={client} />
+        </div>
+      </SettingsSection>
+      <SettingsSection title="Şifreli DM cihazları">
+        <div className="px-space-md py-space-md">
+          <E2eeDevicesPanel
+            client={client}
+            manager={user ? browserE2eeManager(client, user.id, 'web') : null}
+          />
         </div>
       </SettingsSection>
     </SettingsPage>

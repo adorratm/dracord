@@ -1495,6 +1495,7 @@ __metadata:
     expo-build-properties: "npm:^58.0.12"
     expo-clipboard: "npm:^58.0.4"
     expo-constants: "npm:~58.0.14"
+    expo-crypto: "npm:~58.0.7"
     expo-dev-client: "npm:~58.0.18"
     expo-font: "npm:^58.0.11"
     expo-gl: "npm:~58.0.4"
@@ -1544,6 +1545,7 @@ __metadata:
   dependencies:
     "@dracord/types": "workspace:*"
     socket.io-client: "npm:^4.8.4"
+    tweetnacl: "npm:^1.0.3"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -1560,6 +1562,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dracord/ui@workspace:packages/ui"
   dependencies:
+    "@dracord/sdk": "workspace:*"
     "@dracord/types": "workspace:*"
     "@tanstack/react-virtual": "npm:^3.14.24"
     "@types/react": "npm:^19.3.0"
@@ -8880,6 +8883,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-crypto@npm:~58.0.7":
+  version: 58.0.7
+  resolution: "expo-crypto@npm:58.0.7"
+  peerDependencies:
+    expo: "*"
+  checksum: 10c0/cb80a5fa143b2c9102f97edc478829f6bd0a85a9926a8fb712de1d4ef41ffdac362a25d2fb0c76c2b6588bf17dc5818a731f790e602e237567987bf166bbaa26
+  languageName: node
+  linkType: hard
+
 "expo-dev-client@npm:~58.0.18":
   version: 58.0.18
   resolution: "expo-dev-client@npm:58.0.18"
@@ -15030,6 +15042,13 @@ __metadata:
   bin:
     turbo: bin/turbo
   checksum: 10c0/8a6ec1d42251c96749953398739a4d005fd88e882c9f4cf0b9a4367259ba427320088bb67fc6fe3235a1e983ebaab992d35a163b8f1b03d6632101b2da581f15
+  languageName: node
+  linkType: hard
+
+"tweetnacl@npm:^1.0.3":
+  version: 1.0.3
+  resolution: "tweetnacl@npm:1.0.3"
+  checksum: 10c0/069d9df51e8ad4a89fbe6f9806c68e06c65be3c7d42f0701cc43dba5f0d6064686b238bbff206c5addef8854e3ce00c643bff59432ea2f2c639feab0ee1a93f9
   languageName: node
   linkType: hard
 

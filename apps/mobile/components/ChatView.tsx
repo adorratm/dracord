@@ -57,6 +57,8 @@ import {
   type MessageActionId,
 } from './MessageActionsSheet';
 import { confirmDialog, noticeDialog } from './ConfirmModal';
+import { E2eeDmBar } from './E2eeDmBar';
+import { useMobileE2eeDm } from '../lib/e2ee';
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '🔥', '😮', '😢', '🎉', '👀'];
 
@@ -95,6 +97,9 @@ export function ChatView({
 }) {
   const { client, user } = useAuth();
   const scheduler = useScheduledMessages(client, channel.id);
+  const isDmChannel = !(guildId ?? channel.guildId) && !channel.selfNotes;
+  const e2ee = useMobileE2eeDm(client, user?.id ?? null, isDmChannel ? channel.id : null);
+  const e2eeOn = isDmChannel && e2ee.enabled;
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [catchupOpen, setCatchupOpen] = useState(false);
@@ -243,15 +248,16 @@ export function ChatView({
   }, [client, channel.id, userId, aroundMessageId]);
 
   /** inverted: index 0 = en yeni (görsel alt); index+1 = daha eski */
+  const viewMessages = useMemo(() => e2ee.transform(messages), [e2ee.transform, messages]);
   const chatRows = useMemo<ChatRow[]>(() => {
-    return messages.map((m, index) => {
+    return viewMessages.map((m, index) => {
       const day = new Date(m.createdAt).toLocaleDateString('tr-TR');
-      const older = messages[index + 1];
+      const older = viewMessages[index + 1];
       const showDay =
         !older || new Date(older.createdAt).toLocaleDateString('tr-TR') !== day;
       return { m, showDay, day };
     });
-  }, [messages]);
+  }, [viewMessages]);
 
   const onReplyMsg = useCallback((m: MessageDto) => setReplyTo(m), []);
   const onEditMsg = useCallback((m: MessageDto) => {
@@ -648,6 +654,32 @@ export function ChatView({
   const send = async (content: string, attachments?: MessageAttachment[]) => {
     setBusy(true);
     try {
+      if (e2eeOn) {
+        if (editing) {
+          setEditing(null);
+          setText('');
+          void noticeDialog('Düzenlenemez', 'Şifreli sohbette mesajlar düzenlenemez.');
+          return;
+        }
+        if (attachments?.length || content.startsWith('sticker:')) {
+          void noticeDialog('Yalnız metin', 'Şifreli sohbette şimdilik yalnız metin gönderilebilir.');
+          return;
+        }
+        try {
+          const sent = await e2ee.send(content, { replyToId: replyTo?.id, threadRootId: threadRoot?.id });
+          if (threadRoot) {
+            setThreadMsgs((prev) => (prev.some((x) => x.id === sent.id) ? prev : [...prev, sent]));
+          } else {
+            setMessages((prev) => (prev.some((x) => x.id === sent.id) ? prev : [sent, ...prev]));
+          }
+        } catch (err) {
+          void noticeDialog('Gönderilemedi', err instanceof Error ? err.message : 'Şifreli mesaj gönderilemedi');
+          return;
+        }
+        setText('');
+        setReplyTo(null);
+        return;
+      }
       if (editing) {
         await client.updateMessage(editing.id, content);
         setEditing(null);
@@ -907,6 +939,8 @@ export function ChatView({
           ) : null}
         </ScrollView>
       ) : null}
+
+      {isDmChannel ? <E2eeDmBar ctl={e2ee} peerName={channel.name || 'DM'} /> : null}
 
       <View style={{ flex: 1 }}>
         <FlatList
@@ -1182,6 +1216,8 @@ export function ChatView({
       {/* Web ChatInput benzeri alt araç çubuğu */}
       <View style={composerBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
+          {e2eeOn ? null : (
+          <>
           <ToolBtn icon="add_circle" onPress={() => void pickImage(false)} accessibilityLabel="Dosya ekle" />
           <ToolBtn
             icon="gif_box"
@@ -1198,12 +1234,16 @@ export function ChatView({
             }}
             accessibilityLabel="Sticker"
           />
+          </>
+          )}
           <ToolBtn
             icon="sentiment_satisfied"
             active={panel === 'emoji'}
             onPress={() => setPanel((p) => (p === 'emoji' ? 'none' : 'emoji'))}
             accessibilityLabel="Emoji"
           />
+          {e2eeOn ? null : (
+          <>
           <ToolBtn
             icon="ballot"
             active={pollOpen}
@@ -1220,6 +1260,8 @@ export function ChatView({
                 : 'Mesajı zamanla'
             }
           />
+          </>
+          )}
         </ScrollView>
       </View>
 
@@ -1235,13 +1277,13 @@ export function ChatView({
               /* typing TTL sunucuda */
             }, 2500);
           }}
-          placeholder={`#${channel.name} kanalına mesaj`}
+          placeholder={e2eeOn ? `🔒 ${channel.name || 'DM'} · şifreli mesaj` : `#${channel.name} kanalına mesaj`}
           placeholderTextColor={colors.textMuted}
           style={{ ...inputStyle, flex: 1, minHeight: 44, maxHeight: 120, paddingVertical: 10 }}
           multiline
         />
         ) : null}
-        {!text.trim() && !pendingAtt && !editing && !threadRoot ? (
+        {!e2eeOn && !text.trim() && !pendingAtt && !editing && !threadRoot ? (
           <VoiceRecorderBar
             client={client}
             channelId={channel.id}
@@ -1253,13 +1295,13 @@ export function ChatView({
             onRecordingChange={setVoiceRecording}
           />
         ) : null}
-        {voiceRecording || (!text.trim() && !pendingAtt && !editing && !threadRoot) ? null : (
+        {voiceRecording || (!text.trim() && !pendingAtt && !editing && !threadRoot && !e2eeOn) ? null : (
         <Pressable
           disabled={!canSend}
           onPress={() => void sendComposer()}
           onLongPress={() => {
             // Uzun bas: zamanla (düzenleme / thread / ek hariç)
-            if (!editing && !threadRoot && !pendingAtt && text.trim()) setScheduleOpen(true);
+            if (!e2eeOn && !editing && !threadRoot && !pendingAtt && text.trim()) setScheduleOpen(true);
           }}
           delayLongPress={400}
           style={{
@@ -1365,7 +1407,7 @@ export function ChatView({
           <ScrollView style={{ flex: 1, padding: 12 }}>
             {threadRoot ? (
               <MessageRow
-                m={threadRoot}
+                m={e2ee.transformOne(threadRoot)}
                 mine={threadRoot.author?.id === user?.id}
                 avatarFallback={
                   channel.peerUserId && threadRoot.author?.id === channel.peerUserId
@@ -1379,7 +1421,7 @@ export function ChatView({
                 onLongPress={openMessageMenu}
               />
             ) : null}
-            {threadMsgs.map((m) => (
+            {e2ee.transform(threadMsgs).map((m) => (
               <MessageRow
                 key={m.id}
                 m={m}

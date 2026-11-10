@@ -60,6 +60,11 @@ export class SocketBroadcastService {
     }
   }
 
+  emitToUsers(userIds: string[], event: string, payload: unknown) {
+    if (!this.server || !userIds.length) return;
+    this.server.to(userIds.map((id) => `user:${id}`)).emit(event, payload);
+  }
+
   emitToGuild(guildId: string, event: string, payload: unknown) {
     this.server?.to(`guild:${guildId}`).emit(event, payload);
   }

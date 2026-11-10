@@ -620,6 +620,8 @@ export interface MessageDto {
   bookmarked?: boolean;
   /** Görüntüleyen için bekleyen hatırlatma varsa */
   reminderAt?: string | null;
+  /** E3 — uçtan uca şifreli içerik (content boştur; istemci çözer) */
+  e2ee?: E2eePayload | null;
   createdAt: string;
   updatedAt: string | null;
 }
@@ -873,6 +875,8 @@ export const SocketEvents = {
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
   VOICE_CAPTION: 'voice:caption',
+  /** E3 — DM şifreleme durumu / cihaz listesi değişti */
+  DM_E2EE_UPDATE: 'dm:e2ee',
   /**
    * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
    * Eski istemci LiveKit’i bırakır; presence kanalda kalır.
@@ -1316,6 +1320,66 @@ export interface LevelUpPayload {
 
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
+
+// ── Uçtan uca şifreli DM (E3) ──
+export const E2EE_LIMITS = { devicesPerUser: 10, payloadBytes: 64 * 1024, recipientsMax: 64, textMax: 4000 } as const;
+
+/**
+ * Şifreli mesaj zarfı (v1): içerik rastgele mesaj anahtarıyla XSalsa20-Poly1305 (secretbox);
+ * mesaj anahtarı her alıcı cihaz için X25519 box ile sarılır. Tüm alanlar base64.
+ */
+export interface E2eePayload {
+  v: 1;
+  /** Gönderen cihaz kimliği */
+  sd: string;
+  /** Gönderen cihaz açık anahtarı (alıcı kayıtlı anahtarla karşılaştırır) */
+  sk: string;
+  /** İçerik nonce + şifreli metin */
+  n: string;
+  c: string;
+  /** alıcı cihaz kimliği → [nonce, sarılı anahtar] */
+  k: Record<string, [string, string]>;
+}
+
+export interface E2eeDeviceDto {
+  id: string;
+  userId: string;
+  publicKey: string;
+  name: string;
+  platform: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+}
+
+export interface ChannelE2eeDto {
+  channelId: string;
+  enabled: boolean;
+  enabledById: string | null;
+  enabledAt: string | null;
+  /** Katılımcı → cihazları */
+  members: Array<{ userId: string; devices: Array<Pick<E2eeDeviceDto, 'id' | 'publicKey' | 'name' | 'createdAt'>> }>;
+}
+
+const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
+/** Sunucu: zarfın şeklini ve boyutunu doğrula (içeriği okuyamaz) */
+export function validateE2eePayload(raw: unknown): E2eePayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (r.v !== 1) return null;
+  const str = (v: unknown, max: number) => typeof v === 'string' && v.length > 0 && v.length <= max;
+  if (!str(r.sd, 64) || !str(r.sk, 64) || !B64.test(r.sk as string)) return null;
+  if (!str(r.n, 64) || !B64.test(r.n as string) || !str(r.c, 32_000) || !B64.test(r.c as string)) return null;
+  if (!r.k || typeof r.k !== 'object' || Array.isArray(r.k)) return null;
+  const k = r.k as Record<string, unknown>;
+  const ids = Object.keys(k);
+  if (!ids.length || ids.length > E2EE_LIMITS.recipientsMax) return null;
+  for (const id of ids) {
+    const v = k[id];
+    if (id.length > 64 || !Array.isArray(v) || v.length !== 2 || !str(v[0], 64) || !str(v[1], 128) || !B64.test(v[0]) || !B64.test(v[1])) return null;
+  }
+  if (JSON.stringify(r).length > E2EE_LIMITS.payloadBytes) return null;
+  return { v: 1, sd: r.sd as string, sk: r.sk as string, n: r.n as string, c: r.c as string, k: k as E2eePayload['k'] };
+}
 
 // ── Oturum / cihaz yönetimi (E2) ──
 export interface SessionDeviceDto {

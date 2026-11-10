@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { DracordClient } from '@dracord/sdk';
 import { getDracordClient } from '@/lib/client';
+import { browserE2eeManager } from '@dracord/ui';
 import {
   clearSession,
   getAccessToken,
@@ -176,6 +177,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // E3 — bu cihazın şifreleme anahtarını kaydet (karşı taraf E2EE açabilsin)
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    const t = window.setTimeout(() => {
+      void browserE2eeManager(client, user.id, 'web')
+        .ensureIdentity()
+        .catch(() => undefined);
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [ready, user?.id, client]);
 
   // Proaktif token yenileme
   useEffect(() => {
