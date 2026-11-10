@@ -9,6 +9,8 @@ import {
   GamesLauncherButton,
   useGameSessions,
   useScreenAnnotations,
+  useVoiceCaptions,
+  CaptionsButton,
   presenceLabelTr,
   type MemberListAction,
   type MemberListGroup,
@@ -104,6 +106,12 @@ export function VoicePanel({
       ? user?.id ?? null
       : voice.activeScreenShare.identity
     : null;
+  const captions = useVoiceCaptions(
+    client,
+    voice.voiceGuildId && voice.voiceChannelId ? { guildId: voice.voiceGuildId, channelId: voice.voiceChannelId } : null,
+    user ? { id: user.id, name: user.displayName || user.username } : null,
+    { muted: voice.muted || voice.deafened },
+  );
   const annotations = useScreenAnnotations(
     client,
     voice.voiceGuildId && voice.voiceChannelId && annotSharer
@@ -305,6 +313,7 @@ export function VoicePanel({
     <div className="flex h-full min-h-0 flex-col">
     <VoiceStage
       annotations={inThisVoice && annotSharer ? annotations : null}
+      captions={inThisVoice ? captions : null}
       className="min-h-0 flex-1"
       channelName={channel.name}
       voiceStatus={voiceStatus}
@@ -347,6 +356,7 @@ export function VoicePanel({
             onChanged={() => void soundboard.reload()}
             disabled={voice.deafened}
           />
+          <CaptionsButton ctl={captions} />
           <ClipButton
             shareKey={focused ? `${focused.identity}:${focused.isLocal ? 'l' : 'r'}` : null}
             shareName={focused ? (focused.isLocal ? 'Ekranım' : focused.displayName) : ''}

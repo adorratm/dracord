@@ -1850,6 +1850,19 @@ export class DracordClient {
     return () => sock.off(SocketEvents.VOICE_CHANNEL_STATUS, handler);
   }
 
+  /** A7: canlı altyazı gönder (ara sonuçlar volatile) */
+  sendVoiceCaption(payload: import('@dracord/types').VoiceCaptionPayload) {
+    if (payload.final) this.socket?.emit(SocketEvents.VOICE_CAPTION, payload);
+    else this.socket?.volatile.emit(SocketEvents.VOICE_CAPTION, payload);
+  }
+
+  onVoiceCaption(handler: (p: import('@dracord/types').VoiceCaptionPayload) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.VOICE_CAPTION, handler);
+    return () => sock.off(SocketEvents.VOICE_CAPTION, handler);
+  }
+
   /** A4: ekran paylaşımına çizim (kayıp tolere edilir → volatile) */
   sendScreenAnnotation(payload: import('@dracord/types').ScreenAnnotationPayload) {
     // Ara noktalar düşebilir; bitiş/temizle düşmemeli

@@ -871,6 +871,8 @@ export const SocketEvents = {
   TOURNAMENT_UPDATE: 'tournament:update',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
+  /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
+  VOICE_CAPTION: 'voice:caption',
   /**
    * Aynı kullanıcının başka istemcisi (web/desktop/mobil/sekme) sesi aldı.
    * Eski istemci LiveKit’i bırakır; presence kanalda kalır.
@@ -1314,6 +1316,37 @@ export interface LevelUpPayload {
 
 
 // ─── Soundboard (A2) ────────────────────────────────────────────────
+
+// ── Canlı altyazı (A7) ──
+export const CAPTION_LIMITS = { textMax: 300, holdMs: 6000 } as const;
+export interface VoiceCaptionPayload {
+  guildId: string;
+  channelId: string;
+  /** Konuşma parçası kimliği (ara sonuç aynı id ile güncellenir) */
+  id: string;
+  text: string;
+  /** false = ara sonuç (Web Speech), true = kesin */
+  final: boolean;
+  /** BCP-47 kısa kod (tr, en…) */
+  lang?: string | null;
+  /** Sunucu doldurur */
+  userId?: string;
+  userName?: string | null;
+}
+
+export function sanitizeCaption(raw: unknown): VoiceCaptionPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const s = (v: unknown, max: number) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
+  const guildId = s(r.guildId, 64);
+  const channelId = s(r.channelId, 64);
+  const id = s(r.id, 32);
+  if (!guildId || !channelId || !id || !/^[A-Za-z0-9_-]+$/.test(id)) return null;
+  const text = typeof r.text === 'string' ? r.text.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CAPTION_LIMITS.textMax) : '';
+  if (!text) return null;
+  const lang = typeof r.lang === 'string' && /^[a-z]{2,3}$/.test(r.lang) ? r.lang : null;
+  return { guildId, channelId, id, text, final: r.final !== false, lang };
+}
 
 // ── Ekran paylaşımına çizim (A4) ──
 export const ANNOTATION_COLORS = ['#ff5555', '#f1fa8c', '#50fa7b', '#8be9fd', '#ff79c6', '#ffffff'] as const;

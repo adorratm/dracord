@@ -3,6 +3,8 @@
 import { RemoteControlSurface } from './RemoteControlSurface';
 import { AnnotationLayer, AnnotationToolbar } from './AnnotationLayer';
 import type { ScreenAnnotationController } from '../lib/use-screen-annotations';
+import type { VoiceCaptionsController } from '../lib/use-voice-captions';
+import { CaptionsOverlay } from './Captions';
 import { VoiceChannelStatusChip } from './VoiceChannelStatusChip';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { cn } from '../lib/cn';
@@ -121,6 +123,8 @@ export interface VoiceStageProps {
   gameLayer?: ReactNode;
   /** A4 — odaktaki paylaşıma çizim (yalnız ses kanalındayken) */
   annotations?: ScreenAnnotationController | null;
+  /** A7 — canlı altyazı katmanı */
+  captions?: VoiceCaptionsController | null;
   chatPanel?: ReactNode;
   participantsPanel?: ReactNode;
   /** Desktop sohbet paneli genişliği (px) */
@@ -214,6 +218,7 @@ export function VoiceStage({
   stageOverlay,
   gameLayer,
   annotations = null,
+  captions = null,
   chatPanel,
   participantsPanel,
   chatPanelWidth = 340,
@@ -994,6 +999,7 @@ export function VoiceStage({
             );
           })()}
           {!inCinema && stageOverlay}
+          {captions ? <CaptionsOverlay ctl={captions} /> : null}
           {gameLayer && <div className="absolute inset-0 z-[20]">{gameLayer}</div>}
         </div>
 

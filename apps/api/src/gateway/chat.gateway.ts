@@ -16,6 +16,7 @@ import {
   SocketEvents,
   normalizeVoiceChannelStatus,
   sanitizeAnnotation,
+  sanitizeCaption,
   type DmCallPayload,
   type RemoteControlInputPayload,
   type RemoteControlRequestPayload,
@@ -550,6 +551,35 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const out = { ...p, userId: user.sub, userName: cached.me || null };
     const rooms = cached.ids.filter((id) => id !== user.sub).map((id) => `user:${id}`);
     if (rooms.length) this.server.to(rooms).emit(SocketEvents.SCREEN_ANNOTATE, out);
+    return { ok: true };
+  }
+
+  /** A7: canlı altyazı metni — yalnız aynı ses kanalındakilere; sunucuda saklanmaz */
+  private readonly captionRate = new Map<string, { sec: number; n: number }>();
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.VOICE_CAPTION)
+  async handleVoiceCaption(@ConnectedSocket() client: Socket, @MessageBody() body: unknown): Promise<{ ok: boolean; error?: string }> {
+    const user = client.data.user as WsUser;
+    const p = sanitizeCaption(body);
+    if (!p) return { ok: false, error: 'bad_request' };
+    const sec = Math.floor(Date.now() / 1000);
+    const rate = this.captionRate.get(user.sub);
+    if (rate && rate.sec === sec) {
+      if (++rate.n > 8) return { ok: false, error: 'rate_limited' };
+    } else this.captionRate.set(user.sub, { sec, n: 1 });
+    if (this.captionRate.size > 5000) this.captionRate.clear();
+    const key = `${p.guildId}:${p.channelId}:${user.sub}`;
+    let cached = this.annotateMembers.get(key);
+    if (!cached || Date.now() - cached.at > 5000) {
+      const members = await this.voicePresence.listChannel(p.guildId, p.channelId);
+      const me = members.find((m) => m.id === user.sub);
+      cached = { at: Date.now(), ids: members.map((m) => m.id), me: me ? (me.displayName ?? '') : null };
+      this.annotateMembers.set(key, cached);
+    }
+    if (cached.me === null) return { ok: false, error: 'not_in_channel' };
+    const rooms = cached.ids.filter((id) => id !== user.sub).map((id) => `user:${id}`);
+    if (rooms.length) this.server.to(rooms).emit(SocketEvents.VOICE_CAPTION, { ...p, userId: user.sub, userName: cached.me || null });
     return { ok: true };
   }
 

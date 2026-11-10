@@ -15,6 +15,7 @@ import { primaryBtn, primaryBtnText } from '../lib/ui';
 import { useSoundboard } from '../lib/useSoundboard';
 import { GamesStrip, MobileGameFrame, useMobileGameSessions } from './GameRoom';
 import { ScreenShareViewer } from './voice/ScreenShareViewer';
+import { CaptionsStrip } from './voice/CaptionsStrip';
 
 /** Ses odası — kontroller alt VoiceConnectionBar’da */
 export function VoiceRoom({
@@ -337,6 +338,7 @@ export function VoiceRoom({
         </View>
       ) : null}
 
+      {inThisChannel && guildId ? <CaptionsStrip client={client} guildId={guildId} channelId={channel.id} /> : null}
       {inThisChannel && guildId && user
         ? voice.peers
             .filter((p) => p.screenShare && p.id !== user.id)

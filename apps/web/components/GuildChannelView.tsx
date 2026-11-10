@@ -38,6 +38,8 @@ import {
   GamesLauncherButton,
   useGameSessions,
   useScreenAnnotations,
+  useVoiceCaptions,
+  CaptionsButton,
   presenceLabelTr,
   type MemberListGroup,
   type MemberListAction,
@@ -187,6 +189,12 @@ export function GuildChannelView({
       ? user?.id ?? null
       : voice.activeScreenShare.identity
     : null;
+  const captions = useVoiceCaptions(
+    client,
+    voice.voiceGuildId && voice.voiceChannelId ? { guildId: voice.voiceGuildId, channelId: voice.voiceChannelId } : null,
+    user ? { id: user.id, name: user.displayName || user.username } : null,
+    { muted: voice.muted || voice.deafened },
+  );
   const annotations = useScreenAnnotations(
     client,
     voice.voiceGuildId && voice.voiceChannelId && annotSharer
@@ -3161,6 +3169,7 @@ export function GuildChannelView({
         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
           <VoiceStage
           annotations={inVoiceInThisGuild && annotSharer ? annotations : null}
+          captions={inVoiceInThisGuild ? captions : null}
           channelName={channel?.name ?? voiceChannel?.name ?? 'Ses'}
           voiceStatus={voice.voiceChannelId ? voiceStatuses[voice.voiceChannelId] ?? null : null}
           canEditVoiceStatus={inVoiceInThisGuild && Boolean(voice.voiceChannelId)}
@@ -3205,6 +3214,7 @@ export function GuildChannelView({
                 onChanged={() => void soundboard.reload()}
                 disabled={voice.deafened}
               />
+              <CaptionsButton ctl={captions} />
               </>
             ) : null
           }
