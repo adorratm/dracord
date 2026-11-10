@@ -33,6 +33,7 @@ export { MemberWeeklyStats } from './member-weekly-stats.entity';
 export { ChallengeClaim } from './challenge-claim.entity';
 export { GuildAutomodConfig, GuildAutomodEvent } from './guild-automod.entity';
 export { GuildFaq } from './guild-faq.entity';
+export { UserPasskey } from './user-passkey.entity';
 export { OauthConnection } from './oauth-connection.entity';
 export { ChannelReadState } from './channel-read-state.entity';
 export { PushSubscription } from './push-subscription.entity';

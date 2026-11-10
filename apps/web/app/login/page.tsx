@@ -1,6 +1,6 @@
 'use client';
 
-import { LoginScreen } from '@dracord/ui';
+import { LoginScreen, loginWithPasskey, passkeySupported } from '@dracord/ui';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { Draco } from '@/components/Draco';
@@ -57,8 +57,28 @@ function LoginInner() {
     }
   };
 
+  const onPasskeyLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await loginWithPasskey(client);
+      client.setToken(result.accessToken);
+      client.connectSocket();
+      persistSession(result.accessToken, result.refreshToken, result.user);
+      setUser(result.user);
+      router.replace(returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/channels/@me');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Passkey girişi başarısız');
+    } finally {
+      setLoading(false);
+    }
+  };
+  const [canPasskey, setCanPasskey] = useState(false);
+  useEffect(() => setCanPasskey(passkeySupported()), []);
+
   return (
     <LoginScreen
+      onPasskeyLogin={canPasskey ? () => void onPasskeyLogin() : undefined}
       showApple={showApple}
       loading={loading}
       errorMessage={error ?? undefined}

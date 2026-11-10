@@ -1806,6 +1806,38 @@ export class DracordClient {
     return () => this.sessionRevokedHandlers.delete(handler);
   }
 
+  // ── E1: passkey (WebAuthn) ──
+  async listPasskeys(): Promise<Array<{ id: string; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }>> {
+    return this.request('/auth/passkeys');
+  }
+
+  async passkeyRegisterOptions(): Promise<{ options: Record<string, unknown>; state: string }> {
+    return this.request('/auth/passkeys/register/options', { method: 'POST', body: '{}' });
+  }
+
+  async passkeyRegisterVerify(state: string, response: unknown, name?: string) {
+    return this.request<Array<{ id: string; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }>>(
+      '/auth/passkeys/register/verify',
+      { method: 'POST', body: JSON.stringify({ state, response, name }) },
+    );
+  }
+
+  async renamePasskey(id: string, name: string) {
+    return this.request(`/auth/passkeys/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+  }
+
+  async deletePasskey(id: string) {
+    return this.request(`/auth/passkeys/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async passkeyLoginOptions(): Promise<{ options: Record<string, unknown>; state: string }> {
+    return this.request('/auth/passkeys/login/options', { method: 'POST', body: '{}' });
+  }
+
+  async passkeyLoginVerify(state: string, response: unknown): Promise<AuthTokens & { user: PublicUser }> {
+    return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
+  }
+
   // ── E2: oturum / cihaz yönetimi ──
   async listSessions(): Promise<import('@dracord/types').SessionDeviceDto[]> {
     return this.request('/auth/sessions');

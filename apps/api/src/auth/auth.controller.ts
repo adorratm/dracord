@@ -11,11 +11,14 @@ import {
   UseFilters,
   UseGuards,
   Param,
+  Patch,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { CurrentUser, type JwtPayloadUser } from '@/common/decorators/current-user.decorator';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
+import { PasskeysService } from './passkeys.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { toPublicUser } from '@/common/user.mapper';
 import { AuthService } from './auth.service';
@@ -38,7 +41,58 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly config: ConfigService,
     private readonly broadcast: SocketBroadcastService,
+    private readonly passkeys: PasskeysService,
   ) {}
+
+  // ── E1: passkey ──
+  @Get('passkeys')
+  @UseGuards(JwtAuthGuard)
+  listPasskeys(@CurrentUser() user: JwtPayloadUser) {
+    return this.passkeys.list(user.sub);
+  }
+
+  @Post('passkeys/register/options')
+  @UseGuards(JwtAuthGuard)
+  passkeyRegisterOptions(@CurrentUser() user: JwtPayloadUser) {
+    return this.passkeys.registrationOptions(user.sub);
+  }
+
+  @Post('passkeys/register/verify')
+  @UseGuards(JwtAuthGuard)
+  passkeyRegisterVerify(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { state: string; response: RegistrationResponseJSON; name?: string },
+  ) {
+    return this.passkeys.registrationVerify(user.sub, body?.state ?? '', body?.response, body?.name);
+  }
+
+  @Patch('passkeys/:id')
+  @UseGuards(JwtAuthGuard)
+  renamePasskey(@CurrentUser() user: JwtPayloadUser, @Param('id') id: string, @Body() body: { name: string }) {
+    return this.passkeys.rename(user.sub, id, body?.name ?? '');
+  }
+
+  @Delete('passkeys/:id')
+  @UseGuards(JwtAuthGuard)
+  removePasskey(@CurrentUser() user: JwtPayloadUser, @Param('id') id: string) {
+    return this.passkeys.remove(user.sub, id);
+  }
+
+  @Post('passkeys/login/options')
+  passkeyLoginOptions() {
+    return this.passkeys.loginOptions();
+  }
+
+  @Post('passkeys/login/verify')
+  async passkeyLoginVerify(
+    @Body() body: { state: string; response: AuthenticationResponseJSON },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = await this.passkeys.loginVerify(body?.state ?? '', body?.response);
+    const tokens = await this.authService.issueTokensForUser(user);
+    this.setRefreshCookie(res, tokens.refreshToken);
+    return { ...tokens, user: toPublicUser(user, { viewerId: user.id }) };
+  }
 
   // ── E2: oturum / cihaz yönetimi ──
   @Get('sessions')

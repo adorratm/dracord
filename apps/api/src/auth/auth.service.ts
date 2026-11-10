@@ -528,6 +528,11 @@ export class AuthService {
     return this.issueTokens(user, session);
   }
 
+  /** E1 — passkey ile giriş sonrası belirteç (TOTP gerekmez: passkey kullanıcı doğrulamalı, oltalamaya dirençli) */
+  async issueTokensForUser(user: User): Promise<AuthTokens> {
+    return this.issueTokens(user);
+  }
+
   /** E2 — kullanıcının açık oturumları */
   async listSessions(userId: string, currentSid: string | undefined) {
     const rows = await this.em.find(Session, { where: { userId }, order: { lastUsedAt: 'DESC', createdAt: 'DESC' }, take: 100 });

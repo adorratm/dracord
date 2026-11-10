@@ -52,6 +52,8 @@ module.exports = {
     'class-validator',
     'class-transformer/storage',
     'reflect-metadata',
+    // E1 passkey — decorator'lı bağımlılıklar (tsyringe) paketlenmesin
+    '@simplewebauthn/server',
   ],
   plugins: [
     new rspack.DefinePlugin({

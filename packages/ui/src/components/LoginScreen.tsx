@@ -8,6 +8,8 @@ export interface LoginScreenProps {
   showApple?: boolean;
   onGoogleLogin?: () => void;
   onAppleLogin?: () => void;
+  /** E1 — verilirse "Passkey ile giriş" düğmesi */
+  onPasskeyLogin?: () => void;
   loading?: boolean;
   errorMessage?: string;
   /** Logo yerine özel hero (ör. Draco maskot) */
@@ -19,6 +21,7 @@ export function LoginScreen({
   showApple = false,
   onGoogleLogin,
   onAppleLogin,
+  onPasskeyLogin,
   loading,
   errorMessage,
   hero,
@@ -69,6 +72,18 @@ export function LoginScreen({
             >
               <span className="material-symbols-outlined text-[22px]">phone_iphone</span>
               Apple ile giriş yap
+            </button>
+          )}
+
+          {onPasskeyLogin && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={onPasskeyLogin}
+              className="w-full flex items-center justify-center gap-space-sm h-11 rounded-lg border border-outline-variant bg-surface-container-high text-on-surface hover:bg-surface-bright font-headline-md text-headline-md transition-colors disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[22px]">passkey</span>
+              Passkey ile giriş yap
             </button>
           )}
         </div>
