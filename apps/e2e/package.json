@@ -1,0 +1,16 @@
+{
+  "name": "@dracord/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dracord web uçtan uca duman testleri (Playwright)",
+  "scripts": {
+    "install-browsers": "playwright install chromium",
+    "test": "playwright test",
+    "test:public": "playwright test --project=public",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^22"
+  }
+}

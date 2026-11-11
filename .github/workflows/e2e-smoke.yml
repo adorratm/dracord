@@ -1,0 +1,52 @@
+name: E2E smoke (web)
+
+# Canlıya karşı duman testi: her başarılı dağıtımdan sonra ve elle.
+# Herkese açık testler hiçbir şey yazmaz. Oturumlu testler yalnız şu secret'lar varsa çalışır:
+#   E2E_REFRESH_TOKEN — test hesabının yenileme belirteci (ilk çalıştırmada; sonra artefakttan yenilenmez,
+#                       bu yüzden CI'da oturumlu testler için belirteci düzenli güncelle ya da yerelde çalıştır)
+#   E2E_CHANNEL       — "<guildId>/<channelId>" test sunucusundaki metin kanalı
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Web adresi
+        default: https://dracord.com.tr
+      api_url:
+        description: API adresi
+        default: https://api.dracord.com.tr
+  workflow_run:
+    workflows: ['Deploy production']
+    types: [completed]
+
+concurrency:
+  group: e2e-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      E2E_BASE_URL: ${{ inputs.base_url || 'https://dracord.com.tr' }}
+      E2E_API_URL: ${{ inputs.api_url || 'https://api.dracord.com.tr' }}
+      E2E_REFRESH_TOKEN: ${{ secrets.E2E_REFRESH_TOKEN }}
+      E2E_CHANNEL: ${{ secrets.E2E_CHANNEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn workspace @dracord/e2e playwright install --with-deps chromium
+      - name: Duman testleri
+        run: yarn workspace @dracord/e2e test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report
+          retention-days: 7
