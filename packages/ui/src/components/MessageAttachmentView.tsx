@@ -2,6 +2,7 @@
 
 import type { MessageAttachment } from '@dracord/types';
 import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 
@@ -36,11 +37,21 @@ export function MediaLightbox({ attachment, onClose }: MediaLightboxProps) {
   }, [attachment, onClose]);
 
   if (!attachment) return null;
+  if (typeof document === 'undefined') return null;
 
   const { url, filename, contentType } = attachment;
 
-  return (
-    <div className="fixed inset-0 z-[120] flex flex-col bg-black/90">
+  // Portal: mesaj satırları (sanal liste) transform kullandığı için `fixed` orada satıra hapsoluyordu
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex flex-col bg-black/90"
+      role="dialog"
+      aria-modal="true"
+      aria-label={filename}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <header className="h-12 px-space-md flex items-center justify-between shrink-0">
         <span className="font-body-sm text-white/80 truncate">{filename}</span>
         <div className="flex items-center gap-space-sm">
@@ -63,13 +74,18 @@ export function MediaLightbox({ attachment, onClose }: MediaLightboxProps) {
           </button>
         </div>
       </header>
-      <div className="flex-1 min-h-0 flex items-center justify-center p-space-md">
+      <div
+        className="flex-1 min-h-0 flex items-center justify-center p-space-md"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
         {isImage(contentType, filename) && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={url}
             alt={filename}
-            className="w-full h-full max-w-[100vw] max-h-[calc(100dvh-3rem)] object-contain"
+            className="max-w-full max-h-full object-contain"
           />
         )}
         {isVideo(contentType, filename) && (
@@ -77,7 +93,7 @@ export function MediaLightbox({ attachment, onClose }: MediaLightboxProps) {
             src={url}
             controls
             autoPlay
-            className="w-full h-full max-w-[100vw] max-h-[calc(100dvh-3rem)] object-contain rounded-lg"
+            className="max-w-full max-h-full object-contain rounded-lg"
           />
         )}
         {isAudio(contentType, filename) && (
@@ -95,7 +111,8 @@ export function MediaLightbox({ attachment, onClose }: MediaLightboxProps) {
             </a>
           )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

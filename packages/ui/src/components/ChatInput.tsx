@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 import { tokenizeMessageContent } from '../lib/mentions';
@@ -684,6 +684,38 @@ export function ChatInput({
     onAttachFiles?.(files);
     setAttachOpen(false);
     setAttachDragging(false);
+  };
+
+  /**
+   * Ctrl+V: panodaki görsel/dosyayı (ör. Win+Shift+S ekran görüntüsü) doğrudan yükle.
+   * Panoda metin de varsa (Excel/Word kopyası) metin yapıştırılır.
+   */
+  const onComposerPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (textOnly || !onAttachFiles) return;
+    const cd = e.clipboardData;
+    if (!cd) return;
+    if (cd.getData('text/plain').trim()) return;
+    const files: File[] = [];
+    for (const item of Array.from(cd.items ?? [])) {
+      if (item.kind !== 'file') continue;
+      const f = item.getAsFile();
+      if (f) files.push(f);
+    }
+    if (!files.length && cd.files?.length) files.push(...Array.from(cd.files));
+    if (!files.length) return;
+    e.preventDefault();
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[:T]/g, '-')
+      .replace(/\..+$/, '');
+    const named = files.map((f, i) => {
+      // Ekran görüntüleri genelde "image.png" adıyla gelir — anlamlı ad ver
+      if (f.name && f.name !== 'image.png' && f.name !== 'blob') return f;
+      const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '');
+      const suffix = files.length > 1 ? `-${i + 1}` : '';
+      return new File([f], `ekran-goruntusu-${stamp}${suffix}.${ext}`, { type: f.type || 'image/png' });
+    });
+    handleFiles(named);
   };
 
   const onDragEnter = (e: DragEvent) => {
@@ -1602,6 +1634,7 @@ export function ChatInput({
               if (mirror) mirror.scrollTop = e.currentTarget.scrollTop;
             }}
             onKeyDown={onComposerKeyDown}
+            onPaste={onComposerPaste}
             disabled={disabled}
             spellCheck={spellCheck}
             rows={1}
