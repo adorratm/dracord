@@ -352,7 +352,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] Kopya kod ortak pakete: `useRemoteControl`, `buildSidebarCategories`, ayar bileşenleri (`SettingsPage/Section/Toggle/Select/Note/Slider`) artık `@dracord/ui`'da; web ve desktop-ui kopyaları silindi. Mobil için DOM'suz giriş `@dracord/ui/core` (`useScheduledMessages`, `useVoiceChannelStatuses`) — mobil kopyalar kaldırıldı. Kalan: `Draco`, `NotificationBell`, `GuildEventsModal`, `AppTour` uygulamaya özel farklar içeriyor (ayrı ayrı birleştirilmeli).
 - [ ] E2E smoke: Playwright (web) + Windows desktop — giriş, mesaj, ses, ekran paylaşımı, uzak kontrol, oyun.
 - [ ] Performans bütçesi (desktop açılış, web LCP/INP, mobil soğuk açılış) + bundle analizi.
-- [ ] Bağlantı dayanıklılığı (uyku, ağ değişimi, mobil arka plan).
+- [x] Bağlantı dayanıklılığı — **hata düzeltildi:** socket.io v4'te `reconnect` Socket'te değil Manager'da yayıldığı için `onSocketReconnect` hiç çalışmıyordu ve yeniden bağlanınca kanal odalarına geri katılınmıyordu (açık kanala canlı mesaj gelmiyordu). SDK artık katılınan kanalları izleyip her yeniden bağlantıda tekrar katılıyor; sunucu bağlantıyı kendisi keserse (süresi dolmuş belirteç) belirteci yenileyip bağlanıyor; uyanma / `online` / sekme görünür olunca beklemeden bağlanıyor; mobilde AppState `active` aynı işi yapıyor. Açık sohbet (web/desktop/mobil) yeniden bağlanınca son 50 mesajı çekip kaçırılanları ekliyor (`mergeLatestMessages`).
 - [ ] Erişilebilirlik/kontrast taraması (koyu + açık tema).
 - [x] Repo temizliği: `apps/desktop` deneme betikleri/günlükleri ve `apps/mobile/console.log(m.width` (boş) depodan çıkarıldı, `.gitignore`'a eklendi. Kökteki `youtube-cookies.*` zaten gitignore'da ve depoda yok (yerel dosyan, dokunulmadı).
 

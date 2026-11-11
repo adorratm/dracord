@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageDto } from '@dracord/types';
+import { mergeLatestMessages, type MessageDto } from '@dracord/types';
 import { SocketEvents } from '@dracord/sdk';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -188,8 +188,25 @@ export function useChatChannel(channelId: string | undefined, aroundMessageId?: 
     };
     socket?.on(SocketEvents.TYPING_START, onTyping);
 
+    // Bağlantı koptuysa (uyku, ağ değişimi) kaçırılan mesajları tamamla
+    const offReconnect = client.onSocketReconnect(() => {
+      if (cancelled || !atLiveRef.current) return;
+      void client
+        .getMessages(channelId, { limit: 50 })
+        .then((page) => {
+          if (cancelled || channelRef.current !== channelId) return;
+          setMessages((prev) => {
+            const next = mergeLatestMessages(prev, page.items);
+            remember(channelId, { items: next, hasMore: page.hasMore });
+            return next;
+          });
+        })
+        .catch(() => undefined);
+    });
+
     return () => {
       cancelled = true;
+      offReconnect();
       client.leaveChannel(channelId);
       socket?.off(SocketEvents.MESSAGE_CREATE, onCreate);
       socket?.off(SocketEvents.MESSAGE_UPDATE, onUpdate);

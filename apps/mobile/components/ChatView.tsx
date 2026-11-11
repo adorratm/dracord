@@ -26,7 +26,7 @@ import type {
   MessageEmbed,
   MessageEmbedAction,
 } from '@dracord/types';
-import { SocketEvents } from '@dracord/types';
+import { SocketEvents, mergeLatestMessages } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../lib/auth';
 import { useThemeRevision } from '../lib/theme-revision';
@@ -238,7 +238,20 @@ export function ChatView({
     sock.on(SocketEvents.MESSAGE_UPDATE, onUpdate);
     sock.on(SocketEvents.MESSAGE_DELETE, onDelete);
     sock.on(SocketEvents.TYPING_START, onTyping);
+    // Bağlantı koptuysa (arka plan, ağ değişimi) kaçırılan mesajları tamamla — yalnız canlı uçtayken
+    const offReconnect = client.onSocketReconnect(() => {
+      if (around) return;
+      void client
+        .getMessages(channel.id, 50)
+        .then((page) =>
+          setMessages((prev) =>
+            mergeLatestMessages(prev, (page.items ?? []).filter((m) => !m.viewerHide), true),
+          ),
+        )
+        .catch(() => undefined);
+    });
     return () => {
+      offReconnect();
       sock.off(SocketEvents.MESSAGE_CREATE, onMsg);
       sock.off(SocketEvents.MESSAGE_UPDATE, onUpdate);
       sock.off(SocketEvents.MESSAGE_DELETE, onDelete);

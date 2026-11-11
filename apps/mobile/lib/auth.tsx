@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -138,6 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [client]);
+
+  // Arka plandan dönünce / ağ değişince geri çekilmeyi beklemeden yeniden bağlan
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') client.nudgeReconnect();
+    });
+    return () => sub.remove();
+  }, [ready, user?.id, client]);
 
   // E3 — bu cihazın şifreleme anahtarını kaydet (karşı taraf E2EE açabilsin)
   useEffect(() => {

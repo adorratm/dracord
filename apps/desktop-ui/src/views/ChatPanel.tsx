@@ -7,7 +7,7 @@ import type {
   SearchHit,
   SearchHitMessage,
 } from '@dracord/types';
-import { DRACORD_BOT_USER_ID, SocketEvents } from '@dracord/types';
+import { DRACORD_BOT_USER_ID, SocketEvents, mergeLatestMessages } from '@dracord/types';
 import {
   Avatar,
   ChatInput,
@@ -218,7 +218,15 @@ export function ChatPanel({
     sock.on(SocketEvents.MESSAGE_CREATE, onMsg);
     sock.on(SocketEvents.MESSAGE_UPDATE, onUpdate);
     sock.on(SocketEvents.MESSAGE_DELETE, onDelete);
+    // Bağlantı koptuysa (uyku, ağ değişimi) kaçırılan mesajları tamamla
+    const offReconnect = client.onSocketReconnect(() => {
+      void client
+        .getMessages(channel.id)
+        .then((page) => setMessages((prev) => mergeLatestMessages(prev, page.items ?? [])))
+        .catch(() => undefined);
+    });
     return () => {
+      offReconnect();
       sock.off(SocketEvents.MESSAGE_CREATE, onMsg);
       sock.off(SocketEvents.MESSAGE_UPDATE, onUpdate);
       sock.off(SocketEvents.MESSAGE_DELETE, onDelete);

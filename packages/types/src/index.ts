@@ -2131,3 +2131,27 @@ export const GAME_EMBED = {
   hostSource: 'dracord-host',
   nativeOrigin: 'dracord-native',
 } as const;
+
+/**
+ * Yeniden bağlanınca alınan son mesaj sayfasını mevcut listeye kat:
+ * aynı id'liler güncellenir, eksikler eklenir, liste eskiden yeniye sıralanır.
+ * `newestFirst` true ise sonuç yeniden eskiye döner (mobil ters liste).
+ */
+export function mergeLatestMessages<T extends { id: string; createdAt: string; bookmarked?: boolean }>(
+  prev: T[],
+  latest: T[],
+  newestFirst = false,
+): T[] {
+  if (!latest.length) return prev;
+  const byId = new Map(latest.map((m) => [m.id, m]));
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const m of prev) {
+    seen.add(m.id);
+    const fresh = byId.get(m.id);
+    out.push(fresh ? { ...fresh, bookmarked: fresh.bookmarked ?? m.bookmarked } : m);
+  }
+  for (const m of latest) if (!seen.has(m.id)) out.push(m);
+  const t = (m: T) => new Date(m.createdAt).getTime();
+  return out.sort((a, b) => (newestFirst ? t(b) - t(a) : t(a) - t(b)));
+}

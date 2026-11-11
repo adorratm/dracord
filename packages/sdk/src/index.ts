@@ -128,6 +128,11 @@ export class DracordClient {
   private voicePlatform: string | null = null;
   public socket: Socket | null = null;
   private reconnectHandlers = new Set<() => void>();
+  /** Yeniden bağlanınca tekrar katılınacak kanal odaları (sunucu odaları yeni sokete taşımaz) */
+  private joinedChannels = new Set<string>();
+  private socketEverConnected = false;
+  private sessionRevoked = false;
+  private lifecycleAttached = false;
 
   /** API kökü (oyun SDK'sı verify için) */
   get apiBaseUrl(): string {
@@ -148,6 +153,7 @@ export class DracordClient {
 
   setToken(token: string | null) {
     this.accessToken = token;
+    if (!token) this.joinedChannels.clear(); // çıkış — başka hesapla eski odalara katılma
   }
 
   /**
@@ -1921,8 +1927,11 @@ export class DracordClient {
       reconnectionDelay: 800,
       reconnectionDelayMax: 8_000,
     });
+    this.socketEverConnected = false;
+    this.sessionRevoked = false;
     // E2 — bu oturum başka cihazdan kapatıldı
     this.socket.on('session:revoked', () => {
+      this.sessionRevoked = true;
       for (const h of this.sessionRevokedHandlers) {
         try {
           h();
@@ -1931,8 +1940,15 @@ export class DracordClient {
         }
       }
     });
-    this.socket.on('reconnect', () => {
-      if (this.socket) this.socket.auth = { token: this.accessToken };
+    // Not: socket.io-client v4'te 'reconnect' olayı Socket'te değil Manager'da (socket.io) yayılır.
+    // Her bağlantıda (ilki hariç) kanal odalarına yeniden katıl ve dinleyicileri tetikle.
+    this.socket.on('connect', () => {
+      if (!this.socketEverConnected) {
+        // İlk bağlantı: bağlanmadan önceki joinChannel çağrıları socket.io tamponundan zaten gider
+        this.socketEverConnected = true;
+        return;
+      }
+      for (const id of this.joinedChannels) this.socket?.emit(SocketEvents.CHANNEL_JOIN, { channelId: id });
       for (const h of this.reconnectHandlers) {
         try {
           h();
@@ -1941,14 +1957,80 @@ export class DracordClient {
         }
       }
     });
+    this.socket.io.on('reconnect_attempt', () => {
+      if (this.socket) this.socket.auth = { token: this.accessToken };
+    });
+    // Sunucu bağlantıyı kendisi kestiyse (ör. süresi dolmuş belirteç) socket.io yeniden denemez:
+    // belirteci yenileyip tekrar bağlan. Oturum iptal edildiyse bağlanma.
+    this.socket.on('disconnect', (reason) => {
+      if (reason !== 'io server disconnect' || this.sessionRevoked) return;
+      void this.recoverSocketAuth();
+    });
+    this.socket.on('connect_error', (err) => {
+      if (this.sessionRevoked) return;
+      if (/unauthori|jwt|token|auth/i.test(err?.message ?? '')) void this.recoverSocketAuth();
+    });
+    this.attachLifecycle();
     return this.socket;
   }
 
+  private recoverInFlight = false;
+  private async recoverSocketAuth() {
+    if (this.recoverInFlight) return;
+    this.recoverInFlight = true;
+    try {
+      const token = await this.refreshAccessToken();
+      if (!token || !this.socket || this.sessionRevoked) return;
+      this.socket.auth = { token };
+      if (!this.socket.connected) this.socket.connect();
+    } finally {
+      this.recoverInFlight = false;
+    }
+  }
+
+  /**
+   * Uyku / ağ değişimi / arka plandan dönüş: geri çekilme süresini beklemeden hemen yeniden bağlan.
+   * Tarayıcı ve Electron'da otomatik bağlanır; React Native'de AppState 'active' olunca çağır.
+   */
+  nudgeReconnect() {
+    const sock = this.socket;
+    if (!sock || sock.connected || this.sessionRevoked || !this.accessToken) return;
+    sock.auth = { token: this.accessToken };
+    sock.connect();
+  }
+
+  private attachLifecycle() {
+    if (this.lifecycleAttached) return;
+    const w = typeof window !== 'undefined' ? (window as unknown as {
+      addEventListener?: (t: string, h: () => void) => void;
+    }) : null;
+    const d = typeof document !== 'undefined' ? (document as unknown as {
+      addEventListener?: (t: string, h: () => void) => void;
+      visibilityState?: string;
+    }) : null;
+    if (!w?.addEventListener || !d?.addEventListener) return; // React Native
+    this.lifecycleAttached = true;
+    w.addEventListener('online', () => this.nudgeReconnect());
+    w.addEventListener('focus', () => this.nudgeReconnect());
+    d.addEventListener('visibilitychange', () => {
+      if (d.visibilityState === 'visible') this.nudgeReconnect();
+    });
+  }
+
   joinChannel(channelId: string) {
+    this.joinedChannels.delete(channelId);
+    this.joinedChannels.add(channelId);
+    // Sınırsız büyümesin — en eski katılımları unut
+    while (this.joinedChannels.size > 200) {
+      const first = this.joinedChannels.values().next().value;
+      if (first === undefined) break;
+      this.joinedChannels.delete(first);
+    }
     this.socket?.emit(SocketEvents.CHANNEL_JOIN, { channelId });
   }
 
   leaveChannel(channelId: string) {
+    this.joinedChannels.delete(channelId);
     this.socket?.emit(SocketEvents.CHANNEL_LEAVE, { channelId });
   }
 
