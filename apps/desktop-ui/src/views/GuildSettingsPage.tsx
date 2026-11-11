@@ -517,6 +517,7 @@ export function GuildSettingsPage({
                   className="flex-1 min-w-[140px] h-10 px-3 rounded-lg bg-surface-container-highest outline-none"
                 />
                 <select
+                  aria-label="Kanal türü"
                   value={newChannelType}
                   onChange={(e) =>
                     setNewChannelType(
@@ -533,6 +534,7 @@ export function GuildSettingsPage({
                 </select>
                 {newChannelType === 'GAME' ? (
                   <select
+                    aria-label="Oyun türü"
                     value={newGameKind}
                     onChange={(e) => setNewGameKind(e.target.value as GameChannelKind)}
                     className="h-10 px-2 rounded-lg bg-surface-container-highest"

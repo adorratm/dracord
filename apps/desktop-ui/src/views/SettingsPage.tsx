@@ -2962,6 +2962,7 @@ function DesktopGamesLibrarySection() {
                   {editingId === g.appId ? (
                     <div className="flex gap-1">
                       <input
+                        aria-label="Oyun adı"
                         className="min-w-0 flex-1 rounded-md bg-surface-container px-space-sm py-1 font-body-sm text-on-surface"
                         value={editName}
                         autoFocus

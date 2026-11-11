@@ -690,6 +690,7 @@ export function AppShell({
           Link panoya kopyalandı (destekleniyorsa). Paylaşmak için:
         </p>
         <input
+          aria-label="Davet linki"
           readOnly
           value={createdInviteUrl ?? ''}
           className="w-full h-10 px-space-sm rounded-lg bg-surface-container-highest text-on-surface outline-none"

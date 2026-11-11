@@ -1280,8 +1280,10 @@ export function ChatInput({
                               </button>
                               <button
                                 type="button"
+                                aria-label={favoriteIds.includes(id) ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+                                aria-pressed={favoriteIds.includes(id)}
                                 className={cn(
-                                  'absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100',
+                                  'absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                                   favoriteIds.includes(id)
                                     ? 'bg-primary-container text-on-primary-container opacity-100'
                                     : 'bg-black/50 text-white',

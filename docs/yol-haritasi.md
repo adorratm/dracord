@@ -354,7 +354,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
   - [ ] Sonraki: Windows desktop E2E (Electron), ses/ekran paylaşımı/uzak kontrol (iki hesap + LiveKit gerektirir).
 - [ ] Performans bütçesi (desktop açılış, web LCP/INP, mobil soğuk açılış) + bundle analizi.
 - [x] Bağlantı dayanıklılığı — **hata düzeltildi:** socket.io v4'te `reconnect` Socket'te değil Manager'da yayıldığı için `onSocketReconnect` hiç çalışmıyordu ve yeniden bağlanınca kanal odalarına geri katılınmıyordu (açık kanala canlı mesaj gelmiyordu). SDK artık katılınan kanalları izleyip her yeniden bağlantıda tekrar katılıyor; sunucu bağlantıyı kendisi keserse (süresi dolmuş belirteç) belirteci yenileyip bağlanıyor; uyanma / `online` / sekme görünür olunca beklemeden bağlanıyor; mobilde AppState `active` aynı işi yapıyor. Açık sohbet (web/desktop/mobil) yeniden bağlanınca son 50 mesajı çekip kaçırılanları ekliyor (`mergeLatestMessages`).
-- [ ] Erişilebilirlik/kontrast taraması (koyu + açık tema).
+- [x] Erişilebilirlik/kontrast taraması — herkese açık sayfalar (ana sayfa, giriş, indirme) koyu+açık temada axe WCAG 2 A/AA: **0 ihlal**; kalıcı test `apps/e2e/tests/a11y.public.spec.ts`. Uygulama içi kod taraması: adsız simge düğmesi 3 → 0, etiketsiz form alanı 13 → 0 (aria-label). Kalan: oturumlu ekranların axe taraması (test hesabı ile `signed-in` projesine eklenecek).
 - [x] Repo temizliği: `apps/desktop` deneme betikleri/günlükleri ve `apps/mobile/console.log(m.width` (boş) depodan çıkarıldı, `.gitignore`'a eklendi. Kökteki `youtube-cookies.*` zaten gitignore'da ve depoda yok (yerel dosyan, dokunulmadı).
 
 ## Karar bekleyen sorular

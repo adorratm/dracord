@@ -803,6 +803,7 @@ export function UserPanel({
                 <p className="font-label-sm text-on-surface">Giriş aygıtı</p>
                 <p className="font-label-sm text-outline truncate text-[11px] mb-1">{inputLabel}</p>
                 <select
+                  aria-label="Giriş aygıtı"
                   value={inputDeviceId}
                   onChange={(e) => onInputDeviceChange?.(e.target.value)}
                   className="w-full h-9 rounded-lg bg-surface-container-lowest px-2 text-on-surface font-body-sm outline-none"
@@ -902,6 +903,7 @@ export function UserPanel({
                 <p className="font-label-sm text-on-surface">Çıkış aygıtı</p>
                 <p className="font-label-sm text-outline truncate text-[11px] mb-1">{outputLabel}</p>
                 <select
+                  aria-label="Çıkış aygıtı"
                   value={outputDeviceId}
                   onChange={(e) => onOutputDeviceChange?.(e.target.value)}
                   className="w-full h-9 rounded-lg bg-surface-container-lowest px-2 text-on-surface font-body-sm outline-none"

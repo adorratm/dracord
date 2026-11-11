@@ -674,6 +674,7 @@ function DmChatInner({
         }
       >
         <textarea
+          aria-label="Mesaj içeriği"
           value={editMessageTarget?.content ?? ''}
           onChange={(e) =>
             setEditMessageTarget((prev) =>

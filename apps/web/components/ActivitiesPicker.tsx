@@ -84,6 +84,7 @@ export function ActivitiesPicker({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Kapat"
             className="h-8 w-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container"
           >
             <span className="material-symbols-outlined">close</span>

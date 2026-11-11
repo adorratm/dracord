@@ -4514,6 +4514,7 @@ export function GuildChannelView({
           <strong>{voicePasswordPrompt?.channel.name}</strong> kilitli. Şifreyi gir.
         </p>
         <input
+          aria-label="Ses kanalı şifresi"
           type="password"
           value={voicePasswordDraft}
           onChange={(e) => setVoicePasswordDraft(e.target.value)}
@@ -4608,6 +4609,7 @@ export function GuildChannelView({
           Bu linki paylaşarak sunucuya davet edebilirsin.
         </p>
         <input
+          aria-label="Davet linki"
           readOnly
           value={inviteUrl ?? ''}
           className="w-full h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
@@ -4744,6 +4746,7 @@ export function GuildChannelView({
         }
       >
         <textarea
+          aria-label="Mesaj içeriği"
           value={editMessageTarget?.content ?? ''}
           onChange={(e) =>
             setEditMessageTarget((prev) =>

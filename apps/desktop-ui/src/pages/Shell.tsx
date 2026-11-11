@@ -1906,6 +1906,7 @@ export function Shell() {
             </div>
             {channelModal.type === 'GAME' ? (
               <select
+                aria-label="Oyun türü"
                 value={channelGameKind}
                 onChange={(e) => setChannelGameKind(e.target.value as GameChannelKind)}
                 className="w-full h-10 px-3 rounded-lg bg-surface-container-highest outline-none"
@@ -2224,6 +2225,7 @@ export function Shell() {
           Bu linki paylaş — panoya kopyalandı.
         </p>
         <input
+          aria-label="Davet linki"
           readOnly
           value={createdInviteUrl ?? ''}
           className="w-full h-10 px-3 rounded-lg bg-surface-container-highest text-on-surface mb-3 outline-none select-all"

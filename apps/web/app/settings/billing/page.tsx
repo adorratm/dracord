@@ -103,6 +103,7 @@ export default function BillingPage() {
           </SettingsNote>
           <div className="flex flex-wrap gap-2">
             <select
+              aria-label="Kart türü"
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
               className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"

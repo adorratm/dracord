@@ -13,6 +13,7 @@ E2E_REFRESH_TOKEN=... E2E_CHANNEL=<guildId>/<channelId> yarn e2e
 
 | Dosya | Kapsam |
 |---|---|
+| `tests/a11y.public.spec.ts` | axe WCAG 2 A/AA — ana sayfa, giriş, indirme; koyu + açık tema (ciddi/kritik ihlal düşürür) |
 | `tests/public.spec.ts` | API sağlık, ana sayfa (JS hatası yok), giriş ekranı, oturumsuz yönlendirme, indirme sayfası, olmayan `/s/` → 404, `returnUrl=//` açık yönlendirme |
 | `tests/chat.spec.ts` | mesaj gönder/gör, **Ctrl+V ile ekran görüntüsü yükleme**, **önizleme tam ekran** (gerileme testi) |
 | `tests/resilience.spec.ts` | ağ koparken gelen mesaj ağ dönünce yenilemeden görünür; sekme gizle/göster |
