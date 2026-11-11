@@ -3,11 +3,10 @@ import { Inter } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
 import { Analytics } from '@/components/Analytics';
-import { GlobalSearch } from '@/components/GlobalSearch';
+import { GlobalSearchLazy } from '@/components/GlobalSearchLazy';
 import { OnboardingGate } from '@/components/OnboardingGate';
 import { SettingsReturnTracker } from '@/components/SettingsReturnTracker';
-import { VoiceSessionProvider } from '@/components/VoiceSessionProvider';
-import { DmIncomingCallListener } from '@/components/DmCallControls';
+import { VoiceGate } from '@/components/VoiceGate';
 import { PreferencesProvider } from '@/lib/user-preferences';
 import { I18nProvider } from '@/lib/i18n';
 import { AppToaster } from '@/components/AppToaster';
@@ -151,15 +150,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Analytics />
             <I18nProvider>
               <OnboardingGate>
-                <VoiceSessionProvider>
-                  <Suspense fallback={null}>
-                    <GlobalSearch />
-                  </Suspense>
-                  <SettingsReturnTracker />
-                  <DmIncomingCallListener />
-                  {children}
-                  <AppToaster />
-                </VoiceSessionProvider>
+                <Suspense fallback={null}>
+                  <GlobalSearchLazy />
+                </Suspense>
+                <SettingsReturnTracker />
+                {/* Ses kabuğu (LiveKit) yalnız uygulama sayfalarında yüklenir */}
+                <VoiceGate>{children}</VoiceGate>
+                <AppToaster />
               </OnboardingGate>
             </I18nProvider>
           </PreferencesProvider>

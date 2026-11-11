@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   ],
   // NSFW modeli yalnızca istemci dinamik import; RSC bundle’ına sokma
   serverExternalPackages: ['@tensorflow/tfjs', 'nsfwjs', 'edge-tts-universal'],
+  experimental: {
+    // Barrel (index.ts) içe aktarımlarını doğrudan modüle çevir — kullanılmayan UI bileşenleri paketlenmesin
+    optimizePackageImports: ['@dracord/ui'],
+  },
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
   async rewrites() {

@@ -244,18 +244,25 @@ function AppPreview() {
 export default function LandingPage() {
   const router = useRouter();
   const { ready, user } = useAuth();
-  const [checking, setChecking] = useState(true);
+  /** Oturum varsa uygulamaya yönlendirilirken içerik yerine maskot göster */
+  const [redirecting, setRedirecting] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  // İçerik sunucuda hazır gelir (LCP için oturum kontrolünü beklemez); oturum varsa yönlendir
+  useEffect(() => {
+    if (hasSession()) setRedirecting(true);
+  }, []);
   useEffect(() => {
     if (!ready) return;
     if (user || hasSession()) {
+      setRedirecting(true);
       router.replace('/channels/@me');
-      return;
+    } else {
+      setRedirecting(false);
     }
-    setChecking(false);
   }, [ready, user, router]);
+  const checking = redirecting;
 
   const scrollToId = useCallback((id: string) => {
     const root = scrollerRef.current;
