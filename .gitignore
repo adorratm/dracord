@@ -37,3 +37,9 @@ apps/api/prisma/*.db
 .expo
 apps/mobile/.expo
 apps/mobile/dist
+
+# Yerel deneme çıktıları
+apps/desktop/_tts-smoke*.js
+apps/desktop/tts-log*.txt
+apps/desktop/tts-test-out*.txt
+apps/desktop/sync-test.txt

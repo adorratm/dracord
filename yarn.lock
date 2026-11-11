@@ -1480,6 +1480,7 @@ __metadata:
     "@dracord/game-core": "workspace:*"
     "@dracord/sdk": "workspace:*"
     "@dracord/types": "workspace:*"
+    "@dracord/ui": "workspace:*"
     "@expo-google-fonts/material-symbols-outlined": "npm:^0.4.64"
     "@livekit/react-native": "npm:^3.1.0"
     "@livekit/react-native-expo-plugin": "npm:^1.1.0"

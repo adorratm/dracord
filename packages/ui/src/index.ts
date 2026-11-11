@@ -38,6 +38,9 @@ export { GuildFaqSettings } from './components/GuildFaqSettings';
 export { SessionsPanel } from './components/SessionsPanel';
 export { PasskeysPanel } from './components/PasskeysPanel';
 export { E2eeDmBar } from './components/E2eeDmBar';
+export { buildSidebarCategories } from './lib/sidebar-channels';
+export { useRemoteControl } from './lib/use-remote-control';
+export type { RemoteControlUi } from './lib/use-remote-control';
 export { E2eeDevicesPanel } from './components/E2eeDevicesPanel';
 export type { E2eeDevicesClient } from './components/E2eeDevicesPanel';
 export { browserE2eeManager, useE2eeDm } from './lib/use-e2ee-dm';
@@ -186,6 +189,14 @@ export { VolumeSlider } from './components/VolumeSlider';
 export type { VolumeSliderProps } from './components/VolumeSlider';
 
 export { SettingsShell } from './components/SettingsShell';
+export {
+  SettingsPage,
+  SettingsSection,
+  SettingsToggle,
+  SettingsSelect,
+  SettingsNote,
+  SettingsSlider,
+} from './components/SettingsControls';
 export type { SettingsShellProps, SettingsNavItem, SettingsNavSection } from './components/SettingsShell';
 
 export { LoginScreen } from './components/LoginScreen';

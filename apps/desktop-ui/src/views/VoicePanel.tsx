@@ -21,7 +21,7 @@ import {
   SCREEN_SHARE_VIEW_QUALITY_SPECS,
 } from '@/lib/voice-settings';
 import { useAuth } from '../auth';
-import { useRemoteControl } from '../hooks/useRemoteControl';
+import { useRemoteControl } from '@dracord/ui';
 import { loadLocalPrefs } from '../lib/client-settings';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';

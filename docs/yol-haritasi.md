@@ -349,13 +349,12 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] E3 Uçtan uca şifreli DM — isteğe bağlı (sohbet başına), çok cihazlı: X25519 cihaz anahtarları + mesaj başına anahtar (tweetnacl), 1:1 ve grup DM, güvenlik kodu, cihaz değişikliği uyarısı, ayarlarda cihaz listesi. Sınırlar: yalnız metin; arama/düzenleme/şikâyet içeriği yok; yeni cihaz eski mesajları okuyamaz. Mobil için yeni build gerekir (expo-crypto).
 
 ### Öncelik 3 — Faz 1 optimizasyon ve sağlamlık
-- [ ] web ↔ desktop-ui kopya hook'ları ortak pakete (`use-remote-control`, ses ayarları); mobil kopyalar
-  (`useVoiceChannelStatuses`, `useScheduledMessages`) için RN-güvenli alt paket (`@dracord/ui/core`).
+- [x] Kopya kod ortak pakete: `useRemoteControl`, `buildSidebarCategories`, ayar bileşenleri (`SettingsPage/Section/Toggle/Select/Note/Slider`) artık `@dracord/ui`'da; web ve desktop-ui kopyaları silindi. Mobil için DOM'suz giriş `@dracord/ui/core` (`useScheduledMessages`, `useVoiceChannelStatuses`) — mobil kopyalar kaldırıldı. Kalan: `Draco`, `NotificationBell`, `GuildEventsModal`, `AppTour` uygulamaya özel farklar içeriyor (ayrı ayrı birleştirilmeli).
 - [ ] E2E smoke: Playwright (web) + Windows desktop — giriş, mesaj, ses, ekran paylaşımı, uzak kontrol, oyun.
 - [ ] Performans bütçesi (desktop açılış, web LCP/INP, mobil soğuk açılış) + bundle analizi.
 - [ ] Bağlantı dayanıklılığı (uyku, ağ değişimi, mobil arka plan).
 - [ ] Erişilebilirlik/kontrast taraması (koyu + açık tema).
-- [ ] Repo temizliği: `apps/desktop/_tts-smoke*.js`, `tts-log*.txt`, `sync-test.txt`, kökteki `youtube-cookies.*`.
+- [x] Repo temizliği: `apps/desktop` deneme betikleri/günlükleri ve `apps/mobile/console.log(m.width` (boş) depodan çıkarıldı, `.gitignore`'a eklendi. Kökteki `youtube-cookies.*` zaten gitignore'da ve depoda yok (yerel dosyan, dokunulmadı).
 
 ## Karar bekleyen sorular
 

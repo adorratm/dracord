@@ -20,6 +20,7 @@
     "@dracord/game-core": "workspace:*",
     "@dracord/sdk": "workspace:*",
     "@dracord/types": "workspace:*",
+    "@dracord/ui": "workspace:*",
     "@expo-google-fonts/material-symbols-outlined": "^0.4.64",
     "@livekit/react-native": "^3.1.0",
     "@livekit/react-native-expo-plugin": "^1.1.0",

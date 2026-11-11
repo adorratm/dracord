@@ -30,7 +30,7 @@ import {
   type TitleBarNavId,
 } from '@dracord/ui';
 import { useAuth } from '../auth';
-import { buildSidebarCategories } from '../lib/channels';
+import { buildSidebarCategories } from '@dracord/ui';
 import {
   loadLocalPrefs,
   mergeClientSettings,

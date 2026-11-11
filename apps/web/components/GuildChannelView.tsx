@@ -54,7 +54,6 @@ import { DracoEmpty } from '@/components/Draco';
 import { openMessageSearch } from '@/components/GlobalSearch';
 import { MobileDrawer } from '@/components/MobileDrawer';
 import { VoiceSideChat } from '@/components/VoiceSideChat';
-import { buildSidebarCategories } from '@/lib/channels';
 import {
   filterMessageContent,
   isSuspiciousUrl,
@@ -78,7 +77,7 @@ import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
-import { useRemoteControl } from '@/lib/use-remote-control';
+import { buildSidebarCategories, useRemoteControl } from '@dracord/ui';
 
 interface GuildChannelViewProps {
   guildId: string;
