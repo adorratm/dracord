@@ -1,0 +1,94 @@
+name: Deploy COOMBIE
+
+# Runs the COOMBIE game (coombie.dracord.com.tr) on the same Hetzner host as Dracord.
+# The image is built by the coombie repo (ghcr.io/adorratm/coombie:latest, "Image" workflow);
+# this only pulls it and restarts the container when the image changed, then keeps the
+# coombie.conf vhost in the shared nginx. Separate from "Deploy production" so a COOMBIE
+# problem never blocks or fails a Dracord deploy. Own concurrency group: sharing Dracord's would let
+# a scheduled run cancel a pending Dracord deploy. It only touches coombie-game and coombie.conf.
+#
+# Secrets: the same HETZNER_* and GHCR_PULL_TOKEN as "Deploy production".
+# Optional on the server: /opt/coombie/.env with DRACORD_GAME_SECRET=... (Dracord sign-in).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/deploy-coombie.sh
+      - docker/nginx-coombie.docker.conf.example
+      - .github/workflows/deploy-coombie.yml
+  # picks up new COOMBIE images without needing a token in the coombie repo
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Restart the game container even if the image is unchanged
+        type: boolean
+        default: false
+
+concurrency:
+  group: coombie-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Pull + run COOMBIE
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Require deploy secrets
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [[ -n "${HETZNER_HOST:-}" ]] || { echo "Missing secret HETZNER_HOST"; missing=1; }
+          [[ -n "${HETZNER_USER:-}" ]] || { echo "Missing secret HETZNER_USER"; missing=1; }
+          [[ -n "${HETZNER_SSH_KEY:-}" ]] || { echo "Missing secret HETZNER_SSH_KEY"; missing=1; }
+          exit "$missing"
+
+      - name: Run deploy-coombie.sh over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT != '' && secrets.HETZNER_SSH_PORT || 22 }}
+          command_timeout: 8m
+          script_stop: true
+          timeout: 60s
+          envs: DRACORD_DEPLOY_PATH,COOMBIE_FORCE
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${DRACORD_DEPLOY_PATH:-/opt/dracord}"
+            GHCR_PASS='${{ secrets.GHCR_PULL_TOKEN }}'
+            if [[ -z "$GHCR_PASS" ]]; then GHCR_PASS='${{ github.token }}'; fi
+            echo "$GHCR_PASS" | docker login ghcr.io -u '${{ github.repository_owner }}' --password-stdin >/dev/null
+            # Run the scripts from origin/main without touching the Dracord checkout's working tree
+            WORK="$(mktemp -d)"
+            trap 'rm -rf "$WORK"' EXIT
+            git -C "$DEPLOY_PATH" fetch --quiet origin main
+            mkdir -p "$WORK/docker"
+            git -C "$DEPLOY_PATH" show origin/main:docker/deploy-coombie.sh >"$WORK/docker/deploy-coombie.sh"
+            git -C "$DEPLOY_PATH" show origin/main:docker/nginx-coombie.docker.conf.example >"$WORK/docker/nginx-coombie.docker.conf.example"
+            bash "$WORK/docker/deploy-coombie.sh"
+        env:
+          DRACORD_DEPLOY_PATH: ${{ secrets.DRACORD_DEPLOY_PATH }}
+          COOMBIE_FORCE: ${{ inputs.force && '1' || '0' }}
+
+      - name: Public smoke
+        continue-on-error: true
+        run: |
+          code="$(curl -sS -o /tmp/body -w '%{http_code}' https://coombie.dracord.com.tr/health || echo 000)"
+          echo "https://coombie.dracord.com.tr/health → ${code}"
+          head -c 200 /tmp/body; echo
+          if [[ "$code" == "526" ]]; then
+            echo "::warning::Cloudflare 526: SSL mode is 'Full (strict)' and the origin certificate does not cover coombie.dracord.com.tr. Issue one on the server: certbot certonly --webroot -w /var/www/certbot -d coombie.dracord.com.tr"
+          fi
