@@ -55,6 +55,8 @@ export type HostMessage =
   | { source: typeof HOST_SOURCE; type: 'SESSION_UPDATE'; payload: { session: EmbedSession; participants: EmbedParticipant[] } }
   | { source: typeof HOST_SOURCE; type: 'TOKEN'; payload: { token: string; expiresAt: string } }
   | { source: typeof HOST_SOURCE; type: 'VISIBILITY'; payload: { visible: boolean } }
+  /** Odada biri konuşuyor: oyun kendi sesini kısmalı (duck), bitince geri açmalı */
+  | { source: typeof HOST_SOURCE; type: 'AUDIO'; payload: { duck: boolean } }
   | { source: typeof HOST_SOURCE; type: 'ERROR'; payload: { code: string; message: string } };
 
 export type EmbedMessage =

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GAME_EMBED, type GameLaunchDto, type GameSessionDto } from '@dracord/types';
 import { cn } from '../lib/cn';
+import { isVoiceActive, onVoiceActivity, registerGameFrame } from '../lib/game-audio';
 import type { GamesClient } from '../lib/use-game-sessions';
 
 type Participant = { id: string; displayName: string; avatarUrl: string | null };
@@ -92,6 +93,7 @@ export function GameFrame({
               testMode: l.session.game.status !== 'approved',
               apiBase,
             });
+            post('AUDIO', { duck: isVoiceActive() });
           } catch (e) {
             setError(e instanceof Error ? e.message : 'Oyun başlatılamadı');
             post('ERROR', { code: 'launch_failed', message: 'Dracord oturumu açılamadı' });
@@ -137,6 +139,17 @@ export function GameFrame({
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, [client, session.id, origin, post, participants, platform, apiBase, onClose, onInvite, onSetStatus]);
+
+  // Oyun odasında ses önceliği konuşmacılarda: çerçeve açıkken ses yükselir,
+  // biri konuşurken oyun kendi sesini kısar (AUDIO mesajı).
+  useEffect(() => registerGameFrame(), []);
+  useEffect(
+    () =>
+      onVoiceActivity((speaking) => {
+        if (launchRef.current) post('AUDIO', { duck: speaking });
+      }),
+    [post],
+  );
 
   // Sekme görünürlüğü
   useEffect(() => {

@@ -249,3 +249,13 @@ export {
   toggleFavoriteId,
 } from './lib/sticker-store';
 export type { StoredSticker, StickerKind, StickerCloudState } from './lib/sticker-store';
+export {
+  GAME_VOICE_BOOST,
+  gameVoiceLevel,
+  isGameFrameOpen,
+  isVoiceActive,
+  onGameFrameChange,
+  onVoiceActivity,
+  registerGameFrame,
+  reportVoiceActivity,
+} from './lib/game-audio';

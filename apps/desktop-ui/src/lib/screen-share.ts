@@ -1,3 +1,4 @@
+import { gameVoiceLevel } from '@dracord/ui';
 import {
   Track,
   VideoPresets,
@@ -67,7 +68,8 @@ export function setRemoteSourceVolume(
 }
 
 export function listenLevel(outputVolume: number, personalPct: number): number {
-  return softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100);
+  // oyun odasında konuşmacılar oyunun altında kalmasın
+  return gameVoiceLevel(softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100));
 }
 
 let screenShareQualityFloorEl: HTMLVideoElement | null = null;

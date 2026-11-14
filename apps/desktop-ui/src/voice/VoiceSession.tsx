@@ -19,6 +19,7 @@ import {
 } from 'livekit-client';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import type { VoiceParticipant } from '@dracord/ui';
+import { onGameFrameChange, reportVoiceActivity } from '@dracord/ui';
 import { API_URL } from '../config';
 import {
   loadVoiceAudioSettings,
@@ -693,6 +694,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         isBot,
       });
     }
+    reportVoiceActivity(list.some((p) => p.id !== room.localParticipant.identity && p.speaking));
     setPeers(list);
   }, [displayName, user?.avatarUrl, userId]);
 
@@ -1096,6 +1098,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setRemoteSourceVolume(p, Track.Source.Microphone, listenLevel(out, micPct));
     }
   }, []);
+
+  // oyun penceresi açılıp kapanınca konuşmacı seviyelerini yeniden uygula
+  useEffect(
+    () =>
+      onGameFrameChange(() => {
+        const room = roomRef.current;
+        if (room) applyMicVolumes(room);
+      }),
+    [applyMicVolumes],
+  );
 
   const refreshAudioDevices = useCallback(async (_force?: boolean) => {
     try {

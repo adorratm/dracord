@@ -1,6 +1,7 @@
 'use client';
 
 import type { VoiceParticipant } from '@dracord/ui';
+import { gameVoiceLevel, onGameFrameChange, reportVoiceActivity } from '@dracord/ui';
 import { SocketEvents } from '@dracord/sdk';
 import type { VoiceTakeoverPayload } from '@dracord/types';
 import {
@@ -403,7 +404,8 @@ function setRemoteSourceVolume(
 
 /** Kulaklık + kişi kaydırıcısı → soft-curve dinleme seviyesi */
 function listenLevel(outputVolume: number, personalPct: number): number {
-  return softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100);
+  // oyun odasında konuşmacılar oyunun altında kalmasın
+  return gameVoiceLevel(softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100));
 }
 
 /**
@@ -1068,16 +1070,29 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     if (room.localParticipant) {
       list.push(participantFromLocal(room.localParticipant, isMuted));
     }
+    let othersSpeaking = false;
     room.remoteParticipants.forEach((p) => {
       list.push(participantFromRemote(p));
+      if (p.isSpeaking) othersSpeaking = true;
       const out = audioSettingsRef.current.outputVolume;
       const micPct = participantVolumesRef.current.get(p.identity) ?? 100;
       const sharePct = screenShareVolumesRef.current.get(p.identity) ?? 100;
       setRemoteSourceVolume(p, Track.Source.Microphone, listenLevel(out, micPct));
       setRemoteSourceVolume(p, Track.Source.ScreenShareAudio, listenLevel(out, sharePct));
     });
+    reportVoiceActivity(othersSpeaking);
     setParticipants(list);
   }, []);
+
+  // oyun penceresi açılıp kapanınca ses seviyelerini yeniden uygula
+  useEffect(
+    () =>
+      onGameFrameChange(() => {
+        const room = roomRef.current;
+        if (room) refreshParticipants(room, mutedRef.current);
+      }),
+    [refreshParticipants],
+  );
 
   const clearScreenShareView = useCallback(() => {
     const el = screenVideoElRef.current;

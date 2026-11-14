@@ -5,6 +5,8 @@ import { GAME_EMBED, SocketEvents, type GameAppDto, type GameLaunchDto, type Gam
 import { colors } from '@dracord/app-theme';
 import { Icon } from './Icon';
 import { SafeWebView, type SafeWebViewHandle } from './SafeWebView';
+import { useVoiceSessionOptional } from './voice/VoiceSession';
+import { useAuth } from '../lib/auth';
 
 /** Mobil: ses kanalındaki harici oyun oturumları (web useGameSessions eşi) */
 export function useMobileGameSessions(client: DracordClient, guildId: string | null | undefined, channelId: string | null | undefined) {
@@ -148,6 +150,14 @@ export function MobileGameFrame({
   }, []);
 
   const participants = useCallback((s: GameSessionDto) => s.participantIds.map(resolveParticipant), [resolveParticipant]);
+
+  // odada biri konuşurken oyun sesini kıssın
+  const voice = useVoiceSessionOptional();
+  const myId = useAuth().user?.id;
+  const othersSpeaking = !!voice?.peers.some((p) => p.id !== myId && p.speaking);
+  useEffect(() => {
+    if (launched.current) post('AUDIO', { duck: othersSpeaking });
+  }, [othersSpeaking, post]);
 
   useEffect(() => {
     if (launched.current) post('SESSION_UPDATE', { session: { ...session, game: undefined }, participants: participants(session) });

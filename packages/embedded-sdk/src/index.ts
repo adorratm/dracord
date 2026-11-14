@@ -61,6 +61,7 @@ export class DracordEmbed {
     session: new Set<Listener<{ session: EmbedSession; participants: EmbedParticipant[] }>>(),
     token: new Set<Listener<{ token: string; expiresAt: string }>>(),
     visibility: new Set<Listener<boolean>>(),
+    audio: new Set<Listener<{ duck: boolean }>>(),
     error: new Set<Listener<{ code: string; message: string }>>(),
   };
   private readonly onMessage = (ev: MessageEvent) => this.handle(ev);
@@ -167,6 +168,9 @@ export class DracordEmbed {
       case 'VISIBILITY':
         this.listeners.visibility.forEach((f) => f(m.payload.visible));
         break;
+      case 'AUDIO':
+        this.listeners.audio.forEach((f) => f({ duck: !!m.payload?.duck }));
+        break;
       case 'ERROR':
         this.listeners.error.forEach((f) => f(m.payload));
         break;
@@ -220,6 +224,11 @@ export class DracordEmbed {
   onVisibilityChange(f: Listener<boolean>) {
     this.listeners.visibility.add(f);
     return () => this.listeners.visibility.delete(f);
+  }
+  /** Odada biri konuşurken `duck: true` gelir: oyun sesini kıs, konuşmalar duyulsun. */
+  onAudio(f: Listener<{ duck: boolean }>) {
+    this.listeners.audio.add(f);
+    return () => this.listeners.audio.delete(f);
   }
   onError(f: Listener<{ code: string; message: string }>) {
     this.listeners.error.add(f);
