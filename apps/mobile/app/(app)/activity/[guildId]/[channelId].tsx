@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { StatusBar, Text, View, useWindowDimensions } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { ChannelSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
@@ -16,7 +16,10 @@ export default function ActivityScreen() {
   const { client } = useAuth();
   const { setActiveChannelId } = useAppShell();
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
   const [channel, setChannel] = useState<ChannelSummary | null>(null);
+  /** a developer game in landscape gets the whole screen: no app header, no status bar */
+  const immersive = channel?.gameKind === 'app' && width > height;
 
   useEffect(() => {
     setActiveChannelId(channelId);
@@ -38,7 +41,8 @@ export default function ActivityScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ShellHeader title={channel.name} showChannels showMembers />
+      <StatusBar hidden={immersive} />
+      {immersive ? null : <ShellHeader title={channel.name} showChannels showMembers />}
       {channel.gameKind === 'app' ? (
         // developer-portal game: the web embed joins the channel and opens the game frame
         <GameWebEmbed guildId={guildId} channelId={channel.id} onActivityLeave={() => router.back()} />
