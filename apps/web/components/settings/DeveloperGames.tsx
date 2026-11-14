@@ -137,14 +137,20 @@ export function DeveloperGames() {
             <input className={input} value={editing.form.entryUrl ?? ''} onChange={(e) => set('entryUrl', e.target.value)} />
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1">
-              <span className="font-label-sm text-on-surface-variant">Simge URL (kare, 256px)</span>
-              <input className={input} value={editing.form.iconUrl ?? ''} onChange={(e) => set('iconUrl', e.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="font-label-sm text-on-surface-variant">Kapak URL (16:9)</span>
-              <input className={input} value={editing.form.coverUrl ?? ''} onChange={(e) => set('coverUrl', e.target.value)} />
-            </label>
+            <ImageField
+              label="Simge (kare, 256px)"
+              shape="square"
+              value={editing.form.iconUrl ?? ''}
+              onChange={(v) => set('iconUrl', v)}
+              upload={(f) => client.uploadFile(f, 'games').then((r) => r.url)}
+            />
+            <ImageField
+              label="Kapak (16:9)"
+              shape="wide"
+              value={editing.form.coverUrl ?? ''}
+              onChange={(v) => set('coverUrl', v)}
+              upload={(f) => client.uploadFile(f, 'games').then((r) => r.url)}
+            />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <label className="flex flex-col gap-1">
@@ -285,6 +291,83 @@ export function DeveloperGames() {
       <p className="font-body-sm text-outline">
         Test: oyunu bir ses kanalında başlat (kontrol çubuğu → 🎮). Taslak oyunlar yalnız sana ve testçilere görünür.
       </p>
+    </div>
+  );
+}
+
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Image URL field with an upload button: paste a link or pick a file from the device. */
+function ImageField(props: {
+  label: string;
+  shape: 'square' | 'wide';
+  value: string;
+  onChange: (url: string) => void;
+  upload: (file: File) => Promise<string>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setErr(null);
+    if (!file.type.startsWith('image/')) {
+      setErr('Yalnız görsel dosyası seçebilirsin.');
+      return;
+    }
+    if (file.size > IMAGE_MAX_BYTES) {
+      setErr('Görsel en çok 5 MB olabilir.');
+      return;
+    }
+    setBusy(true);
+    try {
+      props.onChange(await props.upload(file));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Yükleme başarısız');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const box = props.shape === 'square' ? 'h-16 w-16' : 'h-16 w-28';
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-label-sm text-on-surface-variant">{props.label}</span>
+      <div className="flex items-center gap-2">
+        <div className={`${box} shrink-0 overflow-hidden rounded-lg bg-surface-container-highest grid place-items-center`}>
+          {props.value ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={props.value} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="material-symbols-outlined text-on-surface-variant" aria-hidden>
+              image
+            </span>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <label
+            className={`self-start h-8 px-3 rounded-lg font-label-sm grid place-items-center cursor-pointer bg-surface-container-highest text-on-surface hover:bg-surface-container ${busy ? 'pointer-events-none opacity-60' : ''}`}
+          >
+            {busy ? 'Yükleniyor…' : props.value ? 'Değiştir' : 'Görsel yükle'}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="sr-only"
+              disabled={busy}
+              onChange={(e) => {
+                void pick(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <input
+            className={input}
+            placeholder="veya https:// bağlantısı yapıştır"
+            aria-label={`${props.label} bağlantısı`}
+            value={props.value}
+            onChange={(e) => props.onChange(e.target.value)}
+          />
+        </div>
+      </div>
+      {err && <p className="font-body-sm text-error">{err}</p>}
     </div>
   );
 }
