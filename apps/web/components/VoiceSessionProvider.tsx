@@ -691,6 +691,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const screenShareVolumesRef = useRef<Map<string, number>>(new Map());
   const restoringRef = useRef(false);
   const intentionalLeaveRef = useRef(false);
+  /** Son "tüm guild seslerinden çık" (channelId:null) gönderimimiz — kanal değiştirirken
+   *  sunucunun yeni kanaldan da çıkardığı yankıyı "atıldın" sanmamak için. */
+  const selfLeaveAllAtRef = useRef(0);
+  const emitLeaveAll = (guildId: string) => {
+    selfLeaveAllAtRef.current = Date.now();
+    client.emitVoiceState({ guildId, channelId: null });
+  };
   /** Liderlik başka sekmeye geçerken presence’ı bırakma */
   const transferringLeadershipRef = useRef(false);
   /** getDisplayMedia picker / paylaşım kurulumu sırasında liderlik ve devicechange’i kilitle */
@@ -854,7 +861,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         setIsVoiceLeader(true);
         if (wasLeader && ch) {
           void client.leaveVoiceState(ch).catch(() => undefined);
-          if (g) client.emitVoiceState({ guildId: g, channelId: null });
+          if (g) emitLeaveAll(g);
         }
       }
     });
@@ -1805,12 +1812,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             isRnEmbed ||
             !saved ||
             saved.channelId !== channelId);
+        // Başka kanala geçiş: yalnız eski kanaldan çık. channelId:null sunucuda guild'deki
+        // TÜM ses kanallarından çıkarır — yeni girilen kanal da gider ve "çıkarıldın" görünür.
+        const switching = !intentional && !!saved && saved.channelId !== channelId;
         try {
           if (shouldLeavePresence) {
             await client.leaveVoiceState(channelId);
-            if (guildId) {
-              client.emitVoiceState({ guildId, channelId: null });
-            }
+            if (guildId && !switching) emitLeaveAll(guildId);
           }
         } catch {
           // ignore
@@ -2028,9 +2036,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           await client.leaveVoiceState(channelId);
-          if (guildId) {
-            client.emitVoiceState({ guildId, channelId: null });
-          }
+          if (guildId) emitLeaveAll(guildId);
         } catch {
           // ignore
         }
@@ -2071,6 +2077,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (!channelIdRef.current) return;
+      // Kendi "hepsinden çık" isteğimizin yankısı (kanal geçişi) — atılma değil
+      if (Date.now() - selfLeaveAllAtRef.current < 4000) return;
       leave();
       setError('Bu odadan çıkarıldın veya girişin engellendi.');
     };
