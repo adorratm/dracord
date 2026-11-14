@@ -110,7 +110,13 @@ if [[ -d "$TTEN_TPL" ]]; then cp "$RENDERED" "$TTEN_TPL/$CONF_NAME"; fi
 rm -f "$PREV_BACKUP" "$RENDERED"
 
 echo "==> Smoke"
-code="$(curl -sS -o /tmp/coombie-smoke.body -w '%{http_code}' -H "Host: ${HOST_NAME}" http://127.0.0.1/health || echo 000)"
+# nginx -s reload is asynchronous: old workers answer for a moment, so retry briefly
+code=000
+for _ in $(seq 1 10); do
+  code="$(curl -sS -o /tmp/coombie-smoke.body -w '%{http_code}' -H "Host: ${HOST_NAME}" http://127.0.0.1/health || echo 000)"
+  grep -qi 'No vhost for this host' /tmp/coombie-smoke.body 2>/dev/null || break
+  sleep 1
+done
 echo "  Host ${HOST_NAME} via nginx :80 → HTTP ${code}"
 if grep -qi 'No vhost for this host' /tmp/coombie-smoke.body 2>/dev/null; then
   echo "!! nginx still answers 'No vhost' for ${HOST_NAME}" >&2
