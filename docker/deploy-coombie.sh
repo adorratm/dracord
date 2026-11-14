@@ -9,7 +9,7 @@
 # SAFETY (shared host, 5 sites): touches only the coombie-game container and coombie.conf.
 # Never edits dracord.conf or another site's vhost. A failed nginx -t restores the previous file.
 #
-# Optional server config: /opt/coombie/.env (DRACORD_GAME_SECRET=... for sign-in from Dracord).
+# Dracord sign-in: COOMBIE_GAME_SECRET (from the workflow) is written to /opt/coombie/.env.
 # Usage: bash docker/deploy-coombie.sh            (from the Dracord checkout)
 #        COOMBIE_FORCE=1 bash docker/deploy-coombie.sh   (restart even if unchanged)
 set -euo pipefail
@@ -24,6 +24,28 @@ NGINX_CTN="${DRACORD_NGINX_CONTAINER:-ttengamesstudio-nginx}"
 TTEN_TPL="${TTEN_TEMPLATES:-/opt/ttengamesstudio/docker/nginx/templates}"
 CONF_NAME="coombie.conf"
 HOST_NAME="coombie.dracord.com.tr"
+
+# Dracord sign-in key: comes from the workflow (repo secret COOMBIE_GAME_SECRET), lands in
+# the env file (mode 600) and is never printed. A changed key restarts the container.
+if [[ -n "${COOMBIE_GAME_SECRET:-}" ]]; then
+  if ! mkdir -p "$(dirname "$ENV_FILE")" 2>/dev/null || ! touch "$ENV_FILE" 2>/dev/null; then
+    ENV_FILE="$HOME/.coombie.env"
+  fi
+  WANT="DRACORD_GAME_SECRET=${COOMBIE_GAME_SECRET}"
+  if [[ "$(cat "$ENV_FILE" 2>/dev/null)" != "$WANT" ]]; then
+    (umask 077 && printf '%s\n' "$WANT" >"$ENV_FILE")
+    chmod 600 "$ENV_FILE"
+    COOMBIE_FORCE=1
+    echo "==> Dracord game key updated in $ENV_FILE"
+  fi
+elif [[ ! -f "$ENV_FILE" && -f "$HOME/.coombie.env" ]]; then
+  ENV_FILE="$HOME/.coombie.env"
+fi
+if [[ -f "$ENV_FILE" ]] && grep -q '^DRACORD_GAME_SECRET=.' "$ENV_FILE"; then
+  echo "  OK  Dracord sign-in enabled"
+else
+  echo "  NOTE  no Dracord game key: sign-in from Dracord is off. Add repo secret COOMBIE_GAME_SECRET."
+fi
 
 echo "==> COOMBIE image $IMAGE"
 docker pull "$IMAGE" >/dev/null

@@ -8,7 +8,8 @@ name: Deploy COOMBIE
 # a scheduled run cancel a pending Dracord deploy. It only touches coombie-game and coombie.conf.
 #
 # Secrets: the same HETZNER_* and GHCR_PULL_TOKEN as "Deploy production".
-# Optional on the server: /opt/coombie/.env with DRACORD_GAME_SECRET=... (Dracord sign-in).
+# Dracord sign-in: repo secret COOMBIE_GAME_SECRET (the game key from the developer portal).
+# The script writes it to /opt/coombie/.env on the server; it never reaches the game client.
 
 on:
   push:
@@ -64,7 +65,7 @@ jobs:
           command_timeout: 8m
           script_stop: true
           timeout: 60s
-          envs: DRACORD_DEPLOY_PATH,COOMBIE_FORCE
+          envs: DRACORD_DEPLOY_PATH,COOMBIE_FORCE,COOMBIE_GAME_SECRET
           script: |
             set -euo pipefail
             DEPLOY_PATH="${DRACORD_DEPLOY_PATH:-/opt/dracord}"
@@ -82,6 +83,8 @@ jobs:
         env:
           DRACORD_DEPLOY_PATH: ${{ secrets.DRACORD_DEPLOY_PATH }}
           COOMBIE_FORCE: ${{ inputs.force && '1' || '0' }}
+          # game key from Dracord's developer portal (Settings > Advanced > My games); server only
+          COOMBIE_GAME_SECRET: ${{ secrets.COOMBIE_GAME_SECRET }}
 
       - name: Public smoke
         continue-on-error: true
