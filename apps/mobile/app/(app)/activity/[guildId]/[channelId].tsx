@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type { ChannelSummary } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../../../lib/auth';
 import { ActivityRoom } from '../../../../components/ActivityRoom';
+import { GameWebEmbed } from '../../../../components/GameWebEmbed';
 import { ShellHeader, useAppShell } from '../../../../components/shell/AppShell';
 
 export default function ActivityScreen() {
@@ -14,6 +15,7 @@ export default function ActivityScreen() {
   }>();
   const { client } = useAuth();
   const { setActiveChannelId } = useAppShell();
+  const router = useRouter();
   const [channel, setChannel] = useState<ChannelSummary | null>(null);
 
   useEffect(() => {
@@ -37,7 +39,12 @@ export default function ActivityScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
       <ShellHeader title={channel.name} showChannels showMembers />
-      <ActivityRoom guildId={guildId} channel={channel} />
+      {channel.gameKind === 'app' ? (
+        // developer-portal game: the web embed joins the channel and opens the game frame
+        <GameWebEmbed guildId={guildId} channelId={channel.id} onActivityLeave={() => router.back()} />
+      ) : (
+        <ActivityRoom guildId={guildId} channel={channel} />
+      )}
     </View>
   );
 }

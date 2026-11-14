@@ -3,6 +3,7 @@ import type {
   CategoryDto,
   ChannelSummary,
   ClientSettings,
+  GameAppDto,
   GameChannelKind,
   GuildSummary,
   PublicUser,
@@ -42,6 +43,7 @@ import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from '../views/ChatPanel';
 import { VoicePanel } from '../views/VoicePanel';
 import { ActivityPanel } from '../views/ActivityPanel';
+import { AppGamePanel } from '../views/AppGamePanel';
 import { ActivitiesPicker } from '../views/ActivitiesPicker';
 import { DmPanel } from '../views/DmPanel';
 import { DmSidebar } from '../views/DmSidebar';
@@ -133,6 +135,8 @@ export function Shell() {
   >(null);
   const [channelNameDraft, setChannelNameDraft] = useState('');
   const [channelGameKind, setChannelGameKind] = useState<GameChannelKind>('billiards');
+  const [channelGameAppId, setChannelGameAppId] = useState<string | null>(null);
+  const [gameCatalog, setGameCatalog] = useState<Array<GameAppDto & { testMode: boolean }> | null>(null);
   const [categoryModal, setCategoryModal] = useState<
     null | { mode: 'create' } | { mode: 'edit'; category: CategoryDto }
   >(null);
@@ -1603,7 +1607,10 @@ export function Shell() {
               }}
             />
           )}
-          {view.kind === 'channel' && isActivity && activeChannel && (
+          {view.kind === 'channel' && isActivity && activeChannel && activeChannel.gameKind === 'app' && (
+            <AppGamePanel guildId={view.guildId} channel={activeChannel} members={members} />
+          )}
+          {view.kind === 'channel' && isActivity && activeChannel && activeChannel.gameKind !== 'app' && (
             <ActivityPanel
               guildId={view.guildId}
               channel={activeChannel}
@@ -1907,17 +1914,52 @@ export function Shell() {
             {channelModal.type === 'GAME' ? (
               <select
                 aria-label="Oyun türü"
-                value={channelGameKind}
-                onChange={(e) => setChannelGameKind(e.target.value as GameChannelKind)}
+                value={channelGameKind === 'app' ? `app:${channelGameAppId ?? ''}` : channelGameKind}
+                onFocus={() => {
+                  if (!gameCatalog) void client.getGameCatalog().then(setGameCatalog).catch(() => setGameCatalog([]));
+                }}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith('app:')) {
+                    const id = v.slice(4);
+                    setChannelGameKind('app');
+                    setChannelGameAppId(id);
+                    const g = gameCatalog?.find((x) => x.id === id);
+                    if (g && !channelNameDraft.trim()) setChannelNameDraft(g.name);
+                  } else {
+                    setChannelGameKind(v as GameChannelKind);
+                    setChannelGameAppId(null);
+                  }
+                }}
                 className="w-full h-10 px-3 rounded-lg bg-surface-container-highest outline-none"
               >
-                <option value="billiards">Bilardo</option>
-                <option value="okey">Okey</option>
-                <option value="bowling">Bowling</option>
-                <option value="tavla">Tavla</option>
-                <option value="blackjack">Blackjack</option>
-                <option value="trivia">Trivia</option>
-                <option value="words">Kelime</option>
+                <optgroup label="Dracord oyunları">
+                  <option value="billiards">Bilardo</option>
+                  <option value="okey">Okey</option>
+                  <option value="bowling">Bowling</option>
+                  <option value="tavla">Tavla</option>
+                  <option value="blackjack">Blackjack</option>
+                  <option value="trivia">Trivia</option>
+                  <option value="words">Kelime</option>
+                </optgroup>
+                <optgroup label="Geliştirici oyunları">
+                  {gameCatalog === null ? (
+                    <option value="__loading" disabled>
+                      Yükleniyor…
+                    </option>
+                  ) : gameCatalog.length === 0 ? (
+                    <option value="__none" disabled>
+                      Yayında oyun yok
+                    </option>
+                  ) : (
+                    gameCatalog.map((g) => (
+                      <option key={g.id} value={`app:${g.id}`}>
+                        {g.name}
+                        {g.testMode ? ' (test)' : ''}
+                      </option>
+                    ))
+                  )}
+                </optgroup>
               </select>
             ) : null}
           </div>
@@ -1939,6 +1981,8 @@ export function Shell() {
                     channelModal.type === 'GAME'
                       ? channelGameKind || 'billiards'
                       : null,
+                  gameAppId:
+                    channelModal.type === 'GAME' && channelGameKind === 'app' ? channelGameAppId : null,
                 })
                 .then(() => {
                   setChannelModal(null);

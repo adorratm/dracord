@@ -7,7 +7,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { CategoryDto, ChannelSummary, GameChannelKind } from '@dracord/types';
+import type { CategoryDto, ChannelSummary, GameAppDto, GameChannelKind } from '@dracord/types';
+import { useAuth } from '../lib/auth';
 import { colors } from '@dracord/app-theme';
 import { inputStyle, primaryBtn, primaryBtnText } from '../lib/ui';
 import { Icon } from './Icon';
@@ -50,8 +51,12 @@ export function CreateChannelSheet({
     type: ChannelTypeOpt;
     categoryId: string | null;
     gameKind: GameChannelKind | null;
+    gameAppId?: string | null;
   }) => Promise<void>;
 }) {
+  const { client } = useAuth();
+  const [gameAppId, setGameAppId] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<Array<GameAppDto & { testMode: boolean }> | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<ChannelTypeOpt>(initialType);
   const [gameKind, setGameKind] = useState<GameChannelKind>('billiards');
@@ -64,10 +69,16 @@ export function CreateChannelSheet({
     setName('');
     setType(initialType);
     setGameKind('billiards');
+    setGameAppId(null);
     setCategoryId(initialCategoryId);
     setError(null);
     setBusy(false);
   }, [open, initialType, initialCategoryId]);
+
+  useEffect(() => {
+    if (!open || type !== 'GAME' || catalog) return;
+    void client.getGameCatalog().then(setCatalog).catch(() => setCatalog([]));
+  }, [open, type, catalog, client]);
 
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
@@ -150,7 +161,10 @@ export function CreateChannelSheet({
                   {GAME_KINDS.map((g) => (
                     <Pressable
                       key={g.id}
-                      onPress={() => setGameKind(g.id)}
+                      onPress={() => {
+                        setGameKind(g.id);
+                        setGameAppId(null);
+                      }}
                       style={{
                         paddingHorizontal: 12,
                         paddingVertical: 8,
@@ -170,6 +184,32 @@ export function CreateChannelSheet({
                       </Text>
                     </Pressable>
                   ))}
+                  {(catalog ?? []).map((g) => {
+                    const on = gameKind === 'app' && gameAppId === g.id;
+                    return (
+                      <Pressable
+                        key={g.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        onPress={() => {
+                          setGameKind('app');
+                          setGameAppId(g.id);
+                          if (!name.trim()) setName(g.name);
+                        }}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                          backgroundColor: on ? colors.primary : colors.surfaceHigh,
+                        }}
+                      >
+                        <Text style={{ color: on ? colors.primaryOn : colors.text, fontWeight: '700', fontSize: 13 }}>
+                          {g.name}
+                          {g.testMode ? ' (test)' : ''}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </>
             ) : null}
@@ -231,6 +271,7 @@ export function CreateChannelSheet({
                   type,
                   categoryId,
                   gameKind: type === 'GAME' ? (gameKind || 'billiards') : null,
+                  gameAppId: type === 'GAME' && gameKind === 'app' ? gameAppId : null,
                 })
                   .then(onClose)
                   .catch((e) =>

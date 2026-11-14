@@ -17,6 +17,7 @@ import { WatchPartyRoom } from '@/components/activities/games/WatchPartyRoom';
 import { GameAudio } from '@/lib/game-audio';
 import { ActivityStageShell } from '@/components/activities/ActivityStageShell';
 import { trackGameJoin } from '@/lib/analytics';
+import { AppGameRoom } from '@dracord/ui';
 import type { ReactNode } from 'react';
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -50,8 +51,82 @@ function errMsg(e: unknown, fallback: string) {
   return e.message;
 }
 
+type ActivityChannelViewProps = Parameters<typeof BuiltinActivityChannelView>[0];
+
+/** GAME / WATCH_PARTY kanalları: yerleşik oyunlar ya da geliştirici portalındaki bir oyun ('app') */
+export function ActivityChannelView(props: ActivityChannelViewProps) {
+  return props.channel.type === 'GAME' && props.channel.gameKind === 'app' ? (
+    <AppGameChannelView {...props} />
+  ) : (
+    <BuiltinActivityChannelView {...props} />
+  );
+}
+
+/** GAME kanalı (gameKind 'app'): kanala girince sesine katıl, oyunu kanalın kendisinde aç */
+function AppGameChannelView({ guildId, channel, className, onOpenChannels, embedMode = false }: ActivityChannelViewProps) {
+  const { client, user } = useAuth();
+  const voice = useVoiceSession();
+  const channelId = channel.id;
+  const [members, setMembers] = useState<Record<string, { name: string; avatarUrl: string | null }>>({});
+
+  useEffect(() => {
+    if (!user) return;
+    if (voice.voiceChannelId === channelId && voice.voiceGuildId === guildId) return;
+    void voice.join(channelId, guildId).catch(() => undefined);
+    return () => {
+      if (embedMode && voice.voiceChannelId === channelId) voice.leave();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sadece kanal değişiminde
+  }, [channelId, guildId, user?.id, embedMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .getGuildMembers(guildId)
+      .then((list) => {
+        if (cancelled) return;
+        const map: Record<string, { name: string; avatarUrl: string | null }> = {};
+        for (const m of list) map[m.id] = { name: m.displayName || m.username || m.id, avatarUrl: m.avatarUrl ?? null };
+        setMembers(map);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client, guildId]);
+
+  const inVoice = voice.voiceChannelId === channelId && voice.voiceGuildId === guildId;
+  return (
+    <div className={`flex min-h-0 flex-col ${className ?? ''}`}>
+      {!embedMode && (
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-surface-container-high px-space-md">
+          {onOpenChannels ? (
+            <button type="button" className="md:hidden material-symbols-outlined text-on-surface-variant" aria-label="Kanallar" onClick={onOpenChannels}>
+              menu
+            </button>
+          ) : null}
+          <span className="material-symbols-outlined text-[20px] text-on-surface-variant" aria-hidden>
+            sports_esports
+          </span>
+          <span className="truncate font-label-lg text-on-surface">{channel.name}</span>
+        </div>
+      )}
+      <AppGameRoom
+        client={client}
+        guildId={guildId}
+        channel={channel}
+        inVoice={inVoice}
+        platform={embedMode ? 'mobile' : 'web'}
+        apiBase={client.apiBaseUrl}
+        resolveParticipant={(id) => ({ id, displayName: members[id]?.name ?? 'Oyuncu', avatarUrl: members[id]?.avatarUrl ?? null })}
+        className="flex-1"
+      />
+    </div>
+  );
+}
+
 /** GAME / WATCH_PARTY kanalları için tam yükseklikte aktivite görünümü */
-export function ActivityChannelView({
+function BuiltinActivityChannelView({
   guildId,
   channel,
   className,

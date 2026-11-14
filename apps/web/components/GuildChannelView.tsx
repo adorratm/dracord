@@ -44,7 +44,7 @@ import {
   type MemberListGroup,
   type MemberListAction,
 } from '@dracord/ui';
-import type { RoleDto } from '@dracord/types';
+import type { GameAppDto, GameChannelKind, RoleDto } from '@dracord/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ActivitiesPicker } from '@/components/ActivitiesPicker';
@@ -265,9 +265,10 @@ export function GuildChannelView({
   const [channelType, setChannelType] = useState<
     'TEXT' | 'VOICE' | 'FORUM' | 'GAME' | 'WATCH_PARTY'
   >('TEXT');
-  const [gameKind, setGameKind] = useState<
-    'billiards' | 'okey' | 'bowling' | 'tavla' | 'blackjack' | 'trivia' | 'words'
-  >('billiards');
+  const [gameKind, setGameKind] = useState<GameChannelKind>('billiards');
+  /** gameKind 'app': developer-portal game shown in the channel */
+  const [gameAppId, setGameAppId] = useState<string | null>(null);
+  const [gameCatalog, setGameCatalog] = useState<Array<GameAppDto & { testMode: boolean }> | null>(null);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [activitiesPickerOpen, setActivitiesPickerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
@@ -1318,6 +1319,7 @@ export function GuildChannelView({
               : 'TEXT',
     );
     if (ch.gameKind) setGameKind(ch.gameKind);
+    setGameAppId(ch.gameAppId ?? null);
     setChannelLocked(Boolean(ch.locked));
     setChannelPasswordDraft('');
     setChannelDeniedIds(ch.deniedUserIds ?? []);
@@ -1581,6 +1583,8 @@ export function GuildChannelView({
   const joinActivityRoom = useCallback(
     async (ch: ChannelSummary) => {
       if (ch.type !== 'GAME' && ch.type !== 'WATCH_PARTY') return;
+      // developer-portal games run their own session (AppGameRoom), not a built-in activity
+      if (ch.gameKind === 'app') return;
       try {
         let s = await client.getChannelActivity(guildId, ch.id);
         if (!s) s = await client.startActivity({ guildId, channelId: ch.id });
@@ -2478,6 +2482,7 @@ export function GuildChannelView({
           type: channelType,
           categoryId: channelModal.categoryId,
           gameKind: channelType === 'GAME' ? gameKind || 'billiards' : null,
+          gameAppId: channelType === 'GAME' && gameKind === 'app' ? gameAppId : null,
         });
         if (channelType === 'VOICE' && (channelLocked || channelPasswordDraft.trim())) {
           await client.updateChannel(created.id, {
@@ -4284,28 +4289,52 @@ export function GuildChannelView({
               <label className="flex flex-col gap-space-xs">
                 <span className="font-label-sm text-on-surface-variant">Oyun türü</span>
                 <select
-                  value={gameKind}
-                  onChange={(e) =>
-                    setGameKind(
-                      e.target.value as
-                        | 'billiards'
-                        | 'okey'
-                        | 'bowling'
-                        | 'tavla'
-                        | 'blackjack'
-                        | 'trivia'
-                        | 'words',
-                    )
-                  }
+                  value={gameKind === 'app' ? `app:${gameAppId ?? ''}` : gameKind}
+                  onFocus={() => {
+                    if (!gameCatalog) void client.getGameCatalog().then(setGameCatalog).catch(() => setGameCatalog([]));
+                  }}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v.startsWith('app:')) {
+                      const id = v.slice(4);
+                      setGameKind('app');
+                      setGameAppId(id);
+                      const g = gameCatalog?.find((x) => x.id === id);
+                      if (g && !channelName.trim()) setChannelName(g.name);
+                    } else {
+                      setGameKind(v as GameChannelKind);
+                      setGameAppId(null);
+                    }
+                  }}
                   className="h-10 px-space-sm rounded-lg bg-surface-container-highest outline-none"
                 >
-                  <option value="billiards">Bilardo</option>
-                  <option value="okey">Okey</option>
-                  <option value="bowling">Bowling</option>
-                  <option value="tavla">Tavla</option>
-                  <option value="blackjack">21 Blackjack</option>
-                  <option value="trivia">Trivia</option>
-                  <option value="words">Kelime</option>
+                  <optgroup label="Dracord oyunları">
+                    <option value="billiards">Bilardo</option>
+                    <option value="okey">Okey</option>
+                    <option value="bowling">Bowling</option>
+                    <option value="tavla">Tavla</option>
+                    <option value="blackjack">21 Blackjack</option>
+                    <option value="trivia">Trivia</option>
+                    <option value="words">Kelime</option>
+                  </optgroup>
+                  <optgroup label="Geliştirici oyunları">
+                    {gameCatalog === null ? (
+                      <option value="__loading" disabled>
+                        Yükleniyor…
+                      </option>
+                    ) : gameCatalog.length === 0 ? (
+                      <option value="__none" disabled>
+                        Yayında oyun yok
+                      </option>
+                    ) : (
+                      gameCatalog.map((g) => (
+                        <option key={g.id} value={`app:${g.id}`}>
+                          {g.name}
+                          {g.testMode ? ' (test)' : ''}
+                        </option>
+                      ))
+                    )}
+                  </optgroup>
                 </select>
               </label>
             )}

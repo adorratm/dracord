@@ -1767,6 +1767,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
             type: data.type,
             categoryId: data.categoryId,
             gameKind: data.gameKind,
+            gameAppId: data.gameAppId ?? null,
           });
           const [chs, cats] = await Promise.all([
             client.getGuildChannels(guildId),

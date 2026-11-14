@@ -195,7 +195,7 @@ export function ActivityPanel({
 
   const kind: ActivityKind =
     session?.kind ??
-    (channel.type === 'WATCH_PARTY' ? 'watch_party' : channel.gameKind) ??
+    (channel.type === 'WATCH_PARTY' ? 'watch_party' : channel.gameKind === 'app' ? null : channel.gameKind) ??
     'blackjack';
 
   const isPlayer = Boolean(me && session?.playerIds.includes(me));

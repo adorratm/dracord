@@ -66,6 +66,7 @@ export { VoiceMessagePlayer } from './components/VoiceMessagePlayer';
 export { SoundboardButton } from './components/SoundboardButton';
 export { CatchupButton } from './components/CatchupButton';
 export { GameFrame } from './components/GameFrame';
+export { AppGameRoom } from './components/AppGameRoom';
 export { GamesLauncherButton } from './components/GamesLauncherButton';
 export { useGameSessions } from './lib/use-game-sessions';
 export type { GamesClient } from './lib/use-game-sessions';

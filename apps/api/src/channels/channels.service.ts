@@ -19,6 +19,7 @@ import {
 import { GuildPermissions } from '@/common/permissions';
 import { ActivitySession } from '@/database/entities/activity-session.entity';
 import { Channel } from '@/database/entities/channel.entity';
+import { GameApp } from '@/database/entities/game-app.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { GuildMember } from '@/database/entities/guild-member.entity';
@@ -136,6 +137,21 @@ export class ChannelsService {
     return this.toSummary(channel, { voiceMembers, includeDenied: canManage });
   }
 
+  /**
+   * GAME kanalına bağlanacak geliştirici oyunu: yayındaki oyunlar herkes için, onaysız oyunlar
+   * yalnız sahibi ve test edenleri için (kendi sunucularında deneyebilsinler).
+   */
+  private async resolveChannelGameApp(gameAppId: string | null | undefined, userId: string): Promise<string> {
+    const id = typeof gameAppId === 'string' ? gameAppId.trim() : '';
+    if (!id) throw new BadRequestException('Oyun seçilmedi');
+    const game = await this.em.findOne(GameApp, { where: { id } });
+    if (!game) throw new BadRequestException('Oyun bulunamadı');
+    if (game.status === 'approved') return game.id;
+    const tester = game.ownerUserId === userId || (game.testerUserIds ?? []).includes(userId);
+    if (tester && game.status !== 'suspended') return game.id;
+    throw new BadRequestException('Bu oyun henüz yayında değil');
+  }
+
   async createChannel(
     guildId: string,
     userId: string,
@@ -145,6 +161,7 @@ export class ChannelsService {
       categoryId?: string | null;
       topic?: string | null;
       gameKind?: string | null;
+      gameAppId?: string | null;
     },
   ): Promise<ChannelSummary> {
     await this.guilds.requirePermission(guildId, userId, 'MANAGE_CHANNELS');
@@ -178,6 +195,10 @@ export class ChannelsService {
       }
       gameKind = normalized;
     }
+    let gameAppId: string | null = null;
+    if (gameKind === 'app') {
+      gameAppId = await this.resolveChannelGameApp(data.gameAppId, userId);
+    }
 
     const last = await this.em.findOne(Channel, {
       where: { guildId },
@@ -191,6 +212,7 @@ export class ChannelsService {
         name,
         type: channelType,
         gameKind,
+        gameAppId,
         categoryId: data.categoryId ?? null,
         topic: data.topic ?? null,
         position: maxPos + 1,
@@ -470,6 +492,7 @@ export class ChannelsService {
         channel.type === ChannelType.GAME
           ? ((channel.gameKind as ChannelSummary['gameKind']) ?? null)
           : undefined,
+      gameAppId: channel.type === ChannelType.GAME ? (channel.gameAppId ?? null) : undefined,
       categoryId: channel.categoryId,
       position: channel.position,
       topic: channel.topic ?? null,

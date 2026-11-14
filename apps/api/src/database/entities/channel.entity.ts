@@ -35,6 +35,10 @@ export class Channel extends CuidEntity {
   @Column({ type: 'varchar', nullable: true })
   gameKind!: string | null;
 
+  /** gameKind 'app': geliştirici portalındaki oyun (game_apps.id) */
+  @Column({ type: 'varchar', nullable: true })
+  gameAppId!: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   categoryId!: string | null;
 

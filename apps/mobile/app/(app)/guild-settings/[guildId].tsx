@@ -1038,6 +1038,7 @@ export default function GuildSettingsScreen() {
             type: data.type,
             categoryId: data.categoryId,
             gameKind: data.gameKind,
+            gameAppId: data.gameAppId ?? null,
           });
           reloadChannels();
           setMsg('Kanal oluşturuldu');

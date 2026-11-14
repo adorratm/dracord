@@ -40,4 +40,10 @@ export class CreateChannelDto {
   @ValidateIf((_, v) => v != null && v !== '')
   @IsIn([...GAME_CHANNEL_KINDS])
   gameKind?: GameChannelKind | null;
+
+  /** gameKind 'app' için: geliştirici portalındaki oyunun kimliği */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  gameAppId?: string | null;
 }

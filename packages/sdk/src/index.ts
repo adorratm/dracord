@@ -711,6 +711,8 @@ export class DracordClient {
       categoryId?: string | null;
       topic?: string | null;
       gameKind?: GameChannelKind | null;
+      /** gameKind 'app' için zorunlu */
+      gameAppId?: string | null;
     },
   ): Promise<ChannelSummary> {
     return this.request(`/guilds/${guildId}/channels`, {

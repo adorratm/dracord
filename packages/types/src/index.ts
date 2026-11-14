@@ -16,7 +16,9 @@ export type GameChannelKind =
   | 'tavla'
   | 'blackjack'
   | 'trivia'
-  | 'words';
+  | 'words'
+  /** geliştirici portalındaki bir oyun (gameAppId) */
+  | 'app';
 
 /** API + istemciler için tek kaynak — GAME createChannel allowlist */
 export const GAME_CHANNEL_KINDS: readonly GameChannelKind[] = [
@@ -27,6 +29,7 @@ export const GAME_CHANNEL_KINDS: readonly GameChannelKind[] = [
   'blackjack',
   'trivia',
   'words',
+  'app',
 ] as const;
 
 export interface SocialLinks {
@@ -454,6 +457,8 @@ export interface ChannelSummary {
   type: ChannelType;
   /** GAME kanalları için */
   gameKind?: GameChannelKind | null;
+  /** gameKind 'app' ise: geliştirici portalındaki oyunun kimliği */
+  gameAppId?: string | null;
   categoryId: string | null;
   position: number;
   topic?: string | null;
