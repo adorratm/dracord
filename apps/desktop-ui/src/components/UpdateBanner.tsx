@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 type UpdaterStatus = {
   status:
@@ -18,7 +19,18 @@ type UpdaterStatus = {
 /**
  * Electron auto-updater banner — mevcut / yeni sürüm + onay.
  */
+/**
+ * Rendered into <body>: inside the shell it shared a stacking context with the chat
+ * composer and ended up under it, so "Güncelle ve yeniden başlat" could not be clicked.
+ * It also sits above the composer instead of on top of it.
+ */
 export function UpdateBanner() {
+  const node = useUpdateBannerNode();
+  if (!node || typeof document === 'undefined') return null;
+  return createPortal(node, document.body);
+}
+
+function useUpdateBannerNode(): ReactNode {
   const [status, setStatus] = useState<UpdaterStatus | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const desktop = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
@@ -41,7 +53,7 @@ export function UpdateBanner() {
 
   if (status.status === 'error') {
     return (
-      <div className="fixed bottom-4 left-1/2 z-[100] w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-error/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-error/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-sm text-error">Güncelleme hatası: {status.message ?? 'bilinmiyor'}</p>
         <button
           type="button"
@@ -57,7 +69,7 @@ export function UpdateBanner() {
   if (status.status === 'downloading') {
     const pct = Math.round(status.percent ?? 0);
     return (
-      <div className="fixed bottom-4 left-1/2 z-[100] w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-sm text-on-surface">
           Güncelleme indiriliyor… {pct}%
         </p>
@@ -73,7 +85,7 @@ export function UpdateBanner() {
 
   if (status.status === 'available') {
     return (
-      <div className="fixed bottom-4 left-1/2 z-[100] w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-md text-on-surface">
           Yeni sürüm v{next} mevcut
         </p>
@@ -102,7 +114,7 @@ export function UpdateBanner() {
 
   if (status.status === 'downloaded') {
     return (
-      <div className="fixed bottom-4 left-1/2 z-[100] w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-md text-on-surface">
           v{next} indirildi
         </p>
