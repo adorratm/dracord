@@ -2671,6 +2671,8 @@ function DesktopUpdateControls() {
   const [version, setVersion] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  /** an update is downloaded and waiting: offer the install here too */
+  const [ready, setReady] = useState(false);
   const versionRef = useRef(version);
   const userCheckRef = useRef(false);
   const desktop = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
@@ -2745,6 +2747,7 @@ function DesktopUpdateControls() {
         userCheckRef.current = false;
         setChecking(false);
         setNote(`v${next} indirildi — yeniden başlatarak kur.`);
+        setReady(true);
         return;
       }
       if (payload.status === 'error') {
@@ -2760,6 +2763,15 @@ function DesktopUpdateControls() {
 
   return (
     <div className="px-space-md py-space-md space-y-2 border-t border-surface-container-high">
+      {ready ? (
+        <button
+          type="button"
+          className="h-8 rounded-lg bg-primary-container px-3 font-label-sm text-on-primary-container"
+          onClick={() => void desktop.installUpdate?.()}
+        >
+          Güncelle ve yeniden başlat
+        </button>
+      ) : null}
       <p className="font-body-sm text-on-surface">
         Uygulama sürümü:{' '}
         <span className="font-label-sm tabular-nums text-outline">

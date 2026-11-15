@@ -22,7 +22,7 @@ type UpdaterStatus = {
 /**
  * Rendered into <body>: inside the shell it shared a stacking context with the chat
  * composer and ended up under it, so "Güncelle ve yeniden başlat" could not be clicked.
- * It also sits above the composer instead of on top of it.
+ * It sits at the top of the window (under the title bar), well away from the composer.
  */
 export function UpdateBanner() {
   const node = useUpdateBannerNode();
@@ -53,7 +53,7 @@ function useUpdateBannerNode(): ReactNode {
 
   if (status.status === 'error') {
     return (
-      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-error/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed top-14 left-1/2 z-[2147483000] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-error/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-sm text-error">Güncelleme hatası: {status.message ?? 'bilinmiyor'}</p>
         <button
           type="button"
@@ -69,7 +69,7 @@ function useUpdateBannerNode(): ReactNode {
   if (status.status === 'downloading') {
     const pct = Math.round(status.percent ?? 0);
     return (
-      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed top-14 left-1/2 z-[2147483000] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-sm text-on-surface">
           Güncelleme indiriliyor… {pct}%
         </p>
@@ -85,7 +85,7 @@ function useUpdateBannerNode(): ReactNode {
 
   if (status.status === 'available') {
     return (
-      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed top-14 left-1/2 z-[2147483000] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-md text-on-surface">
           Yeni sürüm v{next} mevcut
         </p>
@@ -114,7 +114,7 @@ function useUpdateBannerNode(): ReactNode {
 
   if (status.status === 'downloaded') {
     return (
-      <div className="fixed bottom-24 left-1/2 z-[300] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
+      <div className="fixed top-14 left-1/2 z-[2147483000] pointer-events-auto w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-xl border border-primary-container/40 bg-surface-container-high px-4 py-3 shadow-float">
         <p className="font-body-md text-on-surface">
           v{next} indirildi
         </p>
