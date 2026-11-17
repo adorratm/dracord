@@ -24,7 +24,7 @@
     "edge-tts-universal": "^1.4.0",
     "framer-motion": "^14.9.0",
     "livekit-client": "^2.23.0",
-    "next": "^16.4.3",
+    "next": "^16.4.5",
     "nsfwjs": "^4.4.0",
     "postcss": "^8.5.32",
     "react": "^19.3.1",
