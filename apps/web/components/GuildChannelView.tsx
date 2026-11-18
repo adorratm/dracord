@@ -31,6 +31,7 @@ import {
   LevelsPanel,
   TournamentsPanel,
   LfgBoard,
+  GiveawaysPanel,
   ChallengesPanel,
   SoundboardButton,
   useSoundboard,
@@ -356,6 +357,7 @@ export function GuildChannelView({
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [lfgOpen, setLfgOpen] = useState(false);
+  const [giveawaysOpen, setGiveawaysOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
@@ -2909,6 +2911,14 @@ export function GuildChannelView({
           <button
             type="button"
             className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+            onClick={() => setGiveawaysOpen(true)}
+          >
+            <span className="material-symbols-outlined text-[16px]">redeem</span>
+            Çekilişler
+          </button>
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
             onClick={() => setLfgOpen(true)}
           >
             <span className="material-symbols-outlined text-[16px]">group_add</span>
@@ -5081,6 +5091,24 @@ export function GuildChannelView({
           }}
         />
       ) : null}
+      <Modal open={giveawaysOpen} title="Çekilişler" onClose={() => setGiveawaysOpen(false)} className="sm:max-w-2xl">
+        <div className="max-h-[75vh] overflow-y-auto pr-1">
+          {giveawaysOpen && user && (
+            <GiveawaysPanel
+              client={client}
+              guildId={guildId}
+              meId={user.id}
+              canHost={canManageGuild || canModerateMembers}
+              channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              roles={guildRoles}
+              memberName={(id) => {
+                const m = guildMembers.find((g) => g.id === id);
+                return m ? m.displayName || m.username : id === user.id ? 'Sen' : 'Üye';
+              }}
+            />
+          )}
+        </div>
+      </Modal>
       <Modal open={lfgOpen} title="Takım arkadaşı ara" onClose={() => setLfgOpen(false)} className="sm:max-w-2xl">
         <div className="max-h-[75vh] overflow-y-auto pr-1">
           {lfgOpen && user && (

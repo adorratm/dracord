@@ -884,6 +884,8 @@ export const SocketEvents = {
   TOURNAMENT_UPDATE: 'tournament:update',
   /** C5 takım arama ilanı oluşturuldu / güncellendi / kapandı (guild odası) */
   LFG_UPDATE: 'lfg:update',
+  /** B7 çekiliş oluşturuldu / güncellendi / bitti (guild odası) */
+  GIVEAWAY_UPDATE: 'giveaway:update',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
@@ -2291,4 +2293,48 @@ export interface MediaGalleryPage {
   items: MediaGalleryItem[];
   /** bir sonraki sayfa için `before` */
   nextCursor: string | null;
+}
+
+// ── B7: çekiliş + doğum günü ──
+export interface GiveawayDto {
+  id: string;
+  guildId: string;
+  channelId: string;
+  hostId: string;
+  prize: string;
+  description: string | null;
+  winnersCount: number;
+  endsAt: string;
+  endedAt: string | null;
+  /** katılımcı sayısı (liste yalnız düzenleyene) */
+  entrantCount: number;
+  /** ben katıldım mı */
+  entered: boolean;
+  winnerIds: string[];
+  /** katılmak için gereken rol */
+  requiredRoleId: string | null;
+}
+
+export interface CreateGiveawayInput {
+  channelId: string;
+  prize: string;
+  description?: string | null;
+  winnersCount: number;
+  /** 1 dk – 30 gün */
+  durationMin: number;
+  requiredRoleId?: string | null;
+}
+
+export interface GuildBirthdayConfig {
+  enabled: boolean;
+  channelId: string | null;
+  /** doğum günü olanlara o gün verilen rol */
+  roleId: string | null;
+}
+
+/** "MM-DD" (yıl tutulmaz) */
+export interface MyBirthdayDto {
+  birthday: string | null;
+  /** sunucularda kutlansın mı */
+  share: boolean;
 }

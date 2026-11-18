@@ -71,7 +71,7 @@ export class OnboardingService {
   }
 
   /** roles that are safe to hand out without a moderator: no @everyone, only basic permissions */
-  private async assertSelfAssignable(guildId: string, roleIds: string[]): Promise<void> {
+  async assertSelfAssignable(guildId: string, roleIds: string[]): Promise<void> {
     if (roleIds.length === 0) return;
     const roles = await this.em.find(Role, { where: { id: In(roleIds), guildId }, select: { id: true, name: true } });
     if (roles.length !== roleIds.length) throw new BadRequestException('Rollerden biri bu sunucuda yok');

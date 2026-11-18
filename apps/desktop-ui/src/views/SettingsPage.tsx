@@ -19,6 +19,7 @@ import {
   browserE2eeManager,
   VoiceInputSettings,
   DataExportSection,
+  MyBirthdaySettings,
   formatDeletionDate,
 } from '@dracord/ui';
 import {
@@ -453,6 +454,9 @@ export function SettingsPage({
           title="Hesap Bilgileri"
           description="Profil özetin, durumun ve oturum bilgilerin."
         >
+          <SettingsSection title="Doğum günü">
+            <MyBirthdaySettings client={client} />
+          </SettingsSection>
           <SettingsSection title="Hesap">
             <div className="px-space-md py-space-md space-y-2">
               <p className="font-headline-md">{user?.displayName ?? '—'}</p>

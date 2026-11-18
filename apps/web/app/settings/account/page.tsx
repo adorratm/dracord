@@ -1,7 +1,7 @@
 'use client';
 
 import type { PresenceStatus } from '@dracord/types';
-import { presenceLabelTr } from '@dracord/ui';
+import { MyBirthdaySettings, presenceLabelTr } from '@dracord/ui';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -58,6 +58,10 @@ export default function AccountInfoPage() {
             Profili düzenle
           </button>
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Doğum günü">
+        <MyBirthdaySettings client={client} />
       </SettingsSection>
 
       <SettingsSection title="Durum">

@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -954,6 +954,15 @@ export function GuildSettingsPage({
               <StarboardSettings
                 client={client}
                 guildId={guildId}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="dogum-gunleri">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Doğum günleri</h2>
+              <GuildBirthdaySettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
                 channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
             </section>

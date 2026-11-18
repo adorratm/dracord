@@ -85,6 +85,14 @@ export class User extends CuidEntity {
   @Column({ type: 'timestamptz', nullable: true })
   disabledAt!: Date | null;
 
+  /** B7 — doğum günü "MM-DD" (yıl tutulmaz) */
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  birthday!: string | null;
+
+  /** B7 — doğum günü sunucularda kutlansın mı */
+  @Column({ type: 'boolean', default: false })
+  shareBirthday!: boolean;
+
   /** E5 — hesap silme talebi: bu tarihte kalıcı silinir; o zamana dek giriş yapınca iptal edilebilir */
   @Column({ type: 'timestamptz', nullable: true })
   deletionScheduledAt!: Date | null;

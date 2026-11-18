@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings } from '@dracord/ui';
+import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -794,6 +794,15 @@ export default function GuildSettingsPage({ params }: PageProps) {
               <StarboardSettings
                 client={client}
                 guildId={guildId}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="dogum-gunleri">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Doğum günleri</h2>
+              <GuildBirthdaySettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
                 channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
             </section>

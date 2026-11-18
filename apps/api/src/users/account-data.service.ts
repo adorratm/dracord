@@ -182,6 +182,8 @@ export class AccountDataService implements OnModuleInit, OnModuleDestroy {
       socialLinks: user.socialLinks,
       customStatus: user.customStatus,
       twoFactorEnabled: user.totpEnabled,
+      birthday: user.birthday,
+      shareBirthday: user.shareBirthday,
       createdAt: user.createdAt,
       deletionScheduledAt: user.deletionScheduledAt,
       settings: user.clientSettings,

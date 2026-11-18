@@ -293,3 +293,6 @@ export { StarboardSettings } from './components/StarboardSettings';
 
 // G1 — medya galerisi
 export { MediaGalleryModal } from './components/MediaGallery';
+
+// B7 — çekiliş + doğum günü
+export { GiveawaysPanel, GuildBirthdaySettings, MyBirthdaySettings } from './components/Giveaways';

@@ -1926,6 +1926,53 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── B7: çekiliş + doğum günü ──
+  async listGiveaways(guildId: string): Promise<import('@dracord/types').GiveawayDto[]> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/giveaways`);
+  }
+
+  async createGiveaway(guildId: string, input: import('@dracord/types').CreateGiveawayInput): Promise<import('@dracord/types').GiveawayDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/giveaways`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async toggleGiveawayEntry(id: string): Promise<import('@dracord/types').GiveawayDto> {
+    return this.request(`/giveaways/${encodeURIComponent(id)}/enter`, { method: 'POST' });
+  }
+
+  async endGiveaway(id: string): Promise<import('@dracord/types').GiveawayDto> {
+    return this.request(`/giveaways/${encodeURIComponent(id)}/end`, { method: 'POST' });
+  }
+
+  async rerollGiveaway(id: string): Promise<import('@dracord/types').GiveawayDto> {
+    return this.request(`/giveaways/${encodeURIComponent(id)}/reroll`, { method: 'POST' });
+  }
+
+  onGiveawayUpdate(handler: (g: import('@dracord/types').GiveawayDto) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.GIVEAWAY_UPDATE, handler);
+    return () => sock.off(SocketEvents.GIVEAWAY_UPDATE, handler);
+  }
+
+  async getMyBirthday(): Promise<import('@dracord/types').MyBirthdayDto> {
+    return this.request('/users/me/birthday');
+  }
+
+  async setMyBirthday(input: import('@dracord/types').MyBirthdayDto): Promise<import('@dracord/types').MyBirthdayDto> {
+    return this.request('/users/me/birthday', { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  async getGuildBirthdays(guildId: string): Promise<import('@dracord/types').GuildBirthdayConfig> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/birthdays`);
+  }
+
+  async updateGuildBirthdays(
+    guildId: string,
+    cfg: import('@dracord/types').GuildBirthdayConfig,
+  ): Promise<import('@dracord/types').GuildBirthdayConfig> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/birthdays`, { method: 'PUT', body: JSON.stringify(cfg) });
+  }
+
   // ── G1: medya galerisi ──
   async listChannelMedia(
     channelId: string,
