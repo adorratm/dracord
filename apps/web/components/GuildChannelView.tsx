@@ -30,6 +30,7 @@ import {
   voiceStatusErrorMessage,
   LevelsPanel,
   TournamentsPanel,
+  LfgBoard,
   ChallengesPanel,
   SoundboardButton,
   useSoundboard,
@@ -354,6 +355,7 @@ export function GuildChannelView({
   const [eventsOpen, setEventsOpen] = useState(false);
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [tournamentsOpen, setTournamentsOpen] = useState(false);
+  const [lfgOpen, setLfgOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
   useEffect(() => {
@@ -2905,6 +2907,14 @@ export function GuildChannelView({
           <button
             type="button"
             className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
+            onClick={() => setLfgOpen(true)}
+          >
+            <span className="material-symbols-outlined text-[16px]">group_add</span>
+            Takım ara
+          </button>
+          <button
+            type="button"
+            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
             onClick={() => setTournamentsOpen(true)}
           >
             <span className="material-symbols-outlined text-[16px]">emoji_events</span>
@@ -5037,6 +5047,30 @@ export function GuildChannelView({
         )}
       </Modal>
 
+      <Modal open={lfgOpen} title="Takım arkadaşı ara" onClose={() => setLfgOpen(false)} className="sm:max-w-2xl">
+        <div className="max-h-[75vh] overflow-y-auto pr-1">
+          {lfgOpen && user && (
+            <LfgBoard
+              client={client}
+              guildId={guildId}
+              meId={user.id}
+              canModerate={canModerateMembers}
+              voiceChannels={channels.filter((c) => c.type === 'VOICE').map((c) => ({ id: c.id, name: c.name }))}
+              memberName={(id) => {
+                const m = guildMembers.find((g) => g.id === id);
+                return m ? m.displayName || m.username : id === user.id ? 'Sen' : 'Üye';
+              }}
+              onJoinVoice={(chId) => {
+                const ch = channels.find((c) => c.id === chId);
+                if (ch) {
+                  setLfgOpen(false);
+                  void joinVoiceChannel(ch);
+                }
+              }}
+            />
+          )}
+        </div>
+      </Modal>
       <Modal open={tournamentsOpen} title="Turnuvalar" onClose={() => setTournamentsOpen(false)} className="sm:max-w-3xl">
         <div className="max-h-[75vh] overflow-y-auto pr-1">
           {tournamentsOpen && user && (

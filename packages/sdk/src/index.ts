@@ -1924,6 +1924,27 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── C5: takım arama ilanları ──
+  async listLfg(guildId: string): Promise<import('@dracord/types').LfgListingDto[]> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/lfg`);
+  }
+
+  async createLfg(guildId: string, input: import('@dracord/types').CreateLfgInput): Promise<import('@dracord/types').LfgListingDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/lfg`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async joinLfg(id: string): Promise<import('@dracord/types').LfgListingDto> {
+    return this.request(`/lfg/${encodeURIComponent(id)}/join`, { method: 'POST' });
+  }
+
+  async leaveLfg(id: string): Promise<import('@dracord/types').LfgListingDto> {
+    return this.request(`/lfg/${encodeURIComponent(id)}/leave`, { method: 'POST' });
+  }
+
+  async closeLfg(id: string): Promise<import('@dracord/types').LfgListingDto> {
+    return this.request(`/lfg/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   // ── B5: katılış ekranı + tepki rolleri ──
   async getGuildOnboarding(guildId: string): Promise<import('@dracord/types').GuildOnboardingDto> {
     return this.request(`/guilds/${encodeURIComponent(guildId)}/onboarding`);
@@ -2207,6 +2228,14 @@ export class DracordClient {
     if (!sock) return () => undefined;
     sock.on(SocketEvents.SCREEN_ANNOTATE, handler);
     return () => sock.off(SocketEvents.SCREEN_ANNOTATE, handler);
+  }
+
+  /** C5 — takım arama ilanı canlı güncellemesi */
+  onLfgUpdate(handler: (l: import('@dracord/types').LfgListingDto) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.LFG_UPDATE, handler);
+    return () => sock.off(SocketEvents.LFG_UPDATE, handler);
   }
 
   /** Turnuva canlı güncellemesi (C2) */

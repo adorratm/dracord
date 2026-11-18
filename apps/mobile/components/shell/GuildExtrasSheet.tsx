@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { SoundsTab } from './SoundsTab';
 import { StatsTab } from './StatsTab';
 import { TournamentsTab } from './TournamentsTab';
+import { LfgTab } from './LfgTab';
 import { ChallengesCard } from './ChallengesCard';
 
 /** Sunucu etkinlikleri + boost — web sidebar menü parity */
@@ -24,7 +25,7 @@ export function GuildExtrasSheet({
   onClose: () => void;
   guildId: string | null;
   guild: GuildSummary | null;
-  initialTab?: 'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments';
+  initialTab?: 'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments' | 'lfg';
   onGuildUpdated?: (g: GuildSummary) => void;
   /** MANAGE_GUILD — soundboard ses ekle/sil */
   canManage?: boolean;
@@ -32,7 +33,7 @@ export function GuildExtrasSheet({
   inCall?: boolean;
 }) {
   const { client, user } = useAuth();
-  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments'>(initialTab);
+  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments' | 'lfg'>(initialTab);
   const [board, setBoard] = useState<MemberLevelDto[]>([]);
   const [myLevel, setMyLevel] = useState<MemberLevelDto | null>(null);
   const [events, setEvents] = useState<GuildEventDto[]>([]);
@@ -115,6 +116,7 @@ export function GuildExtrasSheet({
             <Chip label="Takviye" active={tab === 'boost'} onPress={() => setTab('boost')} />
             <Chip label="Seviyeler" active={tab === 'levels'} onPress={() => setTab('levels')} />
             <Chip label="Sesler" active={tab === 'sounds'} onPress={() => setTab('sounds')} />
+            <Chip label="Takım ara" active={tab === 'lfg'} onPress={() => setTab('lfg')} />
             <Chip label="Turnuva" active={tab === 'tournaments'} onPress={() => setTab('tournaments')} />
             {canManage ? <Chip label="İstatistik" active={tab === 'stats'} onPress={() => setTab('stats')} /> : null}
             <Pressable onPress={onClose} style={{ marginLeft: 'auto', padding: 8 }}>
@@ -122,7 +124,9 @@ export function GuildExtrasSheet({
             </Pressable>
           </View>
 
-          {tab === 'tournaments' && guildId && user ? (
+          {tab === 'lfg' && guildId && user ? (
+            <LfgTab client={client} guildId={guildId} meId={user.id} />
+          ) : tab === 'tournaments' && guildId && user ? (
             <TournamentsTab client={client} guildId={guildId} meId={user.id} canManage={canManage} />
           ) : tab === 'stats' && guildId && canManage ? (
             <StatsTab client={client} guildId={guildId} />

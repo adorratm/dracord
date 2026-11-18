@@ -878,6 +878,8 @@ export const SocketEvents = {
   GAME_SESSION_UPDATE: 'game:session',
   /** C2 turnuva oluşturuldu / güncellendi (guild odası) */
   TOURNAMENT_UPDATE: 'tournament:update',
+  /** C5 takım arama ilanı oluşturuldu / güncellendi / kapandı (guild odası) */
+  LFG_UPDATE: 'lfg:update',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
@@ -2212,4 +2214,36 @@ export interface ReactionRoleDto {
   messageId: string;
   emoji: string;
   roleId: string;
+}
+
+// ── C5: takım arkadaşı arama ilanları ──
+export interface LfgListingDto {
+  id: string;
+  guildId: string;
+  authorId: string;
+  game: string;
+  /** toplam kişi (ilan sahibi dahil) */
+  slots: number;
+  /** katılanlar (ilan sahibi ilk) */
+  memberIds: string[];
+  rank: string | null;
+  note: string | null;
+  /** sesli oynanacak mı; doluysa bu kanal */
+  voice: boolean;
+  voiceChannelId: string | null;
+  expiresAt: string;
+  createdAt: string;
+  /** kapandıysa (süre doldu / sahibi kapattı) */
+  closed: boolean;
+}
+
+export interface CreateLfgInput {
+  game: string;
+  slots: number;
+  rank?: string | null;
+  note?: string | null;
+  voice?: boolean;
+  voiceChannelId?: string | null;
+  /** 15–480 dk, varsayılan 120 */
+  durationMin?: number;
 }

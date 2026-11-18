@@ -281,3 +281,6 @@ export {
   isSelfAssignableRole,
   parseMessageRef,
 } from './components/GuildOnboarding';
+
+// C5 — takım arama ilanları
+export { LfgBoard } from './components/LfgBoard';
