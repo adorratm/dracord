@@ -1,4 +1,5 @@
-import { StarboardController } from './starboard.controller';
+import { MediaGalleryService } from './media-gallery.service';
+import { MediaGalleryController, StarboardController } from './starboard.controller';
 import { StarboardConfigService } from './starboard-config.service';
 import { OnboardingModule } from '@/onboarding/onboarding.module';
 import { Module, forwardRef } from '@nestjs/common';
@@ -36,7 +37,7 @@ import { DracoService } from '@/draco/draco.service';
     OnboardingModule,
     forwardRef(() => MusicModule),
   ],
-  controllers: [MessagesController, ScheduledMessagesController, DracoController, StarboardController],
+  controllers: [MessagesController, ScheduledMessagesController, DracoController, StarboardController, MediaGalleryController],
   providers: [
     MessagesService,
     LinkPreviewService,
@@ -47,6 +48,7 @@ import { DracoService } from '@/draco/draco.service';
     CatchupService,
     DracoService,
     StarboardConfigService,
+    MediaGalleryService,
   ],
   exports: [MessagesService, MessagesRealtimeService, ScheduledMessagesService],
 })

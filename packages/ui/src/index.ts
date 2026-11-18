@@ -290,3 +290,6 @@ export { AnnouncementFollowButton, ChannelExtrasSettings, SLOW_MODE_OPTIONS, slo
 
 // B9 — yıldız panosu
 export { StarboardSettings } from './components/StarboardSettings';
+
+// G1 — medya galerisi
+export { MediaGalleryModal } from './components/MediaGallery';

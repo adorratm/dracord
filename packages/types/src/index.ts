@@ -2274,3 +2274,21 @@ export interface GuildStarboardConfig {
   threshold: number;
   ignoredChannelIds: string[];
 }
+
+// ── G1: medya galerisi ──
+export type MediaGalleryKind = 'image' | 'video' | 'file';
+
+export interface MediaGalleryItem {
+  messageId: string;
+  channelId: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  attachment: MessageAttachment;
+}
+
+export interface MediaGalleryPage {
+  items: MediaGalleryItem[];
+  /** bir sonraki sayfa için `before` */
+  nextCursor: string | null;
+}

@@ -10,6 +10,7 @@ import type {
 import { DRACORD_BOT_USER_ID, SocketEvents, mergeLatestMessages } from '@dracord/types';
 import {
   AnnouncementFollowButton,
+  MediaGalleryModal,
   Avatar,
   ChatInput,
   MessageList,
@@ -110,6 +111,7 @@ export function ChatPanel({
 }) {
   const { client, user } = useAuth();
   // B8 — servers to send this announcement channel's posts to
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [followGuilds, setFollowGuilds] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     if (!channel?.isAnnouncement) return;
@@ -620,6 +622,29 @@ export function ChatPanel({
                 }}
               />
             )}
+            <button
+              type="button"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Medya galerisi"
+              title="Görseller, videolar ve dosyalar"
+              onClick={() => setGalleryOpen(true)}
+            >
+              <span className="material-symbols-outlined text-[18px]">photo_library</span>
+            </button>
+            <MediaGalleryModal
+              client={client}
+              channelId={channel.id}
+              channelName={channel.name}
+              open={galleryOpen}
+              onClose={() => setGalleryOpen(false)}
+              onJump={(around) => {
+                setGalleryOpen(false);
+                void client.getMessages(channel.id, { limit: 50, around }).then((page) => {
+                  setMessages(page.items ?? []);
+                  setHighlightMessageId(around);
+                });
+              }}
+            />
             <button
               type="button"
               className="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface flex items-center justify-center"

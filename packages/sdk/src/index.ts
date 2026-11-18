@@ -1926,6 +1926,17 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── G1: medya galerisi ──
+  async listChannelMedia(
+    channelId: string,
+    kind: import('@dracord/types').MediaGalleryKind,
+    before?: string | null,
+  ): Promise<import('@dracord/types').MediaGalleryPage> {
+    const q = new URLSearchParams({ kind });
+    if (before) q.set('before', before);
+    return this.request(`/channels/${encodeURIComponent(channelId)}/media?${q.toString()}`);
+  }
+
   // ── B9: yıldız panosu ──
   async getStarboard(guildId: string): Promise<import('@dracord/types').GuildStarboardConfig> {
     return this.request(`/guilds/${encodeURIComponent(guildId)}/starboard`);

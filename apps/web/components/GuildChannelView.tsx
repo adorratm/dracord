@@ -78,7 +78,7 @@ import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
-import { AnnouncementFollowButton, ChannelExtrasSettings, GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
+import { AnnouncementFollowButton, ChannelExtrasSettings, MediaGalleryModal, GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -356,6 +356,7 @@ export function GuildChannelView({
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [lfgOpen, setLfgOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
   useEffect(() => {
@@ -3621,6 +3622,19 @@ export function GuildChannelView({
             >
               <span className="material-symbols-outlined text-[18px]">push_pin</span>
             </button>
+            {channel && !isForumView ? (
+              <>
+                <button
+                  type="button"
+                  className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  aria-label="Medya galerisi"
+                  title="Görseller, videolar ve dosyalar"
+                  onClick={() => setGalleryOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">photo_library</span>
+                </button>
+              </>
+            ) : null}
             {!isForumView && (
               <button
                 type="button"
@@ -5054,6 +5068,19 @@ export function GuildChannelView({
         )}
       </Modal>
 
+      {channel ? (
+        <MediaGalleryModal
+          client={client}
+          channelId={channel.id}
+          channelName={channel.name}
+          open={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+          onJump={(id) => {
+            setGalleryOpen(false);
+            router.push(`/channels/${guildId}/${channel.id}?around=${id}`);
+          }}
+        />
+      ) : null}
       <Modal open={lfgOpen} title="Takım arkadaşı ara" onClose={() => setLfgOpen(false)} className="sm:max-w-2xl">
         <div className="max-h-[75vh] overflow-y-auto pr-1">
           {lfgOpen && user && (
