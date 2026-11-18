@@ -2164,3 +2164,52 @@ export function mergeLatestMessages<T extends { id: string; createdAt: string; b
   const t = (m: T) => new Date(m.createdAt).getTime();
   return out.sort((a, b) => (newestFirst ? t(b) - t(a) : t(a) - t(b)));
 }
+
+// ── B5: sunucuya katılış ekranı + tepki rolleri ──
+export interface GuildOnboardingOption {
+  id: string;
+  label: string;
+  emoji?: string | null;
+  /** seçenek seçilince verilen roller (yalnız temel izinli roller) */
+  roleIds: string[];
+  /** seçenek seçilince önerilen kanallar */
+  channelIds: string[];
+}
+
+export interface GuildOnboardingQuestion {
+  id: string;
+  title: string;
+  multi: boolean;
+  required: boolean;
+  options: GuildOnboardingOption[];
+}
+
+export interface GuildOnboardingConfig {
+  enabled: boolean;
+  /** kısa kurallar — kabul edilmeden devam edilemez */
+  rules: string[];
+  questions: GuildOnboardingQuestion[];
+  /** her yeni üyeye önerilen kanallar */
+  defaultChannelIds: string[];
+}
+
+export interface GuildOnboardingDto extends GuildOnboardingConfig {
+  guildId: string;
+  /** bu üye ekranı tamamladı mı */
+  completed: boolean;
+}
+
+export interface GuildOnboardingCompleteResult {
+  ok: true;
+  grantedRoleIds: string[];
+  suggestedChannelIds: string[];
+}
+
+export interface ReactionRoleDto {
+  id: string;
+  guildId: string;
+  channelId: string;
+  messageId: string;
+  emoji: string;
+  roleId: string;
+}

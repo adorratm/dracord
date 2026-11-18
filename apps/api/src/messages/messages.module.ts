@@ -1,3 +1,4 @@
+import { OnboardingModule } from '@/onboarding/onboarding.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { ChannelsModule } from '@/channels/channels.module';
 import { GuildsModule } from '@/guilds/guilds.module';
@@ -30,6 +31,7 @@ import { DracoService } from '@/draco/draco.service';
     QueuesModule,
     LevelsModule,
     AutomodRulesModule,
+    OnboardingModule,
     forwardRef(() => MusicModule),
   ],
   controllers: [MessagesController, ScheduledMessagesController, DracoController],

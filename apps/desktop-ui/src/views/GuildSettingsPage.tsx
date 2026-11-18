@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { AutomodSettings, cn, GuildFaqSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -48,6 +48,7 @@ type Tab =
   | 'stats'
   | 'public'
   | 'faq'
+  | 'onboarding'
   | 'invite';
 
 const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | 'channels' | 'mod' }[] =
@@ -62,6 +63,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
     { id: 'public', label: 'Tanıtım sayfası', icon: 'public', need: 'manage' },
     { id: 'faq', label: 'SSS ve Draco', icon: 'quiz', need: 'manage' },
+    { id: 'onboarding', label: 'Katılış & tepki rolleri', icon: 'waving_hand', need: 'manage' },
     { id: 'invite', label: 'Davet', icon: 'link' },
   ];
 
@@ -934,6 +936,29 @@ export function GuildSettingsPage({
                 }}
               />
             </section>
+          )}
+
+          {tab === 'onboarding' && canManage && (
+            <>
+            <section className="max-w-2xl" id="katilis">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Katılış ekranı</h2>
+              <GuildOnboardingSettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="tepki-rolleri">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Tepki rolleri</h2>
+              <ReactionRolesSettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            </>
           )}
 
           {tab === 'faq' && canManage && (

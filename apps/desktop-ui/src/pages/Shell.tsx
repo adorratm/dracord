@@ -62,7 +62,7 @@ import { GuildBoostPage } from '../views/GuildBoostPage';
 import { MemberPanel } from '../views/MemberPanel';
 import { NotificationBell } from '../views/NotificationBell';
 import { UpdateBanner } from '../components/UpdateBanner';
-import { AccountDeletionBanner } from '@dracord/ui';
+import { AccountDeletionBanner, GuildOnboardingModal } from '@dracord/ui';
 
 type View =
   | { kind: 'home' }
@@ -1201,6 +1201,19 @@ export function Shell() {
     <div className="flex flex-col h-dvh max-h-dvh w-screen overflow-hidden bg-surface">
       <UpdateBanner />
       <AccountDeletionBanner user={user} client={client} onCancelled={() => void refreshUser()} />
+      {activeGuild ? (
+        <GuildOnboardingModal
+          key={activeGuild.id}
+          client={client}
+          guildId={activeGuild.id}
+          guildName={activeGuild.name}
+          channelName={(id) => channels.find((c) => c.id === id)?.name}
+          onDone={(r) => {
+            const first = r?.suggestedChannelIds[0];
+            if (first) openChannel(activeGuild.id, first);
+          }}
+        />
+      ) : null}
       {voice.voiceOnOtherClient && voice.voiceChannelId && (
         <div className="fixed top-12 left-1/2 -translate-x-1/2 z-90 max-w-lg w-[min(100%-2rem,32rem)] rounded-xl bg-surface-container-high border border-primary-container/40 text-on-surface px-space-md py-space-sm shadow-float flex items-center gap-space-sm">
           <span className="material-symbols-outlined text-primary-container text-[20px]">

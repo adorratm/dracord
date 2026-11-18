@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { AutomodSettings, GuildFaqSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel } from '@dracord/ui';
+import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -777,6 +777,29 @@ export default function GuildSettingsPage({ params }: PageProps) {
               </>
             )}
           </section>
+
+          {canManage && (
+            <>
+            <section className="max-w-2xl mt-space-2xl" id="katilis">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Katılış ekranı</h2>
+              <GuildOnboardingSettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="tepki-rolleri">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Tepki rolleri</h2>
+              <ReactionRolesSettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            </>
+          )}
 
           {canManage && (
             <section className="max-w-2xl mt-space-2xl" id="sss">

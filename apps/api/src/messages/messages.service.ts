@@ -1,3 +1,4 @@
+import { OnboardingService } from '@/onboarding/onboarding.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -86,6 +87,7 @@ export class MessagesService {
     private readonly draco: DracoService,
     @Optional() private readonly queues?: QueuesService,
     @Optional() private readonly levels?: LevelsService,
+    @Optional() private readonly onboarding?: OnboardingService,
   ) {}
 
   async listChannelMessages(
@@ -925,6 +927,8 @@ export class MessagesService {
         this.em.create(Reaction, { messageId, userId, emoji: clean }),
       );
     }
+    // B5 — reaction roles
+    void this.onboarding?.onReaction(messageId, userId, clean, !existing);
     const reactions = await this.em.find(Reaction, {
       where: { messageId },
       relations: { user: true },

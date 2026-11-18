@@ -1924,6 +1924,40 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── B5: katılış ekranı + tepki rolleri ──
+  async getGuildOnboarding(guildId: string): Promise<import('@dracord/types').GuildOnboardingDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/onboarding`);
+  }
+
+  async updateGuildOnboarding(
+    guildId: string,
+    cfg: import('@dracord/types').GuildOnboardingConfig,
+  ): Promise<import('@dracord/types').GuildOnboardingDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/onboarding`, { method: 'PUT', body: JSON.stringify(cfg) });
+  }
+
+  async completeGuildOnboarding(
+    guildId: string,
+    body: { acceptRules: boolean; answers: Record<string, string[]> },
+  ): Promise<import('@dracord/types').GuildOnboardingCompleteResult> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/onboarding/complete`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async listReactionRoles(guildId: string): Promise<import('@dracord/types').ReactionRoleDto[]> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/reaction-roles`);
+  }
+
+  async addReactionRole(
+    guildId: string,
+    body: { messageId: string; emoji: string; roleId: string },
+  ): Promise<import('@dracord/types').ReactionRoleDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/reaction-roles`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async removeReactionRole(guildId: string, id: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/reaction-roles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   // ── E4: QR ile giriş ──
   /** the computer (signed out) asks for a ticket; show `qrLoginUrl(ticketId)` as a QR */
   async createQrLogin(platform?: string): Promise<{ ticketId: string; pollToken: string; expiresAt: string }> {

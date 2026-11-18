@@ -6,6 +6,7 @@ import { colors } from '@dracord/app-theme';
 import { useAuth } from '../../../../lib/auth';
 import { ChatView } from '../../../../components/ChatView';
 import { Icon } from '../../../../components/Icon';
+import { GuildOnboardingSheet } from '../../../../components/GuildOnboardingSheet';
 import { ShellHeader, useAppShell } from '../../../../components/shell/AppShell';
 
 export default function ChannelScreen() {
@@ -72,6 +73,12 @@ export default function ChannelScreen() {
         hideChannelChrome
         guildId={guildId}
         aroundMessageId={typeof around === 'string' ? around : around?.[0] ?? null}
+      />
+      <GuildOnboardingSheet
+        guildId={guildId}
+        onSuggestedChannel={(id) => {
+          if (id !== channelId) router.replace(`/channels/${guildId}/${id}`);
+        }}
       />
     </View>
   );

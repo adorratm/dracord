@@ -272,3 +272,12 @@ export { AccountDeletionBanner, DataExportSection, formatDeletionDate } from './
 
 // E4 — QR ile giriş
 export { QrApproveCard, QrCodeSvg, QrLoginPanel, QR_LOGIN_WEB_BASE, qrLoginUrl } from './components/QrLogin';
+
+// B5 — katılış ekranı + tepki rolleri
+export {
+  GuildOnboardingModal,
+  GuildOnboardingSettings,
+  ReactionRolesSettings,
+  isSelfAssignableRole,
+  parseMessageRef,
+} from './components/GuildOnboarding';

@@ -77,7 +77,7 @@ import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
-import { buildSidebarCategories, useRemoteControl } from '@dracord/ui';
+import { GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -2931,6 +2931,19 @@ export function GuildChannelView({
       activeGuildId={guildId}
       onGuildsChanged={() => void reload()}
     >
+      {guild ? (
+        <GuildOnboardingModal
+          key={guildId}
+          client={client}
+          guildId={guildId}
+          guildName={guild.name}
+          channelName={(id) => channels.find((c) => c.id === id)?.name}
+          onDone={(r) => {
+            const first = r?.suggestedChannelIds[0];
+            if (first && first !== channelId) router.push(`/channels/${guildId}/${first}`);
+          }}
+        />
+      ) : null}
       <div
         className={cn(
           'contents',
