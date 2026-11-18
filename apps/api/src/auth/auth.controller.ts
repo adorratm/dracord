@@ -19,6 +19,7 @@ import { CurrentUser, type JwtPayloadUser } from '@/common/decorators/current-us
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import { PasskeysService } from './passkeys.service';
+import { QrLoginService } from './qr-login.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { toPublicUser } from '@/common/user.mapper';
 import { AuthService } from './auth.service';
@@ -42,6 +43,7 @@ export class AuthController {
     private readonly config: ConfigService,
     private readonly broadcast: SocketBroadcastService,
     private readonly passkeys: PasskeysService,
+    private readonly qrLogin: QrLoginService,
   ) {}
 
   // ── E1: passkey ──
@@ -92,6 +94,52 @@ export class AuthController {
     const tokens = await this.authService.issueTokensForUser(user);
     this.setRefreshCookie(res, tokens.refreshToken);
     return { ...tokens, user: toPublicUser(user, { viewerId: user.id }) };
+  }
+
+  // ── E4: QR ile giriş ──
+  /** the computer (not signed in) asks for a QR ticket */
+  @Post('qr')
+  createQr(@Req() req: Request, @Body() body: { platform?: string }) {
+    const fwd = String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim();
+    return this.qrLogin.create({
+      ip: fwd || req.ip || null,
+      userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+      platform: typeof body?.platform === 'string' ? body.platform : null,
+    });
+  }
+
+  /** the computer waits; once the phone approves, this returns the session (once) */
+  @Post('qr/:id/poll')
+  async pollQr(
+    @Param('id') id: string,
+    @Body() body: { pollToken?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.qrLogin.poll(id, body?.pollToken ?? '');
+    if (r.status !== 'approved') return r;
+    const user = await this.authService.getUserById(r.userId);
+    const tokens = await this.authService.issueTokensForUser(user);
+    this.setRefreshCookie(res, tokens.refreshToken);
+    return { status: 'approved' as const, ...tokens, user: toPublicUser(user, { viewerId: user.id }) };
+  }
+
+  /** the signed-in phone opened the QR: which computer is asking? */
+  @Post('qr/:id/scan')
+  @UseGuards(JwtAuthGuard)
+  scanQr(@CurrentUser() user: JwtPayloadUser, @Param('id') id: string) {
+    return this.qrLogin.scan(id, user.sub);
+  }
+
+  @Post('qr/:id/approve')
+  @UseGuards(JwtAuthGuard)
+  approveQr(@CurrentUser() user: JwtPayloadUser, @Param('id') id: string) {
+    return this.qrLogin.decide(id, user.sub, true);
+  }
+
+  @Post('qr/:id/reject')
+  @UseGuards(JwtAuthGuard)
+  rejectQr(@CurrentUser() user: JwtPayloadUser, @Param('id') id: string) {
+    return this.qrLogin.decide(id, user.sub, false);
   }
 
   // ── E2: oturum / cihaz yönetimi ──

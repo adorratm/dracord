@@ -31,7 +31,8 @@
     "@dracord/sdk": "workspace:*",
     "@dracord/types": "workspace:*",
     "@tanstack/react-virtual": "^3.14.24",
-    "gifenc": "^1.0.3"
+    "gifenc": "^1.0.3",
+    "toqr": "^0.1.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

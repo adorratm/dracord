@@ -1,6 +1,6 @@
 'use client';
 
-import { LoginScreen, loginWithPasskey, passkeySupported } from '@dracord/ui';
+import { LoginScreen, QrLoginPanel, loginWithPasskey, passkeySupported } from '@dracord/ui';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { Draco } from '@/components/Draco';
@@ -75,6 +75,9 @@ function LoginInner() {
   };
   const [canPasskey, setCanPasskey] = useState(false);
   useEffect(() => setCanPasskey(passkeySupported()), []);
+  // E4 — QR only where a phone is the other device (not on the phone itself)
+  const [wide, setWide] = useState(false);
+  useEffect(() => setWide(window.matchMedia('(min-width: 768px) and (pointer: fine)').matches), []);
 
   return (
     <LoginScreen
@@ -85,6 +88,21 @@ function LoginInner() {
       onGoogleLogin={onGoogleLogin}
       onAppleLogin={() => void onAppleLogin()}
       hero={<Draco size={140} mood="wave" glow headset />}
+      footer={
+        wide ? (
+          <QrLoginPanel
+            client={client}
+            platform="web"
+            onLoggedIn={(result) => {
+              client.setToken(result.accessToken);
+              client.connectSocket();
+              persistSession(result.accessToken, result.refreshToken, result.user);
+              setUser(result.user);
+              router.replace(returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/channels/@me');
+            }}
+          />
+        ) : undefined
+      }
     />
   );
 }

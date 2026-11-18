@@ -269,3 +269,6 @@ export { VoiceInputSettings } from './components/VoiceInputSettings';
 
 // E5 — KVKK veri dökümü + bekleyen hesap silme
 export { AccountDeletionBanner, DataExportSection, formatDeletionDate } from './components/AccountData';
+
+// E4 — QR ile giriş
+export { QrApproveCard, QrCodeSvg, QrLoginPanel, QR_LOGIN_WEB_BASE, qrLoginUrl } from './components/QrLogin';

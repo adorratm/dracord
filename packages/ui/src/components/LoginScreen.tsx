@@ -14,6 +14,8 @@ export interface LoginScreenProps {
   errorMessage?: string;
   /** Logo yerine özel hero (ör. Draco maskot) */
   hero?: ReactNode;
+  /** E4 — under the buttons (e.g. the QR login panel) */
+  footer?: ReactNode;
   className?: string;
 }
 
@@ -25,6 +27,7 @@ export function LoginScreen({
   loading,
   errorMessage,
   hero,
+  footer,
   className,
 }: LoginScreenProps) {
   return (
@@ -87,6 +90,8 @@ export function LoginScreen({
             </button>
           )}
         </div>
+
+        {footer}
 
         <p className="font-label-sm text-label-sm text-outline text-center max-w-xs">
           Devam ederek Dracord Hizmet Şartları&apos;nı ve Gizlilik Politikası&apos;nı kabul etmiş olursun.

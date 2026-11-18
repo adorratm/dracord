@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { colors } from '@dracord/app-theme';
+import { QrLoginPanel } from '@dracord/ui';
 import { useAuth } from '../auth';
 import { Draco } from '../components/Draco';
 
 export function LoginPage() {
-  const { loginGoogle, loginHint } = useAuth();
+  const { loginGoogle, loginHint, client, setSession } = useAuth();
   const [busy, setBusy] = useState(false);
 
   return (
@@ -19,7 +20,7 @@ export function LoginPage() {
     >
       <div
         style={{
-          width: 'min(100%, 400px)',
+          width: 'min(100%, 440px)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -93,6 +94,14 @@ export function LoginPage() {
             ya da tarayıcıda aç
           </button>
         ) : null}
+
+        <div style={{ width: '100%', textAlign: 'left' }}>
+          <QrLoginPanel
+            client={client}
+            platform="desktop"
+            onLoggedIn={({ user, ...tokens }) => setSession(tokens, user)}
+          />
+        </div>
 
         {loginHint ? (
           <p style={{ margin: 0, color: colors.success, fontSize: 13, maxWidth: 320, lineHeight: 1.4 }}>

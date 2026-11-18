@@ -1924,6 +1924,41 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── E4: QR ile giriş ──
+  /** the computer (signed out) asks for a ticket; show `qrLoginUrl(ticketId)` as a QR */
+  async createQrLogin(platform?: string): Promise<{ ticketId: string; pollToken: string; expiresAt: string }> {
+    return this.request('/auth/qr', { method: 'POST', body: JSON.stringify({ platform }) });
+  }
+
+  async pollQrLogin(
+    ticketId: string,
+    pollToken: string,
+  ): Promise<
+    | { status: 'pending' | 'rejected' | 'expired' }
+    | { status: 'scanned'; user: { displayName: string; avatarUrl: string | null } }
+    | ({ status: 'approved'; user: PublicUser } & AuthTokens)
+  > {
+    return this.request(`/auth/qr/${encodeURIComponent(ticketId)}/poll`, {
+      method: 'POST',
+      body: JSON.stringify({ pollToken }),
+    });
+  }
+
+  /** the signed-in phone: which computer is asking? */
+  async scanQrLogin(ticketId: string): Promise<{
+    device: string | null;
+    platform: string | null;
+    ip: string | null;
+    createdAt: string;
+    expiresAt: string;
+  }> {
+    return this.request(`/auth/qr/${encodeURIComponent(ticketId)}/scan`, { method: 'POST' });
+  }
+
+  async decideQrLogin(ticketId: string, approve: boolean): Promise<{ ok: true }> {
+    return this.request(`/auth/qr/${encodeURIComponent(ticketId)}/${approve ? 'approve' : 'reject'}`, { method: 'POST' });
+  }
+
   // ── E2: oturum / cihaz yönetimi ──
   async listSessions(): Promise<import('@dracord/types').SessionDeviceDto[]> {
     return this.request('/auth/sessions');

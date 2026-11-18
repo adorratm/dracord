@@ -15,6 +15,7 @@ const googleEnabled = (): boolean => {
 
 import { SessionStatusService } from './session-status.service';
 import { PasskeysService } from './passkeys.service';
+import { QrLoginService } from './qr-login.service';
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -28,6 +29,7 @@ import { PasskeysService } from './passkeys.service';
     JwtStrategy,
     SessionStatusService,
     PasskeysService,
+    QrLoginService,
     JwtRefreshStrategy,
     ...(googleEnabled() ? [GoogleStrategy] : []),
   ],
