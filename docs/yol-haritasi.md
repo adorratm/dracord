@@ -389,3 +389,7 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - 2026-11-18 — Masaüstü: Google girişinden sonra "Failed to fetch" — giriş bilgisi artık hemen saklanıyor,
   profil isteği ağ hatasında 5 kez deneniyor; olmazsa "Tekrar dene / Giriş ekranı". Açılışta ağ hatası
   oturumu silmiyor (yalnız sunucu reddederse). `withNetworkRetry` / `isNetworkFailure` (`@dracord/sdk`).
+- 2026-11-18 — Masaüstü açılış güncellemesi (Windows): uygulama her açılışta (giriş yapılmamış olsa da) ana
+  pencereden önce küçük bir pencerede güncellemeyi kontrol ediyor; yeni sürüm varsa ilerleme çubuğuyla indirip
+  sessiz kuruyor ve yeniden açılıyor. Kontrol 10 sn / indirme 4 dk'yı aşarsa uygulama açılır, indirme arka
+  planda sürer, kapatınca kurulur. Ayar: Sistem › Otomatik güncelleme. COOMBIE işi nginx'i yalnız değişince yeniler.

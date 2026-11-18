@@ -363,6 +363,12 @@ function applySystemPrefs(partial = {}) {
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let updateCheckTimer = null;
+/** set by setupAutoUpdater: checks / downloads / installs before the main window opens */
+let launchUpdateGate = async () => 'continue';
+/** while the launch gate runs, it does the downloading itself */
+let launchGateActive = false;
+/** true until the main window exists: closing the update splash must not quit the app */
+let bootingUi = true;
 /** Son manuel kontrol mü — UI “checking” notunu buna bağlar */
 let lastUpdateCheckManual = false;
 
@@ -522,7 +528,7 @@ function setupAutoUpdater() {
       manual: lastUpdateCheckManual,
     });
     const prefs = readStoredSystemPrefs();
-    if (prefs.autoUpdate) {
+    if (prefs.autoUpdate && !launchGateActive) {
       void autoUpdater.downloadUpdate().catch((err) => {
         sendUpdateEvent('updater:status', {
           status: 'error',
@@ -638,14 +644,112 @@ function setupAutoUpdater() {
     return { ok: true };
   });
 
-  // İlk kontrol (pencere hazır olduktan biraz sonra)
+  launchUpdateGate = () => runLaunchUpdateGate(autoUpdater);
+
+  // Background checks after start-up (the launch gate already did the first one)
   setTimeout(() => {
     void check(false);
-  }, 8_000);
+  }, 15 * 60 * 1000);
   if (updateCheckTimer) clearInterval(updateCheckTimer);
   updateCheckTimer = setInterval(() => {
     void check(false);
   }, 4 * 60 * 60 * 1000);
+}
+
+/** small frameless window shown while the launch update runs */
+function createUpdateSplash() {
+  const icon = loadAppIcon();
+  const win = new BrowserWindow({
+    width: 320,
+    height: 360,
+    frame: false,
+    resizable: false,
+    movable: true,
+    show: false,
+    center: true,
+    skipTaskbar: false,
+    backgroundColor: '#11131e',
+    title: 'Dracord',
+    ...(icon ? { icon } : {}),
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true },
+  });
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body{margin:0;height:100%;background:radial-gradient(ellipse at 50% 0%,#2d1b4e 0%,#11131e 60%);color:#f8f8f2;font-family:system-ui,sans-serif;-webkit-app-region:drag;user-select:none}
+    .w{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+    h1{margin:0;font-size:30px;letter-spacing:.12em;font-weight:900}
+    .p{color:#bd93f9}.g{color:#50fa7b}
+    #t{font-size:14px;color:#c9c9d6;text-align:center;padding:0 24px;min-height:20px}
+    .bar{width:200px;height:6px;border-radius:3px;background:#2a2c3d;overflow:hidden}
+    #b{height:100%;width:0;background:#bd93f9;transition:width .2s}
+    .spin #b{width:35%;animation:s 1.1s ease-in-out infinite}
+    @keyframes s{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+  </style></head><body><div class="w"><h1><span class="p">DR</span><span class="g">ACO</span><span class="p">RD</span></h1>
+  <div id="t">Güncellemeler kontrol ediliyor…</div><div class="bar spin" id="bar"><div id="b"></div></div></div>
+  <script>window.set=(t,p)=>{document.getElementById('t').textContent=t;const bar=document.getElementById('bar');
+  if(typeof p==='number'){bar.classList.remove('spin');document.getElementById('b').style.width=Math.max(2,Math.min(100,p))+'%'}else{bar.classList.add('spin');document.getElementById('b').style.width=''}}</script>
+  </body></html>`;
+  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed()) win.show();
+  });
+  const set = (text, percent) => {
+    if (win.isDestroyed()) return;
+    void win.webContents
+      .executeJavaScript(`window.set && window.set(${JSON.stringify(String(text))}, ${typeof percent === 'number' ? percent : 'undefined'})`)
+      .catch(() => undefined);
+  };
+  return { win, set, close: () => !win.isDestroyed() && win.close() };
+}
+
+/**
+ * Every launch of a closed app (signed in or not): look for an update before the main window
+ * opens; if there is one, download it with a progress bar and install it — the installer
+ * runs silently and starts Dracord again. A slow or failed check never blocks the start:
+ * after a short wait the app opens and the update keeps downloading in the background
+ * (installed when the app quits). Windows only (macOS needs a signed build to self-update).
+ * @returns {Promise<'continue' | 'installing'>}
+ */
+async function runLaunchUpdateGate(autoUpdater) {
+  if (process.platform !== 'win32') return 'continue';
+  if (!readStoredSystemPrefs().autoUpdate) return 'continue';
+  // started hidden at login (tray): no splash, the background check handles it
+  if (process.argv.includes('--hidden')) return 'continue';
+  const CHECK_MS = 10_000;
+  const DOWNLOAD_MS = 4 * 60 * 1000;
+  const splash = createUpdateSplash();
+  launchGateActive = true;
+  const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
+  const onProgress = (p) => {
+    const pct = Math.round(p.percent || 0);
+    const mb = (n) => (n / 1048576).toFixed(1);
+    splash.set(`Güncelleme indiriliyor… %${pct}${p.total ? ` (${mb(p.transferred)} / ${mb(p.total)} MB)` : ''}`, pct);
+  };
+  try {
+    const result = await Promise.race([autoUpdater.checkForUpdates(), timeout(CHECK_MS)]);
+    const remote = result?.updateInfo?.version;
+    const newer = Boolean(remote) && result?.isUpdateAvailable === true;
+    if (!newer) {
+      splash.close();
+      return 'continue';
+    }
+    splash.set(`Yeni sürüm ${remote} indiriliyor…`, 0);
+    autoUpdater.on('download-progress', onProgress);
+    await Promise.race([autoUpdater.downloadUpdate(), timeout(DOWNLOAD_MS)]);
+    splash.set('Güncelleme yükleniyor — Dracord birazdan yeniden açılacak…');
+    await new Promise((r) => setTimeout(r, 600));
+    // silent installer, then start the app again
+    setImmediate(() => autoUpdater.quitAndInstall(true, true));
+    return 'installing';
+  } catch (err) {
+    console.warn('[updater] launch gate', err?.message || err);
+    splash.close();
+    // keep downloading in the background; installed on quit
+    if (readStoredSystemPrefs().autoUpdate) void autoUpdater.downloadUpdate().catch(() => undefined);
+    return 'continue';
+  } finally {
+    autoUpdater.removeListener('download-progress', onProgress);
+    launchGateActive = false;
+  }
 }
 
 function resolveAppIconPath() {
@@ -1466,7 +1570,7 @@ if (!gotLock) {
     showMainWindow();
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (process.platform === 'win32') {
       app.setAppUserModelId('com.dracord.desktop');
     }
@@ -1490,7 +1594,11 @@ if (!gotLock) {
     }
     // Sürüm IPC’sini pencere açılmadan kaydet (UI “…” takılı kalmasın)
     setupAutoUpdater();
+    // Her açılışta (giriş yapılmamış olsa da): önce güncelleme — varsa indir ve kur.
+    const gate = await launchUpdateGate().catch(() => 'continue');
+    if (gate === 'installing') return;
     createWindow();
+    bootingUi = false;
     try {
       registerGameOverlay({
         showMainWindow,
@@ -1522,6 +1630,8 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
+    // the launch update splash closed before the main window opened: not a quit
+    if (bootingUi && (!mainWindow || mainWindow.isDestroyed())) return;
     if (process.platform !== 'darwin') {
       app.quit();
     }

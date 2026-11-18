@@ -2327,7 +2327,7 @@ export function SettingsPage({
             />
             <SettingsToggle
               label="Otomatik güncelleme"
-              description="Yeni sürüm çıkınca arka planda indir; kurulum için onay istenir."
+              description="Uygulama her açılışta güncellemeyi kontrol eder; yeni sürüm varsa indirip kurar ve yeniden açılır. Açıkken çıkan sürüm arka planda iner, kapatınca kurulur."
               checked={prefs.system.autoUpdate}
               onChange={(v) => {
                 setSection('system', { autoUpdate: v });
