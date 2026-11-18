@@ -5,6 +5,7 @@ import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 import { VoicePresenceModule } from '@/voice/voice-presence.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { AccountDataService } from './account-data.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { UsersService } from './users.service';
     SocketBroadcastModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService],
+  providers: [UsersService, AccountDataService],
+  exports: [UsersService, AccountDataService],
 })
 export class UsersModule {}

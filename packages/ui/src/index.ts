@@ -266,3 +266,6 @@ export { useVoiceInputSettings } from './lib/use-voice-input';
 export { usePushToTalk } from './lib/use-push-to-talk';
 export { KeybindCapture } from './components/KeybindCapture';
 export { VoiceInputSettings } from './components/VoiceInputSettings';
+
+// E5 — KVKK veri dökümü + bekleyen hesap silme
+export { AccountDeletionBanner, DataExportSection, formatDeletionDate } from './components/AccountData';

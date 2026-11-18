@@ -121,6 +121,7 @@ export function toPublicUser(
 
   if (isSelf) {
     base.twoFactorEnabled = Boolean(user.totpEnabled);
+    base.deletionScheduledAt = user.deletionScheduledAt ? user.deletionScheduledAt.toISOString() : null;
   }
 
   if (viewerId && viewerId !== user.id) {

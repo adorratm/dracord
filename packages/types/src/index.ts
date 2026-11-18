@@ -109,6 +109,8 @@ export interface PublicUser {
   isBot?: boolean;
   /** Yalnızca kendi profilinde: 2FA açık mı */
   twoFactorEnabled?: boolean;
+  /** E5 — yalnız kendi hesabın: kalıcı silinme zamanı (ISO), iptal edilebilir */
+  deletionScheduledAt?: string | null;
   /** Platform süper admin (ADMIN_EMAILS) */
   isPlatformAdmin?: boolean;
   /** Sunucu üyeliğinde dolu — rol rozetleri */

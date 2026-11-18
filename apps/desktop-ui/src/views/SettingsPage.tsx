@@ -18,6 +18,8 @@ import {
   E2eeDevicesPanel,
   browserE2eeManager,
   VoiceInputSettings,
+  DataExportSection,
+  formatDeletionDate,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -933,8 +935,25 @@ export function SettingsPage({
       {tab === 'account-status' && (
         <SettingsPageBody
           title="Hesap Durumu"
-          description="Hesabı geçici kapat veya kalıcı sil. Silme geri alınamaz."
+          description="Verilerini indir, hesabı geçici kapat ya da silme talebi oluştur (14 gün içinde iptal edilebilir)."
         >
+          <DataExportSection client={client} />
+          {user?.deletionScheduledAt ? (
+            <SettingsSection title="Silme talebi">
+              <div className="px-space-md py-space-md space-y-3">
+                <SettingsNote>
+                  Hesabın {formatDeletionDate(user.deletionScheduledAt)} tarihinde kalıcı silinecek. Vazgeçtiysen iptal et.
+                </SettingsNote>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container font-semibold"
+                  onClick={() => void client.cancelAccountDeletion().then(() => refreshUser())}
+                >
+                  Silmeyi iptal et
+                </button>
+              </div>
+            </SettingsSection>
+          ) : null}
           <SettingsSection title="Devre dışı bırak">
             <div className="px-space-md py-space-md space-y-3">
               <SettingsNote>
@@ -993,11 +1012,12 @@ export function SettingsPage({
               )}
             </div>
           </SettingsSection>
-          <SettingsSection title="Hesabı kalıcı sil">
+          <SettingsSection title="Hesabı sil">
             <div className="px-space-md py-space-md space-y-3">
               <SettingsNote>
-                Tüm verilerin silinir. Sahip olduğun sunucuları önce sil veya sahipliği
-                devret. Onay için <strong>SİL</strong> yaz.
+                Talepten 14 gün sonra tüm verilerin kalıcı silinir; bu sürede tekrar giriş yapıp iptal
+                edebilirsin. Talep anında tüm cihazlardan çıkış yapılır. Sahip olduğun sunucuları önce sil
+                veya sahipliği devret. Onay için <strong>SİL</strong> yaz.
               </SettingsNote>
               {!deleteConfirming ? (
                 <button
@@ -1005,7 +1025,7 @@ export function SettingsPage({
                   onClick={() => setDeleteConfirming(true)}
                   className="px-4 py-2 rounded-lg bg-error/20 text-error font-semibold hover:bg-error/30"
                 >
-                  Hesabımı kalıcı sil…
+                  Hesabımı silme talebi…
                 </button>
               ) : (
                 <div className="space-y-3">
@@ -1044,14 +1064,21 @@ export function SettingsPage({
                             password: deletePassword || undefined,
                             confirm: deletePhrase,
                           })
-                          .then(() => logout())
+                          .then((r) => {
+                            if (r.deletionScheduledAt) {
+                              window.alert(
+                                `Silme talebin alındı: hesabın ${formatDeletionDate(r.deletionScheduledAt)} tarihinde silinecek. 14 gün içinde giriş yapıp iptal edebilirsin.`,
+                              );
+                            }
+                            logout();
+                          })
                           .catch((e) =>
                             setError(e instanceof Error ? e.message : 'Silme başarısız'),
                           )
                           .finally(() => setDeleteBusy(false));
                       }}
                     >
-                      Kalıcı sil ve çık
+                      Silme talebi oluştur ve çık
                     </button>
                     <button
                       type="button"

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
+import { AccountDeletionBar } from '@/components/AccountDeletionBar';
 import { Analytics } from '@/components/Analytics';
 import { GlobalSearchLazy } from '@/components/GlobalSearchLazy';
 import { OnboardingGate } from '@/components/OnboardingGate';
@@ -154,6 +155,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <GlobalSearchLazy />
                 </Suspense>
                 <SettingsReturnTracker />
+                <AccountDeletionBar />
                 {/* Ses kabuğu (LiveKit) yalnız uygulama sayfalarında yüklenir */}
                 <VoiceGate>{children}</VoiceGate>
                 <AppToaster />

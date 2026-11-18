@@ -11,6 +11,7 @@ import { MusicPlayerBar } from '../../components/voice/MusicPlayerBar';
 import { ActivitySessionProvider } from '../../components/activity/ActivitySession';
 import { ActivityConnectionBar } from '../../components/activity/ActivityConnectionBar';
 import { ConfirmModalHost } from '../../components/ConfirmModal';
+import { AccountDeletionBar } from '../../components/AccountDeletionBar';
 
 export default function AppLayout() {
   const { user, ready } = useAuth();
@@ -36,6 +37,7 @@ export default function AppLayout() {
                 }}
               />
             </View>
+            <AccountDeletionBar />
             <ActivityConnectionBar />
             <MusicPlayerBar />
             <VoiceConnectionBar />

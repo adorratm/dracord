@@ -85,6 +85,10 @@ export class User extends CuidEntity {
   @Column({ type: 'timestamptz', nullable: true })
   disabledAt!: Date | null;
 
+  /** E5 — hesap silme talebi: bu tarihte kalıcı silinir; o zamana dek giriş yapınca iptal edilebilir */
+  @Column({ type: 'timestamptz', nullable: true })
+  deletionScheduledAt!: Date | null;
+
   /** Sistem botu (Dracord-Bot vb.) */
   @Column({ type: 'boolean', default: false })
   isBot!: boolean;

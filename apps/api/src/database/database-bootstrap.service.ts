@@ -16,6 +16,20 @@ export class DatabaseBootstrapService implements OnModuleInit {
     await this.ensureDmHiddenAtColumn();
     await this.ensureActivityStateVersionColumn();
     await this.ensureGuildEventEnrichColumns();
+    await this.ensureUserDeletionColumn();
+  }
+
+  /** users.deletionScheduledAt (E5) — synchronize kapalı ortamlarda */
+  private async ensureUserDeletionColumn() {
+    try {
+      await this.dataSource.query(
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS "deletionScheduledAt" TIMESTAMPTZ NULL`,
+      );
+    } catch (err) {
+      this.log.warn(
+        `users.deletionScheduledAt kontrolü atlandı: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private async ensureGuildEventEnrichColumns() {

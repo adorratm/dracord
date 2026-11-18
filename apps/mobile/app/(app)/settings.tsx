@@ -7,10 +7,12 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { formatDeletionDate } from '../../components/AccountDeletionBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -726,10 +728,59 @@ export default function SettingsScreen() {
               <Text style={{ ...primaryBtnText, color: '#fff' }}>Hesabı devre dışı bırak</Text>
             </Pressable>
 
-            <H1>Hesabı kalıcı sil</H1>
+            <H1>Verilerim</H1>
             <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 8 }}>
-              Geri alınamaz. Sahip olduğun sunucuları önce sil veya sahipliği devret. Onay
-              için SİL yaz.
+              Profilin, ayarların, oturumların, arkadaşlıkların, sunucuların, mesajların ve tepkilerin
+              tek bir JSON dökümü olarak paylaşılır (KVKK m.11). 10 dakikada bir alınabilir.
+            </Text>
+            <Pressable
+              style={{ ...primaryBtn, marginBottom: 16 }}
+              accessibilityRole="button"
+              onPress={() => {
+                setError(null);
+                void client
+                  .exportMyData()
+                  .then(async ({ filename, text }) => {
+                    // the share sheet carries text; very large dumps go through the web download instead
+                    if (text.length > 400_000) {
+                      Alert.alert(
+                        'Döküm çok büyük',
+                        'Verilerin telefonda paylaşılamayacak kadar büyük. dracord.com.tr › Ayarlar › Hesap Durumu bölümünden dosya olarak indirebilirsin.',
+                        [
+                          { text: 'Kapat', style: 'cancel' },
+                          { text: 'Web’de aç', onPress: () => void Linking.openURL('https://dracord.com.tr/settings/account-status') },
+                        ],
+                      );
+                      return;
+                    }
+                    await Share.share({ title: filename, message: text });
+                  })
+                  .catch((e) => setError(e instanceof Error ? e.message : 'Döküm alınamadı'));
+              }}
+            >
+              <Text style={primaryBtnText}>Verilerimi indir</Text>
+            </Pressable>
+
+            {user?.deletionScheduledAt ? (
+              <>
+                <H1>Silme talebi</H1>
+                <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 8 }}>
+                  Hesabın {formatDeletionDate(user.deletionScheduledAt)} tarihinde kalıcı silinecek.
+                </Text>
+                <Pressable
+                  style={{ ...primaryBtn, marginBottom: 16 }}
+                  onPress={() => void client.cancelAccountDeletion().then(() => refreshUser())}
+                >
+                  <Text style={primaryBtnText}>Silmeyi iptal et</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            <H1>Hesabı sil</H1>
+            <Text style={{ color: colors.textMuted, lineHeight: 20, marginBottom: 8 }}>
+              Talepten 14 gün sonra tüm verilerin kalıcı silinir; bu sürede tekrar giriş yapıp iptal
+              edebilirsin. Talep anında tüm cihazlardan çıkış yapılır. Sahip olduğun sunucuları önce
+              sil veya sahipliği devret. Onay için SİL yaz.
             </Text>
             <Label>Onay (SİL)</Label>
             <TextInput
@@ -751,9 +802,9 @@ export default function SettingsScreen() {
               style={{ ...primaryBtn, backgroundColor: colors.danger }}
               onPress={() => {
                 void confirmDialog({
-                  title: 'Hesabı kalıcı sil',
-                  message: 'Tüm verilerin silinir. Bu işlem geri alınamaz.',
-                  confirmLabel: 'Kalıcı sil',
+                  title: 'Hesabı sil',
+                  message: 'Hesabın 14 gün sonra kalıcı silinir. Bu sürede giriş yapıp iptal edebilirsin.',
+                  confirmLabel: 'Silme talebi oluştur',
                   destructive: true,
                 }).then((ok) => {
                   if (!ok) return;
@@ -762,7 +813,12 @@ export default function SettingsScreen() {
                       password: deletePassword || undefined,
                       confirm: deletePhrase,
                     })
-                    .then(() => logout())
+                    .then((r) => {
+                      if (r.deletionScheduledAt) {
+                        Alert.alert('Silme talebi alındı', `Hesabın ${formatDeletionDate(r.deletionScheduledAt)} tarihinde silinecek.`);
+                      }
+                      return logout();
+                    })
                     .then(() => router.replace('/(auth)/login'))
                     .catch((e) =>
                       setError(e instanceof Error ? e.message : 'Silme başarısız'),
@@ -770,7 +826,7 @@ export default function SettingsScreen() {
                 });
               }}
             >
-              <Text style={{ ...primaryBtnText, color: '#fff' }}>Hesabımı kalıcı sil</Text>
+              <Text style={{ ...primaryBtnText, color: '#fff' }}>Hesabımı silme talebi</Text>
             </Pressable>
           </>
         )}

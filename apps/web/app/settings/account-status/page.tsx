@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { DataExportSection, formatDeletionDate } from '@dracord/ui';
 import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import {
@@ -10,7 +11,8 @@ import {
 } from '@/components/settings/SettingsControls';
 
 export default function AccountStatusPage() {
-  const { client, logout } = useAuth();
+  const { client, logout, user, refreshUser } = useAuth();
+  const [scheduledNote, setScheduledNote] = useState<string | null>(null);
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -41,12 +43,16 @@ export default function AccountStatusPage() {
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      await client.deleteAccount({
+      const r = await client.deleteAccount({
         password: deletePassword || undefined,
         confirm: deletePhrase,
       });
-      logout();
-      router.replace('/');
+      setScheduledNote(r.deletionScheduledAt ?? null);
+      // every device is signed out; logging in again within 14 days can cancel it
+      setTimeout(() => {
+        logout();
+        router.replace('/');
+      }, 4000);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Silme başarısız');
     } finally {
@@ -57,8 +63,27 @@ export default function AccountStatusPage() {
   return (
     <SettingsPage
       title="Hesap Durumu"
-      description="Hesabı geçici kapat veya kalıcı sil. Silme geri alınamaz."
+      description="Verilerini indir, hesabı geçici kapat ya da silme talebi oluştur (14 gün içinde iptal edilebilir)."
     >
+      <DataExportSection client={client} />
+
+      {user?.deletionScheduledAt ? (
+        <SettingsSection title="Silme talebi">
+          <div className="px-space-md py-space-md space-y-space-sm">
+            <SettingsNote>
+              Hesabın {formatDeletionDate(user.deletionScheduledAt)} tarihinde kalıcı silinecek. Vazgeçtiysen iptal et.
+            </SettingsNote>
+            <button
+              type="button"
+              onClick={() => void client.cancelAccountDeletion().then(() => refreshUser())}
+              className="px-space-md py-space-sm rounded-lg bg-primary-container text-on-primary-container font-label-sm"
+            >
+              Silmeyi iptal et
+            </button>
+          </div>
+        </SettingsSection>
+      ) : null}
+
       <SettingsSection title="Devre dışı bırak">
         <div className="px-space-md py-space-md space-y-space-sm">
           <SettingsNote>
@@ -109,11 +134,12 @@ export default function AccountStatusPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Hesabı kalıcı sil">
+      <SettingsSection title="Hesabı sil">
         <div className="px-space-md py-space-md space-y-space-sm">
           <SettingsNote>
-            Tüm verilerin silinir ve geri alınamaz. Sahip olduğun sunucuları önce
-            sil veya sahipliği devret. Onay için aşağıya <strong>SİL</strong> yaz.
+            Talepten 14 gün sonra tüm verilerin kalıcı silinir; bu sürede tekrar giriş yapıp
+            iptal edebilirsin. Talep anında tüm cihazlardan çıkış yapılır. Sahip olduğun sunucuları
+            önce sil veya sahipliği devret. Onay için aşağıya <strong>SİL</strong> yaz.
           </SettingsNote>
           {!deleteConfirming ? (
             <button
@@ -121,7 +147,7 @@ export default function AccountStatusPage() {
               onClick={() => setDeleteConfirming(true)}
               className="px-space-md py-space-sm rounded-lg bg-error/20 text-error font-label-sm hover:bg-error/30"
             >
-              Hesabımı kalıcı sil…
+              Hesabımı silme talebi…
             </button>
           ) : (
             <div className="space-y-space-sm">
@@ -150,6 +176,12 @@ export default function AccountStatusPage() {
                 />
               </label>
               {deleteError && <p className="font-body-sm text-error">{deleteError}</p>}
+              {scheduledNote && (
+                <p role="status" className="font-body-sm text-on-surface">
+                  Silme talebin alındı: hesabın {formatDeletionDate(scheduledNote)} tarihinde silinecek.
+                  Çıkış yapılıyor…
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -157,7 +189,7 @@ export default function AccountStatusPage() {
                   onClick={() => void runDelete()}
                   className="px-space-md py-space-sm rounded-lg bg-error text-on-error font-label-sm disabled:opacity-50"
                 >
-                  Kalıcı sil ve çık
+                  Silme talebi oluştur ve çık
                 </button>
                 <button
                   type="button"

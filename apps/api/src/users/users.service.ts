@@ -453,40 +453,6 @@ export class UsersService {
     return { ok: true };
   }
 
-  /**
-   * Kullanıcının kendi hesabını kalıcı silmesi (App Store / Play hesap silme).
-   * Sahip olunan sunucular varsa önce devret/sil gerekir.
-   */
-  async deleteOwnAccount(
-    userId: string,
-    opts: { password?: string; confirm?: string },
-  ): Promise<{ ok: true }> {
-    const confirm = (opts.confirm ?? '').trim().toUpperCase();
-    if (confirm !== 'SİL' && confirm !== 'SIL' && confirm !== 'DELETE') {
-      throw new BadRequestException('Onay için SİL yazmalısın');
-    }
-    const user = await this.em.findOne(User, { where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.passwordHash) {
-      if (!opts.password) {
-        throw new BadRequestException('Şifre gerekli');
-      }
-      const ok = await bcrypt.compare(opts.password, user.passwordHash);
-      if (!ok) throw new UnauthorizedException('Şifre yanlış');
-    }
-    const owned = await this.em.count(Guild, { where: { ownerId: userId } });
-    if (owned > 0) {
-      throw new BadRequestException(
-        `Hesabında ${owned} sunucunun sahipliği var — önce sahipliği devret veya sunucuları sil`,
-      );
-    }
-    await this.voicePresence.leaveEverywhere(userId);
-    await this.em.delete(Session, { userId });
-    await this.em.remove(User, user);
-    void this.indexer.deleteUser(userId).catch(() => undefined);
-    return { ok: true };
-  }
-
   async reactivateAccount(userId: string): Promise<PublicUser> {
     const user = await this.em.findOne(User, { where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');

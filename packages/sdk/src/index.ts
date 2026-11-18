@@ -344,14 +344,47 @@ export class DracordClient {
     });
   }
 
+  /**
+   * E5 — hesap silme talebi: hemen silinmez, 14 gün sonra kalıcı silinir; tüm cihazlardan çıkış yapılır.
+   * Süre dolmadan tekrar giriş yapıp `cancelAccountDeletion()` ile iptal edilebilir.
+   */
   async deleteAccount(opts: {
     password?: string;
     confirm: string;
-  }): Promise<{ ok: true }> {
+  }): Promise<{ ok: true; deletionScheduledAt?: string }> {
     return this.request('/users/me', {
       method: 'DELETE',
       body: JSON.stringify(opts),
     });
+  }
+
+  /** E5 — bekleyen hesap silme talebini iptal et */
+  async cancelAccountDeletion(): Promise<{ ok: true }> {
+    return this.request('/users/me/deletion/cancel', { method: 'POST' });
+  }
+
+  /** E5 — KVKK/GDPR veri dökümü (JSON metni). 10 dakikada bir alınabilir. */
+  async exportMyData(): Promise<{ filename: string; text: string }> {
+    const go = async (retried: boolean): Promise<{ filename: string; text: string }> => {
+      const headers = new Headers();
+      if (this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+      const res = await fetch(`${this.baseUrl}/users/me/export`, { headers, credentials: 'include', cache: 'no-store' });
+      if (res.status === 401 && !retried && (await this.refreshAccessToken())) return go(true);
+      const text = await res.text();
+      if (!res.ok) {
+        let body: unknown = null;
+        try {
+          body = text.trim() ? JSON.parse(text) : null;
+        } catch {
+          body = null;
+        }
+        throw new ApiError(res.status, formatApiError(res.status, text, body), body);
+      }
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const filename = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'dracord-verilerim.json';
+      return { filename, text };
+    };
+    return go(false);
   }
 
   async deactivateAccount(password?: string): Promise<{ ok: true }> {

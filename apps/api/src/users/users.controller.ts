@@ -1,11 +1,43 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpException, HttpStatus, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { UsersService, type UpdateProfileInput } from './users.service';
+import { AccountDataService } from './account-data.service';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly accountData: AccountDataService,
+  ) {}
+
+  /** E5 — KVKK/GDPR: everything about me as one JSON file (streamed) */
+  @Get('me/export')
+  async exportMe(@Req() req: { user: { sub: string } }, @Res() res: Response) {
+    const retry = this.accountData.exportRetryAfter(req.user.sub);
+    if (retry !== null) {
+      res.setHeader('Retry-After', String(retry));
+      throw new HttpException(`Yeni bir döküm için ${Math.ceil(retry / 60)} dk bekle`, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="dracord-verilerim-${day}.json"`);
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      await this.accountData.streamExport(req.user.sub, res);
+      res.end();
+    } catch (err) {
+      if (!res.headersSent) throw err;
+      res.destroy(err instanceof Error ? err : undefined);
+    }
+  }
+
+  /** E5 — cancel a pending account deletion (within the 14 days) */
+  @Post('me/deletion/cancel')
+  cancelDeletion(@Req() req: { user: { sub: string } }) {
+    return this.accountData.cancelDeletion(req.user.sub);
+  }
 
   @Get('friends')
   friends(@Req() req: { user: { sub: string } }) {
@@ -116,7 +148,8 @@ export class UsersController {
     @Req() req: { user: { sub: string } },
     @Body() body: { password?: string; confirm?: string },
   ) {
-    return this.usersService.deleteOwnAccount(req.user.sub, body);
+    // E5 — not instant: scheduled 14 days out, every device signed out, cancellable by logging in
+    return this.accountData.requestDeletion(req.user.sub, body);
   }
 
   @Post('me/reactivate')
