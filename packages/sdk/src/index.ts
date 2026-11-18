@@ -764,6 +764,8 @@ export class DracordClient {
       locked?: boolean;
       password?: string | null;
       deniedUserIds?: string[];
+      slowModeSec?: number;
+      isAnnouncement?: boolean;
       permissionOverwrites?: Array<{
         id: string;
         type: 'role' | 'member';
@@ -1922,6 +1924,26 @@ export class DracordClient {
 
   async passkeyLoginVerify(state: string, response: unknown): Promise<AuthTokens & { user: PublicUser }> {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
+  }
+
+  // ── B8: duyuru takibi ──
+  async listChannelFollowers(channelId: string): Promise<import('@dracord/types').ChannelFollowDto[]> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/followers`);
+  }
+
+  async listChannelFollowing(channelId: string): Promise<import('@dracord/types').ChannelFollowDto[]> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/following`);
+  }
+
+  async followChannel(sourceChannelId: string, targetChannelId: string): Promise<import('@dracord/types').ChannelFollowDto> {
+    return this.request(`/channels/${encodeURIComponent(sourceChannelId)}/followers`, {
+      method: 'POST',
+      body: JSON.stringify({ targetChannelId }),
+    });
+  }
+
+  async unfollowChannel(followId: string): Promise<{ ok: true }> {
+    return this.request(`/channel-follows/${encodeURIComponent(followId)}`, { method: 'DELETE' });
   }
 
   // ── C5: takım arama ilanları ──

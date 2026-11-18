@@ -63,7 +63,7 @@ import { GuildBoostPage } from '../views/GuildBoostPage';
 import { MemberPanel } from '../views/MemberPanel';
 import { NotificationBell } from '../views/NotificationBell';
 import { UpdateBanner } from '../components/UpdateBanner';
-import { AccountDeletionBanner, GuildOnboardingModal } from '@dracord/ui';
+import { AccountDeletionBanner, ChannelExtrasSettings, GuildOnboardingModal } from '@dracord/ui';
 
 type View =
   | { kind: 'home' }
@@ -2013,6 +2013,15 @@ export function Shell() {
                 </optgroup>
               </select>
             ) : null}
+          </div>
+        ) : null}
+        {channelModal?.mode === 'edit' && channelModal.channel.type === 'TEXT' ? (
+          <div className="mb-3">
+            <ChannelExtrasSettings
+              client={client}
+              channel={channelModal.channel}
+              onUpdated={() => activeGuildId && reloadChannels(activeGuildId)}
+            />
           </div>
         ) : null}
         <button

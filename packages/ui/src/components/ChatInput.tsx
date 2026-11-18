@@ -65,6 +65,8 @@ export interface ChatMentionChannel {
 
 export interface ChatInputProps {
   channelName?: string;
+  /** B8 — yavaş mod (sn): yer tutucuda gösterilir */
+  slowModeSec?: number;
   placeholder?: string;
   disabled?: boolean;
   onSend?: (text: string, meta?: { replyToId?: string }) => void;
@@ -171,6 +173,7 @@ function resolveStickerById(
 export function ChatInput({
   channelName,
   placeholder,
+  slowModeSec,
   disabled,
   onSend,
   onSendMedia,
@@ -314,7 +317,8 @@ export function ChatInput({
 
 
   const resolvedPlaceholder =
-    placeholder ?? (channelName ? `#${channelName} kanalına mesaj gönder` : 'Mesaj yazın…');
+    (placeholder ?? (channelName ? `#${channelName} kanalına mesaj gönder` : 'Mesaj yazın…')) +
+    (slowModeSec && slowModeSec > 0 ? ` · yavaş mod: ${slowModeSec >= 60 ? `${Math.round(slowModeSec / 60)} dk` : `${slowModeSec} sn`}` : '');
 
   const refreshStickerState = useCallback(() => {
     setCustomStickers(loadCustomStickers());

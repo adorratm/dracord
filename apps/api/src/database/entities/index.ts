@@ -37,6 +37,7 @@ export { GuildOnboarding } from './guild-onboarding.entity';
 export { GuildOnboardingCompletion } from './guild-onboarding-completion.entity';
 export { ReactionRole } from './reaction-role.entity';
 export { LfgListing } from './lfg-listing.entity';
+export { ChannelFollow } from './channel-follow.entity';
 export { UserPasskey } from './user-passkey.entity';
 export { E2eeDevice } from './e2ee-device.entity';
 export { OauthConnection } from './oauth-connection.entity';

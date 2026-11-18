@@ -1,3 +1,5 @@
+import { ChannelFollowsController } from './channel-follows.controller';
+import { ChannelFollowsService } from './channel-follows.service';
 import { Module } from '@nestjs/common';
 import { GuildsModule } from '@/guilds/guilds.module';
 import { SearchModule } from '@/search/search.module';
@@ -7,8 +9,8 @@ import { ChannelsService } from './channels.service';
 
 @Module({
   imports: [GuildsModule, VoicePresenceModule, SearchModule],
-  controllers: [ChannelsController],
-  providers: [ChannelsService],
+  controllers: [ChannelsController, ChannelFollowsController],
+  providers: [ChannelsService, ChannelFollowsService],
   exports: [ChannelsService],
 })
 export class ChannelsModule {}

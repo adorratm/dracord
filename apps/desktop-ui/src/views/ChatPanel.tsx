@@ -9,6 +9,7 @@ import type {
 } from '@dracord/types';
 import { DRACORD_BOT_USER_ID, SocketEvents, mergeLatestMessages } from '@dracord/types';
 import {
+  AnnouncementFollowButton,
   Avatar,
   ChatInput,
   MessageList,
@@ -108,6 +109,15 @@ export function ChatPanel({
   e2ee?: E2eeDmController | null;
 }) {
   const { client, user } = useAuth();
+  // B8 — servers to send this announcement channel's posts to
+  const [followGuilds, setFollowGuilds] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    if (!channel?.isAnnouncement) return;
+    void client
+      .listGuilds()
+      .then((gs) => setFollowGuilds(gs.map((g) => ({ id: g.id, name: g.name }))))
+      .catch(() => setFollowGuilds([]));
+  }, [client, channel?.isAnnouncement]);
   const scheduler = useScheduledMessages(client, channel.id);
   /** "Ne kaçırdım?" çapası — kanal açıldığı andaki okuma durumu */
   const catchupAnchor = useRef<{ channelId?: string; after: string | null; unread: number; at?: string }>({ after: null, unread: 0 });
@@ -558,6 +568,7 @@ export function ChatPanel({
 
   const sharedInputProps = {
     channelName: channel.name,
+    slowModeSec: channel.slowModeSec,
     mentionUsers: members.map((m) => ({
       id: m.id,
       username: m.username,
@@ -623,6 +634,7 @@ export function ChatPanel({
             >
               <span className="material-symbols-outlined text-[18px]">search</span>
             </button>
+            {channel.isAnnouncement ? <AnnouncementFollowButton client={client} channel={channel} guilds={followGuilds} /> : null}
             <button
               type="button"
               className="h-8 px-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface flex items-center gap-1 text-sm"

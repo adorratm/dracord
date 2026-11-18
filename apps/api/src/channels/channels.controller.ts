@@ -65,6 +65,8 @@ export class ChannelsController {
       locked?: boolean;
       password?: string | null;
       deniedUserIds?: string[];
+      slowModeSec?: number;
+      isAnnouncement?: boolean;
       permissionOverwrites?: Array<{
         id: string;
         type: 'role' | 'member';

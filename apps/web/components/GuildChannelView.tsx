@@ -78,7 +78,7 @@ import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
-import { GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
+import { AnnouncementFollowButton, ChannelExtrasSettings, GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
 
 interface GuildChannelViewProps {
   guildId: string;
@@ -2662,6 +2662,7 @@ export function GuildChannelView({
 
   const chatInputProps = {
     channelName: channel?.name,
+    slowModeSec: channel?.slowModeSec,
     scheduler: isForumView ? null : scheduler,
     voiceMessages: isForumView || !channelId ? null : { client, channelId },
     placeholder: isForumView
@@ -3631,6 +3632,9 @@ export function GuildChannelView({
                 <span className="material-symbols-outlined text-[18px]">forum</span>
               </button>
             )}
+            {channel?.isAnnouncement ? (
+              <AnnouncementFollowButton client={client} channel={channel} guilds={guilds.map((g) => ({ id: g.id, name: g.name }))} />
+            ) : null}
             {channel && canManageChannels && (
               <button
                 type="button"
@@ -4364,6 +4368,9 @@ export function GuildChannelView({
             )}
           </div>
         )}
+        {channelModal?.mode === 'edit' && canManageChannels && channelModal.channel?.type === 'TEXT' ? (
+          <ChannelExtrasSettings client={client} channel={channelModal.channel} onUpdated={() => void reload()} />
+        ) : null}
         {channelModal?.mode === 'edit' && canManageChannels && (
           <div className="mt-space-md space-y-space-sm">
             <button

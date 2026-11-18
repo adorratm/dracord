@@ -2,6 +2,8 @@ import { OnboardingService } from '@/onboarding/onboarding.service';
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   Optional,
@@ -17,6 +19,8 @@ import {
 } from 'typeorm';
 import { createId } from '@paralleldrive/cuid2';
 import { Channel } from '@/database/entities/channel.entity';
+import { ChannelFollow } from '@/database/entities/channel-follow.entity';
+import { Guild } from '@/database/entities/guild.entity';
 import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
 import { Friendship } from '@/database/entities/friendship.entity';
@@ -421,6 +425,7 @@ export class MessagesService {
       if (!canSend) {
         throw new ForbiddenException('Bu kanala mesaj gönderme iznin yok');
       }
+      await this.assertSlowMode(channelRow, userId);
     }
     const trimmed = content.trim();
     await this.automod.assertMessageAllowed(trimmed, channelRow?.guildId);
@@ -562,6 +567,10 @@ export class MessagesService {
         ? []
         : await this.createMessageNotifications(dto, channelRow, userId);
     this.realtime.emitCreate(channelId, dto);
+    // B8 — duyuru kanalı: takip eden kanallara da düşür
+    if (channelRow?.isAnnouncement && !threadRootId && !e2ee && msgType === 'default' && userId !== DRACORD_BOT_USER_ID) {
+      void this.crosspostAnnouncement(channelRow, message).catch(() => undefined);
+    }
     // Seviye/XP — asla gönderimi bozmaz
     if (msgType === 'default' && channelRow?.guildId) {
       void this.levels?.onMessage(channelRow.guildId, channelId, userId).catch(() => undefined);
@@ -900,6 +909,68 @@ export class MessagesService {
     void this.indexer.deleteMessage(message.id).catch(() => undefined);
     this.realtime.emitDelete(message.channelId, message.id);
     return { id: message.id, channelId: message.channelId };
+  }
+
+  /** B8 — yavaş mod (kanalı / mesajları yönetenler muaf) */
+  private async assertSlowMode(channel: Channel, userId: string): Promise<void> {
+    const sec = channel.slowModeSec || 0;
+    if (sec <= 0 || !channel.guildId || userId === DRACORD_BOT_USER_ID) return;
+    const since = new Date(Date.now() - sec * 1000);
+    const last = await this.em.findOne(Message, {
+      where: { channelId: channel.id, authorId: userId, createdAt: MoreThan(since) },
+      order: { createdAt: 'DESC' },
+      select: { id: true, createdAt: true },
+    });
+    if (!last) return;
+    const exempt =
+      (await this.em.count(Guild, { where: { id: channel.guildId, ownerId: userId } })) > 0 ||
+      (await this.guilds.memberHasPermission(channel.guildId, userId, GuildPermissions.MANAGE_MESSAGES)) ||
+      (await this.guilds.memberHasPermission(channel.guildId, userId, GuildPermissions.MANAGE_CHANNELS));
+    if (exempt) return;
+    const wait = Math.max(1, Math.ceil((last.createdAt.getTime() + sec * 1000 - Date.now()) / 1000));
+    throw new HttpException(`Yavaş mod açık — ${wait} sn sonra yazabilirsin`, HttpStatus.TOO_MANY_REQUESTS);
+  }
+
+  /** B8 — copy a new announcement into every following channel (as Dracord-Bot, with the source) */
+  private async crosspostAnnouncement(source: Channel, message: Message): Promise<void> {
+    const follows = await this.em.find(ChannelFollow, { where: { sourceChannelId: source.id } });
+    if (follows.length === 0) return;
+    const guild = source.guildId ? await this.em.findOne(Guild, { where: { id: source.guildId }, select: { id: true, name: true } }) : null;
+    const from: MessageForwardedFrom = {
+      messageId: message.id,
+      channelId: source.id,
+      authorId: message.authorId,
+      authorName: `${guild?.name ?? 'Sunucu'} #${source.name}`,
+      contentPreview: (message.content || '').slice(0, 500),
+      createdAt: message.createdAt.toISOString(),
+    };
+    for (const f of follows) {
+      try {
+        const saved = await this.em.save(
+          Message,
+          this.em.create(Message, {
+            channelId: f.targetChannelId,
+            authorId: DRACORD_BOT_USER_ID,
+            content: message.content || ' ',
+            type: 'default',
+            replyToId: null,
+            threadRootId: null,
+            pinnedAt: null,
+            pinnedById: null,
+            forwardedFrom: from,
+            attachments: message.attachments,
+            embeds: null,
+            poll: null,
+          }),
+        );
+        const row = await this.em.findOneOrFail(Message, { where: { id: saved.id }, relations: { author: true } });
+        const dto = await this.toDtoResolved(row, { viewerId: DRACORD_BOT_USER_ID, reactions: [] });
+        this.realtime.emitCreate(f.targetChannelId, dto);
+        void this.indexer.indexMessage(dto, { guildId: f.targetGuildId, dmChannelId: null }).catch(() => undefined);
+      } catch {
+        /* the target channel may be gone; FK cascade removes the follow */
+      }
+    }
   }
 
   async toggleReaction(

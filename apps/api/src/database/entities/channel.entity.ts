@@ -69,6 +69,14 @@ export class Channel extends CuidEntity {
     deny: string[];
   }> | null;
 
+  /** B8 — yavaş mod: bir üye bu kanala en fazla bu sıklıkla yazabilir (sn, 0 = kapalı) */
+  @Column({ type: 'int', default: 0 })
+  slowModeSec!: number;
+
+  /** B8 — duyuru kanalı: başka sunucular takip edebilir, mesajlar onlara da düşer */
+  @Column({ type: 'boolean', default: false })
+  isAnnouncement!: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

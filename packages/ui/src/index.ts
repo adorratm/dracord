@@ -284,3 +284,6 @@ export {
 
 // C5 — takım arama ilanları
 export { LfgBoard } from './components/LfgBoard';
+
+// B8 — yavaş mod + duyuru takibi
+export { AnnouncementFollowButton, ChannelExtrasSettings, SLOW_MODE_OPTIONS, slowModeLabel } from './components/ChannelExtras';

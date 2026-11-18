@@ -464,6 +464,10 @@ export interface ChannelSummary {
   categoryId: string | null;
   position: number;
   topic?: string | null;
+  /** B8 — yavaş mod (sn) */
+  slowModeSec?: number;
+  /** B8 — duyuru kanalı (takip edilebilir) */
+  isAnnouncement?: boolean;
   voiceMembers?: VoiceMemberSummary[];
   /** Ses kanalı durum metni (istemci tarafında birleştirilir; VOICE_CHANNEL_STATUS) */
   voiceStatus?: string | null;
@@ -2246,4 +2250,17 @@ export interface CreateLfgInput {
   voiceChannelId?: string | null;
   /** 15–480 dk, varsayılan 120 */
   durationMin?: number;
+}
+
+// ── B8: duyuru takibi ──
+export interface ChannelFollowDto {
+  id: string;
+  sourceChannelId: string;
+  sourceChannelName: string;
+  sourceGuildName: string;
+  targetChannelId: string;
+  targetChannelName: string;
+  targetGuildId: string;
+  targetGuildName: string;
+  createdAt: string;
 }

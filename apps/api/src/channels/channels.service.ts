@@ -38,6 +38,9 @@ export type ChannelUpdateInput = {
   password?: string | null;
   deniedUserIds?: string[];
   permissionOverwrites?: ChannelOverwriteDto[] | null;
+  /** B8 — 0–21600 sn */
+  slowModeSec?: number;
+  isAnnouncement?: boolean;
 };
 
 export type ChannelOverwriteDto = {
@@ -243,6 +246,13 @@ export class ChannelsService {
         : data.name.trim().replace(/\s+/g, '-').toLowerCase().slice(0, 100);
     }
     if (data.topic !== undefined) channel.topic = data.topic;
+    if (data.slowModeSec !== undefined) {
+      const n = Math.round(Number(data.slowModeSec));
+      channel.slowModeSec = Number.isFinite(n) ? Math.max(0, Math.min(21600, n)) : 0;
+    }
+    if (data.isAnnouncement !== undefined && channel.type === ChannelType.TEXT) {
+      channel.isAnnouncement = Boolean(data.isAnnouncement);
+    }
     if (data.categoryId !== undefined) channel.categoryId = data.categoryId;
     if (data.locked !== undefined) channel.locked = Boolean(data.locked);
     if (data.password !== undefined) {
@@ -496,6 +506,8 @@ export class ChannelsService {
       categoryId: channel.categoryId,
       position: channel.position,
       topic: channel.topic ?? null,
+      slowModeSec: channel.slowModeSec || 0,
+      isAnnouncement: !!channel.isAnnouncement,
       voiceMembers: opts?.voiceMembers,
       unread,
       unreadCount,
