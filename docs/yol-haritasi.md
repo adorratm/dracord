@@ -361,6 +361,24 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] Erişilebilirlik/kontrast taraması — herkese açık sayfalar (ana sayfa, giriş, indirme) koyu+açık temada axe WCAG 2 A/AA: **0 ihlal**; kalıcı test `apps/e2e/tests/a11y.public.spec.ts`. Uygulama içi kod taraması: adsız simge düğmesi 3 → 0, etiketsiz form alanı 13 → 0 (aria-label). Kalan: oturumlu ekranların axe taraması (test hesabı ile `signed-in` projesine eklenecek).
 - [x] Repo temizliği: `apps/desktop` deneme betikleri/günlükleri ve `apps/mobile/console.log(m.width` (boş) depodan çıkarıldı, `.gitignore`'a eklendi. Kökteki `youtube-cookies.*` zaten gitignore'da ve depoda yok (yerel dosyan, dokunulmadı).
 
+## Faz 4 — Yeni özellikler (karar 2026-11-18: hepsi)
+
+Hepsi varsayılan kapalı/opsiyonel açılır, üç platform birlikte; ücretli AI yok. Sıra:
+
+**Dalga 1** (en çok hissedilecekler)
+- [ ] A8 Bas-konuş + genel sustur/sağırlaştır kısayolları — desktop: Windows'ta global tuş izleme
+  (PowerShell + `GetAsyncKeyState`, native modül yok; fare yan tuşları dahil), mac/Linux'ta pencere içi;
+  web: sekme içi; mobil: basılı tut düğmesi.
+- [ ] E5 KVKK: verilerimi indir (zip) + hesap silme talebi (14 gün bekleme, iptal edilebilir).
+- [ ] E4 QR ile giriş: web/desktop giriş ekranında QR, mobil uygulamadan okut → onayla.
+- [ ] B5 Sunucuya katılış ekranı (kurallar + sorular → rol + kanal önerisi) + tepki rolleri.
+- [ ] C5 Takım arkadaşı arama ilanları (oyun, kişi sayısı, rank, ses) → tek tıkla katıl.
+  Not: masaüstünde çalışan oyun algılama + "oynuyor" durumu zaten var (`useDesktopGamePresence`).
+
+**Dalga 2:** B7 çekiliş + doğum günü · B8 yavaş mod + duyuru takibi · B9 yıldız panosu · G1 medya galerisi · B6 destek talebi
+**Dalga 3:** A9 RNNoise · A10 kamera arka planı · F1 profil süsleri · E6 passkey desktop/mobil · G2 mobil veri tasarrufu
+**Dalga 4:** C6 turnuva devamı · C7 klip devamı · F2 sunucu abonelikleri · G3 beyaz tahta
+
 ## Karar bekleyen sorular
 
 1. ~~Faz 0.2 hemen mi?~~ → beklemede. Kaçış kısayolu tercihi başlarken sorulacak.
