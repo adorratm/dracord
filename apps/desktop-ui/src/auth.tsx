@@ -25,7 +25,8 @@ type AuthCtx = {
   client: DracordClient;
   user: PublicUser | null;
   ready: boolean;
-  loginGoogle: () => Promise<void>;
+  /** 'app' (default): in-app window · 'browser': the default web browser */
+  loginGoogle: (where?: 'app' | 'browser') => Promise<void>;
   loginHint: string | null;
   logout: () => void;
   setSession: (tokens: AuthTokens, user: PublicUser) => void;
@@ -85,12 +86,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setReady(true));
   }, [client]);
 
-  const loginGoogle = useCallback(async () => {
+  const loginGoogle = useCallback(async (where: 'app' | 'browser' = 'app') => {
     const url = client.getGoogleLoginUrl('desktop');
     const openOAuth = window.dracordDesktop?.openOAuth;
-    const openExternal = window.dracordDesktop?.openExternal;
+    const openExternal = window.dracordDesktop?.openOAuthInBrowser ?? window.dracordDesktop?.openExternal;
+    if (where === 'browser' && openExternal) {
+      setLoginHint('Varsayılan tarayıcında Google açıldı — girişi orada tamamla, Dracord kendiliğinden açılacak.');
+      const res = await openExternal(url);
+      if (!res?.ok) setLoginHint('Tarayıcı açılamadı. Varsayılan tarayıcını kontrol et ya da uygulama içi girişi dene.');
+      return;
+    }
     if (openOAuth) {
-      setLoginHint('Google giriş penceresi açılıyor…');
+      setLoginHint('Google giriş penceresi açıldı. Pencere boş kalırsa ya da doğrulama takılırsa aşağıdan “Tarayıcıda aç” ile dene.');
       const res = await openOAuth(url);
       if (!res?.ok) {
         setLoginHint('Giriş penceresi açılamadı — tekrar dene.');
@@ -120,6 +127,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStickerCloudBridge(null);
     setUser(null);
   }, [client]);
+
+  // the in-app Google window could not load: point at the browser instead
+  useEffect(() => {
+    return window.dracordDesktop?.onOAuthWindowFailed?.(() => {
+      setLoginHint('Giriş penceresi yüklenemedi — “Tarayıcıda aç” ile varsayılan tarayıcından giriş yapabilirsin.');
+    });
+  }, []);
 
   // E3 — bu cihazın şifreleme anahtarını kaydet (karşı taraf E2EE açabilsin)
   useEffect(() => {

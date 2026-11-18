@@ -842,6 +842,27 @@ function openOAuthWindow(rawUrl) {
   });
 
   const wc = oauthWindow.webContents;
+  // Google treats an embedded app browser with suspicion (blank / "this browser may not be
+  // secure" pages). Present the plain Chrome this window really is: drop the app and
+  // Electron tokens from the user agent.
+  try {
+    const clean = wc
+      .getUserAgent()
+      .split(' ')
+      .filter((tok) => !/^(Electron|dracord[\w.-]*|Dracord[\w.-]*)\//.test(tok) && !tok.startsWith(`${app.getName()}/`))
+      .join(' ');
+    wc.setUserAgent(clean);
+  } catch {
+    /* keep the default */
+  }
+  // the page could not load or the window's renderer died: tell the app, which offers the browser
+  const notifyFailed = (reason) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('oauth:window-failed', { reason });
+  };
+  wc.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
+    if (isMainFrame && code !== -3 /* aborted: our own redirect handling */) notifyFailed(`${code} ${desc}`.slice(0, 120));
+  });
+  wc.on('render-process-gone', (_e, d) => notifyFailed(d?.reason || 'gone'));
   const onNav = (_event, url) => {
     if (finishOAuthFromUrl(url)) return;
   };
@@ -1088,6 +1109,28 @@ function registerWindowIpc() {
       return { ok: true };
     } catch (err) {
       console.warn('[shell:open-external]', err);
+      return { ok: false, error: 'open_failed' };
+    }
+  });
+
+  // Google sign-in in the default browser instead (the in-app window is closed first). The
+  // sign-in ends on dracord.com.tr/auth/desktop-done, which hands the session back through
+  // the dracord:// link.
+  ipcMain.handle('shell:open-oauth-browser', async (_event, rawUrl) => {
+    if (typeof rawUrl !== 'string' || rawUrl.length > 2048) return { ok: false, error: 'invalid_url' };
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return { ok: false, error: 'invalid_url' };
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return { ok: false, error: 'protocol' };
+    closeOAuthWindow();
+    try {
+      await shell.openExternal(parsed.toString());
+      return { ok: true };
+    } catch (err) {
+      console.warn('[shell:open-oauth-browser]', err);
       return { ok: false, error: 'open_failed' };
     }
   });

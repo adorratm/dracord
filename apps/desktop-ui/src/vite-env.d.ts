@@ -61,6 +61,8 @@ type DracordDesktopApi = {
   getSystemPrefs?: () => Promise<DracordDesktopSystemPrefsResult>;
   openExternal?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   openOAuth?: (url: string) => Promise<{ ok: boolean; error?: string }>;
+  openOAuthInBrowser?: (url: string) => Promise<{ ok: boolean; error?: string }>;
+  onOAuthWindowFailed?: (callback: (payload: { reason?: string }) => void) => () => void;
   getDesktopSources: () => Promise<DracordDesktopCaptureSource[]>;
   setDisplayMediaSelection: (selection: {
     sourceId: string;

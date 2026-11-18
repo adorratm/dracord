@@ -1227,6 +1227,8 @@ export interface GuildEventDto {
 export interface VoiceTokenResponse {
   token: string;
   url: string;
+  /** the same voice server under other addresses, tried in order if `url` cannot be reached */
+  fallbackUrls?: string[];
   roomName: string;
 }
 

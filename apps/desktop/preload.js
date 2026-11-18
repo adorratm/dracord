@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   /** Google OAuth — kapatılabilir Electron penceresi (sistem sekmesi kapanmaz) */
   openOAuth: (url) => ipcRenderer.invoke('shell:open-oauth', url),
+  /** Google OAuth — varsayılan tarayıcıda (uygulama içi pencere kapanır) */
+  openOAuthInBrowser: (url) => ipcRenderer.invoke('shell:open-oauth-browser', url),
+  /** uygulama içi giriş penceresi yüklenemedi */
+  onOAuthWindowFailed: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('oauth:window-failed', handler);
+    return () => ipcRenderer.removeListener('oauth:window-failed', handler);
+  },
   getDesktopSources: () => ipcRenderer.invoke('desktop-capturer:get-sources'),
   setDisplayMediaSelection: (selection) =>
     ipcRenderer.invoke('desktop-capturer:set-selection', selection),

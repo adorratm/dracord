@@ -79,6 +79,22 @@ server {
 
   client_max_body_size 50m;
 
+  # LiveKit signaling again, under the API host: clients fall back to it when rtc.* cannot
+  # be reached (LIVEKIT_FALLBACK_URLS). The prefix is stripped: /livekit/rtc → /rtc.
+  location /livekit/ {
+    set $dracord_lk dracord-livekit:7880;
+    rewrite ^/livekit/(.*)$ /$1 break;
+    proxy_pass http://$dracord_lk;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $dracord_connection_upgrade;
+    proxy_read_timeout 86400s;
+  }
+
   location / {
     set $dracord_upstream dracord-edge:14000;
     proxy_pass http://$dracord_upstream;

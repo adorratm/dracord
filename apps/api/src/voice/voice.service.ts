@@ -78,7 +78,14 @@ export class VoiceService {
     });
 
     const jwt = await token.toJwt();
-    return { token: jwt, url, roomName };
+    // the same LiveKit under other addresses (comma separated), tried by clients when the
+    // main one cannot be reached — see connectVoiceWithFallback in @dracord/sdk
+    const fallbackUrls = (this.config.get<string>('LIVEKIT_FALLBACK_URLS') ?? '')
+      .split(',')
+      .map((u) => u.trim())
+      .filter((u) => /^wss?:\/\//i.test(u) && u !== url)
+      .slice(0, 3);
+    return { token: jwt, url, roomName, ...(fallbackUrls.length ? { fallbackUrls } : {}) };
   }
 
   async assertCanMoveMembers(guildId: string, actorId: string): Promise<void> {

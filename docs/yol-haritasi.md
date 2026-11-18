@@ -379,3 +379,10 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - 2026-11-09 — Dalga 2 (B1 seviye/XP, A1 sesli mesaj, A2 soundboard, D1 ne kaçırdım) kodu tamamlandı; typecheck temiz.
 - 2026-11-09 — C1 oyun platformu: API + embedded SDK + web/desktop/mobil host + geliştirici portalı + admin onay + Mintlify belgeleri.
 - 2026-11-09 — Öncelik 1 kapandı: mobil uzak kontrol (kontrol eden + ekran izleme), macOS kontrol edilen, fiziksel fare önceliği, mobil soundboard kaydı, embedded-sdk publish + OpenAPI, Electron/Firefox çevirisi, COOMBIE köprüsü (oyun reposunda).
+- 2026-11-18 — Bildirilen hatalar: (1) ses kanalına katılırken "could not establish signal connection" —
+  istemciler artık LiveKit'e önce `rtc.dracord.com.tr`, olmazsa aynı sunucuya `api.dracord.com.tr/livekit`
+  (nginx `/livekit/` → livekit, `LIVEKIT_FALLBACK_URLS`) üzerinden bağlanıyor, listeyi kısa bir aradan sonra
+  bir kez daha deniyor ve sonunda anlaşılır bir Türkçe mesaj gösteriyor (`connectVoiceWithFallback`,
+  `@dracord/sdk`; web/desktop/mobil). (2) Masaüstü Google girişi: uygulama içi pencere kalıyor (Electron
+  izleri user agent'tan çıkarıldı, sayfa yüklenemezse uyarı) + giriş ekranında **"ya da tarayıcıda aç"**:
+  varsayılan tarayıcıda giriş, `dracord://` bağlantısıyla uygulamaya dönüş. Desktop için yeni sürüm gerekir.

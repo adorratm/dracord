@@ -10,6 +10,7 @@ import { ChatView } from '../../components/ChatView';
 import { UserAvatar } from '../../components/UserAvatar';
 import { primaryBtn, primaryBtnText } from '../../lib/ui';
 import { ShellHeader } from '../../components/shell/AppShell';
+import { connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 
 let lkReady = false;
 function ensureLiveKit() {
@@ -81,7 +82,7 @@ export default function DmsScreen() {
           track.attach();
         }
       });
-      await room.connect(tok.url, tok.token);
+      await connectVoiceWithFallback(voiceUrlCandidates(tok), (u) => room.connect(u, tok.token));
       await room.localParticipant.setMicrophoneEnabled(true);
       if (mode === 'video') await room.localParticipant.setCameraEnabled(true);
       setCallStatus(mode === 'video' ? 'Görüntülü arama' : 'Sesli arama');

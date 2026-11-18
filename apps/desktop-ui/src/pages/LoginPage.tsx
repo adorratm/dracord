@@ -74,6 +74,26 @@ export function LoginPage() {
           {busy ? 'Açılıyor…' : 'Google ile giriş yap'}
         </button>
 
+        {window.dracordDesktop?.openOAuthInBrowser || window.dracordDesktop?.openExternal ? (
+          <button
+            type="button"
+            onClick={() => void loginGoogle('browser')}
+            style={{
+              marginTop: -6,
+              border: 'none',
+              background: 'transparent',
+              color: colors.textMuted,
+              fontSize: 13,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              textUnderlineOffset: 3,
+              padding: 4,
+            }}
+          >
+            ya da tarayıcıda aç
+          </button>
+        ) : null}
+
         {loginHint ? (
           <p style={{ margin: 0, color: colors.success, fontSize: 13, maxWidth: 320, lineHeight: 1.4 }}>
             {loginHint}

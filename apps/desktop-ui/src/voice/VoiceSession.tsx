@@ -66,7 +66,7 @@ import {
   type ScreenShareSelection,
 } from '../components/ScreenSharePicker';
 import { playUiTone } from '@/lib/sounds';
-import { SocketEvents } from '@dracord/sdk';
+import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import type { VoiceTakeoverPayload } from '@dracord/types';
 import { useAuth } from '../auth';
 
@@ -988,7 +988,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
         const tok = await client.getVoiceToken(channel.id, opts?.password);
         if (gen !== joinGen.current) return;
-        await room.connect(tok.url, tok.token);
+        await connectVoiceWithFallback(voiceUrlCandidates(tok), (u) => room.connect(u, tok.token), {
+          cancelled: () => gen !== joinGen.current,
+          onRetry: () => setStatus('Ses sunucusuna yeniden bağlanılıyor…'),
+        });
+        setStatus(null);
         const micOn = !mutedRef.current && !afkSilenceRef.current;
         await room.localParticipant.setMicrophoneEnabled(micOn);
         if (afkSilenceRef.current) {

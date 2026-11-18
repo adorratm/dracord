@@ -2527,4 +2527,5 @@ export {
   type E2eeStorage,
 } from './e2ee-manager';
 export { e2eeAvailable, e2eeSafetyNumber, setE2eeRandomSource, type E2eeDecryptResult, type E2eeIdentity } from './e2ee';
+export * from './voice-connect';
 export * from '@dracord/types';

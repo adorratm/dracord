@@ -23,7 +23,7 @@ import {
   registerGlobals,
 } from '@livekit/react-native';
 import type { VoiceTakeoverPayload } from '@dracord/types';
-import { SocketEvents } from '@dracord/sdk';
+import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import { useAuth } from '../../lib/auth';
 import {
   startVoiceCallService,
@@ -522,7 +522,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
-        await room.connect(tok.url, tok.token);
+        await connectVoiceWithFallback(voiceUrlCandidates(tok), (u) => room.connect(u, tok.token));
         if (!stillThisJoin()) {
           try {
             await room.disconnect();

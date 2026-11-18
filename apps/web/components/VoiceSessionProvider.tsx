@@ -2,7 +2,7 @@
 
 import type { VoiceParticipant } from '@dracord/ui';
 import { gameVoiceLevel, onGameFrameChange, reportVoiceActivity } from '@dracord/ui';
-import { SocketEvents } from '@dracord/sdk';
+import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import type { VoiceTakeoverPayload } from '@dracord/types';
 import {
   LocalTrack,
@@ -1609,17 +1609,23 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         }
         if (disposed) return;
 
-        const { token, url } = await client.getVoiceToken(channelId, password);
-        const livekitUrl =
-          process.env.NEXT_PUBLIC_LIVEKIT_URL?.trim() || url || 'ws://localhost:7880';
-        await room.connect(livekitUrl, token, {
-          // ICE/bundle: gecikme ve yeniden bağlanma maliyetini düşürür
-          rtcConfig: {
-            iceTransportPolicy: 'all',
-            bundlePolicy: 'max-bundle',
-            rtcpMuxPolicy: 'require',
-          },
-        });
+        const tok = await client.getVoiceToken(channelId, password);
+        const urls = voiceUrlCandidates(tok, process.env.NEXT_PUBLIC_LIVEKIT_URL);
+        if (urls.length === 0) urls.push('ws://localhost:7880');
+        // main address, then the fallback (same server via the API host), twice over
+        await connectVoiceWithFallback(
+          urls,
+          (u) =>
+            room.connect(u, tok.token, {
+              // ICE/bundle: gecikme ve yeniden bağlanma maliyetini düşürür
+              rtcConfig: {
+                iceTransportPolicy: 'all',
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+              },
+            }),
+          { cancelled: () => disposed },
+        );
         if (disposed) {
           room.disconnect();
           return;
