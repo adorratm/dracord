@@ -2264,3 +2264,13 @@ export interface ChannelFollowDto {
   targetGuildName: string;
   createdAt: string;
 }
+
+// ── B9: yıldız panosu ──
+export interface GuildStarboardConfig {
+  enabled: boolean;
+  channelId: string | null;
+  emoji: string;
+  /** panoya düşmek için gereken tepki sayısı (1–50) */
+  threshold: number;
+  ignoredChannelIds: string[];
+}

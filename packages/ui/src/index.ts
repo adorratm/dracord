@@ -287,3 +287,6 @@ export { LfgBoard } from './components/LfgBoard';
 
 // B8 — yavaş mod + duyuru takibi
 export { AnnouncementFollowButton, ChannelExtrasSettings, SLOW_MODE_OPTIONS, slowModeLabel } from './components/ChannelExtras';
+
+// B9 — yıldız panosu
+export { StarboardSettings } from './components/StarboardSettings';

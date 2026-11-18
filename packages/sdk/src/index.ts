@@ -1926,6 +1926,18 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── B9: yıldız panosu ──
+  async getStarboard(guildId: string): Promise<import('@dracord/types').GuildStarboardConfig> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/starboard`);
+  }
+
+  async updateStarboard(
+    guildId: string,
+    cfg: import('@dracord/types').GuildStarboardConfig,
+  ): Promise<import('@dracord/types').GuildStarboardConfig> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/starboard`, { method: 'PUT', body: JSON.stringify(cfg) });
+  }
+
   // ── B8: duyuru takibi ──
   async listChannelFollowers(channelId: string): Promise<import('@dracord/types').ChannelFollowDto[]> {
     return this.request(`/channels/${encodeURIComponent(channelId)}/followers`);

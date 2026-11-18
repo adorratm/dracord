@@ -20,6 +20,7 @@ import {
 import { createId } from '@paralleldrive/cuid2';
 import { Channel } from '@/database/entities/channel.entity';
 import { ChannelFollow } from '@/database/entities/channel-follow.entity';
+import { GuildStarboard, StarboardEntry } from '@/database/entities/guild-starboard.entity';
 import { Guild } from '@/database/entities/guild.entity';
 import { ChannelReadState } from '@/database/entities/channel-read-state.entity';
 import { DMChannelMember } from '@/database/entities/dm-channel-member.entity';
@@ -973,6 +974,78 @@ export class MessagesService {
     }
   }
 
+  /** B9 — enough of the board emoji → copy to the starboard; keep its count up to date */
+  private async updateStarboard(message: Message, emoji: string): Promise<void> {
+    if (message.authorId === DRACORD_BOT_USER_ID) return;
+    const channel = await this.em.findOne(Channel, { where: { id: message.channelId }, select: { id: true, guildId: true, name: true } });
+    if (!channel?.guildId) return;
+    const cfg = await this.em.findOne(GuildStarboard, { where: { guildId: channel.guildId } });
+    if (!cfg?.enabled || !cfg.channelId || cfg.emoji !== emoji) return;
+    if (channel.id === cfg.channelId || cfg.ignoredChannelIds.includes(channel.id)) return;
+    const count = await this.em.count(Reaction, { where: { messageId: message.id, emoji } });
+    const entry = await this.em.findOne(StarboardEntry, { where: { messageId: message.id } });
+    const line = (n: number) => `${emoji} **${n}** · #${channel.name}`;
+    if (!entry) {
+      if (count < cfg.threshold) return;
+      const from: MessageForwardedFrom = {
+        messageId: message.id,
+        channelId: channel.id,
+        authorId: message.authorId,
+        authorName: message.author?.displayName ?? 'Üye',
+        contentPreview: (message.content || '').slice(0, 500),
+        createdAt: message.createdAt.toISOString(),
+      };
+      const saved = await this.em.save(
+        Message,
+        this.em.create(Message, {
+          channelId: cfg.channelId,
+          authorId: DRACORD_BOT_USER_ID,
+          content: line(count),
+          type: 'default',
+          replyToId: null,
+          threadRootId: null,
+          pinnedAt: null,
+          pinnedById: null,
+          forwardedFrom: from,
+          attachments: message.attachments,
+          embeds: null,
+          poll: null,
+        }),
+      );
+      // the primary key stops a second copy if two reactions land at once
+      await this.em
+        .createQueryBuilder()
+        .insert()
+        .into(StarboardEntry)
+        .values({ messageId: message.id, guildId: channel.guildId, starChannelId: cfg.channelId, starMessageId: saved.id, count })
+        .orIgnore()
+        .execute();
+      const won = await this.em.findOne(StarboardEntry, { where: { messageId: message.id }, select: { messageId: true, starMessageId: true } });
+      if (won?.starMessageId !== saved.id) {
+        await this.em.delete(Message, { id: saved.id });
+        return;
+      }
+      const row = await this.em.findOneOrFail(Message, { where: { id: saved.id }, relations: { author: true } });
+      this.realtime.emitCreate(cfg.channelId, await this.toDtoResolved(row, { viewerId: DRACORD_BOT_USER_ID, reactions: [] }));
+      return;
+    }
+    const star = await this.em.findOne(Message, { where: { id: entry.starMessageId }, relations: { author: true } });
+    if (!star || star.deletedAt) return;
+    if (count === 0) {
+      await this.em.delete(StarboardEntry, { messageId: message.id });
+      star.deletedAt = new Date();
+      await this.em.save(Message, star);
+      this.realtime.emitDelete(star.channelId, star.id);
+      return;
+    }
+    if (entry.count === count) return;
+    entry.count = count;
+    await this.em.save(StarboardEntry, entry);
+    star.content = line(count);
+    await this.em.save(Message, star);
+    this.realtime.emitUpdate(star.channelId, await this.toDtoResolved(star, { viewerId: DRACORD_BOT_USER_ID, reactions: [] }));
+  }
+
   async toggleReaction(
     messageId: string,
     userId: string,
@@ -1000,6 +1073,8 @@ export class MessagesService {
     }
     // B5 — reaction roles
     void this.onboarding?.onReaction(messageId, userId, clean, !existing);
+    // B9 — starboard
+    void this.updateStarboard(message, clean).catch(() => undefined);
     const reactions = await this.em.find(Reaction, {
       where: { messageId },
       relations: { user: true },
