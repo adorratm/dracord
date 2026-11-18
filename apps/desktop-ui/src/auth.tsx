@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { DracordClient, SocketEvents } from '@dracord/sdk';
+import { DracordClient, SocketEvents, isNetworkFailure, withNetworkRetry } from '@dracord/sdk';
 import type { AuthTokens, PublicUser } from '@dracord/types';
 import {
   applyStickerCloudState,
@@ -30,6 +30,8 @@ type AuthCtx = {
   loginHint: string | null;
   logout: () => void;
   setSession: (tokens: AuthTokens, user: PublicUser) => void;
+  /** keep the tokens without a user yet (a sign-in whose profile request is still pending) */
+  persistTokens: (tokens: AuthTokens) => void;
   refreshUser: () => Promise<PublicUser | null>;
   setUser: (user: PublicUser | null | ((prev: PublicUser | null) => PublicUser | null)) => void;
   updatePresence: (data: {
@@ -57,6 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [client],
   );
 
+  const persistTokens = useCallback(
+    (tokens: AuthTokens) => {
+      localStorage.setItem(ACCESS_KEY, tokens.accessToken);
+      localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
+      client.setToken(tokens.accessToken);
+    },
+    [client],
+  );
+
   useEffect(() => {
     client.configureAuth({
       getRefreshToken: () => localStorage.getItem(REFRESH_KEY),
@@ -72,13 +83,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     client.setToken(access);
-    void client
-      .getMe()
+    // a shaky connection at start-up must not sign you out: retry, and only drop the
+    // session when the server actually refuses it
+    void withNetworkRetry(() => client.getMe(), { tries: 4 })
       .then((me) => {
         setUser(me);
         client.connectSocket();
       })
-      .catch(() => {
+      .catch((err) => {
+        if (isNetworkFailure(err)) {
+          setLoginHint('Dracord sunucusuna ulaşılamadı — bağlantın gelince uygulamayı yeniden aç, oturumun duruyor.');
+          return;
+        }
         localStorage.removeItem(ACCESS_KEY);
         localStorage.removeItem(REFRESH_KEY);
         client.setToken(null);
@@ -279,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      persistTokens,
       loginHint,
       logout,
       setSession,
@@ -291,6 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      persistTokens,
       loginHint,
       logout,
       setSession,

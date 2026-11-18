@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { isNetworkFailure, withNetworkRetry } from './retry';
 import { VOICE_SIGNAL_FAILED_MESSAGE, connectVoiceWithFallback, isVoiceSignalError, voiceUrlCandidates } from './voice-connect';
 
 const signal = () => new Error('could not establish signal connection: Encountered websocket error during connection establishment');
@@ -60,5 +61,30 @@ describe('voice connect fallback', () => {
       throw signal();
     }, { sleep: noSleep, cancelled: () => gone }));
     assert.equal(n, 1);
+  });
+});
+
+describe('network retry', () => {
+  const apiErr = (status: number) => Object.assign(new Error(`HTTP ${status}`), { name: 'ApiError', status });
+  it('tells a lost request from an answer', () => {
+    assert.equal(isNetworkFailure(new TypeError('Failed to fetch')), true);
+    assert.equal(isNetworkFailure(apiErr(503)), true);
+    assert.equal(isNetworkFailure(apiErr(401)), false);
+    assert.equal(isNetworkFailure(new Error('Token yok')), false);
+  });
+  it('retries a lost request and gives up on a refusal at once', async () => {
+    let n = 0;
+    const v = await withNetworkRetry(async () => {
+      if (++n < 3) throw new TypeError('Failed to fetch');
+      return 'me';
+    }, { sleep: async () => undefined });
+    assert.equal(v, 'me');
+    assert.equal(n, 3);
+    let m = 0;
+    await assert.rejects(withNetworkRetry(async () => {
+      m++;
+      throw apiErr(401);
+    }, { sleep: async () => undefined }), { message: 'HTTP 401' });
+    assert.equal(m, 1);
   });
 });

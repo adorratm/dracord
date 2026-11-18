@@ -386,3 +386,6 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
   `@dracord/sdk`; web/desktop/mobil). (2) Masaüstü Google girişi: uygulama içi pencere kalıyor (Electron
   izleri user agent'tan çıkarıldı, sayfa yüklenemezse uyarı) + giriş ekranında **"ya da tarayıcıda aç"**:
   varsayılan tarayıcıda giriş, `dracord://` bağlantısıyla uygulamaya dönüş. Desktop için yeni sürüm gerekir.
+- 2026-11-18 — Masaüstü: Google girişinden sonra "Failed to fetch" — giriş bilgisi artık hemen saklanıyor,
+  profil isteği ağ hatasında 5 kez deneniyor; olmazsa "Tekrar dene / Giriş ekranı". Açılışta ağ hatası
+  oturumu silmiyor (yalnız sunucu reddederse). `withNetworkRetry` / `isNetworkFailure` (`@dracord/sdk`).
