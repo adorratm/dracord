@@ -2766,6 +2766,7 @@ export function GuildChannelView({
         noiseNote: voice.noiseNote,
         voiceConnected: inVoice,
         voiceChannelName: voiceChannel?.name ?? null,
+        pushToTalkHeld: inVoice && voice.pushToTalk ? voice.pttHeld : null,
         voiceServerName: guild?.name ?? null,
         voiceLatencyMs: inVoice ? voice.latencyMs : null,
         serverLatencyMs: inVoice ? voice.serverLatencyMs : null,

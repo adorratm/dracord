@@ -1414,6 +1414,7 @@ export function Shell() {
                 voiceChannelName: inVoiceInThisGuild
                   ? voice.voiceChannelName ?? undefined
                   : undefined,
+                pushToTalkHeld: inVoiceInThisGuild && voice.pushToTalk ? voice.pttHeld : null,
                 voiceServerName: inVoiceInThisGuild ? activeGuild.name : undefined,
                 voiceLatencyMs: inVoiceInThisGuild ? voice.latencyMs : null,
                 serverLatencyMs: inVoiceInThisGuild ? voice.serverLatencyMs : null,

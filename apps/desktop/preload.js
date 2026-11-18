@@ -24,6 +24,20 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
     ipcRenderer.on('oauth:window-failed', handler);
     return () => ipcRenderer.removeListener('oauth:window-failed', handler);
   },
+  /** A8 — global ses kısayolları: { active, pttVks, muteAccel, deafenAccel } */
+  configureVoiceHotkeys: (cfg) => ipcRenderer.invoke('voice-hotkeys:configure', cfg),
+  /** sustur / sağırlaştır kısayolu basıldı: { action: 'mute' | 'deafen' } */
+  onVoiceHotkey: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('voice:hotkey', handler);
+    return () => ipcRenderer.removeListener('voice:hotkey', handler);
+  },
+  /** global bas-konuş tuşu durumu: { held: boolean } */
+  onVoicePtt: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('voice:ptt', handler);
+    return () => ipcRenderer.removeListener('voice:ptt', handler);
+  },
   getDesktopSources: () => ipcRenderer.invoke('desktop-capturer:get-sources'),
   setDisplayMediaSelection: (selection) =>
     ipcRenderer.invoke('desktop-capturer:set-selection', selection),

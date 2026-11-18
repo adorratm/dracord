@@ -135,6 +135,8 @@ export interface UserPanelProps {
   noiseNote?: string | null;
   voiceConnected?: boolean;
   voiceChannelName?: string | null;
+  /** A8 — push-to-talk: null = voice activity, false = key up (mic closed), true = talking */
+  pushToTalkHeld?: boolean | null;
   voiceServerName?: string | null;
   /** WebRTC ping (RTT), ms */
   voiceLatencyMs?: number | null;
@@ -315,6 +317,7 @@ export function UserPanel({
   noiseNote,
   voiceConnected,
   voiceChannelName,
+  pushToTalkHeld = null,
   voiceServerName = null,
   voiceLatencyMs = null,
   serverLatencyMs = null,
@@ -521,6 +524,17 @@ export function UserPanel({
                 {voiceChannelName}
                 {voiceServerName ? ` / ${voiceServerName}` : ''}
               </p>
+              {pushToTalkHeld !== null && !muted ? (
+                <p
+                  className={cn(
+                    'font-label-sm leading-tight text-[10px] mt-0.5',
+                    pushToTalkHeld ? 'text-dracula-green' : 'text-on-surface-variant',
+                  )}
+                  aria-live="polite"
+                >
+                  {pushToTalkHeld ? '● Konuşuyorsun (bas-konuş)' : 'Bas-konuş: tuşa basılı tut'}
+                </p>
+              ) : null}
             </button>
             {screenShareViewControl && (
               <Tooltip

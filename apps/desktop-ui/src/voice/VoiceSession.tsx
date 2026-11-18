@@ -19,7 +19,15 @@ import {
 } from 'livekit-client';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import type { VoiceParticipant } from '@dracord/ui';
-import { onGameFrameChange, reportVoiceActivity } from '@dracord/ui';
+import {
+  onGameFrameChange,
+  reportVoiceActivity,
+  shouldTransmit,
+  toElectronAccelerator,
+  toWindowsVks,
+  usePushToTalk,
+  useVoiceInputSettings,
+} from '@dracord/ui';
 import { API_URL } from '../config';
 import {
   loadVoiceAudioSettings,
@@ -183,6 +191,9 @@ async function readPublisherRttMs(room: Room): Promise<number | null> {
 }
 
 type VoiceSessionApi = {
+  /** A8 — push-to-talk mode is on / the key is held right now */
+  pushToTalk: boolean;
+  pttHeld: boolean;
   voiceChannelId: string | null;
   voiceGuildId: string | null;
   voiceChannelName: string | null;
@@ -290,6 +301,24 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const mutedRef = useRef(false);
   const deafenedRef = useRef(false);
   const voiceChannelTypeRef = useRef<string | null>(null);
+  /** A8 — voice activity / push-to-talk */
+  const [voiceInput] = useVoiceInputSettings();
+  const voiceInputRef = useRef(voiceInput);
+  voiceInputRef.current = voiceInput;
+  const pttHeldRef = useRef(false);
+  const [pttHeld, setPttHeld] = useState(false);
+  /** microphone sends only when not muted / AFK and (voice activity, or push-to-talk held) */
+  const micShouldSend = useCallback(
+    () =>
+      !afkSilenceRef.current &&
+      shouldTransmit(voiceInputRef.current, { muted: mutedRef.current, pttHeld: pttHeldRef.current }),
+    [],
+  );
+  const applyMic = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    void room.localParticipant.setMicrophoneEnabled(micShouldSend()).catch(() => undefined);
+  }, [micShouldSend]);
   const pickerResolveRef = useRef<((sel: ScreenShareSelection | null) => void) | null>(
     null,
   );
@@ -994,7 +1023,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         });
         setStatus(null);
         const micOn = !mutedRef.current && !afkSilenceRef.current;
+        // push-to-talk: publish the mic once (so the first press is instant), then hold it closed
         await room.localParticipant.setMicrophoneEnabled(micOn);
+        if (micOn && !micShouldSend()) await room.localParticipant.setMicrophoneEnabled(false);
         if (afkSilenceRef.current) {
           for (const el of attached.current) el.muted = true;
         }
@@ -1188,9 +1219,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const setMicVolume = useCallback(
     (v: number) => {
       patchAudioSettings({ micVolume: Math.min(2, Math.max(0, v)) });
-      void roomRef.current?.localParticipant.setMicrophoneEnabled(!muted);
+      applyMic();
     },
-    [muted, patchAudioSettings],
+    [applyMic, patchAudioSettings],
   );
 
   const setOutputVolume = useCallback(
@@ -1275,7 +1306,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (afkSilenceRef.current && !next) return;
       mutedRef.current = next;
       setMutedState(next);
-      void roomRef.current?.localParticipant.setMicrophoneEnabled(!next);
+      applyMic();
       const chId = voiceChannelIdRef.current;
       if (chId) {
         void client.updateVoiceState(chId, {
@@ -1286,7 +1317,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const room = roomRef.current;
       if (room) refresh();
     },
-    [client, refresh],
+    [applyMic, client, refresh],
   );
 
   const setDeafened = useCallback(
@@ -1306,7 +1337,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         nextMuted = false;
         mutedRef.current = false;
         setMutedState(false);
-        void roomRef.current?.localParticipant.setMicrophoneEnabled(true);
+        applyMic();
       }
       const chId = voiceChannelIdRef.current;
       if (chId) {
@@ -1318,7 +1349,80 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const room = roomRef.current;
       if (room) refresh();
     },
-    [client, refresh],
+    [applyMic, client, refresh],
+  );
+
+  /** A8 — push-to-talk + mute / deafen hotkeys (in-window, plus global ones from the desktop app) */
+  const desktopVoice = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+  const [externalPttHeld, setExternalPttHeld] = useState(false);
+  const [globalToggles, setGlobalToggles] = useState(false);
+  const onPttHeldChange = useCallback(
+    (held: boolean) => {
+      pttHeldRef.current = held;
+      setPttHeld(held);
+      applyMic();
+    },
+    [applyMic],
+  );
+  usePushToTalk({
+    active: !!voiceChannelId,
+    settings: voiceInput,
+    onHeldChange: onPttHeldChange,
+    onToggleMute: () => setMuted(!mutedRef.current),
+    onToggleDeafen: () => setDeafened(!deafenedRef.current),
+    externalHeld: externalPttHeld,
+    windowHotkeys: !globalToggles,
+  });
+  // switching voice activity <-> push-to-talk mid-call
+  useEffect(() => {
+    if (voiceInput.mode === 'voice') {
+      pttHeldRef.current = false;
+      setPttHeld(false);
+    }
+    applyMic();
+  }, [voiceInput.mode, applyMic]);
+  useEffect(() => {
+    const api = desktopVoice;
+    if (!api?.configureVoiceHotkeys) return;
+    const offKey = api.onVoiceHotkey?.(({ action }) => {
+      if (action === 'mute') setMuted(!mutedRef.current);
+      else if (action === 'deafen') setDeafened(!deafenedRef.current);
+    });
+    const offPtt = api.onVoicePtt?.(({ held }) => setExternalPttHeld(!!held));
+    return () => {
+      offKey?.();
+      offPtt?.();
+    };
+  }, [desktopVoice, setMuted, setDeafened]);
+  useEffect(() => {
+    const api = desktopVoice;
+    if (!api?.configureVoiceHotkeys) return;
+    const active = !!voiceChannelId;
+    const muteAccel = toElectronAccelerator(voiceInput.muteKey);
+    const deafenAccel = toElectronAccelerator(voiceInput.deafenKey);
+    let cancelled = false;
+    void api
+      .configureVoiceHotkeys({
+        active,
+        pttVks: voiceInput.mode === 'ptt' ? toWindowsVks(voiceInput.pttKey) : null,
+        muteAccel,
+        deafenAccel,
+      })
+      .then((r) => {
+        if (cancelled) return;
+        // window key events would toggle a second time when the shortcut is global
+        setGlobalToggles(active && r.ok && r.failed.length === 0 && !!(muteAccel || deafenAccel));
+      })
+      .catch(() => setGlobalToggles(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [desktopVoice, voiceChannelId, voiceInput.mode, voiceInput.pttKey, voiceInput.muteKey, voiceInput.deafenKey]);
+  useEffect(
+    () => () => {
+      void desktopVoice?.configureVoiceHotkeys?.({ active: false, pttVks: null, muteAccel: null, deafenAccel: null }).catch(() => undefined);
+    },
+    [desktopVoice],
   );
 
   const setAfkSilence = useCallback(
@@ -1530,7 +1634,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
       try {
-        if (!muted) await room.localParticipant.setMicrophoneEnabled(true);
+        if (!muted) await room.localParticipant.setMicrophoneEnabled(micShouldSend());
       } catch {
         /* ignore */
       }
@@ -1851,6 +1955,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<VoiceSessionApi>(
     () => ({
+      pushToTalk: voiceInput.mode === 'ptt',
+      pttHeld,
       voiceChannelId,
       voiceGuildId,
       voiceChannelName,
@@ -1971,6 +2077,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceChannelName,
       voiceChannelType,
       voiceGuildId,
+      voiceInput.mode,
+      pttHeld,
     ],
   );
 

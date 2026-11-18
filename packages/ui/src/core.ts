@@ -13,3 +13,4 @@ export {
   voiceStatusErrorMessage,
   type VoiceChannelStatusClient,
 } from './lib/use-voice-channel-status';
+export * from './lib/voice-input';

@@ -1,7 +1,13 @@
 'use client';
 
 import type { VoiceParticipant } from '@dracord/ui';
-import { gameVoiceLevel, onGameFrameChange, reportVoiceActivity } from '@dracord/ui';
+import {
+  gameVoiceLevel,
+  onGameFrameChange,
+  reportVoiceActivity,
+  usePushToTalk,
+  useVoiceInputSettings,
+} from '@dracord/ui';
 import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import type { VoiceTakeoverPayload } from '@dracord/types';
 import {
@@ -84,6 +90,9 @@ export interface ActiveScreenShare {
 }
 
 interface VoiceSessionValue {
+  /** A8 — push-to-talk mode is on / the key is held right now */
+  pushToTalk: boolean;
+  pttHeld: boolean;
   voiceChannelId: string | null;
   voiceGuildId: string | null;
   connected: boolean;
@@ -684,6 +693,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const cameraTracksRef = useRef<Map<string, Track>>(new Map());
   const cameraElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const mutedRef = useRef(false);
+  /** A8 — voice activity / push-to-talk */
+  const [voiceInput] = useVoiceInputSettings();
+  const voiceInputRef = useRef(voiceInput);
+  voiceInputRef.current = voiceInput;
+  const pttHeldRef = useRef(false);
+  const [pttHeld, setPttHeld] = useState(false);
+  /** push-to-talk gate: always open in voice-activity mode, otherwise only while the key is held */
+  const pttGateOpen = useCallback(() => voiceInputRef.current.mode === 'voice' || pttHeldRef.current, []);
   const channelIdRef = useRef<string | null>(null);
   const guildIdRef = useRef<string | null>(null);
   const audioSettingsRef = useRef<VoiceAudioSettings>(loadVoiceAudioSettings());
@@ -1647,6 +1664,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           room.disconnect();
           throw new Error(micPermissionErrorMessage(micErr));
         }
+        // push-to-talk: the mic is published (first press is instant) but held closed
+        if (!afkSilenceRef.current && !pttGateOpen()) {
+          await room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+        }
         // AFK sessizlik kilidi oda yenilenince de geçerli kalsın
         if (afkSilenceRef.current) {
           try {
@@ -1971,7 +1992,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         /* aktivite yok / ağ */
       }
     },
-    [client, user?.id],
+    [client, pttGateOpen, user?.id],
   );
 
   const join = useCallback(
@@ -2218,7 +2239,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (afkSilenceRef.current && !next) return;
       if (mutedRef.current === next) return;
       try {
-        await room.localParticipant.setMicrophoneEnabled(!next);
+        await room.localParticipant.setMicrophoneEnabled(!next && pttGateOpen());
       } catch {
         // ignore
       }
@@ -2227,7 +2248,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       refreshParticipants(room, next);
       await publishVoiceFlags(next, deafenedRef.current);
     },
-    [publishVoiceFlags, refreshParticipants],
+    [publishVoiceFlags, pttGateOpen, refreshParticipants],
   );
 
   const setDeafen = useCallback(
@@ -2258,7 +2279,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } else if (!afkSilenceRef.current) {
         if (mutedRef.current) {
           try {
-            await room.localParticipant.setMicrophoneEnabled(true);
+            await room.localParticipant.setMicrophoneEnabled(pttGateOpen());
           } catch {
             // ignore
           }
@@ -2274,8 +2295,33 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       refreshParticipants(room, nextMuted);
       await publishVoiceFlags(nextMuted, next);
     },
-    [publishVoiceFlags, refreshParticipants],
+    [publishVoiceFlags, pttGateOpen, refreshParticipants],
   );
+
+  /** A8 — push-to-talk + mute / deafen hotkeys while this tab has focus */
+  const onPttHeldChange = useCallback((held: boolean) => {
+    pttHeldRef.current = held;
+    setPttHeld(held);
+    const room = roomRef.current;
+    if (!room || mutedRef.current || afkSilenceRef.current) return;
+    void room.localParticipant.setMicrophoneEnabled(pttGateOpen()).catch(() => undefined);
+  }, [pttGateOpen]);
+  usePushToTalk({
+    active: !!voiceChannelId && isVoiceLeader,
+    settings: voiceInput,
+    onHeldChange: onPttHeldChange,
+    onToggleMute: () => void setMute(!mutedRef.current),
+    onToggleDeafen: () => void setDeafen(!deafenedRef.current),
+  });
+  useEffect(() => {
+    if (voiceInput.mode === 'voice') {
+      pttHeldRef.current = false;
+      setPttHeld(false);
+    }
+    const room = roomRef.current;
+    if (!room || mutedRef.current || afkSilenceRef.current) return;
+    void room.localParticipant.setMicrophoneEnabled(pttGateOpen()).catch(() => undefined);
+  }, [voiceInput.mode, pttGateOpen]);
 
   const setAfkSilence = useCallback(
     (enabled: boolean) => {
@@ -2624,7 +2670,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       // Mic’i yeniden doğrula — paylaşım hatası odayı düşürmesin
       try {
         if (!mutedRef.current && !deafenedRef.current) {
-          await room.localParticipant.setMicrophoneEnabled(true);
+          await room.localParticipant.setMicrophoneEnabled(pttGateOpen());
         }
       } catch {
         // ignore
@@ -2868,7 +2914,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const wasMuted = mutedRef.current;
       await room.localParticipant.unpublishTrack(mic, false);
       await room.localParticipant.publishTrack(mic, publish);
-      if (wasMuted) {
+      if (wasMuted || !pttGateOpen()) {
         await room.localParticipant.setMicrophoneEnabled(false);
       }
       await applyMicGainToTrack(mic, audioSettingsRef.current.micVolume).catch(() => undefined);
@@ -3089,6 +3135,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<VoiceSessionValue>(
     () => ({
+      pushToTalk: voiceInput.mode === 'ptt',
+      pttHeld,
       voiceChannelId,
       voiceGuildId,
       connected,
@@ -3158,6 +3206,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       voiceGuildId,
       connected,
       isVoiceLeader,
+      pttHeld,
+      voiceInput.mode,
       voiceOnOtherTab,
       voiceElsewherePlatform,
       reclaimVoice,

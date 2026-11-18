@@ -17,6 +17,7 @@ import {
   SessionsPanel,
   E2eeDevicesPanel,
   browserE2eeManager,
+  VoiceInputSettings,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -1725,6 +1726,13 @@ export function SettingsPage({
           title="Ses ve görüntü"
           description="Mikrofon, kulaklık, kamera ve ekran paylaşımı ayarları (web ile aynı)."
         >
+          <VoiceInputSettings
+            scopeNote={
+              /win/i.test(navigator.userAgent)
+                ? 'Ses kanalındayken bu kısayollar ve bas-konuş tuşu, oyun ya da başka bir uygulama öndeyken de çalışır.'
+                : 'Sustur / sağırlaştır kısayolları her yerde çalışır; bas-konuş tuşu Dracord penceresi öndeyken çalışır.'
+            }
+          />
           <SettingsSection title="Ses seviyeleri">
             <div className="px-space-md py-space-md space-y-4">
               <label className="block">

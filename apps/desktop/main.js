@@ -1289,6 +1289,15 @@ function registerWindowIpc() {
     return { ok: true, ...applied };
   });
 
+  /** A8 — ses kısayolları (sustur/sağırlaştır) + Windows'ta oyundayken de çalışan bas-konuş */
+  try {
+    const voiceHotkeys = require('./voice-hotkeys');
+    voiceHotkeys.registerVoiceHotkeys({ ipcMain, getMainWindow: () => mainWindow });
+    app.on('will-quit', () => voiceHotkeys.shutdownVoiceHotkeys());
+  } catch (err) {
+    console.warn('[voice-hotkeys]', err);
+  }
+
   /** Uzak kontrol — OS input inject (Windows) */
   const remoteInput = require('./remote-input');
   /** @type {{ x: number, y: number, width: number, height: number } | null} */

@@ -1,4 +1,4 @@
-import { Pressable, ScrollView } from 'react-native';
+import { Pressable, ScrollView, Text } from 'react-native';
 import { colors } from '@dracord/app-theme';
 import { Icon } from '../Icon';
 import { useVoiceSessionOptional } from './VoiceSession';
@@ -52,6 +52,32 @@ export function VoiceControls({
         onPress={() => voice.setMuted(!voice.muted)}
         accessibilityLabel={voice.muted ? 'Mikrofon kapalı' : 'Mikrofon'}
       />
+      {voice.pushToTalk && !voice.muted ? (
+        <Pressable
+          disabled={disabled}
+          onPressIn={() => voice.setPttHeld(true)}
+          onPressOut={() => voice.setPttHeld(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Konuşmak için basılı tut"
+          accessibilityState={{ selected: voice.pttHeld }}
+          hitSlop={8}
+          style={{
+            height: size,
+            paddingHorizontal: 14,
+            borderRadius: size / 2,
+            opacity: disabled ? 0.4 : 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            backgroundColor: voice.pttHeld ? colors.success : colors.surfaceHigh,
+          }}
+        >
+          <Icon name="mic" size={iconSz} color={voice.pttHeld ? '#fff' : colors.textMuted} />
+          <Text style={{ marginLeft: 6, fontWeight: '700', fontSize: 12, color: voice.pttHeld ? '#fff' : colors.text }}>
+            {voice.pttHeld ? 'Konuşuyorsun' : 'Bas-konuş'}
+          </Text>
+        </Pressable>
+      ) : null}
       <Ctrl
         size={size}
         iconSize={iconSz}

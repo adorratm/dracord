@@ -31,6 +31,7 @@ import {
   updateVoiceCallService,
   setupVoiceCallServiceListeners,
 } from '../../lib/voiceCallService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { playUiTone } from '../../lib/sounds';
 
 type CameraFacing = 'user' | 'environment';
@@ -121,6 +122,11 @@ type VoiceSessionApi = {
   reclaim: () => Promise<void>;
   setMuted: (v: boolean) => void;
   setDeafened: (v: boolean) => void;
+  /** A8 — push-to-talk: the mic sends only while the talk button is held */
+  pushToTalk: boolean;
+  setPushToTalk: (on: boolean) => void;
+  pttHeld: boolean;
+  setPttHeld: (held: boolean) => void;
   toggleCamera: () => Promise<void>;
   flipCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
@@ -171,6 +177,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const channelNameRef = useRef<string | null>(null);
   const channelTypeRef = useRef<string | null>(null);
   const mutedRef = useRef(false);
+  /** A8 — push-to-talk (kept on this device) */
+  const [pushToTalk, setPushToTalkState] = useState(false);
+  const pushToTalkRef = useRef(false);
+  const [pttHeld, setPttHeldState] = useState(false);
+  const pttHeldRef = useRef(false);
+  const pttGateOpen = () => !pushToTalkRef.current || pttHeldRef.current;
   const deafenedRef = useRef(false);
   const intentionalLeaveRef = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -540,9 +552,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
-        await room.localParticipant.setMicrophoneEnabled(
-          !mutedRef.current && !deafenedRef.current,
-        );
+        const micOn = !mutedRef.current && !deafenedRef.current;
+        await room.localParticipant.setMicrophoneEnabled(micOn);
+        // push-to-talk: published (first press is instant), then held closed
+        if (micOn && !pttGateOpen()) await room.localParticipant.setMicrophoneEnabled(false);
         setConnected(true);
         setStatus('Bağlı');
         refreshPeers(room);
@@ -584,7 +597,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setMutedState(v);
       mutedRef.current = v;
       void roomRef.current?.localParticipant.setMicrophoneEnabled(
-        !v && !deafenedRef.current && !afkSilenceRef.current,
+        !v && !deafenedRef.current && !afkSilenceRef.current && pttGateOpen(),
       );
       const ch = channelIdRef.current;
       if (ch) void client.updateVoiceState(ch, { muted: v }).catch(() => undefined);
@@ -617,6 +630,51 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       syncCallNotification({ deafened: v, muted: v ? true : mutedRef.current });
     },
     [client, syncCallNotification],
+  );
+
+  const PTT_KEY = 'dracord.voice-ptt.v1';
+  useEffect(() => {
+    void AsyncStorage.getItem(PTT_KEY)
+      .then((v) => {
+        const on = v === '1';
+        pushToTalkRef.current = on;
+        setPushToTalkState(on);
+      })
+      .catch(() => undefined);
+  }, []);
+  const applyMicGate = useCallback(() => {
+    const room = roomRef.current;
+    if (!room || mutedRef.current || deafenedRef.current || afkSilenceRef.current) return;
+    void room.localParticipant.setMicrophoneEnabled(pttGateOpen()).catch(() => undefined);
+  }, []);
+  const setPushToTalk = useCallback(
+    (on: boolean) => {
+      pushToTalkRef.current = on;
+      setPushToTalkState(on);
+      pttHeldRef.current = false;
+      setPttHeldState(false);
+      void AsyncStorage.setItem(PTT_KEY, on ? '1' : '0').catch(() => undefined);
+      applyMicGate();
+    },
+    [applyMicGate],
+  );
+  const pttReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setPttHeld = useCallback(
+    (held: boolean) => {
+      if (pttReleaseTimer.current) {
+        clearTimeout(pttReleaseTimer.current);
+        pttReleaseTimer.current = null;
+      }
+      const commit = (h: boolean) => {
+        pttHeldRef.current = h;
+        setPttHeldState(h);
+        applyMicGate();
+      };
+      // a short tail so the last word is not cut
+      if (held) commit(true);
+      else pttReleaseTimer.current = setTimeout(() => commit(false), 200);
+    },
+    [applyMicGate],
   );
 
   const applyAfkSilence = useCallback(
@@ -965,6 +1023,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<VoiceSessionApi>(
     () => ({
+      pushToTalk,
+      setPushToTalk,
+      pttHeld,
+      setPttHeld,
       voiceChannelId,
       voiceGuildId,
       voiceChannelName,
@@ -991,6 +1053,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       getScreenShareTrack,
     }),
     [
+      pushToTalk,
+      setPushToTalk,
+      pttHeld,
+      setPttHeld,
       voiceChannelId,
       voiceGuildId,
       voiceChannelName,

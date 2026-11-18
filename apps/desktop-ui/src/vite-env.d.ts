@@ -63,6 +63,14 @@ type DracordDesktopApi = {
   openOAuth?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   openOAuthInBrowser?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   onOAuthWindowFailed?: (callback: (payload: { reason?: string }) => void) => () => void;
+  configureVoiceHotkeys?: (cfg: {
+    active: boolean;
+    pttVks: number[] | null;
+    muteAccel: string | null;
+    deafenAccel: string | null;
+  }) => Promise<{ ok: boolean; globalPtt: boolean; failed: string[] }>;
+  onVoiceHotkey?: (callback: (payload: { action: 'mute' | 'deafen' }) => void) => () => void;
+  onVoicePtt?: (callback: (payload: { held: boolean }) => void) => () => void;
   getDesktopSources: () => Promise<DracordDesktopCaptureSource[]>;
   setDisplayMediaSelection: (selection: {
     sourceId: string;

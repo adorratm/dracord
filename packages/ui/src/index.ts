@@ -259,3 +259,10 @@ export {
   registerGameFrame,
   reportVoiceActivity,
 } from './lib/game-audio';
+
+// A8 — bas-konuş / ses kısayolları
+export * from './lib/voice-input';
+export { useVoiceInputSettings } from './lib/use-voice-input';
+export { usePushToTalk } from './lib/use-push-to-talk';
+export { KeybindCapture } from './components/KeybindCapture';
+export { VoiceInputSettings } from './components/VoiceInputSettings';

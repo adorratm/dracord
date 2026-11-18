@@ -1503,6 +1503,13 @@ export default function SettingsScreen() {
               Mikrofon, sağırlaştırma ve kamera burada veya ses odası alt şeridinden yönetilir.
               Uygulama arka plandayken oturum foreground service ile sürer.
             </Text>
+            {voice ? (
+              <ToggleRow
+                label="Bas-konuş (konuşmak için alt şeritteki düğmeye basılı tut)"
+                value={voice.pushToTalk}
+                onChange={(v) => voice.setPushToTalk(v)}
+              />
+            ) : null}
             {voice?.connected ? (
               <>
                 <Text style={{ color: colors.success, fontWeight: '700', marginBottom: 8 }}>
