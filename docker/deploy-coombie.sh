@@ -114,6 +114,16 @@ sed "s#__COOMBIE_CERT_DIR__#${CERT_DIR}#g" "$ROOT/docker/nginx-coombie.docker.co
 
 PREV_BACKUP="$(mktemp)"
 docker exec "$NGINX_CTN" cat "/etc/nginx/conf.d/$CONF_NAME" >"$PREV_BACKUP" 2>/dev/null || true
+# This job runs every 20 minutes. Reloading the shared nginx each time leaves the old worker
+# processes alive for as long as their websockets stay open (proxy_read_timeout is a day),
+# so they pile up across all five sites. Only touch nginx when the vhost really changed.
+if [[ -s "$PREV_BACKUP" ]] && cmp -s "$RENDERED" "$PREV_BACKUP"; then
+  echo "  OK  $CONF_NAME unchanged — no nginx reload"
+  if [[ -d "$TTEN_TPL" ]]; then cp "$RENDERED" "$TTEN_TPL/$CONF_NAME"; fi
+  rm -f "$PREV_BACKUP" "$RENDERED"
+  NGINX_UNCHANGED=1
+fi
+if [[ "${NGINX_UNCHANGED:-0}" != "1" ]]; then
 docker cp "$RENDERED" "$NGINX_CTN:/etc/nginx/conf.d/$CONF_NAME"
 if ! docker exec "$NGINX_CTN" nginx -t; then
   echo "!! nginx -t failed — restoring previous $CONF_NAME" >&2
@@ -130,6 +140,7 @@ docker exec "$NGINX_CTN" nginx -s reload
 # persist across a TTEN nginx recreate, like dracord.conf
 if [[ -d "$TTEN_TPL" ]]; then cp "$RENDERED" "$TTEN_TPL/$CONF_NAME"; fi
 rm -f "$PREV_BACKUP" "$RENDERED"
+fi
 
 echo "==> Smoke"
 # nginx -s reload is asynchronous: old workers answer for a moment, so retry briefly
