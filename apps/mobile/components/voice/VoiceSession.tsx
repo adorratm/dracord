@@ -22,7 +22,7 @@ import {
   AndroidAudioTypePresets,
   registerGlobals,
 } from '@livekit/react-native';
-import type { VoiceTakeoverPayload } from '@dracord/types';
+import type { VoiceStatePayload, VoiceTakeoverPayload } from '@dracord/types';
 import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import { useAuth } from '../../lib/auth';
 import {
@@ -344,6 +344,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [client, disconnectLiveKit]);
 
+  const joinRef = useRef<VoiceSessionApi['join'] | null>(null);
   const join = useCallback(
     async (
       guildId: string,
@@ -581,6 +582,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     },
     [client, disconnectLiveKit, refreshPeers],
   );
+  joinRef.current = join;
 
   const reclaim = useCallback(async () => {
     const ch = channelIdRef.current;
@@ -874,9 +876,23 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         );
       })();
     };
+    // a moderator moved me to another room while I am in voice
+    const onVoiceState = (payload: VoiceStatePayload) => {
+      if (payload.user?.id !== user.id || payload.action !== 'move') return;
+      const target = payload.targetChannelId;
+      if (!target || !payload.guildId || !channelIdRef.current || target === channelIdRef.current) return;
+      void client
+        .getGuildChannels(payload.guildId)
+        .then((list) => list.find((c) => c.id === target))
+        .catch(() => undefined)
+        .then((ch) => joinRef.current?.(payload.guildId, { id: target, name: ch?.name ?? 'Ses', type: ch?.type ?? 'VOICE' }))
+        .catch(() => undefined);
+    };
     sock.on(SocketEvents.VOICE_TAKEOVER, onTakeover);
+    sock.on(SocketEvents.VOICE_STATE, onVoiceState);
     return () => {
       sock.off(SocketEvents.VOICE_TAKEOVER, onTakeover);
+      sock.off(SocketEvents.VOICE_STATE, onVoiceState);
     };
   }, [user, client, disconnectLiveKit]);
 
