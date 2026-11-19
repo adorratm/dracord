@@ -82,6 +82,7 @@ services:
       - internal
 
   music-bot:
+    image: ${DRACORD_MUSIC_BOT_IMAGE:-docker-music-bot:latest}
     environment:
       LIVEKIT_URL: ws://livekit:7880
       API_URL: http://api:4000

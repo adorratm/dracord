@@ -42,6 +42,8 @@ jobs:
       !contains(github.event.head_commit.message || '', '[skip ci]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # müzik botu imajı isteğe bağlı: derlenemezse web/api/admin deploy'u yine çıkar
+    continue-on-error: ${{ matrix.optional == true }}
     strategy:
       fail-fast: true
       matrix:
@@ -62,6 +64,10 @@ jobs:
               NEXT_PUBLIC_DOWNLOAD_MACOS=https://github.com/adorratm/dracord/releases/latest/download/Dracord-mac.dmg
               NEXT_PUBLIC_DOWNLOAD_PLAY=https://play.google.com/store/apps/details?id=com.dracord.mobile
               NEXT_PUBLIC_DOWNLOAD_IOS=
+          - service: music-bot
+            dockerfile: docker/Dockerfile.music-bot
+            build_args: ""
+            optional: true
           - service: admin
             dockerfile: docker/Dockerfile.admin
             build_args: |

@@ -63,4 +63,15 @@ for svc in "${SERVICES[@]}"; do
   echo "    tagged ${local_img}:latest"
 done
 
+# İsteğe bağlı servisler: çekilemezse deploy durmaz (eski imaj çalışmaya devam eder)
+for svc in music-bot; do
+  remote="${PREFIX}/${svc}:${TAG}"
+  if pull_one "$remote"; then
+    docker tag "$remote" "docker-${svc}:latest"
+    echo "    tagged docker-${svc}:latest"
+  else
+    echo "    !! optional ${svc} image not pulled — keeping current container" >&2
+  fi
+done
+
 echo "==> Prebuilt images ready (no on-server yarn/next build)"

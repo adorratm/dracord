@@ -86,7 +86,18 @@ ROOT_USE="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
 if [[ "${ROOT_USE:-0}" -ge 90 ]]; then
   echo "==> Disk >=90% — pruning dangling images/build cache (containers kept)"
   docker builder prune -f >/dev/null || true
-  docker image prune -f >/dev/null || true
+  # Müzik botu: imaj değiştiyse yeniden oluşturulur (aynıysa compose dokunmaz). Hata deploy'u durdurmaz.
+if [[ -n "${DRACORD_IMAGE_TAG:-}" ]] && docker image inspect docker-music-bot:latest >/dev/null 2>&1; then
+  echo "==> music-bot (prebuilt)"
+  docker compose \
+    -f docker/docker-compose.yml \
+    -f docker/docker-compose.zd.yml \
+    -f docker/docker-compose.prod.yml \
+    --env-file .env \
+    up -d --no-deps --no-build music-bot || echo "!! music-bot update failed (non-fatal)" >&2
+fi
+
+docker image prune -f >/dev/null || true
 fi
 
 echo "==> Generate LiveKit prod config from .env"
