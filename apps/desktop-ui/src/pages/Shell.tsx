@@ -21,6 +21,7 @@ import {
   LfgBoard,
   GuildQuickActions,
   TicketsPanel,
+  SubscriptionsPanel,
   GiveawaysPanel,
   ChallengesPanel,
   ConfirmDialog,
@@ -151,6 +152,7 @@ export function Shell() {
   );
   const [giveawaysOpen, setGiveawaysOpen] = useState(false);
   const [ticketsOpen, setTicketsOpen] = useState(false);
+  const [subsOpen, setSubsOpen] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
   const [canManageChannels, setCanManageChannels] = useState(false);
   const [canManageRoles, setCanManageRoles] = useState(false);
@@ -1435,6 +1437,7 @@ export function Shell() {
             { id: 'lfg', icon: 'group_add', label: 'Takım ara', onClick: () => setLfgOpen(true) },
             { id: 'tournaments', icon: 'emoji_events', label: 'Turnuvalar', onClick: () => setTournamentsOpen(true) },
             { id: 'tickets', icon: 'support_agent', label: 'Destek talebi', onClick: () => setTicketsOpen(true) },
+            { id: 'subscriptions', icon: 'workspace_premium', label: 'Abonelikler', onClick: () => setSubsOpen(true) },
             { id: 'boost', icon: 'diamond', label: 'Sunucu Takviyeleri', accent: true, onClick: () => setView({ kind: 'guild-boost', guildId: activeGuild.id }) },
           ]}
                 />
@@ -1792,6 +1795,9 @@ export function Shell() {
 
       {activeGuildId && (
         <>
+        <Modal open={subsOpen} title="Sunucu abonelikleri" onClose={() => setSubsOpen(false)} className="sm:max-w-2xl">
+          <div className="max-h-[75vh] overflow-y-auto pr-1">{subsOpen && activeGuildId ? <SubscriptionsPanel client={client} guildId={activeGuildId} /> : null}</div>
+        </Modal>
         <Modal open={ticketsOpen} title="Destek talepleri" onClose={() => setTicketsOpen(false)} className="sm:max-w-xl">
           <div className="max-h-[75vh] overflow-y-auto pr-1">
             {ticketsOpen && user && (

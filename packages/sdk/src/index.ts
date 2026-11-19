@@ -1120,6 +1120,61 @@ export class DracordClient {
   }
 
   // ── Turnuvalar (C2) ──
+  // ── F2 sunucu abonelikleri ──
+  async getGuildSubscriptions(guildId: string): Promise<import('@dracord/types').GuildSubscriptionsOverview> {
+    return this.request(`/guilds/${guildId}/subscriptions`);
+  }
+
+  async createSubscriptionTier(
+    guildId: string,
+    input: Partial<Pick<import('@dracord/types').GuildSubscriptionTierDto, 'name' | 'perks' | 'priceText' | 'roleId' | 'paymentUrl' | 'color' | 'position'>>,
+  ): Promise<import('@dracord/types').GuildSubscriptionTierDto> {
+    return this.request(`/guilds/${guildId}/subscriptions/tiers`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateSubscriptionTier(
+    guildId: string,
+    tierId: string,
+    input: Partial<Pick<import('@dracord/types').GuildSubscriptionTierDto, 'name' | 'perks' | 'priceText' | 'roleId' | 'paymentUrl' | 'color' | 'position'>>,
+  ): Promise<import('@dracord/types').GuildSubscriptionTierDto> {
+    return this.request(`/guilds/${guildId}/subscriptions/tiers/${tierId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async deleteSubscriptionTier(guildId: string, tierId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/subscriptions/tiers/${tierId}`, { method: 'DELETE' });
+  }
+
+  async listGuildSubscribers(guildId: string): Promise<import('@dracord/types').GuildSubscriptionDto[]> {
+    return this.request(`/guilds/${guildId}/subscriptions/members`);
+  }
+
+  async grantGuildSubscription(guildId: string, input: { userId: string; tierId: string; days: number | null }): Promise<import('@dracord/types').GuildSubscriptionDto> {
+    return this.request(`/guilds/${guildId}/subscriptions/members`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async revokeGuildSubscription(guildId: string, subId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/subscriptions/members/${subId}`, { method: 'DELETE' });
+  }
+
+  async listSubscriptionCodes(guildId: string): Promise<import('@dracord/types').GuildSubscriptionCodeDto[]> {
+    return this.request(`/guilds/${guildId}/subscriptions/codes`);
+  }
+
+  async createSubscriptionCodes(
+    guildId: string,
+    input: { tierId: string; days: number | null; count: number; maxUses: number },
+  ): Promise<import('@dracord/types').GuildSubscriptionCodeDto[]> {
+    return this.request(`/guilds/${guildId}/subscriptions/codes`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async deleteSubscriptionCode(guildId: string, codeId: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${guildId}/subscriptions/codes/${codeId}`, { method: 'DELETE' });
+  }
+
+  async redeemSubscriptionCode(guildId: string, code: string): Promise<import('@dracord/types').GuildSubscriptionDto> {
+    return this.request(`/guilds/${guildId}/subscriptions/redeem`, { method: 'POST', body: JSON.stringify({ code }) });
+  }
+
   async listTournaments(guildId: string): Promise<import('@dracord/types').TournamentDto[]> {
     return this.request(`/guilds/${guildId}/tournaments`);
   }

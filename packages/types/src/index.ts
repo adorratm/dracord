@@ -2576,3 +2576,61 @@ export type WhiteboardEvent =
   | { channelId: string; kind: 'add'; stroke: WhiteboardStroke }
   | { channelId: string; kind: 'remove'; strokeIds: string[] }
   | { channelId: string; kind: 'clear' };
+
+// ── F2 Sunucu abonelikleri (para Dracord'dan geçmez: sahip kendi ödeme bağlantısını verir, üyeliği elle ya da kodla tanımlar) ──
+export const SUBSCRIPTION_LIMITS = {
+  tiersPerGuild: 6,
+  nameMax: 40,
+  perksMax: 800,
+  priceMax: 40,
+  codesPerBatch: 50,
+  maxDays: 3650,
+} as const;
+
+export interface GuildSubscriptionTierDto {
+  id: string;
+  guildId: string;
+  name: string;
+  /** Avantajlar (serbest metin) */
+  perks: string;
+  /** Gösterim için fiyat metni, ör. "₺50 / ay" */
+  priceText: string;
+  /** Üyeye verilen rol */
+  roleId: string | null;
+  /** Sahibin kendi ödeme sayfası (https) */
+  paymentUrl: string | null;
+  color: string | null;
+  position: number;
+  subscriberCount?: number;
+}
+
+export interface GuildSubscriptionDto {
+  id: string;
+  guildId: string;
+  tierId: string;
+  userId: string;
+  displayName?: string;
+  avatarUrl?: string | null;
+  source: 'manual' | 'code';
+  grantedById: string | null;
+  /** null = süresiz */
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface GuildSubscriptionCodeDto {
+  id: string;
+  tierId: string;
+  code: string;
+  days: number | null;
+  maxUses: number;
+  uses: number;
+  createdAt: string;
+}
+
+export interface GuildSubscriptionsOverview {
+  tiers: GuildSubscriptionTierDto[];
+  /** benim aktif aboneliklerim */
+  mine: GuildSubscriptionDto[];
+  canManage: boolean;
+}

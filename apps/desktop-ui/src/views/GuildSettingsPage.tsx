@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -975,6 +975,10 @@ export function GuildSettingsPage({
                 categories={categories.map((c) => ({ id: c.id, name: c.name }))}
                 channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="abonelikler">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Abonelikler</h2>
+              <SubscriptionSettings client={client} guildId={guildId} roles={roles} />
             </section>
             <section className="max-w-2xl mt-space-2xl" id="tepki-rolleri">
               <h2 className="font-headline-lg text-on-surface mb-space-sm">Tepki rolleri</h2>

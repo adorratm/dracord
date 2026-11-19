@@ -322,3 +322,5 @@ export { ensureProfileDecorStyles } from './lib/profile-decor';
 
 // G3 — beyaz tahta
 export { Whiteboard, type WhiteboardClient } from './components/Whiteboard';
+export { SubscriptionsPanel, SubscriptionSettings } from './components/GuildSubscriptions';
+export type { SubscriptionsClient } from './components/GuildSubscriptions';

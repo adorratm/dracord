@@ -69,3 +69,4 @@ export type {
   SlashCommandOption,
   SlashOptionType,
 } from './slash-command.entity';
+export { GuildSubscription, GuildSubscriptionCode, GuildSubscriptionTier } from './guild-subscription.entity';

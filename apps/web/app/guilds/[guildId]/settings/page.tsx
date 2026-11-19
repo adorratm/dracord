@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings } from '@dracord/ui';
+import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -822,6 +822,10 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 categories={ticketCategories}
                 channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="abonelikler">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Abonelikler</h2>
+              <SubscriptionSettings client={client} guildId={guildId} roles={roles} />
             </section>
             <section className="max-w-2xl mt-space-2xl" id="tepki-rolleri">
               <h2 className="font-headline-lg text-on-surface mb-space-sm">Tepki rolleri</h2>
