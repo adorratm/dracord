@@ -387,7 +387,11 @@ Hepsi varsayılan kapalı/opsiyonel açılır, üç platform birlikte; ücretli 
 - [x] E6 Passkey masaüstü/mobil — dracord.com.tr/auth/passkey-handoff sistem tarayıcısında doğrular, oturum dracord://oauth ile uygulamaya döner (OTA güvenli).
 - [x] G2 Mobil veri tasarrufu — görseller dokununca, önizleme görselsiz, aramada düşük video katmanı + 24 kbps mikrofon (elle açılır; hücresel algılama native modül ister).
 
-**Dalga 4:** C6 turnuva devamı · C7 klip devamı · F2 sunucu abonelikleri · G3 beyaz tahta
+**Dalga 4** ✅
+- [x] G3 Beyaz tahta — her kanalda ortak 16:9 tahta (kalem, fosforlu, sürükleyerek silgi, 8 renk, 3 kalınlık, geri al, PNG, temizle); canlı. Temizleme Mesajları yönet izni (DM'de herkes). Web/desktop başlıkta + ⋮, mobil parmakla çizim.
+- [x] C6 Turnuva devamı — biçimler: tek eleme, lig (puan durumu, ikili averaj), 4'lü masa (okey; masa kazananı üst tura). Tavla/bilardo/bowling'de maçın oyuncuları sunucunun oyun kanalında oynayınca sonuç kendiliğinden işlenir ("sonuç oyundan"). Çift eleme yapılmadı (lig onun yerine).
+- [x] C7 Klip devamı (desktop) — paylaşım/ses gerekmeden oyun penceresinden klip (Ayarlar › Overlay › Klipler; yalnız yerel), düzenleyici: kırp, kırpılmışı kaydet, kanala gönder (50 MB üstü küçültülür).
+- [x] F2 Sunucu abonelikleri — para Dracord'dan geçmez: sahip kademe (rol, avantaj, fiyat metni, kendi https ödeme sayfası) tanımlar; üyeliği elle (süreli/süresiz) ya da kodla verir; rol otomatik verilir, süre dolunca alınır. Web/desktop; mobil görünüm sonra.
 
 ## Karar bekleyen sorular
 
@@ -421,3 +425,8 @@ Hepsi varsayılan kapalı/opsiyonel açılır, üç platform birlikte; ücretli 
   pencereden önce küçük bir pencerede güncellemeyi kontrol ediyor; yeni sürüm varsa ilerleme çubuğuyla indirip
   sessiz kuruyor ve yeniden açılıyor. Kontrol 10 sn / indirme 4 dk'yı aşarsa uygulama açılır, indirme arka
   planda sürer, kapatınca kurulur. Ayar: Sistem › Otomatik güncelleme. COOMBIE işi nginx'i yalnız değişince yeniler.
+- 2026-11-19 — Dalga 4 kapandı (G3, C6, C7, F2). Müzik: YouTube "Mix" bağlantıları (list=RD…) tek şarkıya
+  indiriliyor ("This playlist type is unviewable" hatası); proxy + YouTube cookie artık **Yönetim › Müzik botu**
+  sayfasından girilir (.env'yi ezer, 30 sn'de devreye girer, son deneme sonucu görünür). Müzik botu artık her
+  deploy'da CI'da derlenip güncelleniyor. Masaüstü güncellemeleri artık fark indirmesi yapıyor (latest*.yml tag
+  adreslerine işaret ediyor; önceden her sürümde ~150 MB'ın tamamı iniyordu).
