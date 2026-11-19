@@ -33,6 +33,7 @@ import {
   LfgBoard,
   GuildQuickActions,
   HeaderOverflowMenu,
+  Whiteboard,
   TicketsPanel,
   GiveawaysPanel,
   ChallengesPanel,
@@ -363,6 +364,7 @@ export function GuildChannelView({
   const [giveawaysOpen, setGiveawaysOpen] = useState(false);
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
   useEffect(() => {
@@ -3625,6 +3627,15 @@ export function GuildChannelView({
                 >
                   <span className="material-symbols-outlined text-[18px]">photo_library</span>
                 </button>
+                <button
+                  type="button"
+                  className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  aria-label="Beyaz tahta"
+                  title="Ortak beyaz tahta"
+                  onClick={() => setBoardOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">draw</span>
+                </button>
               </>
             ) : null}
             {!isForumView && (
@@ -3648,6 +3659,7 @@ export function GuildChannelView({
               items={[
                 { id: 'pins', icon: 'push_pin', label: 'Sabitlenenler', badge: pinCount || null, onClick: () => setPinsOpen(true) },
                 ...(channel && !isForumView ? [{ id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) }] : []),
+                ...(channel && !isForumView ? [{ id: 'board', icon: 'draw', label: 'Beyaz tahta', onClick: () => setBoardOpen(true) }] : []),
                 ...(!isForumView ? [{ id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() }] : []),
                 ...(channel && canManageChannels ? [{ id: 'edit', icon: 'edit', label: 'Kanalı düzenle', onClick: () => openEditChannel(channel) }] : []),
               ]}
@@ -5071,6 +5083,13 @@ export function GuildChannelView({
         )}
       </Modal>
 
+      {channel && user ? (
+        <Modal open={boardOpen} title={`#${channel.name} · beyaz tahta`} onClose={() => setBoardOpen(false)} className="sm:max-w-6xl">
+          <div className="h-[72vh]">
+            {boardOpen ? <Whiteboard client={client} channelId={channel.id} meId={user.id} canClear={canManageMessages} /> : null}
+          </div>
+        </Modal>
+      ) : null}
       {channel ? (
         <MediaGalleryModal
           client={client}

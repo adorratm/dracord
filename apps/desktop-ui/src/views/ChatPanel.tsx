@@ -11,6 +11,7 @@ import { DRACORD_BOT_USER_ID, SocketEvents, mergeLatestMessages } from '@dracord
 import {
   AnnouncementFollowButton,
   HeaderOverflowMenu,
+  Whiteboard,
   MediaGalleryModal,
   Avatar,
   ChatInput,
@@ -113,6 +114,7 @@ export function ChatPanel({
   const { client, user } = useAuth();
   // B8 — servers to send this announcement channel's posts to
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const [followGuilds, setFollowGuilds] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     if (!channel?.isAnnouncement) return;
@@ -632,6 +634,22 @@ export function ChatPanel({
             >
               <span className="material-symbols-outlined text-[18px]">photo_library</span>
             </button>
+            <button
+              type="button"
+              className="hidden @xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Beyaz tahta"
+              title="Ortak beyaz tahta"
+              onClick={() => setBoardOpen(true)}
+            >
+              <span className="material-symbols-outlined text-[18px]">draw</span>
+            </button>
+            {user ? (
+              <Modal open={boardOpen} title={`#${channel.name} · beyaz tahta`} onClose={() => setBoardOpen(false)} className="sm:max-w-6xl">
+                <div className="h-[72vh]">
+                  {boardOpen ? <Whiteboard client={client} channelId={channel.id} meId={user.id} canClear={isDm || canManageMessages} /> : null}
+                </div>
+              </Modal>
+            ) : null}
             <MediaGalleryModal
               client={client}
               channelId={channel.id}
@@ -700,6 +718,7 @@ export function ChatPanel({
                   },
                 },
                 { id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) },
+                { id: 'board', icon: 'draw', label: 'Beyaz tahta', onClick: () => setBoardOpen(true) },
                 { id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() },
               ]}
             />

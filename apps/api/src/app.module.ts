@@ -38,6 +38,7 @@ import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
 import { LfgModule } from '@/lfg/lfg.module';
 import { CommunityModule } from '@/community/community.module';
+import { WhiteboardModule } from '@/whiteboard/whiteboard.module';
 import { ChallengesModule } from '@/challenges/challenges.module';
 import { AutomodRulesModule } from '@/automod-rules/automod-rules.module';
 import { E2eeModule } from '@/e2ee/e2ee.module';
@@ -92,6 +93,7 @@ import { GamesModule } from '@/games/games.module';
     TournamentsModule,
     LfgModule,
     CommunityModule,
+    WhiteboardModule,
     ChallengesModule,
     AutomodRulesModule,
     E2eeModule,

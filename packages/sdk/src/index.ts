@@ -1928,6 +1928,33 @@ export class DracordClient {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
   }
 
+  // ── G3: beyaz tahta ──
+  async getWhiteboard(channelId: string): Promise<import('@dracord/types').WhiteboardStroke[]> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/whiteboard`);
+  }
+
+  async addWhiteboardStroke(
+    channelId: string,
+    stroke: Pick<import('@dracord/types').WhiteboardStroke, 'tool' | 'color' | 'width' | 'points'>,
+  ): Promise<import('@dracord/types').WhiteboardStroke> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/whiteboard/strokes`, { method: 'POST', body: JSON.stringify(stroke) });
+  }
+
+  async removeWhiteboardStrokes(channelId: string, ids: string[]): Promise<{ ok: true; removed: number }> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/whiteboard/remove`, { method: 'POST', body: JSON.stringify({ ids }) });
+  }
+
+  async clearWhiteboard(channelId: string): Promise<{ ok: true }> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/whiteboard`, { method: 'DELETE' });
+  }
+
+  onWhiteboardEvent(handler: (e: import('@dracord/types').WhiteboardEvent) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.WHITEBOARD_EVENT, handler);
+    return () => sock.off(SocketEvents.WHITEBOARD_EVENT, handler);
+  }
+
   // ── B6: destek talepleri ──
   async getTicketConfig(guildId: string): Promise<import('@dracord/types').GuildTicketConfig> {
     return this.request(`/guilds/${encodeURIComponent(guildId)}/tickets/config`);

@@ -319,3 +319,6 @@ export { CameraBackgroundPicker } from './components/CameraBackgroundPicker';
 // F1 — profil süsleri
 export { ProfileDecorPicker } from './components/ProfileDecorPicker';
 export { ensureProfileDecorStyles } from './lib/profile-decor';
+
+// G3 — beyaz tahta
+export { Whiteboard, type WhiteboardClient } from './components/Whiteboard';

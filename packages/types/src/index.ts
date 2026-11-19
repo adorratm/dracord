@@ -892,6 +892,8 @@ export const SocketEvents = {
   GIVEAWAY_UPDATE: 'giveaway:update',
   /** sesli olmayan üyeyi yönetici ses kanalına çağırdı (hedef kullanıcıya) */
   VOICE_SUMMON: 'voice:summon',
+  /** G3 beyaz tahta: çizgi eklendi / silindi / temizlendi (kanal odası) */
+  WHITEBOARD_EVENT: 'whiteboard:event',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
@@ -2407,3 +2409,23 @@ export const isAvatarDecoration = (v: unknown): v is AvatarDecorationId =>
   typeof v === 'string' && AVATAR_DECORATIONS.some((d) => d.id === v);
 export const isProfileEffect = (v: unknown): v is ProfileEffectId =>
   typeof v === 'string' && PROFILE_EFFECTS.some((d) => d.id === v);
+
+// ── G3: beyaz tahta ──
+export type WhiteboardTool = 'pen' | 'marker' | 'eraser';
+
+export interface WhiteboardStroke {
+  id: string;
+  userId: string;
+  tool: WhiteboardTool;
+  color: string;
+  /** çizgi kalınlığı, tahta genişliğinin binde biri */
+  width: number;
+  /** [x0, y0, x1, y1, …] — 0..1 normalize */
+  points: number[];
+  createdAt: string;
+}
+
+export type WhiteboardEvent =
+  | { channelId: string; kind: 'add'; stroke: WhiteboardStroke }
+  | { channelId: string; kind: 'remove'; strokeIds: string[] }
+  | { channelId: string; kind: 'clear' };
