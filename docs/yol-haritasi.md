@@ -365,18 +365,28 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 
 Hepsi varsayılan kapalı/opsiyonel açılır, üç platform birlikte; ücretli AI yok. Sıra:
 
-**Dalga 1** (en çok hissedilecekler)
-- [ ] A8 Bas-konuş + genel sustur/sağırlaştır kısayolları — desktop: Windows'ta global tuş izleme
-  (PowerShell + `GetAsyncKeyState`, native modül yok; fare yan tuşları dahil), mac/Linux'ta pencere içi;
-  web: sekme içi; mobil: basılı tut düğmesi.
-- [ ] E5 KVKK: verilerimi indir (zip) + hesap silme talebi (14 gün bekleme, iptal edilebilir).
-- [ ] E4 QR ile giriş: web/desktop giriş ekranında QR, mobil uygulamadan okut → onayla.
-- [ ] B5 Sunucuya katılış ekranı (kurallar + sorular → rol + kanal önerisi) + tepki rolleri.
-- [ ] C5 Takım arkadaşı arama ilanları (oyun, kişi sayısı, rank, ses) → tek tıkla katıl.
-  Not: masaüstünde çalışan oyun algılama + "oynuyor" durumu zaten var (`useDesktopGamePresence`).
+**Dalga 1** ✅
+- [x] A8 Bas-konuş + sustur/sağırlaştır kısayolları — Ayarlar › Ses: ses etkinliği / bas-konuş, tuş ya da fare yan tuşu, bırakma gecikmesi, tık sesi. Windows masaüstünde oyun öndeyken de (PowerShell `GetAsyncKeyState`, native modül yok; kısayollar `globalShortcut`, yalnız ses kanalındayken). Web: sekme içi. Mobil: basılı tut düğmesi.
+- [x] E5 KVKK — "Verilerimi indir" (tek JSON, akışlı, 10 dk'da bir); hesap silme 14 gün bekler, tüm cihazlardan çıkış, her yerde "Silmeyi iptal et"; süre dolunca otomatik silinir (sunucu sahipleri bekletilir).
+- [x] E4 QR ile giriş — web/desktop giriş ekranında kendini yenileyen QR; telefonda dracord.com.tr/qr/… ya da uygulama (dracord://qr/…) onaylar; QR yalnız bilet kimliği taşır, oturum yalnız bekleyen cihaza bir kez verilir.
+- [x] B5 Katılış ekranı (kurallar + sorular → rol + kanal önerisi) + tepki rolleri; yalnız temel izinli roller dağıtılabilir.
+- [x] C5 Takım ara ilanları — oyun, kişi, rank, ses kanalı, süre; satır kilidiyle katılım, canlı güncelleme.
 
-**Dalga 2:** B7 çekiliş + doğum günü · B8 yavaş mod + duyuru takibi · B9 yıldız panosu · G1 medya galerisi · B6 destek talebi
-**Dalga 3:** A9 RNNoise · A10 kamera arka planı · F1 profil süsleri · E6 passkey desktop/mobil · G2 mobil veri tasarrufu
+**Dalga 2** ✅
+- [x] B7 Çekiliş (adil kripto çekiliş, erken bitir, yeniden çek) + doğum günü kutlaması (gün/ay, isteğe bağlı, 09:00 TR, günün rolü).
+- [x] B8 Yavaş mod + duyuru kanalı takibi (Dracord-Bot kaynağıyla kopyalar).
+- [x] B9 Yıldız panosu.
+- [x] G1 Kanal medya galerisi (görsel/video/dosya, mesaja git).
+- [x] B6 Destek talebi (özel kanal, ekip rolleri, kayıt kanalı, kapat/yeniden aç).
+- [x] Ek: kenar çubuğu araçları tek ikon satırı; dar ekranda kanal başlığı "⋮" menüsü; seste olmayan üyeyi sürükleyince "Katıl / Şimdi değil" çağrısı (zorla bağlama yok); masaüstü/mobil moderatör taşımasını izler.
+
+**Dalga 3** ✅
+- [x] A9 RNNoise — masaüstünde gürültü engelleme artık gerçekten çalışıyor (önceden yalnız bayrak değişiyordu); web'de Güçlü (DeepFilterNet) / Hafif (RNNoise) seçimi, RNNoise yedek. Wasm satır içi (file:// uyumlu).
+- [x] A10 Kamera arka planı — bulanık (hafif/çok) ya da 5 hazır arka plan; cihazda işlenir (MediaPipe, @livekit/track-processors).
+- [x] F1 Profil süsleri — 8 avatar süsü + 5 profil efekti, ücretsiz, yalnız CSS.
+- [x] E6 Passkey masaüstü/mobil — dracord.com.tr/auth/passkey-handoff sistem tarayıcısında doğrular, oturum dracord://oauth ile uygulamaya döner (OTA güvenli).
+- [x] G2 Mobil veri tasarrufu — görseller dokununca, önizleme görselsiz, aramada düşük video katmanı + 24 kbps mikrofon (elle açılır; hücresel algılama native modül ister).
+
 **Dalga 4:** C6 turnuva devamı · C7 klip devamı · F2 sunucu abonelikleri · G3 beyaz tahta
 
 ## Karar bekleyen sorular
