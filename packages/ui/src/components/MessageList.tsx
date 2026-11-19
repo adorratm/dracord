@@ -546,7 +546,7 @@ export function MessageItem({
           <span className="material-symbols-outlined text-outline text-[22px]">title</span>
         </div>
       ) : showAvatar ? (
-        <Avatar displayName={author.displayName} imageUrl={author.avatarUrl} size="lg" status={author.status} statusRing={false} className="mt-0.5" />
+        <Avatar displayName={author.displayName} imageUrl={author.avatarUrl} size="lg" status={author.status} statusRing={false} className="mt-0.5" decoration={author.avatarDecoration} />
       ) : (
         <div className="w-12 shrink-0" aria-hidden />
       )}

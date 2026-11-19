@@ -320,6 +320,8 @@ export class DracordClient {
     accentColor?: string | null;
     socialLinks?: SocialLinks | null;
     censorLinkPreviews?: boolean;
+    avatarDecoration?: PublicUser['avatarDecoration'];
+    profileEffect?: PublicUser['profileEffect'];
   }): Promise<PublicUser> {
     return this.request('/users/me', { method: 'PATCH', body: JSON.stringify(data) });
   }

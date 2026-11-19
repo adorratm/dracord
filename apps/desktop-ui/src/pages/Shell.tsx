@@ -1433,6 +1433,7 @@ export function Shell() {
                 displayName: user?.displayName ?? '…',
                 username: user?.username,
                 avatarUrl: user?.avatarUrl,
+                avatarDecoration: user?.avatarDecoration,
                 status: selfStatus,
                 customStatus: user?.customStatus,
                 activity: user?.activity ?? null,

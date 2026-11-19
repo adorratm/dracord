@@ -102,6 +102,10 @@ export interface PublicUser {
   bannerUrl?: string | null;
   bio?: string | null;
   accentColor?: string | null;
+  /** F1 — avatar süsü (AVATAR_DECORATIONS) */
+  avatarDecoration?: AvatarDecorationId | null;
+  /** F1 — profil kartı efekti (PROFILE_EFFECTS) */
+  profileEffect?: ProfileEffectId | null;
   socialLinks?: SocialLinks | null;
   /** true ise link/medya önizlemeleri sansürlü (bulanık / gizli) gösterilir */
   censorLinkPreviews?: boolean;
@@ -974,6 +978,8 @@ export interface RemoteControlInputPayload {
 /** Soket `user:update` — profil alanları (kısmi) */
 export interface UserUpdatePayload {
   userId: string;
+  avatarDecoration?: AvatarDecorationId | null;
+  profileEffect?: ProfileEffectId | null;
   displayName?: string;
   username?: string;
   avatarUrl?: string | null;
@@ -2374,3 +2380,30 @@ export interface VoiceSummonPayload {
   channelName: string;
   from: { id: string; displayName: string; avatarUrl: string | null };
 }
+
+// ── F1: profil süsleri (ücretsiz, CSS ile çizilir — dosya yok) ──
+export const AVATAR_DECORATIONS = [
+  { id: 'neon', label: 'Neon' },
+  { id: 'dracula', label: 'Dracula' },
+  { id: 'fire', label: 'Alev' },
+  { id: 'ice', label: 'Buz' },
+  { id: 'sakura', label: 'Sakura' },
+  { id: 'galaxy', label: 'Galaksi' },
+  { id: 'gold', label: 'Altın' },
+  { id: 'rainbow', label: 'Gökkuşağı' },
+] as const;
+export type AvatarDecorationId = (typeof AVATAR_DECORATIONS)[number]['id'];
+
+export const PROFILE_EFFECTS = [
+  { id: 'sparkles', label: 'Işıltı' },
+  { id: 'snow', label: 'Kar' },
+  { id: 'hearts', label: 'Kalpler' },
+  { id: 'embers', label: 'Kıvılcım' },
+  { id: 'bubbles', label: 'Baloncuk' },
+] as const;
+export type ProfileEffectId = (typeof PROFILE_EFFECTS)[number]['id'];
+
+export const isAvatarDecoration = (v: unknown): v is AvatarDecorationId =>
+  typeof v === 'string' && AVATAR_DECORATIONS.some((d) => d.id === v);
+export const isProfileEffect = (v: unknown): v is ProfileEffectId =>
+  typeof v === 'string' && PROFILE_EFFECTS.some((d) => d.id === v);

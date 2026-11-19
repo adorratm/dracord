@@ -315,3 +315,7 @@ export { NoiseEngineSettings } from './components/NoiseEngineSettings';
 export * from './lib/camera-background';
 export { useCameraBackground } from './lib/use-camera-background';
 export { CameraBackgroundPicker } from './components/CameraBackgroundPicker';
+
+// F1 — profil süsleri
+export { ProfileDecorPicker } from './components/ProfileDecorPicker';
+export { ensureProfileDecorStyles } from './lib/profile-decor';

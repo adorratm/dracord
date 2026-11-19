@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import type { PresenceStatus } from '@dracord/types';
+import { ensureProfileDecorStyles } from '../lib/profile-decor';
 import { cn } from '../lib/cn';
 import { presenceDotClass } from '../lib/presence';
 
@@ -11,6 +13,8 @@ export interface AvatarProps {
   status?: PresenceStatus;
   statusRing?: boolean;
   className?: string;
+  /** F1 — avatar süsü (AVATAR_DECORATIONS id) */
+  decoration?: string | null;
 }
 
 const sizeMap = {
@@ -34,7 +38,11 @@ export function Avatar({
   status,
   statusRing = true,
   className,
+  decoration,
 }: AvatarProps) {
+  useEffect(() => {
+    if (decoration) ensureProfileDecorStyles();
+  }, [decoration]);
   const s = sizeMap[size];
 
   return (
@@ -56,10 +64,11 @@ export function Avatar({
           {initialsFromName(displayName)}
         </div>
       )}
+      {decoration && size !== 'sm' ? <span className={cn('avatar-deco', `avatar-deco--${decoration}`)} aria-hidden /> : null}
       {status && statusRing && (
         <span
           className={cn(
-            'absolute bottom-0 right-0 rounded-full ring-surface-container-lowest',
+            'absolute bottom-0 right-0 z-[2] rounded-full ring-surface-container-lowest',
             s.dot,
             presenceDotClass(status),
           )}

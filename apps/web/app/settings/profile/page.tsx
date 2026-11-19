@@ -1,7 +1,7 @@
 'use client';
 
 import type { SocialLinks } from '@dracord/types';
-import { SOCIAL_LINK_KEYS, ShowcasePicker, type SocialLinkKey } from '@dracord/ui';
+import { ProfileDecorPicker, SOCIAL_LINK_KEYS, ShowcasePicker, type SocialLinkKey } from '@dracord/ui';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAccessToken, getRefreshToken, persistSession } from '@/lib/storage';
@@ -310,6 +310,19 @@ export default function ProfileSettingsPage() {
         <div>
           <p className="font-label-sm text-on-surface-variant mb-space-sm">Profil rozeti</p>
           <ShowcasePicker client={client} userId={user.id} />
+        </div>
+      ) : null}
+
+      {user ? (
+        <div className="rounded-xl bg-surface-container-low">
+          <p className="font-label-sm text-on-surface-variant px-space-md pt-space-md">Profil süsleri</p>
+          <ProfileDecorPicker
+            user={user}
+            onSave={async (patch) => {
+              const me = await client.updateProfile(patch);
+              setUser(me);
+            }}
+          />
         </div>
       ) : null}
 

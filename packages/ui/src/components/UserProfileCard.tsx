@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { cn } from '../lib/cn';
 import { Avatar } from './Avatar';
 import { RoleBadge, ROLE_BADGE_STYLES } from './RoleBadge';
+import { ensureProfileDecorStyles } from '../lib/profile-decor';
 import { SocialLinksRow } from './SocialLinksRow';
 import { ActivityLine } from './ActivityLine';
 import { GuildBadgeChip, useUserShowcase } from './GuildBadge';
@@ -39,6 +40,8 @@ export interface UserProfileCardProps {
     isBot?: boolean;
     roles?: MemberRoleSummary[];
     socialLinks?: SocialLinks | null;
+    avatarDecoration?: string | null;
+    profileEffect?: string | null;
   };
   actions?: Array<{ id: string; label: string; danger?: boolean; onClick: () => void }>;
   onJoinActivity?: (activity: UserActivity) => void;
@@ -63,6 +66,9 @@ export function UserProfileCard({
   loadShowcase,
 }: UserProfileCardProps) {
   const showcase = useUserShowcase(open && !user.isBot ? user.id : null, loadShowcase);
+  useEffect(() => {
+    if (user.profileEffect || user.avatarDecoration) ensureProfileDecorStyles();
+  }, [user.profileEffect, user.avatarDecoration]);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (document.getElementById('dracord-role-badge-styles')) return;
@@ -133,6 +139,7 @@ export function UserProfileCard({
           )}
           style={bannerStyle}
         />
+        {user.profileEffect ? <div className={cn('profile-fx', `profile-fx--${user.profileEffect}`)} aria-hidden /> : null}
 
         <div className="px-space-xl pb-space-xl -mt-14 relative">
           <div className="flex items-end gap-space-md flex-wrap">
@@ -142,6 +149,7 @@ export function UserProfileCard({
                 imageUrl={user.avatarUrl}
                 size="xl"
                 status={user.status}
+                decoration={user.avatarDecoration}
               />
             </div>
             <div className="flex flex-wrap gap-1.5 pb-2 min-w-0 flex-1">

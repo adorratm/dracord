@@ -531,6 +531,8 @@ export function GuildChannelView({
       bannerColor?: string | null;
       accentColor?: string | null;
       bio?: string | null;
+      avatarDecoration?: PublicUser['avatarDecoration'];
+      profileEffect?: PublicUser['profileEffect'];
     }) => {
       setGuildMembers((prev) =>
         prev.map((m) =>
@@ -546,6 +548,8 @@ export function GuildChannelView({
                 bannerColor:
                   payload.bannerColor !== undefined ? payload.bannerColor : m.bannerColor,
                 bio: payload.bio !== undefined ? payload.bio : m.bio,
+                avatarDecoration: payload.avatarDecoration !== undefined ? payload.avatarDecoration : m.avatarDecoration,
+                profileEffect: payload.profileEffect !== undefined ? payload.profileEffect : m.profileEffect,
               }
             : m,
         ),
@@ -563,6 +567,8 @@ export function GuildChannelView({
               bannerColor:
                 payload.bannerColor !== undefined ? payload.bannerColor : cur.bannerColor,
               bio: payload.bio !== undefined ? payload.bio : cur.bio,
+                avatarDecoration: payload.avatarDecoration !== undefined ? payload.avatarDecoration : cur.avatarDecoration,
+                profileEffect: payload.profileEffect !== undefined ? payload.profileEffect : cur.profileEffect,
             }
           : cur,
       );
@@ -2373,6 +2379,7 @@ export function GuildChannelView({
             displayName: m.displayName,
             username: m.username,
             avatarUrl: m.avatarUrl,
+            avatarDecoration: m.avatarDecoration,
             bannerUrl: m.bannerUrl,
             bannerColor: m.bannerColor,
             bio: m.bio,
@@ -2777,6 +2784,7 @@ export function GuildChannelView({
         displayName: user?.displayName ?? 'Kullanıcı',
         username: user?.username ?? null,
         avatarUrl: user?.avatarUrl,
+        avatarDecoration: user?.avatarDecoration,
         status: liveMemberStatus(user?.id ?? '', user?.status) || user?.status || 'ONLINE',
         customStatus: user?.customStatus ?? null,
         activity: user?.activity ?? null,

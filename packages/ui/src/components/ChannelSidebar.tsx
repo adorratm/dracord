@@ -137,6 +137,8 @@ export interface UserPanelProps {
   voiceChannelName?: string | null;
   /** A8 — push-to-talk: null = voice activity, false = key up (mic closed), true = talking */
   pushToTalkHeld?: boolean | null;
+  /** F1 — avatar süsü */
+  avatarDecoration?: string | null;
   voiceServerName?: string | null;
   /** WebRTC ping (RTT), ms */
   voiceLatencyMs?: number | null;
@@ -318,6 +320,7 @@ export function UserPanel({
   voiceConnected,
   voiceChannelName,
   pushToTalkHeld = null,
+  avatarDecoration = null,
   voiceServerName = null,
   voiceLatencyMs = null,
   serverLatencyMs = null,
@@ -663,7 +666,7 @@ export function UserPanel({
             }}
             className="flex items-center gap-2.5 min-w-0 px-1.5 py-1.5 rounded-lg hover:bg-surface-container transition-colors duration-200 w-full text-left"
           >
-            <Avatar displayName={displayName} imageUrl={avatarUrl} size="md" status={status} />
+            <Avatar displayName={displayName} imageUrl={avatarUrl} size="md" status={status} decoration={avatarDecoration} />
             <div className="flex flex-col min-w-0 leading-tight gap-0.5">
               <span className="font-label-md text-on-surface truncate font-semibold">
                 {displayName}

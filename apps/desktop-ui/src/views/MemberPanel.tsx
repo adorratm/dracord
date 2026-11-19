@@ -91,6 +91,7 @@ export function MemberPanel({
         displayName: m.displayName,
         username: m.username,
         avatarUrl: m.avatarUrl,
+        avatarDecoration: m.avatarDecoration,
         bannerUrl: m.bannerUrl,
         bannerColor: m.bannerColor,
         bio: m.bio,

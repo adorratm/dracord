@@ -85,6 +85,14 @@ export class User extends CuidEntity {
   @Column({ type: 'timestamptz', nullable: true })
   disabledAt!: Date | null;
 
+  /** F1 — avatar süsü */
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  avatarDecoration!: string | null;
+
+  /** F1 — profil kartı efekti */
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  profileEffect!: string | null;
+
   /** B7 — doğum günü "MM-DD" (yıl tutulmaz) */
   @Column({ type: 'varchar', length: 5, nullable: true })
   birthday!: string | null;

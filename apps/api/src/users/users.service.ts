@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { EntityManager, ILike, In, Not } from 'typeorm';
-import type { ClientSettings, PublicUser, SocialLinks } from '@dracord/types';
+import { isAvatarDecoration, isProfileEffect, type ClientSettings, type PublicUser, type SocialLinks } from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { toPublicUser } from '@/common/user.mapper';
 import { Friendship } from '@/database/entities/friendship.entity';
@@ -31,6 +31,8 @@ export interface UpdateProfileInput {
   bannerUrl?: string | null;
   bannerColor?: string | null;
   accentColor?: string | null;
+  avatarDecoration?: string | null;
+  profileEffect?: string | null;
   socialLinks?: SocialLinks | null;
   censorLinkPreviews?: boolean;
 }
@@ -309,6 +311,18 @@ export class UsersService {
     if (input.bannerUrl !== undefined) user.bannerUrl = input.bannerUrl;
     if (input.bannerColor !== undefined) user.bannerColor = input.bannerColor;
     if (input.accentColor !== undefined) user.accentColor = input.accentColor;
+    if (input.avatarDecoration !== undefined) {
+      if (input.avatarDecoration !== null && !isAvatarDecoration(input.avatarDecoration)) {
+        throw new BadRequestException('Geçersiz avatar süsü');
+      }
+      user.avatarDecoration = input.avatarDecoration;
+    }
+    if (input.profileEffect !== undefined) {
+      if (input.profileEffect !== null && !isProfileEffect(input.profileEffect)) {
+        throw new BadRequestException('Geçersiz profil efekti');
+      }
+      user.profileEffect = input.profileEffect;
+    }
     if (input.socialLinks !== undefined) {
       user.socialLinks = input.socialLinks as Record<string, string> | null;
     }
@@ -326,6 +340,8 @@ export class UsersService {
       bannerUrl: pub.bannerUrl ?? null,
       bannerColor: pub.bannerColor ?? null,
       accentColor: pub.accentColor ?? null,
+      avatarDecoration: pub.avatarDecoration ?? null,
+      profileEffect: pub.profileEffect ?? null,
       bio: pub.bio ?? null,
       socialLinks: pub.socialLinks ?? null,
     });

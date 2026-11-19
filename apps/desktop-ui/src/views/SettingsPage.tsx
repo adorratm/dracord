@@ -14,6 +14,7 @@ import {
   presenceLabelTr,
   type SocialLinkKey,
   ShowcasePicker,
+  ProfileDecorPicker,
   SessionsPanel,
   E2eeDevicesPanel,
   browserE2eeManager,
@@ -769,6 +770,19 @@ export function SettingsPage({
               <div>
                 <p className="font-label-sm text-on-surface-variant mb-space-sm">Profil rozeti</p>
                 <ShowcasePicker client={client} userId={user.id} />
+              </div>
+            ) : null}
+
+            {user ? (
+              <div className="rounded-xl bg-surface-container-low">
+                <p className="font-label-sm text-on-surface-variant px-space-md pt-space-md">Profil süsleri</p>
+                <ProfileDecorPicker
+                  user={user}
+                  onSave={async (patch) => {
+                    const me = await client.updateProfile(patch);
+                    setUser(me);
+                  }}
+                />
               </div>
             ) : null}
 

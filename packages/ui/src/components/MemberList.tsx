@@ -33,6 +33,8 @@ export interface MemberListAction {
 
 export interface MemberListMember {
   id: string;
+  avatarDecoration?: string | null;
+  profileEffect?: string | null;
   displayName: string;
   username?: string;
   avatarUrl?: string | null;
@@ -141,6 +143,7 @@ function MemberRow({
             imageUrl={member.avatarUrl}
             size="md"
             status={member.status}
+            decoration={member.avatarDecoration}
           />
           <div className="flex flex-col min-w-0 flex-1">
             <span className="flex items-center gap-1.5 min-w-0">

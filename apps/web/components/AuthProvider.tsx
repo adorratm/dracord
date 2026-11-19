@@ -248,6 +248,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bannerColor?: string | null;
       accentColor?: string | null;
       bio?: string | null;
+      avatarDecoration?: PublicUser['avatarDecoration'];
+      profileEffect?: PublicUser['profileEffect'];
     }) => {
       if (payload.userId !== userId) return;
       setUser((prev) =>
@@ -269,6 +271,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   ? payload.accentColor
                   : prev.accentColor,
               bio: payload.bio !== undefined ? payload.bio : prev.bio,
+              avatarDecoration: payload.avatarDecoration !== undefined ? payload.avatarDecoration : prev.avatarDecoration,
+              profileEffect: payload.profileEffect !== undefined ? payload.profileEffect : prev.profileEffect,
             }
           : prev,
       );

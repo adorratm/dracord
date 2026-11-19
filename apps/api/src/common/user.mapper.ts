@@ -4,6 +4,7 @@ import type {
   UserActivity,
   UserActivitySource,
 } from '@dracord/types';
+import { isAvatarDecoration, isProfileEffect } from '@dracord/types';
 import type { User } from '@/database/entities/user.entity';
 import type { UserStatus } from '@/database/enums';
 import { mergeClientSettings } from '@/users/client-settings';
@@ -114,6 +115,8 @@ export function toPublicUser(
     bannerUrl: user.bannerUrl,
     bio: user.bio,
     accentColor: user.accentColor ?? user.bannerColor,
+    avatarDecoration: isAvatarDecoration(user.avatarDecoration) ? user.avatarDecoration : null,
+    profileEffect: isProfileEffect(user.profileEffect) ? user.profileEffect : null,
     socialLinks: user.socialLinks as PublicUser['socialLinks'],
     censorLinkPreviews: Boolean(user.censorLinkPreviews),
     isBot: Boolean(user.isBot),

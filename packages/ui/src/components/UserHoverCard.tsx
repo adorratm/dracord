@@ -30,6 +30,8 @@ export interface UserHoverCardUser {
   isBot?: boolean;
   socialLinks?: SocialLinks | null;
   roles?: MemberRoleSummary[];
+  avatarDecoration?: string | null;
+  profileEffect?: string | null;
 }
 
 const CARD_W = 288;
@@ -159,6 +161,7 @@ export function UserHoverCard({
                 imageUrl={user.avatarUrl}
                 size="lg"
                 status={user.status}
+                decoration={user.avatarDecoration}
               />
               <p className="mt-2 font-headline-md text-on-surface truncate">{user.displayName}</p>
               {user.username && (
