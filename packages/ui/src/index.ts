@@ -306,3 +306,7 @@ export { VoiceSummonPrompt } from './components/VoiceSummonPrompt';
 // sunucu kenar çubuğu araç satırı
 export { GuildQuickActions, type GuildQuickAction } from './components/GuildQuickActions';
 export { HeaderOverflowMenu, type HeaderOverflowItem } from './components/HeaderOverflowMenu';
+
+// A9 — RNNoise gürültü engelleme
+export { RnnoiseTrackProcessor, isRnnoiseSupported, loadNoiseEngine, saveNoiseEngine, NOISE_ENGINE_KEY, type NoiseEngine } from './lib/rnnoise-processor';
+export { NoiseEngineSettings } from './components/NoiseEngineSettings';

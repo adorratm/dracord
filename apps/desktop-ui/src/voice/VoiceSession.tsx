@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  LocalAudioTrack,
   LocalTrack,
   Room,
   RoomEvent,
@@ -20,6 +21,8 @@ import {
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import type { VoiceParticipant } from '@dracord/ui';
 import {
+  RnnoiseTrackProcessor,
+  isRnnoiseSupported,
   onGameFrameChange,
   reportVoiceActivity,
   shouldTransmit,
@@ -77,6 +80,24 @@ import { playUiTone } from '@/lib/sounds';
 import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import type { VoiceStatePayload, VoiceTakeoverPayload } from '@dracord/types';
 import { useAuth } from '../auth';
+
+const NOISE_ON_KEY = 'dracord.noise-cancellation';
+const trackCtxSet = new WeakSet<object>();
+let sharedAudioCtx: AudioContext | null = null;
+function loadNoiseOn(): boolean {
+  try {
+    return localStorage.getItem(NOISE_ON_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function saveNoiseOn(on: boolean): void {
+  try {
+    localStorage.setItem(NOISE_ON_KEY, on ? '1' : '0');
+  } catch {
+    /* private mode */
+  }
+}
 
 type AudioDevice = { deviceId: string; label: string };
 
@@ -296,7 +317,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const nsfwShareMonitorRef = useRef<NsfwMonitorHandle | null>(null);
   const nsfwCooldownUntilRef = useRef(0);
   const boundShareTrackRef = useRef<Track | null>(null);
-  const noiseCancellationRef = useRef(false);
+  const noiseCancellationRef = useRef(loadNoiseOn());
+  /** A9 — RNNoise on the published mic (desktop has no DeepFilterNet bundle) */
+  const rnnoiseRef = useRef<RnnoiseTrackProcessor | null>(null);
   const afkSilenceRef = useRef(false);
   const mutedRef = useRef(false);
   const deafenedRef = useRef(false);
@@ -314,6 +337,37 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       shouldTransmit(voiceInputRef.current, { muted: mutedRef.current, pttHeld: pttHeldRef.current }),
     [],
   );
+  /** A9 — put RNNoise on / take it off the published microphone */
+  const applyNoise = useCallback(async () => {
+    const room = roomRef.current;
+    const mic = room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    if (!(mic instanceof LocalAudioTrack)) return;
+    const deviceId = audioSettingsRef.current.inputDeviceId || undefined;
+    try {
+      if (noiseCancellationRef.current && isRnnoiseSupported()) {
+        if (rnnoiseRef.current) return;
+        // the browser's own suppressor would fight RNNoise
+        await mic.restartTrack({ echoCancellation: true, noiseSuppression: false, autoGainControl: true, deviceId });
+        // LiveKit needs an audio context on the track before it accepts a processor
+        if (!trackCtxSet.has(mic)) {
+          trackCtxSet.add(mic);
+          await mic.setAudioContext((sharedAudioCtx ??= new AudioContext()));
+        }
+        const p = new RnnoiseTrackProcessor();
+        await mic.setProcessor(p as never);
+        rnnoiseRef.current = p;
+        return;
+      }
+      if (!rnnoiseRef.current) return;
+      rnnoiseRef.current = null;
+      await mic.stopProcessor();
+      await mic.restartTrack({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, deviceId });
+    } catch (err) {
+      console.warn('[voice] gürültü engelleme', err);
+      rnnoiseRef.current = null;
+    }
+  }, []);
+
   const applyMic = useCallback(() => {
     const room = roomRef.current;
     if (!room) return;
@@ -354,7 +408,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [screenShareVolumes, setScreenShareVolumes] = useState(loadScreenShareVolumes);
   const [participantVolumes, setParticipantVolumes] = useState(loadParticipantVolumes);
   const [audioSettings, setAudioSettings] = useState(loadVoiceAudioSettings);
-  const [noiseCancellation, setNoiseCancellation] = useState(false);
+  const [noiseCancellation, setNoiseCancellation] = useState(loadNoiseOn);
   const [audioInputDevices, setAudioInputDevices] = useState<AudioDevice[]>([]);
   const [audioOutputDevices, setAudioOutputDevices] = useState<AudioDevice[]>([]);
   const [videoDevices, setVideoDevices] = useState<AudioDevice[]>([]);
@@ -1026,6 +1080,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         // push-to-talk: publish the mic once (so the first press is instant), then hold it closed
         await room.localParticipant.setMicrophoneEnabled(micOn);
         if (micOn && !micShouldSend()) await room.localParticipant.setMicrophoneEnabled(false);
+        rnnoiseRef.current = null; // a new room publishes a new track
+        void applyNoise();
         if (afkSilenceRef.current) {
           for (const el of attached.current) el.muted = true;
         }
@@ -1314,7 +1370,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const next = !noiseCancellationRef.current;
     noiseCancellationRef.current = next;
     setNoiseCancellation(next);
-  }, []);
+    saveNoiseOn(next);
+    void applyNoise();
+  }, [applyNoise]);
 
   const setMuted = useCallback(
     (next: boolean) => {

@@ -5,6 +5,9 @@ import {
   gameVoiceLevel,
   onGameFrameChange,
   reportVoiceActivity,
+  RnnoiseTrackProcessor,
+  isRnnoiseSupported,
+  loadNoiseEngine,
   usePushToTalk,
   useVoiceInputSettings,
 } from '@dracord/ui';
@@ -3063,6 +3066,39 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const next = !noiseCancellation;
     const micVolume = audioSettingsRef.current.micVolume;
 
+    // A9 — RNNoise: the light engine (chosen in settings) and the fallback for DeepFilterNet
+    const startRnnoise = async (): Promise<boolean> => {
+      if (!isRnnoiseSupported()) return false;
+      try {
+        try {
+          await mic.stopProcessor();
+        } catch {
+          // ignore
+        }
+        micGainRef.current = null;
+        await mic.restartTrack({
+          echoCancellation: true,
+          noiseSuppression: false,
+          autoGainControl: false,
+          deviceId: audioSettingsRef.current.inputDeviceId || undefined,
+        });
+        await mic.setProcessor(new RnnoiseTrackProcessor() as never);
+        deepFilterActiveRef.current = true;
+        clarityRef.current = null;
+        setNoiseCancellation(true);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (next && loadNoiseEngine() === 'rnnoise') {
+      if (await startRnnoise()) {
+        setNoiseNote('RNNoise etkin (hafif mod) — arka plan gürültüsü azaltılıyor.');
+        return;
+      }
+    }
+
     if (next) {
       try {
         const { VoiceClarityProcessor, isVoiceClaritySupported } = await import(
@@ -3097,6 +3133,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         deepFilterActiveRef.current = false;
         clarityRef.current = null;
+        if (await startRnnoise()) {
+          setNoiseNote('DeepFilterNet açılamadı; RNNoise (hafif) kullanılıyor.');
+          return;
+        }
         setNoiseCancellation(false);
         setNoiseNote(
           err instanceof Error && err.message === 'unsupported'
