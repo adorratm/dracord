@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ClipBuffer } from '../lib/clip-recorder';
+import { armClipHotkey, disarmClipHotkey } from '../lib/clip-hotkey';
+import type { SavedClip } from '../lib/clip-store';
 
 export type ClipState =
   | { kind: 'off' }
   | { kind: 'armed'; seconds: number; accelerator: string | null }
   | { kind: 'saving' }
-  | { kind: 'saved'; path: string; seconds: number }
+  | { kind: 'saved'; path: string; seconds: number; clip: SavedClip }
   | { kind: 'error'; message: string };
 
 /**
@@ -26,10 +28,11 @@ export function useClipRecorder(
   const api = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
   const supported = Boolean(api?.saveClip) && typeof MediaRecorder !== 'undefined';
 
+  const saveRef = useRef<() => Promise<void>>(async () => undefined);
   const disarm = useCallback(() => {
     buf.current?.stop();
     buf.current = null;
-    void api?.setClipArmed?.(false);
+    disarmClipHotkey('share');
     setState({ kind: 'off' });
   }, [api]);
 
@@ -43,8 +46,8 @@ export function useClipRecorder(
     const b = new ClipBuffer(stream);
     b.start();
     buf.current = b;
-    const r = await api?.setClipArmed?.(true);
-    setState({ kind: 'armed', seconds: 0, accelerator: r?.accelerator ?? null });
+    const accel = await armClipHotkey('share', () => void saveRef.current());
+    setState({ kind: 'armed', seconds: 0, accelerator: accel });
   }, [api]);
 
   const save = useCallback(async () => {
@@ -58,15 +61,17 @@ export function useClipRecorder(
       const data = new Uint8Array(await out.blob.arrayBuffer());
       const r = await api.saveClip(data, nameRef.current || 'klip');
       if (!r.ok || !r.path) throw new Error(r.error || 'Kaydedilemedi');
-      setState({ kind: 'saved', path: r.path, seconds: out.seconds });
+      setState({ kind: 'saved', path: r.path, seconds: out.seconds, clip: { blob: out.blob, seconds: out.seconds, path: r.path, name: nameRef.current || 'klip' } });
       setTimeout(() => {
         if (buf.current === b) setState((s) => (s.kind === 'saved' ? { kind: 'armed', seconds: b.bufferedSeconds, accelerator: 'Control+Shift+K' } : s));
-      }, 6000);
+      }, 12000);
     } catch (e) {
       setState({ kind: 'error', message: e instanceof Error ? e.message : 'Klip kaydedilemedi' });
       setTimeout(() => buf.current === b && setState({ kind: 'armed', seconds: b.bufferedSeconds, accelerator: null }), 4000);
     }
   }, [api]);
+
+  saveRef.current = save;
 
   // Paylaşım değişti / bitti → arabelleği kapat
   useEffect(() => {
@@ -74,7 +79,7 @@ export function useClipRecorder(
     return () => {
       buf.current?.stop();
       buf.current = null;
-      void api?.setClipArmed?.(false);
+      disarmClipHotkey('share');
     };
   }, [shareKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -88,10 +93,6 @@ export function useClipRecorder(
     return () => clearInterval(t);
   }, [state.kind]);
 
-  // Global kısayol
-  const saveRef = useRef(save);
-  saveRef.current = save;
-  useEffect(() => api?.onClipHotkey?.(() => void saveRef.current()), [api]);
 
   return {
     supported,

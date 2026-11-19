@@ -1,4 +1,5 @@
 import { useClipRecorder } from '../hooks/useClipRecorder';
+import { clipStore } from '../lib/clip-store';
 
 /** Ses sahnesi kontrol çubuğu: ekran paylaşımı varken anlık klip (A3) */
 export function ClipButton({
@@ -44,6 +45,17 @@ export function ClipButton({
             ? `${s.seconds} sn kaydedildi · aç`
             : `Klibi kaydet · ${Math.min(s.seconds, 60)} sn`}
       </button>
+      {s.kind === 'saved' ? (
+        <button
+          type="button"
+          onClick={() => clipStore.openEditor(s.clip)}
+          className={`${base} bg-surface-container-high text-on-surface hover:bg-surface-bright`}
+          title="Kırp, kaydet ya da kanala gönder"
+        >
+          <span className="material-symbols-outlined text-[18px]">content_cut</span>
+          Düzenle
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={clip.disarm}

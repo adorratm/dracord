@@ -55,6 +55,8 @@ import {
   SettingsSlider,
 } from '../components/settings/SettingsControls';
 import { useVoiceSession } from '../voice/VoiceSession';
+import { startStandaloneClip } from '../components/StandaloneClipChip';
+import { standaloneClip } from '../lib/standalone-clip';
 
 const LEGAL_BASE = 'https://dracord.com.tr/legal';
 
@@ -2155,6 +2157,23 @@ export function SettingsPage({
                 })
               }
             />
+          </SettingsSection>
+          <SettingsSection title="Klipler">
+            <div className="space-y-2">
+              <p className="font-body-sm text-on-surface-variant">
+                Paylaşım ya da ses kanalı gerekmez: bir oyun penceresini (veya ekranı) seç, Dracord yalnız bu bilgisayarda
+                arabelleğe alır. <strong>Ctrl+Shift+K</strong> son 30–60 sn'yi Videolar/Dracord Klipleri klasörüne kaydeder;
+                sonra kırpıp bir kanala gönderebilirsin.
+              </p>
+              <button
+                type="button"
+                disabled={!standaloneClip.supported}
+                onClick={() => startStandaloneClip()}
+                className="rounded-lg bg-primary px-4 py-2 font-label-md text-on-primary"
+              >
+                {standaloneClip.supported ? 'Oyun penceresinden klip başlat' : 'Uygulamayı güncelle (klip desteği yok)'}
+              </button>
+            </div>
           </SettingsSection>
           <SettingsSection title="Konuşan HUD">
             <SettingsToggle

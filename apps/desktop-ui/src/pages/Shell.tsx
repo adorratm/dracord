@@ -66,6 +66,8 @@ import { GuildBoostPage } from '../views/GuildBoostPage';
 import { MemberPanel } from '../views/MemberPanel';
 import { NotificationBell } from '../views/NotificationBell';
 import { UpdateBanner } from '../components/UpdateBanner';
+import { ClipEditorHost } from '../components/ClipEditor';
+import { StandaloneClipChip } from '../components/StandaloneClipChip';
 import { AccountDeletionBanner, ChannelExtrasSettings, GuildOnboardingModal, VoiceSummonPrompt } from '@dracord/ui';
 
 type View =
@@ -1237,6 +1239,14 @@ export function Shell() {
           <p className="font-body-sm flex-1 min-w-0">{moveNotice}</p>
         </div>
       )}
+      <StandaloneClipChip />
+      <ClipEditorHost
+        client={client}
+        targets={channels
+          .filter((c) => c.type === 'TEXT' || c.type === 'FORUM')
+          .map((c) => ({ id: c.id, label: `# ${c.name}` }))}
+        defaultTargetId={activeChannel && (activeChannel.type === 'TEXT' || activeChannel.type === 'FORUM') ? activeChannel.id : null}
+      />
       <VoiceSummonPrompt
         client={client}
         onAccept={(p) => {
