@@ -248,6 +248,36 @@ jobs:
             head -n 20 latest.yml || true
           fi
 
+      # Fark güncellemesi: latest*.yml içindeki dosya adlarını bu sürümün tag adresine çevir.
+      # electron-updater eski blockmap'i aynı adresteki sürüm numarasını değiştirerek bulur
+      # (…/download/desktop-v0.1.50/…blockmap); "latest/download" kalırsa eski blockmap'e ulaşamaz
+      # ve her güncellemede ~150 MB'ın tamamı iner. Böylece yalnız değişen bloklar iner.
+      - name: Absolute update URLs (differential download)
+        working-directory: apps/desktop/dist-upload
+        shell: bash
+        env:
+          BASE: https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for y in latest*.yml; do
+            node -e '
+              const fs = require("fs");
+              const [file, base] = process.argv.slice(1);
+              const out = fs.readFileSync(file, "utf8").replace(/^(\s*(?:-\s+)?(?:url|path):\s*)(\S+)\s*$/gm, (m, k, v) =>
+                /^[a-z]+:\/\//i.test(v) ? m : k + base + encodeURIComponent(v));
+              fs.writeFileSync(file, out);
+            ' "$y" "$BASE"
+            echo "--- $y ---"; cat "$y"
+          done
+          # sağlama listesindeki yml satırlarını yeni içerikle güncelle
+          for sums in SHA256SUMS-*.txt; do
+            for y in latest*.yml; do
+              h=$( (command -v sha256sum >/dev/null && sha256sum "$y" || shasum -a 256 "$y") | cut -d' ' -f1)
+              node -e 'const fs=require("fs");const [f,y,h]=process.argv.slice(1);fs.writeFileSync(f,fs.readFileSync(f,"utf8").split("\n").map(l=>l.endsWith(" "+y)?h+"  "+y:l).join("\n"))' "$sums" "$y" "$h"
+            done
+          done
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
