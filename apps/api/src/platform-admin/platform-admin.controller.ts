@@ -17,6 +17,7 @@ import type { TrustSafetyCategory } from '@/database/entities/trust-safety-repor
 import { PlatformAuditService } from '@/platform/platform-audit.service';
 import { PlatformAdminGuard } from '@/platform-admin/platform-admin.guard';
 import { PlatformAdminService } from '@/platform-admin/platform-admin.service';
+import { MusicConfigService } from '@/platform-admin/music-config.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
 import { SearchService } from '@/search/search.service';
 import { ElasticsearchService } from '@/search/elasticsearch.service';
@@ -32,7 +33,28 @@ export class PlatformAdminController {
     private readonly safety: GuildSafetyService,
     private readonly hashes: ContentHashService,
     private readonly platformAudit: PlatformAuditService,
+    private readonly musicConfig: MusicConfigService,
   ) {}
+
+  /** Müzik botu yt-dlp ayarları (proxy + YouTube cookie) — .env'yi ezer */
+  @Get('music-config')
+  getMusicConfig() {
+    return this.musicConfig.view();
+  }
+
+  @Patch('music-config')
+  async setMusicConfig(
+    @Req() req: { user: { sub: string } },
+    @Body() body: { proxy?: string | null; cookies?: string | null },
+  ) {
+    const out = await this.musicConfig.update(req.user.sub, body ?? {});
+    void this.platformAudit.record({
+      action: 'music_config.update',
+      actorUserId: req.user.sub,
+      meta: { proxy: body?.proxy === undefined ? 'unchanged' : body.proxy ? 'set' : 'cleared', cookies: body?.cookies === undefined ? 'unchanged' : body.cookies ? 'set' : 'cleared' },
+    });
+    return out;
+  }
 
   @Get('guilds')
   listGuilds() {

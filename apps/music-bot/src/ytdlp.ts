@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { loadRuntimeConfig, reportStatus, type RuntimeConfig } from './runtime-config';
 
 export type YtMeta = {
   title: string;
@@ -30,6 +31,66 @@ let workingSkipCookies = false;
 /** Relay’den gelen stream; openPcmStream ffmpeg ile doğrudan açar */
 let workingStreamUrl: string | null = null;
 let cookiesResolved: CookiesInfo | null = null;
+/** Yönetim panelinden gelen ayar (varsa .env'yi ezer) */
+let runtime: RuntimeConfig = { proxy: null, cookies: null, updatedAt: null };
+let runtimeCookiesStamp: string | null = null;
+
+async function applyRuntimeConfig(): Promise<void> {
+  const next = await loadRuntimeConfig();
+  const cookiesChanged = next.cookies !== runtime.cookies || next.updatedAt !== runtimeCookiesStamp;
+  runtime = next;
+  if (cookiesChanged) {
+    runtimeCookiesStamp = next.updatedAt;
+    cookiesResolved = null; // yeniden çözülsün
+    workingExtractorArgs = null;
+  }
+}
+
+/** Panelden yapıştırılan cookie: Netscape metni ya da base64 */
+function decodeCookies(raw: string): string {
+  const t = raw.trim();
+  if (t.includes('\t') || t.startsWith('#')) return t;
+  try {
+    const d = Buffer.from(t.replace(/\s+/g, ''), 'base64').toString('utf8');
+    if (d.includes('\t')) return d;
+  } catch {
+    /* metin olarak dene */
+  }
+  return t;
+}
+
+/**
+ * YouTube bağlantısını tek videoya indir: karışık liste (RD…, "Mix") ve liste parametreleri
+ * yt-dlp'de "This playlist type is unviewable" verir; shorts/youtu.be da düz izleme adresine çevrilir.
+ */
+export function normalizeYoutubeSource(source: string): string {
+  const raw = source.trim();
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return raw;
+  }
+  const host = u.hostname.replace(/^(www|m|music)\./, '');
+  const watch = (id: string) => `https://www.youtube.com/watch?v=${id}`;
+  const isId = (id: string | null | undefined): id is string => !!id && /^[A-Za-z0-9_-]{11}$/.test(id);
+  if (host === 'youtu.be') {
+    const id = u.pathname.slice(1).split('/')[0];
+    return isId(id) ? watch(id) : raw;
+  }
+  if (host !== 'youtube.com' && host !== 'youtube-nocookie.com') return raw;
+  const v = u.searchParams.get('v');
+  if (isId(v)) return watch(v);
+  const m = u.pathname.match(/^\/(?:shorts|live|embed)\/([A-Za-z0-9_-]{11})/);
+  if (m) return watch(m[1]!);
+  const list = u.searchParams.get('list') ?? '';
+  // Mix: RD<videoId>, RDAMVM<videoId>, RDMM<videoId> … → listenin tohum videosu
+  if (/^RD/.test(list)) {
+    const tail = list.slice(-11);
+    if (isId(tail) && list.length > 11) return watch(tail);
+  }
+  return raw;
+}
 
 /** Cookie varken oturumu kullanan client’lar (android_* cookie’yi yok sayıp bot duvarına düşer) */
 const COOKIE_CLIENTS = [
@@ -86,6 +147,17 @@ function writeCookiesTemp(raw: string): string {
 export function ensureCookiesFile(): string | null {
   if (cookiesResolved?.path && hasUsableCookiesFile(cookiesResolved.path)) {
     return cookiesResolved.path;
+  }
+
+  if (runtime.cookies) {
+    const text = decodeCookies(runtime.cookies);
+    const info = inspectCookiesText(text);
+    if (info.lineCount > 0) {
+      const path = writeCookiesTemp(text);
+      cookiesResolved = { path, loaded: true, source: 'b64', lineCount: info.lineCount, hasLoginHints: info.hasLoginHints };
+      return path;
+    }
+    console.warn('panel cookie metninde cookie satırı yok — .env değerine dönülüyor');
   }
 
   const b64 = process.env.YTDLP_COOKIES_B64?.trim();
@@ -200,6 +272,7 @@ type RunOpts = {
 
 function resolveProxy(): string | null {
   return (
+    runtime.proxy ||
     process.env.YTDLP_PROXY?.trim() ||
     process.env.HTTPS_PROXY?.trim() ||
     process.env.HTTP_PROXY?.trim() ||
@@ -398,7 +471,20 @@ function looksLikeYoutube(source: string): boolean {
 }
 
 /** Metadata — proxy varsa önce yerel+proxy; relay yalnızca proxy yokken */
-export async function fetchMeta(source: string): Promise<YtMeta> {
+export async function fetchMeta(rawSource: string): Promise<YtMeta> {
+  const source = normalizeYoutubeSource(rawSource);
+  await applyRuntimeConfig();
+  try {
+    const meta = await fetchMetaInner(source);
+    void reportStatus({ ok: true, via: resolveProxy() ? 'proxy' : relayBase() ? 'relay' : 'direct' });
+    return meta;
+  } catch (e) {
+    void reportStatus({ ok: false, error: e instanceof Error ? e.message : String(e), via: resolveProxy() ? 'proxy' : relayBase() ? 'relay' : 'direct' });
+    throw e;
+  }
+}
+
+async function fetchMetaInner(source: string): Promise<YtMeta> {
   ensureCookiesFile();
   workingStreamUrl = null;
   const proxy = resolveProxy();
@@ -454,7 +540,12 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
   }
 
   const c = cookiesStatus();
-  if (c.loaded && !c.hasLoginHints) {
+  if (/playlist type is unviewable|playlist does not exist/i.test(lastErr)) {
+    throw new Error('Bu YouTube listesi (Mix / otomatik liste) açılamıyor — şarkının kendi bağlantısını kullan.');
+  }
+  if (!isBotOrAuthError(lastErr)) {
+    // Proxy/cookie ile ilgisi olmayan hata: yanıltıcı ipucu ekleme
+  } else if (c.loaded && !c.hasLoginHints) {
     lastErr +=
       ' — cookie dosyasında LOGIN_INFO/PSID yok; incognito + robots.txt ile yeniden export et.';
   } else if (c.loaded && !proxy && !relay) {
@@ -467,10 +558,11 @@ export async function fetchMeta(source: string): Promise<YtMeta> {
   throw new Error(lastErr);
 }
 
-export function openPcmStream(source: string): {
+export function openPcmStream(rawSource: string): {
   ffmpeg: ReturnType<typeof spawn>;
   ytdlp: ReturnType<typeof spawn> | null;
 } {
+  const source = normalizeYoutubeSource(rawSource);
   ensureCookiesFile();
   const ignorePipeErr = () => undefined;
 

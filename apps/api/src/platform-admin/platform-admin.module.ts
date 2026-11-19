@@ -7,6 +7,7 @@ import { VoicePresenceModule } from '@/voice/voice-presence.module';
 import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
+import { MusicConfigService } from './music-config.service';
 
 @Module({
   imports: [
@@ -17,6 +18,6 @@ import { PlatformAdminService } from './platform-admin.service';
     PlatformModule,
   ],
   controllers: [PlatformAdminController],
-  providers: [PlatformAdminService, PlatformAdminGuard],
+  providers: [PlatformAdminService, PlatformAdminGuard, MusicConfigService],
 })
 export class PlatformAdminModule {}
