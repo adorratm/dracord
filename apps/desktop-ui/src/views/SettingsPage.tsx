@@ -935,6 +935,24 @@ export function SettingsPage({
               )}
             </div>
           </SettingsSection>
+          <SettingsSection title="Passkey'ler">
+            <div className="px-space-md py-space-md space-y-2">
+              <SettingsNote>
+                Passkey ile girişi giriş ekranındaki "Passkey ile giriş (tarayıcıda)" düğmesiyle kullanabilirsin.
+                Passkey eklemek ve silmek tarayıcıda yapılır (güvenlik gereği dracord.com.tr üzerinde).
+              </SettingsNote>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-sm font-semibold"
+                onClick={() => {
+                  const open = window.dracordDesktop?.openExternal ?? window.dracordDesktop?.openOAuthInBrowser;
+                  void open?.('https://dracord.com.tr/settings/password');
+                }}
+              >
+                Passkey'leri tarayıcıda yönet
+              </button>
+            </div>
+          </SettingsSection>
           <SettingsSection title="Oturumlar ve cihazlar">
             <div className="px-space-md py-space-md">
               <SessionsPanel client={client} />

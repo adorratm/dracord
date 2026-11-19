@@ -95,6 +95,37 @@ export function LoginPage() {
           </button>
         ) : null}
 
+        {window.dracordDesktop?.openOAuthInBrowser || window.dracordDesktop?.openExternal ? (
+          <button
+            type="button"
+            onClick={() => {
+              // E6 — WebAuthn needs the https site: sign in there, the session comes back via dracord://oauth
+              const open = window.dracordDesktop?.openOAuthInBrowser ?? window.dracordDesktop?.openExternal;
+              void open?.('https://dracord.com.tr/auth/passkey-handoff?target=desktop');
+            }}
+            style={{
+              width: '100%',
+              height: 44,
+              border: 'none',
+              borderRadius: 12,
+              background: 'transparent',
+              color: colors.text,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: '0 0 0 1px rgba(189,147,249,0.25)',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+              passkey
+            </span>
+            Passkey ile giriş (tarayıcıda)
+          </button>
+        ) : null}
+
         <div style={{ width: '100%', textAlign: 'left' }}>
           <QrLoginPanel
             client={client}

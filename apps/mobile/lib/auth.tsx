@@ -40,6 +40,8 @@ type AuthCtx = {
   user: PublicUser | null;
   ready: boolean;
   loginGoogle: () => Promise<void>;
+  /** E6 — passkey (tarayıcıda doğrula, uygulamaya dön) */
+  loginPasskey: () => Promise<void>;
   loginApple: () => Promise<void>;
   logout: () => Promise<void>;
   setSession: (tokens: AuthTokens, user: PublicUser) => Promise<void>;
@@ -228,6 +230,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await applyOAuthTokens(tokens);
   }, [client, applyOAuthTokens]);
 
+  /** E6 — passkey in the system browser (WebAuthn needs dracord.com.tr), back via dracord://oauth */
+  const loginPasskey = useCallback(async () => {
+    const result = await WebBrowser.openAuthSessionAsync(
+      'https://dracord.com.tr/auth/passkey-handoff?target=mobile',
+      OAUTH_REDIRECT,
+    );
+    if (result.type !== 'success' || !result.url) {
+      if (result.type === 'cancel' || result.type === 'dismiss') return;
+      throw new Error('Passkey girişi tamamlanamadı');
+    }
+    const tokens = parseOAuthUrl(result.url);
+    if (!tokens) throw new Error('Passkey girişi tamamlanamadı');
+    await applyOAuthTokens(tokens);
+  }, [applyOAuthTokens]);
+
   const loginApple = useCallback(async () => {
     const AppleAuthentication = await import('expo-apple-authentication');
     const available = await AppleAuthentication.isAvailableAsync();
@@ -324,6 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      loginPasskey,
       loginApple,
       logout,
       setSession,
@@ -335,6 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loginGoogle,
+      loginPasskey,
       loginApple,
       logout,
       setSession,
