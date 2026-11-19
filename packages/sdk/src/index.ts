@@ -1130,6 +1130,7 @@ export class DracordClient {
       name: string;
       description?: string | null;
       game: import('@dracord/types').TournamentGame;
+      format?: import('@dracord/types').TournamentFormat;
       externalGameName?: string | null;
       maxPlayers?: number;
       startsAt?: string | null;

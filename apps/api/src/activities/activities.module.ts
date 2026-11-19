@@ -4,6 +4,7 @@ import { ChannelsModule } from '@/channels/channels.module';
 import { SocketBroadcastModule } from '@/gateway/socket-broadcast.module';
 import { PresenceModule } from '@/presence/presence.module';
 import { SpotifyModule } from '@/spotify/spotify.module';
+import { TournamentsModule } from '@/tournaments/tournaments.module';
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
 
@@ -14,6 +15,7 @@ import { ActivitiesService } from './activities.service';
     SocketBroadcastModule,
     PresenceModule,
     SpotifyModule,
+    TournamentsModule,
   ],
   controllers: [ActivitiesController],
   providers: [ActivitiesService],

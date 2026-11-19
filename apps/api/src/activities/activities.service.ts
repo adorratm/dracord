@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { EntityManager } from 'typeorm';
 import {
   activityCasCheck,
+  activityWinner,
   activityNextVersion,
   billiardsParseBalls,
   billiardsValidateShotPatch,
@@ -27,6 +28,7 @@ import { UserActivityService } from '@/presence/user-activity.service';
 import { SpotifyService } from '@/spotify/spotify.service';
 import { SocketEvents } from '@dracord/types';
 import { ActivitySyncMetricsService } from './activity-sync-metrics.service';
+import { TournamentsService } from '@/tournaments/tournaments.service';
 
 const KIND_LABELS: Record<ActivityKind, string> = {
   billiards: 'Bilardo',
@@ -121,6 +123,7 @@ export class ActivitiesService {
     private readonly spotify: SpotifyService,
     private readonly config: ConfigService,
     private readonly syncMetrics: ActivitySyncMetricsService,
+    private readonly tournaments: TournamentsService,
   ) {}
 
   private casEnforce(): boolean {
@@ -674,6 +677,14 @@ export class ActivitiesService {
     this.syncMetrics.recordPatch();
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_STATE, dto);
+    // C6: oyun bitti → açık turnuva maçını kendiliğinden kapat (yalnız kazanan yeni belirlendiyse)
+    if (s.guildId) {
+      const players = s.playerIds ?? [];
+      const winner = activityWinner(s.kind, s.state as Record<string, unknown>, players);
+      if (winner && winner !== activityWinner(s.kind, prev, players)) {
+        void this.tournaments.reportFromGame(s.guildId, s.kind, players, winner).catch(() => undefined);
+      }
+    }
     return dto;
   }
 

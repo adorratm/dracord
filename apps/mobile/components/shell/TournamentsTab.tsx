@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import type { DracordClient } from '@dracord/sdk';
-import { TOURNAMENT_GAME_LABEL, TOURNAMENT_LIMITS, type TournamentDto, type TournamentMatch } from '@dracord/types';
+import {
+  TOURNAMENT_AUTO_RESULT_GAMES,
+  TOURNAMENT_FORMAT_LABEL,
+  TOURNAMENT_GAME_LABEL,
+  TOURNAMENT_LIMITS,
+  roundRobinStandings,
+  tournamentMatchPlayers,
+  type TournamentDto,
+  type TournamentFormat,
+  type TournamentMatch,
+} from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 
 const STATUS_TR: Record<TournamentDto['status'], string> = {
@@ -11,7 +21,14 @@ const STATUS_TR: Record<TournamentDto['status'], string> = {
   cancelled: 'İptal',
 };
 const gameLabel = (t: TournamentDto) => (t.game === 'external' ? t.externalGameName || 'Harici oyun' : TOURNAMENT_GAME_LABEL[t.game]);
-const roundName = (r: number, n: number) => (r === n ? 'Final' : r === n - 1 ? 'Yarı final' : r === n - 2 ? 'Çeyrek final' : `${r}. tur`);
+const roundName = (r: number, n: number, f: TournamentFormat = 'single') =>
+  f === 'round_robin' ? `${r}. tur` : r === n ? 'Final' : r === n - 1 ? 'Yarı final' : r === n - 2 && f === 'single' ? 'Çeyrek final' : `${r}. tur`;
+const matchRows = (m: TournamentMatch): Array<string | null> => {
+  if (!m.players) return [m.p1, m.p2];
+  const out: Array<string | null> = [...m.players];
+  while (out.length < (m.slots ?? 2)) out.push(null);
+  return out;
+};
 
 function Btn({ label, onPress, primary, danger, disabled }: { label: string; onPress: () => void; primary?: boolean; danger?: boolean; disabled?: boolean }) {
   return (
@@ -68,14 +85,14 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
   if (!t) {
     return (
       <ScrollView contentContainerStyle={{ padding: 12, gap: 8 }}>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Tek eleme, 1v1. Yeni turnuvayı web veya masaüstünden oluştur.</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Tek eleme, lig ya da 4'lü masa. Yeni turnuvayı web veya masaüstünden oluştur.</Text>
         {list === null ? <Text style={{ color: colors.textMuted }}>Yükleniyor…</Text> : null}
         {list?.length === 0 ? <Text style={{ color: colors.textMuted }}>Henüz turnuva yok.</Text> : null}
         {(list ?? []).map((x) => (
           <Pressable key={x.id} onPress={() => setOpenId(x.id)} style={{ padding: 12, borderRadius: 12, backgroundColor: colors.surfaceHigh }}>
             <Text style={{ color: colors.text, fontWeight: '700' }}>🏆 {x.name}</Text>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-              {gameLabel(x)} · {STATUS_TR[x.status]} · {x.participants.length}/{x.maxPlayers}
+              {gameLabel(x)} · {TOURNAMENT_FORMAT_LABEL[x.format ?? 'single']} · {STATUS_TR[x.status]} · {x.participants.length}/{x.maxPlayers}
             </Text>
           </Pressable>
         ))}
@@ -85,9 +102,12 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
 
   const manage = canManage || t.creatorId === meId;
   const joined = t.participants.some((p) => p.userId === meId);
-  const mine: TournamentMatch | undefined =
-    t.status === 'running' ? t.matches.find((m) => (m.p1 === meId || m.p2 === meId) && m.status !== 'done' && m.p1 && m.p2) : undefined;
-  const opp = mine ? (mine.p1 === meId ? mine.p2! : mine.p1!) : null;
+  const format = t.format ?? 'single';
+  const auto = TOURNAMENT_AUTO_RESULT_GAMES.includes(t.game);
+  const mineList: TournamentMatch[] =
+    t.status === 'running'
+      ? t.matches.filter((m) => (m.status === 'ready' || m.status === 'disputed') && tournamentMatchPlayers(m).includes(meId))
+      : [];
   const champ = t.winnerId ? names.get(t.winnerId) : null;
 
   return (
@@ -97,7 +117,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
       </Pressable>
       <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>{t.name}</Text>
       <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-        {gameLabel(t)} · {STATUS_TR[t.status]} · {t.participants.length}/{t.maxPlayers} oyuncu
+        {gameLabel(t)} · {TOURNAMENT_FORMAT_LABEL[format]} · {STATUS_TR[t.status]} · {t.participants.length}/{t.maxPlayers} oyuncu
       </Text>
       {t.description ? <Text style={{ color: colors.text }}>{t.description}</Text> : null}
       {champ ? <Text style={{ color: colors.text, fontWeight: '800' }}>🏆 Şampiyon: {champ}</Text> : null}
@@ -127,21 +147,50 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
         ) : null}
       </View>
 
-      {mine && opp ? (
-        <View style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, gap: 6 }}>
-          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>{roundName(mine.round, t.rounds)} · senin maçın</Text>
-          <Text style={{ color: colors.text }}>Rakip: {names.get(opp) ?? 'Rakip'}</Text>
-          <Text style={{ color: mine.status === 'disputed' ? colors.danger : colors.textMuted, fontSize: 12 }}>
-            {mine.status === 'disputed'
-              ? 'Bildirimler uyuşmadı — düzenleyici karar verecek.'
-              : mine.reports[meId]
-                ? 'Bildirdin — rakibin onayı bekleniyor.'
-                : 'Oynadıktan sonra sonucu bildir.'}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Btn label="Ben kazandım" primary disabled={busy || mine.reports[meId] === meId} onPress={() => run(() => client.reportTournamentMatch(t.id, mine.id, meId))} />
-            <Btn label="Rakip kazandı" disabled={busy || mine.reports[meId] === opp} onPress={() => run(() => client.reportTournamentMatch(t.id, mine.id, opp))} />
+      {mineList.map((mine) => {
+        const others = tournamentMatchPlayers(mine).filter((p) => p !== meId);
+        const table = others.length > 1;
+        const rep = mine.reports[meId];
+        return (
+          <View key={mine.id} style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, gap: 6 }}>
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
+              {roundName(mine.round, t.rounds, format)} · {table ? 'senin masan' : 'senin maçın'}
+            </Text>
+            <Text style={{ color: colors.text }}>
+              {table ? 'Masadakiler' : 'Rakip'}: {others.map((o) => names.get(o) ?? 'Oyuncu').join(', ')}
+            </Text>
+            <Text style={{ color: mine.status === 'disputed' ? colors.danger : colors.textMuted, fontSize: 12 }}>
+              {mine.status === 'disputed'
+                ? 'Bildirimler uyuşmadı — düzenleyici karar verecek.'
+                : rep
+                  ? `Bildirdin — ${table ? 'masadan bir onay daha' : 'rakibin onayı'} bekleniyor.`
+                  : auto
+                    ? `${TOURNAMENT_GAME_LABEL[t.game]} oyun kanalında birlikte oynayın — sonuç kendiliğinden işlenir.`
+                    : 'Oynadıktan sonra sonucu bildir.'}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Btn label="Ben kazandım" primary disabled={busy || rep === meId} onPress={() => run(() => client.reportTournamentMatch(t.id, mine.id, meId))} />
+              {others.map((o) => (
+                <Btn
+                  key={o}
+                  label={table ? `${names.get(o) ?? 'Oyuncu'} kazandı` : 'Rakip kazandı'}
+                  disabled={busy || rep === o}
+                  onPress={() => run(() => client.reportTournamentMatch(t.id, mine.id, o))}
+                />
+              ))}
+            </View>
           </View>
+        );
+      })}
+
+      {format === 'round_robin' && t.status !== 'registration' ? (
+        <View style={{ gap: 4 }}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>Puan durumu</Text>
+          {roundRobinStandings(t.matches, t.participants.map((p) => p.userId)).map((r, i) => (
+            <Text key={r.userId} style={{ color: colors.text }}>
+              {i + 1}. {names.get(r.userId) ?? 'Ayrılmış üye'} — {r.wins} G ({r.played}/{t.participants.length - 1})
+            </Text>
+          ))}
         </View>
       ) : null}
 
@@ -157,7 +206,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
       ) : (
         Array.from({ length: t.rounds }, (_, i) => i + 1).map((r) => (
           <View key={r} style={{ gap: 6 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>{roundName(r, t.rounds).toUpperCase()}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>{roundName(r, t.rounds, format).toUpperCase()}</Text>
             {t.matches
               .filter((m) => m.round === r)
               .sort((a, b) => a.index - b.index)
@@ -166,7 +215,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
                   key={m.id}
                   style={{ borderRadius: 10, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: m.status === 'disputed' ? colors.danger : 'transparent' }}
                 >
-                  {[m.p1, m.p2].map((p, k) => (
+                  {matchRows(m).map((p, k) => (
                     <View key={k} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 }}>
                       <Text
                         style={{
@@ -180,7 +229,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
                         {p ? (names.get(p) ?? 'Ayrılmış üye') : m.bye ? 'rakipsiz' : '—'}
                         {m.winnerId && p === m.winnerId ? ' ✓' : ''}
                       </Text>
-                      {manage && p && m.p1 && m.p2 && m.status !== 'done' ? (
+                      {manage && p && (m.status === 'ready' || m.status === 'disputed') ? (
                         <Pressable disabled={busy} onPress={() => run(() => client.reportTournamentMatch(t.id, m.id, p, true))} hitSlop={6}>
                           <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>kazandı</Text>
                         </Pressable>

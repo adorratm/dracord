@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index } from 'typeorm';
-import type { TournamentGame, TournamentMatch, TournamentStatus } from '@dracord/types';
+import type { TournamentFormat, TournamentGame, TournamentMatch, TournamentStatus } from '@dracord/types';
 import { CuidEntity } from './cuid-base.entity';
 
 /** Turnuva (C2) — tek eleme; ağaç jsonb (satır kilidiyle atomik güncellenir) */
@@ -17,6 +17,10 @@ export class Tournament extends CuidEntity {
 
   @Column({ type: 'varchar' })
   game!: TournamentGame;
+
+  /** single | round_robin | table4 (C6) */
+  @Column({ type: 'varchar', default: 'single' })
+  format!: TournamentFormat;
 
   @Column({ type: 'varchar', nullable: true })
   externalGameName!: string | null;

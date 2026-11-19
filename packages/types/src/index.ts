@@ -1759,17 +1759,34 @@ export function sanitizeAnnotation(raw: unknown): ScreenAnnotationPayload | null
 }
 
 // ── Turnuva modu (C2) — tek eleme, 1v1 ──
-export const TOURNAMENT_GAMES = ['tavla', 'billiards', 'bowling', 'words', 'trivia', 'external'] as const;
+export const TOURNAMENT_GAMES = ['tavla', 'billiards', 'bowling', 'okey', 'words', 'trivia', 'external'] as const;
 export type TournamentGame = (typeof TOURNAMENT_GAMES)[number];
 export const TOURNAMENT_GAME_LABEL: Record<TournamentGame, string> = {
   tavla: 'Tavla',
   billiards: 'Bilardo',
   bowling: 'Bowling',
+  okey: 'Okey',
   words: 'Kelime',
   trivia: 'Bilgi yarışması',
   external: 'Harici oyun',
 };
-export const TOURNAMENT_LIMITS = { nameMax: 60, descMax: 500, minPlayers: 3, maxPlayers: 64, activePerGuild: 5 } as const;
+/** Oyundan sonucu kendiliğinden alınabilen oyunlar (C6) */
+export const TOURNAMENT_AUTO_RESULT_GAMES: readonly TournamentGame[] = ['tavla', 'billiards', 'bowling'];
+export const TOURNAMENT_FORMATS = ['single', 'round_robin', 'table4'] as const;
+export type TournamentFormat = (typeof TOURNAMENT_FORMATS)[number];
+export const TOURNAMENT_FORMAT_LABEL: Record<TournamentFormat, string> = {
+  single: 'Tek eleme',
+  round_robin: 'Lig (herkes herkesle)',
+  table4: '4\'lü masa (kazanan üst tura)',
+};
+export const TOURNAMENT_LIMITS = {
+  nameMax: 60,
+  descMax: 500,
+  minPlayers: 3,
+  maxPlayers: 64,
+  roundRobinMax: 12,
+  activePerGuild: 5,
+} as const;
 export type TournamentStatus = 'registration' | 'running' | 'finished' | 'cancelled';
 export type TournamentMatchStatus = 'waiting' | 'ready' | 'disputed' | 'done';
 
@@ -1786,6 +1803,12 @@ export interface TournamentMatch {
   reports: Record<string, string>;
   /** Rakipsiz geçiş */
   bye?: boolean;
+  /** Masa formatı (table4): masadaki oyuncular; 1v1 maçlarda yok (p1/p2 kullanılır) */
+  players?: string[];
+  /** Masa formatı: bu masaya kaç oyuncu gelecek */
+  slots?: number;
+  /** Sonuç oyundan kendiliğinden alındı */
+  source?: 'game';
 }
 
 export interface TournamentParticipant {
@@ -1800,6 +1823,7 @@ export interface TournamentDto {
   name: string;
   description: string | null;
   game: TournamentGame;
+  format: TournamentFormat;
   /** game = external iken oyun adı */
   externalGameName: string | null;
   status: TournamentStatus;
@@ -1870,6 +1894,129 @@ export function advanceTournament(matches: TournamentMatch[], matchId: string, w
   else next.p2 = winnerId;
   if (next.p1 && next.p2 && next.status === 'waiting') next.status = 'ready';
   return null;
+}
+
+/** Maçtaki oyuncular (1v1 ya da masa) */
+export function tournamentMatchPlayers(m: TournamentMatch): string[] {
+  if (m.players) return m.players;
+  return [m.p1, m.p2].filter((x): x is string => !!x);
+}
+
+/** Lig (round-robin, çember yöntemi): her tur herkes bir maç; tek sayıda oyuncuda biri dinlenir */
+export function buildRoundRobin(players: string[]): { matches: TournamentMatch[]; rounds: number } {
+  const list: Array<string | null> = [...players];
+  if (list.length % 2) list.push(null);
+  const n = list.length;
+  const rounds = n - 1;
+  const matches: TournamentMatch[] = [];
+  for (let r = 0; r < rounds; r++) {
+    let idx = 0;
+    for (let i = 0; i < n / 2; i++) {
+      const a = list[i];
+      const b = list[n - 1 - i];
+      if (a && b) {
+        matches.push({ id: `r${r + 1}m${idx}`, round: r + 1, index: idx, p1: a, p2: b, winnerId: null, status: 'ready', reports: {} });
+        idx++;
+      }
+    }
+    // ilk sabit, gerisi döner
+    list.splice(1, 0, list.pop()!);
+  }
+  return { matches, rounds };
+}
+
+export interface TournamentStanding {
+  userId: string;
+  wins: number;
+  played: number;
+}
+
+/** Lig puan durumu: galibiyet; eşitlikte ikili averaj (kendi aralarındaki galibiyet), sonra tohum sırası */
+export function roundRobinStandings(matches: TournamentMatch[], seeded: string[]): TournamentStanding[] {
+  const st = new Map(seeded.map((id) => [id, { userId: id, wins: 0, played: 0 }]));
+  for (const m of matches) {
+    if (m.status !== 'done' || !m.winnerId) continue;
+    for (const p of tournamentMatchPlayers(m)) {
+      const row = st.get(p);
+      if (row) row.played++;
+    }
+    const w = st.get(m.winnerId);
+    if (w) w.wins++;
+  }
+  const h2h = (a: string, b: string) => {
+    let x = 0;
+    for (const m of matches) {
+      if (m.status !== 'done') continue;
+      const ps = tournamentMatchPlayers(m);
+      if (ps.includes(a) && ps.includes(b)) x += m.winnerId === a ? 1 : m.winnerId === b ? -1 : 0;
+    }
+    return x;
+  };
+  const order = new Map(seeded.map((id, i) => [id, i]));
+  return [...st.values()].sort(
+    (a, b) => b.wins - a.wins || -h2h(a.userId, b.userId) || order.get(a.userId)! - order.get(b.userId)!,
+  );
+}
+
+/**
+ * 4'lü masa: oyuncular masalara dağıtılır (her masada 2–4), masanın kazananı üst tura çıkar;
+ * tek masa kalana kadar sürer. Üst tur masası j, önceki turun i % sayı === j masalarından beslenir.
+ */
+export function buildTables(players: string[]): { matches: TournamentMatch[]; rounds: number } {
+  const matches: TournamentMatch[] = [];
+  let count = Math.ceil(players.length / 4);
+  const first: string[][] = Array.from({ length: count }, () => []);
+  players.forEach((p, i) => first[i % count]!.push(p));
+  first.forEach((ps, i) =>
+    matches.push({ id: `r1m${i}`, round: 1, index: i, p1: null, p2: null, players: ps, slots: ps.length, winnerId: null, status: 'ready', reports: {} }),
+  );
+  let round = 1;
+  while (count > 1) {
+    const next = Math.ceil(count / 4);
+    round++;
+    for (let j = 0; j < next; j++) {
+      let feeders = 0;
+      for (let i = 0; i < count; i++) if (i % next === j) feeders++;
+      matches.push({ id: `r${round}m${j}`, round, index: j, p1: null, p2: null, players: [], slots: feeders, winnerId: null, status: 'waiting', reports: {} });
+    }
+    count = next;
+  }
+  return { matches, rounds: round };
+}
+
+function advanceTables(matches: TournamentMatch[], m: TournamentMatch, winnerId: string): string | null {
+  m.winnerId = winnerId;
+  m.status = 'done';
+  const nextRound = matches.filter((x) => x.round === m.round + 1);
+  if (!nextRound.length) return winnerId;
+  const next = nextRound.find((x) => x.index === m.index % nextRound.length)!;
+  next.players = [...(next.players ?? []), winnerId];
+  if (next.players.length >= (next.slots ?? 2)) {
+    if (next.players.length === 1) {
+      next.bye = true;
+      return advanceTables(matches, next, winnerId);
+    }
+    next.status = 'ready';
+  }
+  return null;
+}
+
+/** Biçime göre maçı bitir; turnuva bittiyse şampiyonu döndürür */
+export function tournamentAdvance(
+  format: TournamentFormat,
+  matches: TournamentMatch[],
+  matchId: string,
+  winnerId: string,
+  seeded: string[],
+): string | null {
+  if (format === 'single') return advanceTournament(matches, matchId, winnerId);
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) throw new Error('match_not_found');
+  if (format === 'table4') return advanceTables(matches, m, winnerId);
+  m.winnerId = winnerId;
+  m.status = 'done';
+  if (matches.some((x) => x.status !== 'done')) return null;
+  return roundRobinStandings(matches, seeded)[0]?.userId ?? null;
 }
 
 // ── Haftalık görevler + sezon (C3) ──

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import type { TournamentGame } from '@dracord/types';
+import type { TournamentFormat, TournamentGame } from '@dracord/types';
 import { CurrentUser, type JwtPayloadUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { TournamentsService } from './tournaments.service';
@@ -23,6 +23,7 @@ export class TournamentsController {
       name: string;
       description?: string | null;
       game: TournamentGame;
+      format?: TournamentFormat;
       externalGameName?: string | null;
       maxPlayers?: number;
       startsAt?: string | null;

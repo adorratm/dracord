@@ -25,6 +25,7 @@ import { GiveawaysBirthdays1762900000000 } from './migrations/1762900000000-Give
 import { Tickets1762910000000 } from './migrations/1762910000000-Tickets';
 import { ProfileDecorations1762920000000 } from './migrations/1762920000000-ProfileDecorations';
 import { Whiteboard1762930000000 } from './migrations/1762930000000-Whiteboard';
+import { TournamentFormats1762940000000 } from './migrations/1762940000000-TournamentFormats';
 
 loadEnv();
 
@@ -36,6 +37,6 @@ export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   entities: [],
-  migrations: [InitPlatformExtras1730000000000, ScheduledMessages1762700000000, MemberLevels1762710000000, GuildSounds1762720000000, GamePlatform1762730000000, GuildStats1762740000000, GuildVanity1762750000000, GuildBadges1762760000000, Tournaments1762770000000, WeeklyChallenges1762780000000, GuildAutomod1762790000000, GuildFaq1762800000000, SessionDevices1762810000000, UserPasskeys1762820000000, E2eeDm1762830000000, ChannelGameApp1762840000000, AccountDeletion1762850000000, GuildOnboarding1762860000000, LfgListings1762870000000, SlowModeAnnouncements1762880000000, Starboard1762890000000, GiveawaysBirthdays1762900000000, Tickets1762910000000, ProfileDecorations1762920000000, Whiteboard1762930000000],
+  migrations: [InitPlatformExtras1730000000000, ScheduledMessages1762700000000, MemberLevels1762710000000, GuildSounds1762720000000, GamePlatform1762730000000, GuildStats1762740000000, GuildVanity1762750000000, GuildBadges1762760000000, Tournaments1762770000000, WeeklyChallenges1762780000000, GuildAutomod1762790000000, GuildFaq1762800000000, SessionDevices1762810000000, UserPasskeys1762820000000, E2eeDm1762830000000, ChannelGameApp1762840000000, AccountDeletion1762850000000, GuildOnboarding1762860000000, LfgListings1762870000000, SlowModeAnnouncements1762880000000, Starboard1762890000000, GiveawaysBirthdays1762900000000, Tickets1762910000000, ProfileDecorations1762920000000, Whiteboard1762930000000, TournamentFormats1762940000000],
   synchronize: false,
 });

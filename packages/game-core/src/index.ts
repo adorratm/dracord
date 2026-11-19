@@ -8,3 +8,4 @@ export * from './trivia';
 export * from './words';
 export * from './kinds';
 export * from './activity-sync';
+export * from './result';
