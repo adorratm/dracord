@@ -6,6 +6,10 @@ import {
   onGameFrameChange,
   reportVoiceActivity,
   RnnoiseTrackProcessor,
+  applyCameraBackground,
+  useCameraBackground,
+  type CameraTrackLike,
+  type TrackProcessorsModule,
   isRnnoiseSupported,
   loadNoiseEngine,
   usePushToTalk,
@@ -3172,6 +3176,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     });
     await applyMicGainToTrack(mic, micVolume).catch(() => undefined);
   }, [noiseCancellation, applyMicGainToTrack]);
+
+  /** A10 — camera background (blur / virtual), applied on this device */
+  const [cameraBg] = useCameraBackground();
+  useEffect(() => {
+    const room = roomRef.current;
+    const pub = room?.localParticipant.getTrackPublication(Track.Source.Camera);
+    const track = cameraEnabled ? (pub?.track as unknown as CameraTrackLike | undefined) : null;
+    void applyCameraBackground(track, cameraBg, () => import('@livekit/track-processors') as unknown as Promise<TrackProcessorsModule>)
+      .then((ok) => {
+        if (!ok) setError('Bu cihaz kamera arka planını desteklemiyor.');
+      })
+      .catch(() => setError('Kamera arka planı uygulanamadı.'));
+  }, [cameraEnabled, cameraBg]);
 
   const value = useMemo<VoiceSessionValue>(
     () => ({

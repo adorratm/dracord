@@ -18,6 +18,7 @@ import {
   E2eeDevicesPanel,
   browserE2eeManager,
   VoiceInputSettings,
+  CameraBackgroundPicker,
   DataExportSection,
   MyBirthdaySettings,
   formatDeletionDate,
@@ -1757,6 +1758,7 @@ export function SettingsPage({
           title="Ses ve görüntü"
           description="Mikrofon, kulaklık, kamera ve ekran paylaşımı ayarları (web ile aynı)."
         >
+          <CameraBackgroundPicker />
           <VoiceInputSettings
             scopeNote={
               /win/i.test(navigator.userAgent)

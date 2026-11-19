@@ -310,3 +310,8 @@ export { HeaderOverflowMenu, type HeaderOverflowItem } from './components/Header
 // A9 — RNNoise gürültü engelleme
 export { RnnoiseTrackProcessor, isRnnoiseSupported, loadNoiseEngine, saveNoiseEngine, NOISE_ENGINE_KEY, type NoiseEngine } from './lib/rnnoise-processor';
 export { NoiseEngineSettings } from './components/NoiseEngineSettings';
+
+// A10 — kamera arka planı
+export * from './lib/camera-background';
+export { useCameraBackground } from './lib/use-camera-background';
+export { CameraBackgroundPicker } from './components/CameraBackgroundPicker';

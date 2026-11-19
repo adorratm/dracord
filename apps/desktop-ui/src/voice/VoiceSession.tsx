@@ -22,6 +22,10 @@ import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import type { VoiceParticipant } from '@dracord/ui';
 import {
   RnnoiseTrackProcessor,
+  applyCameraBackground,
+  useCameraBackground,
+  type CameraTrackLike,
+  type TrackProcessorsModule,
   isRnnoiseSupported,
   onGameFrameChange,
   reportVoiceActivity,
@@ -2025,6 +2029,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
   }, []);
+
+  /** A10 — camera background (blur / virtual), applied on this device */
+  const [cameraBg] = useCameraBackground();
+  useEffect(() => {
+    const room = roomRef.current;
+    const pub = room?.localParticipant.getTrackPublication(Track.Source.Camera);
+    const track = cameraEnabled ? (pub?.track as unknown as CameraTrackLike | undefined) : null;
+    void applyCameraBackground(track, cameraBg, () => import('@livekit/track-processors') as unknown as Promise<TrackProcessorsModule>)
+      .then((ok) => {
+        if (!ok) setStatus('Bu cihaz kamera arka planını desteklemiyor.');
+      })
+      .catch(() => setStatus('Kamera arka planı uygulanamadı.'));
+  }, [cameraEnabled, cameraBg]);
 
   const value = useMemo<VoiceSessionApi>(
     () => ({

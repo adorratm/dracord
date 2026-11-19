@@ -1415,6 +1415,7 @@ __metadata:
     "@dracord/sdk": "workspace:*"
     "@dracord/types": "workspace:*"
     "@dracord/ui": "workspace:*"
+    "@livekit/track-processors": "npm:0.8.3"
     "@pixiv/three-vrm": "npm:3.5.5"
     "@tailwindcss/postcss": "npm:4.3.3"
     "@tanstack/react-virtual": "npm:3.14.24"
@@ -1608,6 +1609,7 @@ __metadata:
     "@dracord/types": "workspace:*"
     "@dracord/ui": "workspace:*"
     "@livekit/components-react": "npm:^2.9.24"
+    "@livekit/track-processors": "npm:0.8.3"
     "@pixiv/three-vrm": "npm:3.5.5"
     "@tailwindcss/postcss": "npm:4.3.3"
     "@tanstack/react-virtual": "npm:^3.14.24"
@@ -3696,6 +3698,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@livekit/track-processors@npm:0.8.3":
+  version: 0.8.3
+  resolution: "@livekit/track-processors@npm:0.8.3"
+  dependencies:
+    "@mediapipe/tasks-vision": "npm:0.10.14"
+  peerDependencies:
+    "@types/dom-mediacapture-transform": ^0.1.9
+    livekit-client: ^1.12.0 || ^2.1.0
+  checksum: 10c0/27e2f43bbd73905a1a10557b015d9ec6b16075de282bf33334edb4c7227b655a70f96083d3e5b0cad89b02f65fbdf706bf425ac90f34e7c30d21bde8ac4e35fe
+  languageName: node
+  linkType: hard
+
 "@livekit/typed-emitter@npm:^3.0.0":
   version: 3.0.0
   resolution: "@livekit/typed-emitter@npm:3.0.0"
@@ -3728,6 +3742,13 @@ __metadata:
     lodash: "npm:^4.17.15"
     tmp-promise: "npm:^3.0.2"
   checksum: 10c0/b3c87f6482b1956411af1118c771afb39cd9a0568fbb5e86015547ff6d68d2e73a7f0d74b75a57f0a156391c347c8d0adc1037e75172b92da72b96e0a05a2f4f
+  languageName: node
+  linkType: hard
+
+"@mediapipe/tasks-vision@npm:0.10.14":
+  version: 0.10.14
+  resolution: "@mediapipe/tasks-vision@npm:0.10.14"
+  checksum: 10c0/dea1d094153fcb91e76d1a266b6a79baf9cbdd106a786adc0236ded87099b5242c89e0e5b73a3f5d57d7e23ff657dd37f40b9261e12a330762041cd9549fadcc
   languageName: node
   linkType: hard
 

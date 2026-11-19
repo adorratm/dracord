@@ -17,6 +17,7 @@
     "@dracord/sdk": "workspace:*",
     "@dracord/types": "workspace:*",
     "@dracord/ui": "workspace:*",
+    "@livekit/track-processors": "0.8.3",
     "@pixiv/three-vrm": "3.5.5",
     "@tanstack/react-virtual": "3.14.24",
     "@tensorflow/tfjs": "4.22.0",

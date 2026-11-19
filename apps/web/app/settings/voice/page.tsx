@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ConfirmDialog, NoiseEngineSettings, SearchableSelect, VoiceInputSettings } from '@dracord/ui';
+import { CameraBackgroundPicker, ConfirmDialog, NoiseEngineSettings, SearchableSelect, VoiceInputSettings } from '@dracord/ui';
 import { useVoiceSession } from '@/components/VoiceSessionProvider';
 import { SettingsToggle } from '@/components/settings/SettingsControls';
 import {
@@ -108,6 +108,8 @@ export default function VoiceSettingsPage() {
       </div>
 
       <NoiseEngineSettings />
+
+      <CameraBackgroundPicker />
 
       <VoiceInputSettings scopeNote="Tarayıcıda kısayollar ve bas-konuş yalnız Dracord sekmesi öndeyken çalışır. Oyundayken de çalışması için masaüstü uygulamasını kullan." />
 

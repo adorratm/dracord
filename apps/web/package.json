@@ -15,6 +15,7 @@
     "@dracord/types": "workspace:*",
     "@dracord/ui": "workspace:*",
     "@livekit/components-react": "^2.9.24",
+    "@livekit/track-processors": "0.8.3",
     "@pixiv/three-vrm": "3.5.5",
     "@tailwindcss/postcss": "4.3.3",
     "@tanstack/react-virtual": "^3.14.24",
