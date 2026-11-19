@@ -31,6 +31,9 @@ import {
   LevelsPanel,
   TournamentsPanel,
   LfgBoard,
+  GuildQuickActions,
+  HeaderOverflowMenu,
+  TicketsPanel,
   GiveawaysPanel,
   ChallengesPanel,
   SoundboardButton,
@@ -358,6 +361,7 @@ export function GuildChannelView({
   const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [lfgOpen, setLfgOpen] = useState(false);
   const [giveawaysOpen, setGiveawaysOpen] = useState(false);
+  const [ticketsOpen, setTicketsOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
@@ -390,6 +394,13 @@ export function GuildChannelView({
   >([]);
   const [showOverwriteEditor, setShowOverwriteEditor] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
+  /** ses kanalına çağrı gönderildi bilgisi */
+  const [moveNotice, setMoveNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!moveNotice) return;
+    const t = setTimeout(() => setMoveNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [moveNotice]);
 
   const mentionNames = useMemo(() => {
     if (!user) return [] as string[];
@@ -1631,7 +1642,11 @@ export function GuildChannelView({
             await joinActivityRoom(ch);
           }
         } else {
-          await client.moveVoiceUser(targetUserId, targetChannelId);
+          const r = await client.moveVoiceUser(targetUserId, targetChannelId);
+          if (r.summoned) {
+            const name = guildMembers.find((m) => m.id === targetUserId)?.displayName ?? 'Üye';
+            setMoveNotice(`${name} seste değil — kanala çağrı gönderildi.`);
+          }
           await reload();
         }
         setMoveTargetUser(null);
@@ -2884,65 +2899,18 @@ export function GuildChannelView({
         },
       }}
       headerExtra={
-        <div className="px-space-sm pb-space-sm space-y-1.5">
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors"
-            onClick={() => void createInvite()}
-          >
-            İnsanları davet et
-          </button>
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-            onClick={() => setEventsOpen(true)}
-          >
-            <span className="material-symbols-outlined text-[16px]">event</span>
-            Etkinlikler
-          </button>
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-            onClick={() => setLevelsOpen(true)}
-          >
-            <span className="material-symbols-outlined text-[16px]">military_tech</span>
-            Seviyeler
-          </button>
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-            onClick={() => setGiveawaysOpen(true)}
-          >
-            <span className="material-symbols-outlined text-[16px]">redeem</span>
-            Çekilişler
-          </button>
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-            onClick={() => setLfgOpen(true)}
-          >
-            <span className="material-symbols-outlined text-[16px]">group_add</span>
-            Takım ara
-          </button>
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-            onClick={() => setTournamentsOpen(true)}
-          >
-            <span className="material-symbols-outlined text-[16px]">emoji_events</span>
-            Turnuvalar
-          </button>
-          <button
-            type="button"
-            className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-            onClick={() => router.push(`/guilds/${guildId}/boost`)}
-          >
-            <span className="material-symbols-outlined text-[16px] text-primary-container">
-              diamond
-            </span>
-            Sunucu Takviyeleri
-          </button>
-        </div>
+        <GuildQuickActions
+          onInvite={() => void createInvite()}
+          actions={[
+            { id: 'events', icon: 'event', label: 'Etkinlikler', onClick: () => setEventsOpen(true) },
+            { id: 'levels', icon: 'military_tech', label: 'Seviyeler', onClick: () => setLevelsOpen(true) },
+            { id: 'giveaways', icon: 'redeem', label: 'Çekilişler', onClick: () => setGiveawaysOpen(true) },
+            { id: 'lfg', icon: 'group_add', label: 'Takım ara', onClick: () => setLfgOpen(true) },
+            { id: 'tournaments', icon: 'emoji_events', label: 'Turnuvalar', onClick: () => setTournamentsOpen(true) },
+            { id: 'tickets', icon: 'support_agent', label: 'Destek talebi', onClick: () => setTicketsOpen(true) },
+            { id: 'boost', icon: 'diamond', label: 'Sunucu Takviyeleri', accent: true, onClick: () => router.push(`/guilds/${guildId}/boost`) },
+          ]}
+        />
       }
     />
   );
@@ -2982,6 +2950,12 @@ export function GuildChannelView({
           } as CSSProperties
         }
       >
+      {moveNotice && (
+        <div role="status" className="fixed top-14 left-1/2 -translate-x-1/2 z-90 max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-surface-container-high border border-primary/40 text-on-surface px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
+          <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5 text-primary">campaign</span>
+          <p className="font-body-sm flex-1 min-w-0">{moveNotice}</p>
+        </div>
+      )}
       {dmError && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-90 max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-error/15 border border-error/40 text-error px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
           <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
@@ -3626,7 +3600,7 @@ export function GuildChannelView({
             </button>
             <button
               type="button"
-              className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
               aria-label="Sabitlenen mesajlar"
               onClick={() => setPinsOpen((v) => !v)}
             >
@@ -3636,7 +3610,7 @@ export function GuildChannelView({
               <>
                 <button
                   type="button"
-                  className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                   aria-label="Medya galerisi"
                   title="Görseller, videolar ve dosyalar"
                   onClick={() => setGalleryOpen(true)}
@@ -3648,7 +3622,7 @@ export function GuildChannelView({
             {!isForumView && (
               <button
                 type="button"
-                className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                 aria-label="Son threadler"
                 title="Son threadler (@threads)"
                 onClick={() => openThreadsPreview()}
@@ -3657,12 +3631,23 @@ export function GuildChannelView({
               </button>
             )}
             {channel?.isAnnouncement ? (
-              <AnnouncementFollowButton client={client} channel={channel} guilds={guilds.map((g) => ({ id: g.id, name: g.name }))} />
+              <span className="hidden sm:inline-flex">
+                <AnnouncementFollowButton client={client} channel={channel} guilds={guilds.map((g) => ({ id: g.id, name: g.name }))} />
+              </span>
             ) : null}
+            <HeaderOverflowMenu
+              className="sm:hidden"
+              items={[
+                { id: 'pins', icon: 'push_pin', label: 'Sabitlenenler', badge: pinCount || null, onClick: () => setPinsOpen(true) },
+                ...(channel && !isForumView ? [{ id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) }] : []),
+                ...(!isForumView ? [{ id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() }] : []),
+                ...(channel && canManageChannels ? [{ id: 'edit', icon: 'edit', label: 'Kanalı düzenle', onClick: () => openEditChannel(channel) }] : []),
+              ]}
+            />
             {channel && canManageChannels && (
               <button
                 type="button"
-                className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                 aria-label="Kanalı düzenle"
                 onClick={() => openEditChannel(channel)}
               >
@@ -5091,6 +5076,22 @@ export function GuildChannelView({
           }}
         />
       ) : null}
+      <Modal open={ticketsOpen} title="Destek talepleri" onClose={() => setTicketsOpen(false)} className="sm:max-w-xl">
+        <div className="max-h-[75vh] overflow-y-auto pr-1">
+          {ticketsOpen && user && (
+            <TicketsPanel
+              client={client}
+              guildId={guildId}
+              meId={user.id}
+              memberName={(id) => guildMembers.find((g) => g.id === id)?.displayName ?? 'Üye'}
+              onOpenChannel={(chId) => {
+                setTicketsOpen(false);
+                void reload().then(() => router.push(`/channels/${guildId}/${chId}`));
+              }}
+            />
+          )}
+        </div>
+      </Modal>
       <Modal open={giveawaysOpen} title="Çekilişler" onClose={() => setGiveawaysOpen(false)} className="sm:max-w-2xl">
         <div className="max-h-[75vh] overflow-y-auto pr-1">
           {giveawaysOpen && user && (

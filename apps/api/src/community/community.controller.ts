@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { CommunityService } from './community.service';
+import { TicketsService } from './tickets.service';
 
 type AuthedReq = { user: { sub: string } };
 
@@ -8,7 +9,41 @@ type AuthedReq = { user: { sub: string } };
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class CommunityController {
-  constructor(private readonly community: CommunityService) {}
+  constructor(
+    private readonly community: CommunityService,
+    private readonly tickets: TicketsService,
+  ) {}
+
+  // ── B6: destek talepleri ──
+  @Get('guilds/:guildId/tickets/config')
+  ticketConfig(@Param('guildId') guildId: string, @Req() req: AuthedReq) {
+    return this.tickets.getConfig(guildId, req.user.sub);
+  }
+
+  @Put('guilds/:guildId/tickets/config')
+  setTicketConfig(@Param('guildId') guildId: string, @Req() req: AuthedReq, @Body() body: unknown) {
+    return this.tickets.setConfig(guildId, req.user.sub, body);
+  }
+
+  @Get('guilds/:guildId/tickets')
+  listTickets(@Param('guildId') guildId: string, @Req() req: AuthedReq) {
+    return this.tickets.list(guildId, req.user.sub);
+  }
+
+  @Post('guilds/:guildId/tickets')
+  openTicket(@Param('guildId') guildId: string, @Req() req: AuthedReq, @Body() body: unknown) {
+    return this.tickets.open(guildId, req.user.sub, body);
+  }
+
+  @Post('tickets/:id/close')
+  closeTicket(@Param('id') id: string, @Req() req: AuthedReq) {
+    return this.tickets.close(id, req.user.sub);
+  }
+
+  @Post('tickets/:id/reopen')
+  reopenTicket(@Param('id') id: string, @Req() req: AuthedReq) {
+    return this.tickets.reopen(id, req.user.sub);
+  }
 
   @Get('guilds/:guildId/giveaways')
   list(@Param('guildId') guildId: string, @Req() req: AuthedReq) {

@@ -19,6 +19,8 @@ import {
   LevelsPanel,
   TournamentsPanel,
   LfgBoard,
+  GuildQuickActions,
+  TicketsPanel,
   GiveawaysPanel,
   ChallengesPanel,
   ConfirmDialog,
@@ -64,7 +66,7 @@ import { GuildBoostPage } from '../views/GuildBoostPage';
 import { MemberPanel } from '../views/MemberPanel';
 import { NotificationBell } from '../views/NotificationBell';
 import { UpdateBanner } from '../components/UpdateBanner';
-import { AccountDeletionBanner, ChannelExtrasSettings, GuildOnboardingModal } from '@dracord/ui';
+import { AccountDeletionBanner, ChannelExtrasSettings, GuildOnboardingModal, VoiceSummonPrompt } from '@dracord/ui';
 
 type View =
   | { kind: 'home' }
@@ -121,7 +123,32 @@ export function Shell() {
   const [levelsOpen, setLevelsOpen] = useState(false);
   const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [lfgOpen, setLfgOpen] = useState(false);
+  /** ses kanalına çağrı gönderildi bilgisi */
+  const [moveNotice, setMoveNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!moveNotice) return;
+    const t = setTimeout(() => setMoveNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [moveNotice]);
+  const moveOrSummon = useCallback(
+    (userId: string, channelId: string) =>
+      client
+        .moveVoiceUser(userId, channelId)
+        .then((r) => {
+          if (r.summoned) {
+            const name = members.find((m) => m.id === userId)?.displayName ?? 'Üye';
+            setMoveNotice(`${name} seste değil — kanala çağrı gönderildi.`);
+          }
+          return r;
+        })
+        .catch((err) => {
+          setMoveNotice(err instanceof Error ? err.message : 'Taşınamadı');
+          throw err;
+        }),
+    [client, members],
+  );
   const [giveawaysOpen, setGiveawaysOpen] = useState(false);
+  const [ticketsOpen, setTicketsOpen] = useState(false);
   const [canManageGuild, setCanManageGuild] = useState(false);
   const [canManageChannels, setCanManageChannels] = useState(false);
   const [canManageRoles, setCanManageRoles] = useState(false);
@@ -995,7 +1022,7 @@ export function Shell() {
             void joinVoiceChannel(activeGuildId, channel);
             return;
           }
-          void client.moveVoiceUser(userId, channel.id);
+          void moveOrSummon(userId, channel.id).catch(() => undefined);
         },
         canDragVoiceMembers: canMoveMembers,
         canDragSelf: Boolean(voice.voiceChannelId),
@@ -1204,6 +1231,20 @@ export function Shell() {
   return (
     <div className="flex flex-col h-dvh max-h-dvh w-screen overflow-hidden bg-surface">
       <UpdateBanner />
+      {moveNotice && (
+        <div role="status" className="fixed top-14 left-1/2 -translate-x-1/2 z-90 max-w-md w-[min(100%-2rem,28rem)] rounded-xl bg-surface-container-high border border-primary/40 text-on-surface px-space-md py-space-sm shadow-float flex items-start gap-space-sm">
+          <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5 text-primary">campaign</span>
+          <p className="font-body-sm flex-1 min-w-0">{moveNotice}</p>
+        </div>
+      )}
+      <VoiceSummonPrompt
+        client={client}
+        onAccept={(p) => {
+          void voice
+            .join(p.guildId, { id: p.channelId, name: p.channelName, type: 'VOICE' })
+            .then(() => openChannel(p.guildId, p.channelId));
+        }}
+      />
       <AccountDeletionBanner user={user} client={client} onCancelled={() => void refreshUser()} />
       {activeGuild ? (
         <GuildOnboardingModal
@@ -1371,69 +1412,22 @@ export function Shell() {
               }}
               categories={categories}
               headerExtra={
-                <div className="px-2 pb-2 space-y-1.5">
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors"
-                    disabled={inviteBusy}
-                    onClick={() => {
-                      setCreatedInviteUrl(null);
-                      void createGuildInvite(activeGuild.id);
-                    }}
-                  >
-                    İnsanları davet et
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-                    onClick={() => setEventsOpen(true)}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">event</span>
-                    Etkinlikler
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-                    onClick={() => setLevelsOpen(true)}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">military_tech</span>
-                    Seviyeler
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-                    onClick={() => setGiveawaysOpen(true)}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">redeem</span>
-                    Çekilişler
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-                    onClick={() => setLfgOpen(true)}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">group_add</span>
-                    Takım ara
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-                    onClick={() => setTournamentsOpen(true)}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">emoji_events</span>
-                    Turnuvalar
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full h-8 rounded-lg bg-surface-container-high text-on-surface font-label-sm hover:bg-surface-bright transition-colors flex items-center justify-center gap-1.5"
-                    onClick={() => setView({ kind: 'guild-boost', guildId: activeGuild.id })}
-                  >
-                    <span className="material-symbols-outlined text-[16px] text-primary-container">
-                      diamond
-                    </span>
-                    Sunucu Takviyeleri
-                  </button>
-                </div>
+                <GuildQuickActions
+                  inviteBusy={inviteBusy}
+                  onInvite={() => {
+                    setCreatedInviteUrl(null);
+                    void createGuildInvite(activeGuild.id);
+                  }}
+                  actions={[
+            { id: 'events', icon: 'event', label: 'Etkinlikler', onClick: () => setEventsOpen(true) },
+            { id: 'levels', icon: 'military_tech', label: 'Seviyeler', onClick: () => setLevelsOpen(true) },
+            { id: 'giveaways', icon: 'redeem', label: 'Çekilişler', onClick: () => setGiveawaysOpen(true) },
+            { id: 'lfg', icon: 'group_add', label: 'Takım ara', onClick: () => setLfgOpen(true) },
+            { id: 'tournaments', icon: 'emoji_events', label: 'Turnuvalar', onClick: () => setTournamentsOpen(true) },
+            { id: 'tickets', icon: 'support_agent', label: 'Destek talebi', onClick: () => setTicketsOpen(true) },
+            { id: 'boost', icon: 'diamond', label: 'Sunucu Takviyeleri', accent: true, onClick: () => setView({ kind: 'guild-boost', guildId: activeGuild.id }) },
+          ]}
+                />
               }
               userPanel={{
                 displayName: user?.displayName ?? '…',
@@ -1627,6 +1621,7 @@ export function Shell() {
               channel={activeChannel}
               voiceStatus={voiceStatuses[activeChannel.id] ?? null}
               canManageGuild={canManageGuild}
+              canMoveMembers={canMoveMembers}
               onSaveVoiceStatus={async (status) => {
                 const res = await setVoiceStatus(activeChannel.id, status);
                 return res.ok ? res : { ...res, error: voiceStatusErrorMessage(res.error) };
@@ -1786,6 +1781,23 @@ export function Shell() {
 
       {activeGuildId && (
         <>
+        <Modal open={ticketsOpen} title="Destek talepleri" onClose={() => setTicketsOpen(false)} className="sm:max-w-xl">
+          <div className="max-h-[75vh] overflow-y-auto pr-1">
+            {ticketsOpen && user && (
+              <TicketsPanel
+                client={client}
+                guildId={activeGuildId}
+                meId={user.id}
+                memberName={(id) => members.find((g) => g.id === id)?.displayName ?? 'Üye'}
+                onOpenChannel={(chId) => {
+                  setTicketsOpen(false);
+                  reloadChannels(activeGuildId);
+                  openChannel(activeGuildId, chId);
+                }}
+              />
+            )}
+          </div>
+        </Modal>
         <Modal open={giveawaysOpen} title="Çekilişler" onClose={() => setGiveawaysOpen(false)} className="sm:max-w-2xl">
           <div className="max-h-[75vh] overflow-y-auto pr-1">
             {giveawaysOpen && user && (
@@ -2186,9 +2198,9 @@ export function Shell() {
                 className="h-10 px-3 rounded-lg text-left hover:bg-surface-container-high text-sm"
                 onClick={() => {
                   if (!moveTargetUser) return;
-                  void client.moveVoiceUser(moveTargetUser.id, c.id).then(() =>
-                    setMoveTargetUser(null),
-                  );
+                  void moveOrSummon(moveTargetUser.id, c.id)
+                    .then(() => setMoveTargetUser(null))
+                    .catch(() => undefined);
                 }}
               >
                 {c.name}

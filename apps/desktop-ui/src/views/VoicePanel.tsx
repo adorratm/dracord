@@ -58,7 +58,10 @@ export function VoicePanel({
   voiceStatus = null,
   onSaveVoiceStatus,
   canManageGuild = false,
+  canMoveMembers = false,
 }: {
+  /** üyeleri sürükleyip ses kanalına taşıma / çağırma */
+  canMoveMembers?: boolean;
   guildId: string;
   channel: ChannelSummary;
   /** Ses kanalı durum metni (Shell'den) */
@@ -261,6 +264,7 @@ export function VoicePanel({
         ...memberRoleExtras(m, roleColors),
         subtitle: presenceLabelTr(status, m?.customStatus),
         onClick: canDmUser(dmTarget) ? () => openDmWith(p.id) : undefined,
+        draggable: canMoveMembers && p.id !== user?.id && !peerIsBot,
         contextActions,
       };
     });
@@ -293,12 +297,13 @@ export function VoicePanel({
             ...memberRoleExtras(m, roleColors),
             subtitle: presenceLabelTr(m.status ?? 'OFFLINE', m.customStatus),
             onClick: canDmUser(m) ? () => openDmWith(m.id) : undefined,
+            draggable: canMoveMembers && m.id !== user?.id && !m.isBot && !m.isPlatformAdmin,
             contextActions,
           };
         }),
       },
     ];
-  }, [voice.peers, members, userId, user, roleColors, actionsFor]);
+  }, [voice.peers, members, userId, user, roleColors, actionsFor, canMoveMembers]);
 
   const focused = voice.activeScreenShare;
 

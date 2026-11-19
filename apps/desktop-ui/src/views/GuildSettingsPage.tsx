@@ -12,7 +12,7 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -63,7 +63,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
     { id: 'public', label: 'Tanıtım sayfası', icon: 'public', need: 'manage' },
     { id: 'faq', label: 'SSS ve Draco', icon: 'quiz', need: 'manage' },
-    { id: 'onboarding', label: 'Katılış, roller & pano', icon: 'waving_hand', need: 'manage' },
+    { id: 'onboarding', label: 'Topluluk araçları', icon: 'waving_hand', need: 'manage' },
     { id: 'invite', label: 'Davet', icon: 'link' },
   ];
 
@@ -963,6 +963,16 @@ export function GuildSettingsPage({
                 client={client}
                 guildId={guildId}
                 roles={roles}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="destek-talepleri">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Destek talepleri</h2>
+              <TicketSettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
+                categories={categories.map((c) => ({ id: c.id, name: c.name }))}
                 channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
             </section>

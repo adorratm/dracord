@@ -886,6 +886,8 @@ export const SocketEvents = {
   LFG_UPDATE: 'lfg:update',
   /** B7 çekiliş oluşturuldu / güncellendi / bitti (guild odası) */
   GIVEAWAY_UPDATE: 'giveaway:update',
+  /** sesli olmayan üyeyi yönetici ses kanalına çağırdı (hedef kullanıcıya) */
+  VOICE_SUMMON: 'voice:summon',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
@@ -2337,4 +2339,38 @@ export interface MyBirthdayDto {
   birthday: string | null;
   /** sunucularda kutlansın mı */
   share: boolean;
+}
+
+// ── B6: destek talepleri ──
+export interface GuildTicketConfig {
+  enabled: boolean;
+  /** talep kanallarının açılacağı kategori */
+  categoryId: string | null;
+  /** talepleri görecek roller */
+  staffRoleIds: string[];
+  /** yeni talepler buraya duyurulur (yalnız ekip görsün) */
+  logChannelId: string | null;
+  /** talep kanalının başına yazılan karşılama */
+  greeting: string;
+}
+
+export interface TicketDto {
+  id: string;
+  guildId: string;
+  channelId: string;
+  number: number;
+  openerId: string;
+  subject: string;
+  status: 'open' | 'closed';
+  createdAt: string;
+  closedAt: string | null;
+}
+
+/** Sesli kanala çağrı: hedef ses kanalında değilken sürükle-bırak / Taşı yapıldı */
+export interface VoiceSummonPayload {
+  guildId: string;
+  guildName: string;
+  channelId: string;
+  channelName: string;
+  from: { id: string; displayName: string; avatarUrl: string | null };
 }

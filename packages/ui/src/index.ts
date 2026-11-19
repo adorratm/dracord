@@ -296,3 +296,13 @@ export { MediaGalleryModal } from './components/MediaGallery';
 
 // B7 — çekiliş + doğum günü
 export { GiveawaysPanel, GuildBirthdaySettings, MyBirthdaySettings } from './components/Giveaways';
+
+// B6 — destek talepleri
+export { TicketSettings, TicketsPanel } from './components/Tickets';
+
+// ses kanalına çağrı (sesli olmayan üyeyi sürükleyince)
+export { VoiceSummonPrompt } from './components/VoiceSummonPrompt';
+
+// sunucu kenar çubuğu araç satırı
+export { GuildQuickActions, type GuildQuickAction } from './components/GuildQuickActions';
+export { HeaderOverflowMenu, type HeaderOverflowItem } from './components/HeaderOverflowMenu';

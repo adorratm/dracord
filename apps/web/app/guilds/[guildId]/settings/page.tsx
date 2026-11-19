@@ -5,7 +5,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings } from '@dracord/ui';
+import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -74,6 +74,13 @@ export default function GuildSettingsPage({ params }: PageProps) {
   const { client, user } = useAuth();
   const { prefs, setSection } = useUserPreferences();
   const { guilds, guild, channels, patchGuild, reload } = useGuildNav(guildId);
+  const [ticketCategories, setTicketCategories] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    void client
+      .listGuildCategories(guildId)
+      .then((l) => setTicketCategories(l.map((c) => ({ id: c.id, name: c.name }))))
+      .catch(() => setTicketCategories([]));
+  }, [client, guildId]);
   const skin = prefs.appearance.guildSkins?.[guildId] ?? {};
   const [detail, setDetail] = useState<GuildSummary | null>(guild);
   const [nameDraft, setNameDraft] = useState(guild?.name ?? '');
@@ -803,6 +810,16 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 client={client}
                 guildId={guildId}
                 roles={roles}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
+            </section>
+            <section className="max-w-2xl mt-space-2xl" id="destek-talepleri">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Destek talepleri</h2>
+              <TicketSettings
+                client={client}
+                guildId={guildId}
+                roles={roles}
+                categories={ticketCategories}
                 channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
               />
             </section>

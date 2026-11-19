@@ -75,7 +75,7 @@ import {
 } from '../components/ScreenSharePicker';
 import { playUiTone } from '@/lib/sounds';
 import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
-import type { VoiceTakeoverPayload } from '@dracord/types';
+import type { VoiceStatePayload, VoiceTakeoverPayload } from '@dracord/types';
 import { useAuth } from '../auth';
 
 type AudioDevice = { deviceId: string; label: string };
@@ -1086,11 +1086,26 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (payload.clientId === client.getVoiceClientId()) return;
       void yieldToOtherClient(payload.platform ?? null);
     };
+    // a moderator moved me to another room (only while I am in one — otherwise it is a summon)
+    const onVoiceState = (payload: VoiceStatePayload) => {
+      if (payload.user?.id !== user.id || payload.action !== 'move') return;
+      if (!payload.targetChannelId || !payload.guildId || !voiceChannelIdRef.current) return;
+      if (payload.targetChannelId === voiceChannelIdRef.current) return;
+      const target = payload.targetChannelId;
+      void client
+        .getGuildChannels(payload.guildId)
+        .then((list) => list.find((c) => c.id === target))
+        .catch(() => undefined)
+        .then((ch) => join(payload.guildId, { id: target, name: ch?.name ?? 'Ses', type: ch?.type ?? 'VOICE' }))
+        .catch(() => undefined);
+    };
     sock.on(SocketEvents.VOICE_TAKEOVER, onTakeover);
+    sock.on(SocketEvents.VOICE_STATE, onVoiceState);
     return () => {
       sock.off(SocketEvents.VOICE_TAKEOVER, onTakeover);
+      sock.off(SocketEvents.VOICE_STATE, onVoiceState);
     };
-  }, [user, client, yieldToOtherClient]);
+  }, [user, client, yieldToOtherClient, join]);
 
   // Presence TTL (90s) — heartbeat yoksa sidebar’da görünmezsiniz
   useEffect(() => {

@@ -10,6 +10,7 @@ import type {
 import { DRACORD_BOT_USER_ID, SocketEvents, mergeLatestMessages } from '@dracord/types';
 import {
   AnnouncementFollowButton,
+  HeaderOverflowMenu,
   MediaGalleryModal,
   Avatar,
   ChatInput,
@@ -596,7 +597,7 @@ export function ChatPanel({
     <div className={`flex flex-col flex-1 min-h-0 min-w-0 h-full ${className ?? ''}`}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {!hideHeader && (
-          <header className="h-12 shrink-0 border-b border-outline-variant flex items-center gap-2 px-4">
+          <header className="@container h-12 shrink-0 border-b border-outline-variant flex items-center gap-2 px-4">
             <span className="material-symbols-outlined text-on-surface-variant text-[22px]">tag</span>
             <strong className="font-headline-md text-headline-md truncate">
               {titleOverride ?? channel.name}
@@ -624,7 +625,7 @@ export function ChatPanel({
             )}
             <button
               type="button"
-              className="h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              className="hidden @xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
               aria-label="Medya galerisi"
               title="Görseller, videolar ve dosyalar"
               onClick={() => setGalleryOpen(true)}
@@ -659,10 +660,15 @@ export function ChatPanel({
             >
               <span className="material-symbols-outlined text-[18px]">search</span>
             </button>
-            {channel.isAnnouncement ? <AnnouncementFollowButton client={client} channel={channel} guilds={followGuilds} /> : null}
+            {channel.isAnnouncement ? (
+              <span className="hidden @xl:inline-flex">
+                <AnnouncementFollowButton client={client} channel={channel} guilds={followGuilds} />
+              </span>
+            ) : null}
             <button
               type="button"
-              className="h-8 px-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface flex items-center gap-1 text-sm"
+              aria-label="Sabitlenen mesajlar"
+              className="hidden @xl:flex h-8 px-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface items-center gap-1 text-sm"
               onClick={() => {
                 setPinsOpen(true);
                 void client.listPinnedMessages(channel.id).then(setPins).catch(() => setPins([]));
@@ -673,13 +679,30 @@ export function ChatPanel({
             </button>
             <button
               type="button"
-              className="h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface flex items-center justify-center"
+              className="hidden @xl:flex h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface items-center justify-center"
               aria-label="Son threadler"
               title="Son threadler"
               onClick={() => openThreadsPreview()}
             >
               <span className="material-symbols-outlined text-[18px]">forum</span>
             </button>
+            <HeaderOverflowMenu
+              className="@xl:hidden"
+              items={[
+                {
+                  id: 'pins',
+                  icon: 'push_pin',
+                  label: 'Sabitlenenler',
+                  badge: pins.length || null,
+                  onClick: () => {
+                    setPinsOpen(true);
+                    void client.listPinnedMessages(channel.id).then(setPins).catch(() => setPins([]));
+                  },
+                },
+                { id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) },
+                { id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() },
+              ]}
+            />
             {showMembersToggle && (
               <button
                 type="button"

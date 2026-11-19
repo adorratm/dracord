@@ -1644,7 +1644,7 @@ export class DracordClient {
   async moveVoiceUser(
     userId: string,
     targetChannelId: string,
-  ): Promise<{ ok: true; targetChannelId: string }> {
+  ): Promise<{ ok: true; targetChannelId: string; summoned?: boolean }> {
     return this.request('/voice/move', {
       method: 'POST',
       body: JSON.stringify({ userId, targetChannelId }),
@@ -1924,6 +1924,34 @@ export class DracordClient {
 
   async passkeyLoginVerify(state: string, response: unknown): Promise<AuthTokens & { user: PublicUser }> {
     return this.request('/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify({ state, response }) });
+  }
+
+  // ── B6: destek talepleri ──
+  async getTicketConfig(guildId: string): Promise<import('@dracord/types').GuildTicketConfig> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/tickets/config`);
+  }
+
+  async updateTicketConfig(
+    guildId: string,
+    cfg: import('@dracord/types').GuildTicketConfig,
+  ): Promise<import('@dracord/types').GuildTicketConfig> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/tickets/config`, { method: 'PUT', body: JSON.stringify(cfg) });
+  }
+
+  async listTickets(guildId: string): Promise<import('@dracord/types').TicketDto[]> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/tickets`);
+  }
+
+  async openTicket(guildId: string, subject: string): Promise<import('@dracord/types').TicketDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/tickets`, { method: 'POST', body: JSON.stringify({ subject }) });
+  }
+
+  async closeTicket(id: string): Promise<import('@dracord/types').TicketDto> {
+    return this.request(`/tickets/${encodeURIComponent(id)}/close`, { method: 'POST' });
+  }
+
+  async reopenTicket(id: string): Promise<import('@dracord/types').TicketDto> {
+    return this.request(`/tickets/${encodeURIComponent(id)}/reopen`, { method: 'POST' });
   }
 
   // ── B7: çekiliş + doğum günü ──
@@ -2320,6 +2348,14 @@ export class DracordClient {
     if (!sock) return () => undefined;
     sock.on(SocketEvents.SCREEN_ANNOTATE, handler);
     return () => sock.off(SocketEvents.SCREEN_ANNOTATE, handler);
+  }
+
+  /** a moderator invites me (not in voice) to a voice room */
+  onVoiceSummon(handler: (p: import('@dracord/types').VoiceSummonPayload) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.VOICE_SUMMON, handler);
+    return () => sock.off(SocketEvents.VOICE_SUMMON, handler);
   }
 
   /** C5 — takım arama ilanı canlı güncellemesi */

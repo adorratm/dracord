@@ -6,10 +6,11 @@ import { MessagesModule } from '@/messages/messages.module';
 import { OnboardingModule } from '@/onboarding/onboarding.module';
 import { CommunityController } from './community.controller';
 import { CommunityService } from './community.service';
+import { TicketsService } from './tickets.service';
 
 @Module({
   imports: [GuildsModule, SocketBroadcastModule, MessagesModule, BotModule, OnboardingModule],
   controllers: [CommunityController],
-  providers: [CommunityService],
+  providers: [CommunityService, TicketsService],
 })
 export class CommunityModule {}

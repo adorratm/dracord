@@ -40,6 +40,7 @@ export { LfgListing } from './lfg-listing.entity';
 export { ChannelFollow } from './channel-follow.entity';
 export { GuildStarboard, StarboardEntry } from './guild-starboard.entity';
 export { Giveaway, GuildBirthdaySettings } from './giveaway.entity';
+export { GuildTicketSettings, Ticket } from './ticket.entity';
 export { UserPasskey } from './user-passkey.entity';
 export { E2eeDevice } from './e2ee-device.entity';
 export { OauthConnection } from './oauth-connection.entity';

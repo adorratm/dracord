@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AccessToken } from 'livekit-server-sdk';
 import { EntityManager } from 'typeorm';
-import type { VoiceTokenResponse } from '@dracord/types';
+import { SocketEvents, type VoiceSummonPayload, type VoiceTokenResponse } from '@dracord/types';
 import { ChannelsService } from '@/channels/channels.service';
 import { GuildPermissions } from '@/common/permissions';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
@@ -107,7 +107,7 @@ export class VoiceService {
     actorId: string,
     targetUserId: string,
     targetChannelId: string,
-  ): Promise<{ ok: true; targetChannelId: string }> {
+  ): Promise<{ ok: true; targetChannelId: string; summoned?: boolean }> {
     const target = await this.em.findOne(Channel, { where: { id: targetChannelId } });
     if (
       !target?.guildId ||
@@ -136,6 +136,23 @@ export class VoiceService {
 
     if (fromChannelId === targetChannelId) {
       return { ok: true, targetChannelId };
+    }
+
+    // not in voice: nobody is pulled into a call without saying yes — send a summon instead
+    if (!fromChannelId && !isSelf) {
+      const [guild, actor] = await Promise.all([
+        this.em.findOne(Guild, { where: { id: target.guildId }, select: { id: true, name: true } }),
+        this.em.findOne(User, { where: { id: actorId }, select: { id: true, displayName: true, avatarUrl: true } }),
+      ]);
+      const payload: VoiceSummonPayload = {
+        guildId: target.guildId,
+        guildName: guild?.name ?? '',
+        channelId: target.id,
+        channelName: target.name,
+        from: { id: actorId, displayName: actor?.displayName ?? 'Bir yönetici', avatarUrl: actor?.avatarUrl ?? null },
+      };
+      this.broadcast.emitToUsers([targetUserId], SocketEvents.VOICE_SUMMON, payload);
+      return { ok: true, targetChannelId, summoned: true };
     }
 
     if (fromChannelId) {
