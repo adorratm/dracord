@@ -14,9 +14,12 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoQuality,
   type LocalVideoTrack,
   type RemoteTrack,
+  type RemoteTrackPublication,
 } from 'livekit-client';
+import { DATA_SAVER_AUDIO_BITRATE, isDataSaverOn } from '../../lib/dataSaver';
 import {
   AudioSession,
   AndroidAudioTypePresets,
@@ -431,6 +434,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       afkVoiceChannelTrackedRef.current = channel.id;
 
       const onTrackSubscribed = (track: RemoteTrack, pub: { kind?: Track.Kind }) => {
+        // G2 — data saver: lowest video layer
+        if (pub.kind === Track.Kind.Video && isDataSaverOn()) {
+          try {
+            (pub as unknown as RemoteTrackPublication).setVideoQuality(VideoQuality.LOW);
+          } catch {
+            /* not a simulcast track */
+          }
+        }
         if (pub.kind === Track.Kind.Audio) {
           const el = track.attach();
           if (typeof el === 'object' && el && 'muted' in el) {
@@ -554,7 +565,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           return;
         }
         const micOn = !mutedRef.current && !deafenedRef.current;
-        await room.localParticipant.setMicrophoneEnabled(micOn);
+        await room.localParticipant.setMicrophoneEnabled(
+          micOn,
+          undefined,
+          isDataSaverOn() ? { audioPreset: { maxBitrate: DATA_SAVER_AUDIO_BITRATE } } : undefined,
+        );
         // push-to-talk: published (first press is instant), then held closed
         if (micOn && !pttGateOpen()) await room.localParticipant.setMicrophoneEnabled(false);
         setConnected(true);

@@ -49,6 +49,7 @@ import { VoiceMessageBubble, VoiceRecorderBar } from './VoiceMessage';
 import { useVoiceSessionOptional } from './voice/VoiceSession';
 import { useScheduledMessages } from '../lib/useScheduledMessages';
 import { Icon } from './Icon';
+import { useDataSaver } from '../lib/dataSaver';
 import { LinkifiedText } from './LinkifiedText';
 import { UserAvatar } from './UserAvatar';
 import {
@@ -1544,7 +1545,29 @@ const RemoteImage = memo(function RemoteImage({
   style: { width: number; height: number; borderRadius?: number; marginTop?: number };
 }) {
   const [failed, setFailed] = useState(false);
+  const saver = useDataSaver();
+  const [tapped, setTapped] = useState(false);
   const resolved = resolveMediaUrl(uri);
+  // G2 — data saver: load on tap
+  if (resolved && !failed && saver && !tapped) {
+    return (
+      <Pressable
+        onPress={() => setTapped(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Görseli yükle"
+        style={{
+          ...style,
+          borderRadius: style.borderRadius ?? 8,
+          backgroundColor: colors.surfaceHigh,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name="image" size={22} color={colors.textMuted} />
+        <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 4 }}>Dokun, yükle</Text>
+      </Pressable>
+    );
+  }
   if (!resolved || failed) {
     return (
       <View
@@ -1819,6 +1842,7 @@ function EmbedCard({
   onAction?: (action: MessageEmbedAction) => void;
 }) {
   const img = resolveMediaUrl(embed.imageUrl);
+  const dataSaver = useDataSaver();
   return (
     <View
       style={{
@@ -1862,7 +1886,7 @@ function EmbedCard({
             </Text>
           ) : null}
         </View>
-        {img ? (
+        {img && !dataSaver ? (
           <Image
             source={{ uri: img }}
             style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: colors.surface }}

@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { formatDeletionDate } from '../../components/AccountDeletionBar';
+import { setDataSaver, useDataSaver } from '../../lib/dataSaver';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -187,6 +188,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
   const voice = useVoiceSessionOptional();
+  const dataSaver = useDataSaver();
   const locale = useSyncExternalStore(subscribeLocale, getAppLocale, getAppLocale);
   const [tab, setTab] = useState<Tab>('account');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1559,6 +1561,11 @@ export default function SettingsScreen() {
               Mikrofon, sağırlaştırma ve kamera burada veya ses odası alt şeridinden yönetilir.
               Uygulama arka plandayken oturum foreground service ile sürer.
             </Text>
+            <ToggleRow
+              label="Veri tasarrufu (görseller dokununca yüklenir, aramada düşük video ve ses kalitesi)"
+              value={dataSaver}
+              onChange={(v) => setDataSaver(v)}
+            />
             {voice ? (
               <ToggleRow
                 label="Bas-konuş (konuşmak için alt şeritteki düğmeye basılı tut)"
