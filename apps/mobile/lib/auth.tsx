@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || !user?.id) return;
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') client.nudgeReconnect();
+      if (st === 'active') client.checkSocketLiveness();
     });
     return () => sub.remove();
   }, [ready, user?.id, client]);

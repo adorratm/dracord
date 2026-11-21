@@ -312,6 +312,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.voiceOrphanTimers.set(userId, timer);
   }
 
+  /** Canlılık yoklaması: istemci uyandığında bağlantının gerçekten açık olduğunu doğrular */
+  @SubscribeMessage(SocketEvents.CLIENT_PING)
+  handleClientPing() {
+    return { ok: true, t: Date.now() };
+  }
+
   @UseGuards(WsJwtGuard)
   @SubscribeMessage(SocketEvents.CHANNEL_JOIN)
   async handleJoin(

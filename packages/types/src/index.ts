@@ -872,6 +872,8 @@ export const SocketEvents = {
   /** Profil / avatar / banner / displayName anlık güncelleme */
   USER_UPDATE: 'user:update',
   CHANNEL_JOIN: 'channel:join',
+  /** İstemci canlılık yoklaması (ack) — uyku sonrası ölü bağlantıyı yakalamak için */
+  CLIENT_PING: 'client:ping',
   CHANNEL_LEAVE: 'channel:leave',
   VOICE_STATE: 'voice:state',
   /** İstemci ister / sunucu guild roster snapshot gönderir */

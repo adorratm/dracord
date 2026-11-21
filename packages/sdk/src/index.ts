@@ -2329,6 +2329,31 @@ export class DracordClient {
     sock.connect();
   }
 
+  /**
+   * Bağlı görünen ama aslında ölü (uyku / ağ değişimi sonrası yarı açık) bağlantıyı yakala:
+   * 4 sn içinde yanıt gelmezse taşımayı kapat → socket.io hemen yeniden bağlanır.
+   */
+  private livenessInFlight = false;
+  checkSocketLiveness(timeoutMs = 4000) {
+    const sock = this.socket;
+    if (!sock || this.sessionRevoked) return;
+    if (!sock.connected) {
+      this.nudgeReconnect();
+      return;
+    }
+    if (this.livenessInFlight) return;
+    this.livenessInFlight = true;
+    sock.timeout(timeoutMs).emit(SocketEvents.CLIENT_PING, {}, (err: unknown) => {
+      this.livenessInFlight = false;
+      if (!err || sock !== this.socket) return;
+      try {
+        (sock.io as unknown as { engine?: { close(): void } }).engine?.close();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
   private attachLifecycle() {
     if (this.lifecycleAttached) return;
     const w = typeof window !== 'undefined' ? (window as unknown as {
@@ -2340,11 +2365,26 @@ export class DracordClient {
     }) : null;
     if (!w?.addEventListener || !d?.addEventListener) return; // React Native
     this.lifecycleAttached = true;
-    w.addEventListener('online', () => this.nudgeReconnect());
+    let hiddenAt = 0;
+    w.addEventListener('online', () => this.checkSocketLiveness());
     w.addEventListener('focus', () => this.nudgeReconnect());
     d.addEventListener('visibilitychange', () => {
-      if (d.visibilityState === 'visible') this.nudgeReconnect();
+      if (d.visibilityState !== 'visible') {
+        hiddenAt = Date.now();
+        return;
+      }
+      // Uzun süre gizli kaldıysa (uyku olabilir) bağlantıyı yokla, kısa süreyse yalnız bağlan
+      if (hiddenAt && Date.now() - hiddenAt > 20_000) this.checkSocketLiveness();
+      else this.nudgeReconnect();
     });
+    // Uyku algılama: zamanlayıcı beklenenden çok geç çalıştıysa makine uyumuştur
+    let last = Date.now();
+    const iv = setInterval(() => {
+      const now = Date.now();
+      if (now - last > 30_000) this.checkSocketLiveness();
+      last = now;
+    }, 10_000);
+    (iv as unknown as { unref?: () => void }).unref?.();
   }
 
   joinChannel(channelId: string) {

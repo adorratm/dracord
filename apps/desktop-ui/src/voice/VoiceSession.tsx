@@ -309,6 +309,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const joinGen = useRef(0);
   const knownPeersRef = useRef(new Set<string>());
   const intentionalLeaveRef = useRef(false);
+  const rejoinTimerRef = useRef<number | null>(null);
+  const rejoinAttemptRef = useRef(0);
   const voiceChannelIdRef = useRef<string | null>(null);
   const voiceGuildIdRef = useRef<string | null>(null);
   const screenVideoElRef = useRef<HTMLVideoElement | null>(null);
@@ -974,7 +976,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     async (
       guildId: string,
       channel: { id: string; name: string; type?: string },
-      opts?: { password?: string },
+      opts?: { password?: string; keepOnFail?: boolean },
     ) => {
       if (voiceChannelIdRef.current === channel.id && roomRef.current) {
         setVoiceGuildId(guildId);
@@ -1061,6 +1063,22 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       });
       room.on(RoomEvent.TrackSubscribed, attachRemote);
       room.on(RoomEvent.TrackUnsubscribed, refresh);
+      // Bağlantı dayanıklılığı: LiveKit kendi denemesinde durum göster; tamamen koparsa (uyku, ağ değişimi)
+      // aynı kanala geri dön
+      room.on(RoomEvent.Reconnecting, () => {
+        setConnected(false);
+        setStatus('Yeniden bağlanılıyor…');
+      });
+      room.on(RoomEvent.Reconnected, () => {
+        setConnected(true);
+        setStatus(null);
+      });
+      room.on(RoomEvent.Disconnected, () => {
+        if (roomRef.current !== room || intentionalLeaveRef.current) return;
+        if (voiceChannelIdRef.current !== channel.id) return;
+        setConnected(false);
+        scheduleRejoinRef.current(guildId, channel);
+      });
       // Konuşma halkası — ekran track’ini yeniden bağlama (takılma / flicker)
       room.on(RoomEvent.ActiveSpeakersChanged, refreshPeers);
       room.on(RoomEvent.LocalTrackPublished, refresh);
@@ -1096,11 +1114,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         for (const p of room.remoteParticipants.values()) {
           knownPeersRef.current.add(p.identity);
         }
-        playUiTone('join');
+        if (!opts?.keepOnFail) playUiTone('join');
+        rejoinAttemptRef.current = 0;
+        setStatus(null);
         setConnected(true);
         refresh();
       } catch (e) {
         if (gen !== joinGen.current) return;
+        if (opts?.keepOnFail && !intentionalLeaveRef.current) {
+          // Yeniden bağlanma denemesi: kanalı bırakma, biraz sonra tekrar dene
+          roomRef.current = null;
+          scheduleRejoinRef.current(guildId, channel);
+          return;
+        }
         setStatus(e instanceof Error ? e.message : 'Ses bağlantısı başarısız');
         await teardownRoom(channel.id, guildId, { playLeaveTone: false });
         voiceChannelIdRef.current = null;
@@ -1113,7 +1139,33 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [client, deafened, muted, refresh, refreshPeers, teardownRoom],
   );
 
+  const joinFnRef = useRef(join);
+  joinFnRef.current = join;
+  const scheduleRejoinRef = useRef<(g: string, c: { id: string; name: string; type?: string }) => void>(() => undefined);
+  scheduleRejoinRef.current = (g, c) => {
+    if (rejoinTimerRef.current) return;
+    const delays = [1000, 3000, 6000, 12000, 20000, 30000];
+    const d = delays[Math.min(rejoinAttemptRef.current, delays.length - 1)]!;
+    rejoinAttemptRef.current += 1;
+    setStatus(`Bağlantı koptu — yeniden bağlanılıyor (${rejoinAttemptRef.current})…`);
+    rejoinTimerRef.current = window.setTimeout(() => {
+      rejoinTimerRef.current = null;
+      if (intentionalLeaveRef.current || voiceChannelIdRef.current !== c.id) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        scheduleRejoinRef.current(g, c);
+        return;
+      }
+      roomRef.current = null;
+      void joinFnRef.current(g, c, { keepOnFail: true });
+    }, d);
+  };
+
   const leave = useCallback(async () => {
+    if (rejoinTimerRef.current) {
+      window.clearTimeout(rejoinTimerRef.current);
+      rejoinTimerRef.current = null;
+    }
+    rejoinAttemptRef.current = 0;
     joinGen.current += 1;
     const id = voiceChannelIdRef.current;
     const gid = voiceGuildIdRef.current;

@@ -718,6 +718,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const screenShareVolumesRef = useRef<Map<string, number>>(new Map());
   const restoringRef = useRef(false);
   const intentionalLeaveRef = useRef(false);
+  const rejoinTimerRef = useRef<number | null>(null);
+  const rejoinAttemptRef = useRef(0);
   /** Son "tüm guild seslerinden çık" (channelId:null) gönderimimiz — kanal değiştirirken
    *  sunucunun yeni kanaldan da çıkardığı yankıyı "atıldın" sanmamak için. */
   const selfLeaveAllAtRef = useRef(0);
@@ -1480,7 +1482,24 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     room.on(RoomEvent.Connected, syncAll);
     room.on(RoomEvent.Disconnected, () => {
-      if (!disposed) setConnected(false);
+      if (disposed) return;
+      setConnected(false);
+      // Uyku / ağ değişimi sonrası LiveKit vazgeçtiyse aynı kanala geri dön (geri çekilmeli)
+      if (intentionalLeaveRef.current || channelIdRef.current !== channelId || !isLeaderRef.current) return;
+      if (rejoinTimerRef.current) return;
+      const delays = [1000, 3000, 6000, 12000, 20000, 30000];
+      const d = delays[Math.min(rejoinAttemptRef.current, delays.length - 1)]!;
+      rejoinAttemptRef.current += 1;
+      const attempt = () => {
+        rejoinTimerRef.current = null;
+        if (intentionalLeaveRef.current || channelIdRef.current !== channelId) return;
+        if (navigator.onLine === false) {
+          rejoinTimerRef.current = window.setTimeout(attempt, 2000);
+          return;
+        }
+        setRoomEpoch((n) => n + 1);
+      };
+      rejoinTimerRef.current = window.setTimeout(attempt, d);
     });
     room.on(RoomEvent.ParticipantConnected, (p) => {
       if (!knownPeersRef.current.has(p.identity)) {
@@ -1705,7 +1724,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         await applyRoomAudioSettings(room, audioSettingsRef.current);
         void refreshAudioDevices(false);
 
-        playUiTone('join');
+        if (rejoinAttemptRef.current === 0) playUiTone('join');
+        rejoinAttemptRef.current = 0;
         everConnected = true;
         hadConnectedRef.current = true;
         setConnected(true);
@@ -2044,6 +2064,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const channelId = channelIdRef.current;
     const guildId = guildIdRef.current;
     intentionalLeaveRef.current = true;
+    if (rejoinTimerRef.current) {
+      window.clearTimeout(rejoinTimerRef.current);
+      rejoinTimerRef.current = null;
+    }
+    rejoinAttemptRef.current = 0;
     transferringLeadershipRef.current = false;
     screenShareBusyRef.current = false;
     hadConnectedRef.current = false;
