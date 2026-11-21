@@ -37,6 +37,9 @@ jobs:
         run: |
           yarn workspace @dracord/desktop-ui build
           node apps/desktop/scripts/copy-ui.js
+      - name: Bundle budget
+        shell: bash
+        run: node scripts/bundle-budget.mjs
       - name: Electron E2E (Windows)
         if: runner.os == 'Windows'
         run: yarn workspace @dracord/e2e test:desktop

@@ -72,8 +72,8 @@ Plan:
 - Codec belirtilmemiş (VP8 varsayılan).
 - [x] Kontrol aktifken izleyicide `source` kalite zorlanır (`setRemoteControlQualityBoost`), bitince kullanıcının ayarına döner (ayar değişmez).
 - [x] Kontrol edilirken paylaşanda canlı `contentHint='detail'` + `maintain-resolution` (`setRemoteControlSharerDetail`).
-- [ ] Codec denemesi: H.264 (donanım encode) ve VP9/AV1 SVC — flag ile A/B.
-- [ ] Yayına "istatistik" katmanı (çözünürlük, fps, bitrate, kayıp) — teşhis için.
+- [x] Codec denemesi: Ayarlar'da Otomatik (VP8) / H.264 / VP9 SVC / AV1 SVC (VP8 yedekli).
+- [x] Yayına "istatistik" katmanı (çözünürlük, fps, bitrate, kayıp, RTT, codec, sınırlayan).
 
 **Test:** `node apps/desktop/scripts/remote-input-smoke.js` (Windows) → imleç ortaya gitmeli.
 Manuel: %150 ölçekli ekranda tık konumu · pencere paylaşımı · Ctrl+C/V · ğüş · Esc basılı · Ctrl+Shift+F12.
@@ -88,13 +88,13 @@ Manuel: %150 ölçekli ekranda tık konumu · pencere paylaşımı · Ctrl+C/V �
 
 ## Faz 1 — Optimizasyon ve sağlamlık
 
-- [ ] **Ortak hook'ları pakete taşı:** web ↔ desktop-ui kopya dosyaları (`use-remote-control`, ses/ekran ayarları) → `packages/*`.
-- [ ] **Performans bütçesi:** desktop açılış süresi, web LCP/INP, mobil soğuk açılış; her sürümde ölçüm.
-- [ ] **Bundle diyeti:** web/desktop-ui chunk analizi, oyunlar ve ağır modüller lazy.
-- [ ] **Bağlantı dayanıklılığı:** socket/LiveKit yeniden bağlanma senaryoları (uyku, ağ değişimi, mobil arka plan).
-- [ ] **E2E smoke:** Playwright (web) + Windows desktop E2E — giriş, mesaj, ses, ekran paylaşımı, uzak kontrol.
-- [ ] **Erişilebilirlik/kontrast taraması:** tüm ekranlar koyu+açık tema (`ui-ux-pro-max`, `frontend-a11y`).
-- [ ] **Hata görünürlüğü:** istemci hata raporlama (Sentry/GlitchTip self-host) `(?)`
+- [x] **Ortak hook'ları pakete taşı:** (`@dracord/ui/voice`, `@dracord/ui/screen-share`; uzak kontrol zaten pakette) web ↔ desktop-ui kopya dosyaları (`use-remote-control`, ses/ekran ayarları) → `packages/*`.
+- [x] **Performans bütçesi:** (`scripts/bundle-budget.mjs`, Desktop E2E işinde; mobil soğuk açılış ölçümü açık) desktop açılış süresi, web LCP/INP, mobil soğuk açılış; her sürümde ölçüm.
+- [x] **Bundle diyeti:** (desktop ana parça 3.0 → 1.6 MB; ayarlar/keşfet/oyun paneli lazy; web oyun görünümü dinamik) web/desktop-ui chunk analizi, oyunlar ve ağır modüller lazy.
+- [x] **Bağlantı dayanıklılığı:** (uyku/ağ değişiminde socket yoklaması, ses odasına otomatik geri dönüş) socket/LiveKit yeniden bağlanma senaryoları (uyku, ağ değişimi, mobil arka plan).
+- [x] **E2E smoke:** (web Playwright + Desktop E2E Windows/Linux; ses/ekran/uzak kontrol E2E açık) Playwright (web) + Windows desktop E2E — giriş, mesaj, ses, ekran paylaşımı, uzak kontrol.
+- [x] **Erişilebilirlik/kontrast taraması:** (herkese açık + oturumlu ekranlar, koyu/açık; CI'da) tüm ekranlar koyu+açık tema (`ui-ux-pro-max`, `frontend-a11y`).
+- [x] **Hata görünürlüğü:** kendi sunucumuzda istemci hata raporlama (Yönetim › İstemci hataları).
 - [x] Repo temizliği: test dosyaları kaldırıldı (`tts-smoke.mp3` son kalan); cookie dosyaları gitignore'da,
   artık panelden giriliyor (Yönetim › Müzik botu).
 
@@ -112,7 +112,7 @@ farklı bir taşıma katmanı ister.
 
 - [ ] **Dracord Embedded SDK** (`@dracord/embedded-sdk`): iframe/webview içindeki oyuna kimlik,
   oda üyeleri, davet, ses kanalı durumu, `postMessage` köprüsü. Harici geliştiricilere de açılabilir.
-- [ ] **Oyun odası (lobby) modeli:** ses kanalına bağlı oda, hazır ol, host, izleyici, davet linki.
+- [x] **Oyun odası (lobby) modeli:** (hazırım, host başlatır / herkes hazır olunca başlar, izleyici, davet linki) ses kanalına bağlı oda, hazır ol, host, izleyici, davet linki.
 - [ ] **Gerçek zamanlı taşıma — karar: oyunun kendi sunucusu.** COOMBIE API (socket.io) oyunu
   yönetir; Dracord kimlik (kısa ömürlü oyun token'ı), oda, davet ve ses kanalını sağlar.
   Aynı sunucu Steam sürümüne de hizmet eder.
