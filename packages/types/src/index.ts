@@ -1774,10 +1774,11 @@ export const TOURNAMENT_GAME_LABEL: Record<TournamentGame, string> = {
 };
 /** Oyundan sonucu kendiliğinden alınabilen oyunlar (C6) */
 export const TOURNAMENT_AUTO_RESULT_GAMES: readonly TournamentGame[] = ['tavla', 'billiards', 'bowling'];
-export const TOURNAMENT_FORMATS = ['single', 'round_robin', 'table4'] as const;
+export const TOURNAMENT_FORMATS = ['single', 'double', 'round_robin', 'table4'] as const;
 export type TournamentFormat = (typeof TOURNAMENT_FORMATS)[number];
 export const TOURNAMENT_FORMAT_LABEL: Record<TournamentFormat, string> = {
   single: 'Tek eleme',
+  double: 'Çift eleme (iki yenilgide elenir)',
   round_robin: 'Lig (herkes herkesle)',
   table4: '4\'lü masa (kazanan üst tura)',
 };
@@ -1811,6 +1812,13 @@ export interface TournamentMatch {
   slots?: number;
   /** Sonuç oyundan kendiliğinden alındı */
   source?: 'game';
+  /** Çift eleme: üst (W) / alt (L) kol, büyük final (GF1) ve rövanş (GF2) */
+  bracket?: 'W' | 'L' | 'GF1' | 'GF2';
+  /** Çift eleme: kazanan / kaybeden nereye gider */
+  winTo?: { id: string; slot: 1 | 2 } | null;
+  loseTo?: { id: string; slot: 1 | 2 } | null;
+  /** Çift eleme: dolan yuva sayısı (rakipsiz geçiş dahil) */
+  fills?: number;
 }
 
 export interface TournamentParticipant {
@@ -2003,6 +2011,113 @@ function advanceTables(matches: TournamentMatch[], m: TournamentMatch, winnerId:
   return null;
 }
 
+/**
+ * Çift eleme: üst kolda kaybeden alt kola düşer, ikinci yenilgide elenir. Büyük finali alt koldan
+ * gelen kazanırsa rövanş (GF2) oynanır. Rakipsiz yuvalar kendiliğinden geçer.
+ */
+export function buildDoubleElimination(seeded: string[]): { matches: TournamentMatch[]; rounds: number } {
+  const n = seeded.length;
+  let size = 4;
+  while (size < n) size *= 2;
+  const k = Math.log2(size);
+  const order = bracketSeedOrder(size);
+  const matches: TournamentMatch[] = [];
+  const mk = (id: string, round: number, index: number, bracket: TournamentMatch['bracket']): TournamentMatch => {
+    const m: TournamentMatch = { id, round, index, p1: null, p2: null, winnerId: null, status: 'waiting', reports: {}, bracket, winTo: null, loseTo: null, fills: 0 };
+    matches.push(m);
+    return m;
+  };
+  const W: TournamentMatch[][] = [];
+  for (let r = 1; r <= k; r++) W.push(Array.from({ length: size / 2 ** r }, (_, i) => mk(`w${r}m${i}`, r, i, 'W')));
+  const lbRounds = 2 * (k - 1);
+  const L: TournamentMatch[][] = [];
+  for (let j = 1; j <= lbRounds; j++) {
+    const count = size / 2 ** (Math.floor((j + 1) / 2) + 1);
+    L.push(Array.from({ length: count }, (_, i) => mk(`l${j}m${i}`, k + j, i, 'L')));
+  }
+  const gf1 = mk('gf1', k + lbRounds + 1, 0, 'GF1');
+  const gf2 = mk('gf2', k + lbRounds + 2, 0, 'GF2');
+  // üst kol bağlantıları
+  for (let r = 0; r < k; r++) {
+    W[r]!.forEach((m, i) => {
+      m.winTo = r < k - 1 ? { id: W[r + 1]![Math.floor(i / 2)]!.id, slot: i % 2 === 0 ? 1 : 2 } : { id: gf1.id, slot: 1 };
+      if (r === 0) m.loseTo = { id: L[0]![Math.floor(i / 2)]!.id, slot: i % 2 === 0 ? 1 : 2 };
+      else {
+        // üst kolun r+1. turunda kaybeden alt kolun 2r. turuna (ters sırayla — rövanşı geciktirir)
+        const target = L[2 * r - 1]!;
+        m.loseTo = { id: target[target.length - 1 - i]!.id, slot: 2 };
+      }
+    });
+  }
+  // alt kol bağlantıları
+  for (let j = 0; j < lbRounds; j++) {
+    L[j]!.forEach((m, i) => {
+      if (j === lbRounds - 1) m.winTo = { id: gf1.id, slot: 2 };
+      else if (j % 2 === 0) m.winTo = { id: L[j + 1]![i]!.id, slot: 1 }; // tek tur → çift tur (aynı sıra)
+      else m.winTo = { id: L[j + 1]![Math.floor(i / 2)]!.id, slot: i % 2 === 0 ? 1 : 2 };
+    });
+  }
+  gf1.winTo = null;
+  // ilk tur
+  W[0]!.forEach((m, i) => {
+    m.p1 = seeded[order[2 * i]! - 1] ?? null;
+    m.p2 = seeded[order[2 * i + 1]! - 1] ?? null;
+    m.fills = 2;
+  });
+  for (const m of W[0]!) {
+    if (m.p1 && m.p2) m.status = 'ready';
+    else {
+      m.bye = true;
+      finishDouble(matches, m, m.p1 ?? m.p2);
+    }
+  }
+  return { matches, rounds: k + lbRounds + 2 };
+}
+
+function placeDouble(matches: TournamentMatch[], to: { id: string; slot: 1 | 2 } | null | undefined, who: string | null): string | null {
+  if (!to) return null;
+  const t = matches.find((x) => x.id === to.id);
+  if (!t) return null;
+  if (to.slot === 1) t.p1 = who;
+  else t.p2 = who;
+  t.fills = (t.fills ?? 0) + 1;
+  if (t.fills < 2) return null;
+  if (t.p1 && t.p2) {
+    t.status = 'ready';
+    return null;
+  }
+  t.bye = true;
+  return finishDouble(matches, t, t.p1 ?? t.p2);
+}
+
+/** Çift eleme maçını bitir; şampiyon belli olduysa döndürür */
+function finishDouble(matches: TournamentMatch[], m: TournamentMatch, winnerId: string | null): string | null {
+  m.winnerId = winnerId;
+  m.status = 'done';
+  const players = [m.p1, m.p2];
+  const loser = winnerId ? (players.find((p) => p && p !== winnerId) ?? null) : null;
+  if (m.bracket === 'GF1') {
+    const gf2 = matches.find((x) => x.bracket === 'GF2');
+    if (!winnerId) return null;
+    if (winnerId === m.p1 || !gf2) {
+      if (gf2) {
+        gf2.status = 'done';
+        gf2.bye = true;
+      }
+      return winnerId; // üst kol şampiyonu ilk yenilgisini almadı
+    }
+    gf2.p1 = m.p1;
+    gf2.p2 = m.p2;
+    gf2.fills = 2;
+    gf2.status = 'ready';
+    return null;
+  }
+  if (m.bracket === 'GF2') return winnerId;
+  const a = placeDouble(matches, m.winTo, winnerId);
+  const b = placeDouble(matches, m.loseTo, loser);
+  return a ?? b;
+}
+
 /** Biçime göre maçı bitir; turnuva bittiyse şampiyonu döndürür */
 export function tournamentAdvance(
   format: TournamentFormat,
@@ -2014,6 +2129,7 @@ export function tournamentAdvance(
   if (format === 'single') return advanceTournament(matches, matchId, winnerId);
   const m = matches.find((x) => x.id === matchId);
   if (!m) throw new Error('match_not_found');
+  if (format === 'double') return finishDouble(matches, m, winnerId);
   if (format === 'table4') return advanceTables(matches, m, winnerId);
   m.winnerId = winnerId;
   m.status = 'done';

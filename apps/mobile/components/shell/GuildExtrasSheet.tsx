@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { SoundsTab } from './SoundsTab';
 import { StatsTab } from './StatsTab';
 import { TournamentsTab } from './TournamentsTab';
+import { SubscriptionsTab } from './SubscriptionsTab';
 import { LfgTab } from './LfgTab';
 import { ChallengesCard } from './ChallengesCard';
 
@@ -25,7 +26,7 @@ export function GuildExtrasSheet({
   onClose: () => void;
   guildId: string | null;
   guild: GuildSummary | null;
-  initialTab?: 'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments' | 'lfg';
+  initialTab?: 'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments' | 'lfg' | 'subscriptions';
   onGuildUpdated?: (g: GuildSummary) => void;
   /** MANAGE_GUILD — soundboard ses ekle/sil */
   canManage?: boolean;
@@ -33,7 +34,7 @@ export function GuildExtrasSheet({
   inCall?: boolean;
 }) {
   const { client, user } = useAuth();
-  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments' | 'lfg'>(initialTab);
+  const [tab, setTab] = useState<'events' | 'boost' | 'levels' | 'sounds' | 'stats' | 'tournaments' | 'lfg' | 'subscriptions'>(initialTab);
   const [board, setBoard] = useState<MemberLevelDto[]>([]);
   const [myLevel, setMyLevel] = useState<MemberLevelDto | null>(null);
   const [events, setEvents] = useState<GuildEventDto[]>([]);
@@ -118,13 +119,16 @@ export function GuildExtrasSheet({
             <Chip label="Sesler" active={tab === 'sounds'} onPress={() => setTab('sounds')} />
             <Chip label="Takım ara" active={tab === 'lfg'} onPress={() => setTab('lfg')} />
             <Chip label="Turnuva" active={tab === 'tournaments'} onPress={() => setTab('tournaments')} />
+            <Chip label="Abonelik" active={tab === 'subscriptions'} onPress={() => setTab('subscriptions')} />
             {canManage ? <Chip label="İstatistik" active={tab === 'stats'} onPress={() => setTab('stats')} /> : null}
             <Pressable onPress={onClose} style={{ marginLeft: 'auto', padding: 8 }}>
               <Text style={{ color: colors.textMuted }}>Kapat</Text>
             </Pressable>
           </View>
 
-          {tab === 'lfg' && guildId && user ? (
+          {tab === 'subscriptions' && guildId ? (
+            <SubscriptionsTab client={client} guildId={guildId} />
+          ) : tab === 'lfg' && guildId && user ? (
             <LfgTab client={client} guildId={guildId} meId={user.id} />
           ) : tab === 'tournaments' && guildId && user ? (
             <TournamentsTab client={client} guildId={guildId} meId={user.id} canManage={canManage} />

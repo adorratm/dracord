@@ -8,6 +8,7 @@ import {
   TOURNAMENT_GAMES,
   TOURNAMENT_GAME_LABEL,
   TOURNAMENT_LIMITS,
+  buildDoubleElimination,
   buildRoundRobin,
   buildSingleElimination,
   buildTables,
@@ -269,7 +270,13 @@ export class TournamentsService {
       const before = t.matches;
       const fmt = t.format ?? 'single';
       const { matches, rounds } =
-        fmt === 'round_robin' ? buildRoundRobin(players) : fmt === 'table4' ? buildTables(players) : buildSingleElimination(players);
+        fmt === 'round_robin'
+          ? buildRoundRobin(players)
+          : fmt === 'table4'
+            ? buildTables(players)
+            : fmt === 'double'
+              ? buildDoubleElimination(players)
+              : buildSingleElimination(players);
       t.participantIds = players;
       t.matches = matches;
       t.rounds = rounds;

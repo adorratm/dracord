@@ -21,8 +21,16 @@ const STATUS_TR: Record<TournamentDto['status'], string> = {
   cancelled: 'İptal',
 };
 const gameLabel = (t: TournamentDto) => (t.game === 'external' ? t.externalGameName || 'Harici oyun' : TOURNAMENT_GAME_LABEL[t.game]);
-const roundName = (r: number, n: number, f: TournamentFormat = 'single') =>
-  f === 'round_robin' ? `${r}. tur` : r === n ? 'Final' : r === n - 1 ? 'Yarı final' : r === n - 2 && f === 'single' ? 'Çeyrek final' : `${r}. tur`;
+const roundName = (r: number, n: number, f: TournamentFormat = 'single', m?: TournamentMatch) =>
+  f === 'double' && m?.bracket
+    ? m.bracket === 'GF1'
+      ? 'Büyük final'
+      : m.bracket === 'GF2'
+        ? 'Rövanş'
+        : m.bracket === 'W'
+          ? `Üst kol ${m.round}`
+          : `Alt kol ${/^l(\d+)/.exec(m.id)?.[1] ?? ''}`
+    : f === 'round_robin' ? `${r}. tur` : r === n ? 'Final' : r === n - 1 ? 'Yarı final' : r === n - 2 && f === 'single' ? 'Çeyrek final' : `${r}. tur`;
 const matchRows = (m: TournamentMatch): Array<string | null> => {
   if (!m.players) return [m.p1, m.p2];
   const out: Array<string | null> = [...m.players];
@@ -85,7 +93,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
   if (!t) {
     return (
       <ScrollView contentContainerStyle={{ padding: 12, gap: 8 }}>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Tek eleme, lig ya da 4'lü masa. Yeni turnuvayı web veya masaüstünden oluştur.</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Tek/çift eleme, lig ya da 4'lü masa. Yeni turnuvayı web veya masaüstünden oluştur.</Text>
         {list === null ? <Text style={{ color: colors.textMuted }}>Yükleniyor…</Text> : null}
         {list?.length === 0 ? <Text style={{ color: colors.textMuted }}>Henüz turnuva yok.</Text> : null}
         {(list ?? []).map((x) => (
@@ -154,7 +162,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
         return (
           <View key={mine.id} style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, gap: 6 }}>
             <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
-              {roundName(mine.round, t.rounds, format)} · {table ? 'senin masan' : 'senin maçın'}
+              {roundName(mine.round, t.rounds, format, mine)} · {table ? 'senin masan' : 'senin maçın'}
             </Text>
             <Text style={{ color: colors.text }}>
               {table ? 'Masadakiler' : 'Rakip'}: {others.map((o) => names.get(o) ?? 'Oyuncu').join(', ')}
@@ -206,7 +214,7 @@ export function TournamentsTab({ client, guildId, meId, canManage }: { client: D
       ) : (
         Array.from({ length: t.rounds }, (_, i) => i + 1).map((r) => (
           <View key={r} style={{ gap: 6 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>{roundName(r, t.rounds, format).toUpperCase()}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>{roundName(r, t.rounds, format, t.matches.find((m) => m.round === r)).toUpperCase()}</Text>
             {t.matches
               .filter((m) => m.round === r)
               .sort((a, b) => a.index - b.index)

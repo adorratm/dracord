@@ -46,8 +46,16 @@ const STATUS_TR: Record<TournamentDto['status'], string> = {
 const gameLabel = (t: Pick<TournamentDto, 'game' | 'externalGameName'>) =>
   t.game === 'external' ? t.externalGameName || 'Harici oyun' : TOURNAMENT_GAME_LABEL[t.game];
 
-const roundName = (r: number, rounds: number, format: TournamentFormat = 'single') =>
-  format === 'round_robin'
+const roundName = (r: number, rounds: number, format: TournamentFormat = 'single', m?: TournamentMatch) =>
+  format === 'double' && m?.bracket
+    ? m.bracket === 'GF1'
+      ? 'Büyük final'
+      : m.bracket === 'GF2'
+        ? 'Rövanş'
+        : m.bracket === 'W'
+          ? `Üst kol ${m.round}`
+          : `Alt kol ${/^l(\d+)/.exec(m.id)?.[1] ?? ''}`
+    : format === 'round_robin'
     ? `${r}. tur`
     : r === rounds
       ? 'Final'
@@ -60,8 +68,8 @@ const roundName = (r: number, rounds: number, format: TournamentFormat = 'single
 /** Oyun → seçilebilir biçimler. 2 kişilik oyunlarda masa yok; okey yalnız masa. */
 export function tournamentFormatsFor(game: TournamentGame): TournamentFormat[] {
   if (game === 'okey') return ['table4'];
-  if (game === 'tavla' || game === 'billiards') return ['single', 'round_robin'];
-  return ['single', 'round_robin', 'table4'];
+  if (game === 'tavla' || game === 'billiards') return ['single', 'double', 'round_robin'];
+  return ['single', 'double', 'round_robin', 'table4'];
 }
 
 /**
@@ -361,7 +369,7 @@ function TournamentDetail({
           meId={meId}
           names={names}
           busy={busy}
-          label={roundName(m.round, t.rounds, format)}
+          label={roundName(m.round, t.rounds, format, m)}
           auto={TOURNAMENT_AUTO_RESULT_GAMES.includes(t.game) ? TOURNAMENT_GAME_LABEL[t.game] : null}
           onReport={(w) => run(() => client.reportTournamentMatch(t.id, m.id, w))}
         />
@@ -520,7 +528,7 @@ function Bracket({
       <div className="flex min-w-max gap-space-md">
         {rounds.map((ms, ri) => (
           <div key={ri} className="flex w-52 flex-col">
-            <h4 className="mb-2 font-label-sm uppercase tracking-wider text-outline">{roundName(ri + 1, t.rounds, format)}</h4>
+            <h4 className="mb-2 font-label-sm uppercase tracking-wider text-outline">{roundName(ri + 1, t.rounds, format, rounds[ri]?.[0])}</h4>
             <div className="flex flex-1 flex-col justify-around gap-2">
               {ms.map((m) => (
                 <div
