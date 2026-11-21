@@ -8,6 +8,7 @@ import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
 import { MusicConfigService } from './music-config.service';
+import { ClientErrorsModule } from '@/client-errors/client-errors.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { MusicConfigService } from './music-config.service';
     SearchModule,
     ModerationModule,
     PlatformModule,
+    ClientErrorsModule,
   ],
   controllers: [PlatformAdminController],
   providers: [PlatformAdminService, PlatformAdminGuard, MusicConfigService],

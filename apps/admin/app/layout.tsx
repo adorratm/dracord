@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { AdminErrorReporter } from '@/components/AdminErrorReporter';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/components/AuthProvider';
 import './globals.css';
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="tr" className={`dark ${inter.variable}`}>
       <body className="font-sans antialiased">
+        <AdminErrorReporter />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

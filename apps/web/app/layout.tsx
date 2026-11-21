@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ErrorReporter } from '@/components/ErrorReporter';
 import { Inter } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
@@ -149,6 +150,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <PreferencesProvider>
             <Analytics />
+            <ErrorReporter />
             <I18nProvider>
               <OnboardingGate>
                 <Suspense fallback={null}>

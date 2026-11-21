@@ -7,6 +7,9 @@ import { AuthProvider, useAuth } from '../lib/auth';
 import { ThemeProvider } from '../lib/theme';
 import { useThemeRevision } from '../lib/theme-revision';
 import { useAppFonts } from '../lib/useAppFonts';
+import { installMobileErrorReporter } from '../lib/errorReporter';
+
+installMobileErrorReporter();
 
 function RootNav() {
   const { ready } = useAuth();

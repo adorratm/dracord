@@ -18,6 +18,7 @@ import { PlatformAuditService } from '@/platform/platform-audit.service';
 import { PlatformAdminGuard } from '@/platform-admin/platform-admin.guard';
 import { PlatformAdminService } from '@/platform-admin/platform-admin.service';
 import { MusicConfigService } from '@/platform-admin/music-config.service';
+import { ClientErrorsService } from '@/client-errors/client-errors.service';
 import { SearchIndexerService } from '@/search/search-indexer.service';
 import { SearchService } from '@/search/search.service';
 import { ElasticsearchService } from '@/search/elasticsearch.service';
@@ -34,7 +35,24 @@ export class PlatformAdminController {
     private readonly hashes: ContentHashService,
     private readonly platformAudit: PlatformAuditService,
     private readonly musicConfig: MusicConfigService,
+    private readonly clientErrors: ClientErrorsService,
   ) {}
+
+  /** İstemci hataları (web/desktop/mobil) */
+  @Get('client-errors')
+  listClientErrors(@Query('platform') platform?: string, @Query('resolved') resolved?: string) {
+    return this.clientErrors.list({ platform, resolved: resolved === undefined || resolved === '' ? undefined : resolved === 'true' });
+  }
+
+  @Patch('client-errors/:id')
+  resolveClientError(@Param('id') id: string, @Body() body: { resolved?: boolean }) {
+    return this.clientErrors.setResolved(id, body?.resolved !== false);
+  }
+
+  @Delete('client-errors/:id')
+  deleteClientError(@Param('id') id: string) {
+    return this.clientErrors.remove(id);
+  }
 
   /** Müzik botu yt-dlp ayarları (proxy + YouTube cookie) — .env'yi ezer */
   @Get('music-config')

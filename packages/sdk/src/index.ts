@@ -2874,3 +2874,4 @@ export { e2eeAvailable, e2eeSafetyNumber, setE2eeRandomSource, type E2eeDecryptR
 export * from './voice-connect';
 export * from './retry';
 export * from '@dracord/types';
+export * from './error-reporter';
