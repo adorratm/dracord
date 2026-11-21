@@ -1,4 +1,4 @@
-import { gameVoiceLevel } from '@dracord/ui';
+import { gameVoiceLevel } from './game-audio';
 import {
   Track,
   VideoPresets,
@@ -12,7 +12,7 @@ import {
   SCREEN_SHARE_VIEW_QUALITY_SPECS,
   softVolumeCurve,
   type ScreenShareViewQualityId,
-} from '@/lib/voice-settings';
+} from './voice-settings';
 
 export type ActiveScreenShare = {
   identity: string;

@@ -20,10 +20,10 @@ export default defineConfig({
       { find: '@/lib/sounds', replacement: path.join(webRoot, 'lib/sounds.ts') },
       { find: '@/lib/watch-party-media', replacement: path.join(webRoot, 'lib/watch-party-media.ts') },
       { find: '@/lib/analytics', replacement: path.join(srcRoot, 'lib/analytics-stub.ts') },
-      { find: '@/lib/voice-settings', replacement: path.join(webRoot, 'lib/voice-settings.ts') },
+      { find: '@/lib/voice-settings', replacement: path.resolve(__dirname, '../../packages/ui/src/voice.ts') },
       {
         find: '@/lib/participant-volumes',
-        replacement: path.join(webRoot, 'lib/participant-volumes.ts'),
+        replacement: path.resolve(__dirname, '../../packages/ui/src/voice.ts'),
       },
       {
         find: '@/lib/nsfw-screen-guard',

@@ -75,7 +75,7 @@ import {
   screenShareSimulcastLayersForHeight,
   setRemoteSourceVolume,
   type ActiveScreenShare,
-} from '../lib/screen-share';
+} from '@dracord/ui/screen-share';
 import {
   ScreenSharePicker,
   type DesktopCaptureSource,

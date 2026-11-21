@@ -16,6 +16,16 @@
       "types": "./src/core.ts",
       "import": "./src/core.ts",
       "default": "./src/core.ts"
+    },
+    "./voice": {
+      "types": "./src/voice.ts",
+      "import": "./src/voice.ts",
+      "default": "./src/voice.ts"
+    },
+    "./screen-share": {
+      "types": "./src/lib/screen-share.ts",
+      "import": "./src/lib/screen-share.ts",
+      "default": "./src/lib/screen-share.ts"
     }
   },
   "scripts": {
@@ -24,6 +34,7 @@
     "lint": "echo ok"
   },
   "peerDependencies": {
+    "livekit-client": "^2.23.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
@@ -38,5 +49,10 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "typescript": "^6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "livekit-client": {
+      "optional": true
+    }
   }
 }

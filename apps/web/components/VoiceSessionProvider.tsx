@@ -1,6 +1,7 @@
 'use client';
 
 import type { VoiceParticipant } from '@dracord/ui';
+import { isScreenShareAudioFailure, listenLevel, setRemoteSourceVolume } from '@dracord/ui/screen-share';
 import {
   gameVoiceLevel,
   onGameFrameChange,
@@ -409,23 +410,7 @@ function ensureRemoteAudioReceiving(room: Room, deafened: boolean) {
   });
 }
 
-function setRemoteSourceVolume(
-  participant: RemoteParticipant,
-  source: Track.Source,
-  level: number,
-) {
-  const pub = participant.getTrackPublication(source);
-  const track = pub?.track as unknown as { setVolume?: (v: number) => void } | undefined;
-  if (track && typeof track.setVolume === 'function') {
-    track.setVolume(level);
-  }
-}
 
-/** Kulaklık + kişi kaydırıcısı → soft-curve dinleme seviyesi */
-function listenLevel(outputVolume: number, personalPct: number): number {
-  // oyun odasında konuşmacılar oyunun altında kalmasın
-  return gameVoiceLevel(softVolumeCurve(outputVolume) * softVolumeCurve(personalPct / 100));
-}
 
 /**
  * LiveKit adaptiveStream, istenen boyuttan küçük görünen elemana göre kaliteyi düşürür.
@@ -576,10 +561,6 @@ function screenShareErrorMessage(err: unknown): string {
   return msg || 'Ekran paylaşımı başarısız';
 }
 
-function isScreenShareAudioFailure(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /could not start audio source|audio source|NotReadableError|AbortError/i.test(msg);
-}
 
 function isIOSWebKit(): boolean {
   if (typeof navigator === 'undefined') return false;
