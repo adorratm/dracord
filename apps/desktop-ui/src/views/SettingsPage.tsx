@@ -23,6 +23,7 @@ import {
   DataExportSection,
   MyBirthdaySettings,
   formatDeletionDate,
+  ShareCodecSettings,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -1894,6 +1895,7 @@ export function SettingsPage({
               }}
             />
           </SettingsSection>
+          <ShareCodecSettings />
           <SettingsSection title="Ekran paylaşımı">
             <SettingsNote>
               Çözünürlük ve FPS kişisel ayardır. Paylaşım sırasında değiştirirsen paylaşım yeniden

@@ -3285,6 +3285,7 @@ export function GuildChannelView({
                   displayName: voice.activeScreenShare.displayName,
                   isLocal: voice.activeScreenShare.isLocal,
                   videoRef: voice.setScreenVideoElement,
+                  getStatsReport: voice.getScreenShareStats,
                 }
               : null
           }

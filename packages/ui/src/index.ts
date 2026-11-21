@@ -324,3 +324,7 @@ export { ensureProfileDecorStyles } from './lib/profile-decor';
 export { Whiteboard, type WhiteboardClient } from './components/Whiteboard';
 export { SubscriptionsPanel, SubscriptionSettings } from './components/GuildSubscriptions';
 export type { SubscriptionsClient } from './components/GuildSubscriptions';
+export { StreamStatsOverlay } from './components/StreamStatsOverlay';
+export { summarizeStats, type StreamStats } from './lib/stream-stats';
+export { SHARE_CODECS, loadShareCodec, saveShareCodec, canSendCodec, shareCodecPublishOptions, type ShareCodec } from './lib/share-codec';
+export { ShareCodecSettings } from './components/ShareCodecSettings';

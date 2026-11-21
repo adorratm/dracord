@@ -1,5 +1,6 @@
 'use client';
 
+import { StreamStatsOverlay } from './StreamStatsOverlay';
 import { RemoteControlSurface } from './RemoteControlSurface';
 import { AnnotationLayer, AnnotationToolbar } from './AnnotationLayer';
 import type { ScreenAnnotationController } from '../lib/use-screen-annotations';
@@ -29,6 +30,8 @@ export interface VoiceStageScreenShare {
   displayName: string;
   isLocal?: boolean;
   videoRef: (el: HTMLVideoElement | null) => void;
+  /** Yayın istatistikleri katmanı için (LiveKit track.getRTCStatsReport) */
+  getStatsReport?: () => Promise<RTCStatsReport | undefined> | undefined;
 }
 
 export interface VoiceStageScreenShareOption {
@@ -608,6 +611,16 @@ export function VoiceStage({
                           </div>
                         </div>
                       )}
+                    {screenShare.getStatsReport ? (
+                      <StreamStatsOverlay
+                        getStatsReport={screenShare.getStatsReport}
+                        className={cn(
+                          'absolute right-space-sm z-[4] transition-opacity duration-300',
+                          shareOptions.length > 1 ? 'top-12' : 'top-space-sm',
+                          inCinema && !cinemaChrome && 'opacity-0 pointer-events-none',
+                        )}
+                      />
+                    ) : null}
                     {/* Sinema letterbox — kendi paylaşımında GPU yeşil/ghost artefaktı yapabiliyor */}
                     {inCinema && !screenShare.isLocal && (
                       <div

@@ -388,6 +388,7 @@ export function VoicePanel({
               displayName: focused.displayName,
               isLocal: focused.isLocal,
               videoRef: (el) => voice.setScreenVideoElement(el),
+              getStatsReport: () => voice.getScreenShareStats(),
             }
           : null
       }

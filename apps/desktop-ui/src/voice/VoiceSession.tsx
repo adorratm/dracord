@@ -34,6 +34,7 @@ import {
   toWindowsVks,
   usePushToTalk,
   useVoiceInputSettings,
+  shareCodecPublishOptions,
 } from '@dracord/ui';
 import { API_URL } from '../config';
 import {
@@ -269,6 +270,8 @@ type VoiceSessionApi = {
   pauseScreenShareView: () => void;
   resumeScreenShareView: () => void;
   setScreenVideoElement: (el: HTMLVideoElement | null) => void;
+  /** Odaktaki ekran paylaşımının WebRTC istatistikleri (istatistik katmanı) */
+  getScreenShareStats: () => Promise<RTCStatsReport | undefined>;
   setScreenShareVolume: (identity: string, volume: number) => void;
   setParticipantVolume: (identity: string, volume: number) => void;
   getParticipantVolume: (identity: string) => number;
@@ -1657,6 +1660,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         maxFramerate: shareCap.frameRate,
       },
       screenShareSimulcastLayers: screenShareSimulcastLayersForHeight(shareCap.height),
+      ...shareCodecPublishOptions(),
       degradationPreference: (preferFps
         ? 'maintain-framerate'
         : 'maintain-resolution') as 'maintain-framerate' | 'maintain-resolution',
@@ -1765,6 +1769,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
     applyScreenShareView(room);
   }, [applyScreenShareView, listScreenShares]);
+
+  const getScreenShareStats = useCallback(async (): Promise<RTCStatsReport | undefined> => {
+    const t = boundShareTrackRef.current as unknown as { getRTCStatsReport?: () => Promise<RTCStatsReport | undefined> } | null;
+    return t?.getRTCStatsReport?.();
+  }, []);
 
   const setScreenVideoElement = useCallback(
     (el: HTMLVideoElement | null) => {
@@ -2087,6 +2096,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       pauseScreenShareView,
       resumeScreenShareView,
       setScreenVideoElement,
+      getScreenShareStats,
       setScreenShareVolume,
       setParticipantVolume,
       getParticipantVolume,
@@ -2157,6 +2167,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       getScreenShareStream,
       setScreenShareVolume,
       setScreenVideoElement,
+      getScreenShareStats,
       setVideoDevice,
       status,
       toggleCamera,

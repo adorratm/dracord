@@ -14,6 +14,7 @@ import {
   loadNoiseEngine,
   usePushToTalk,
   useVoiceInputSettings,
+  shareCodecPublishOptions,
 } from '@dracord/ui';
 import { SocketEvents, connectVoiceWithFallback, voiceUrlCandidates } from '@dracord/sdk';
 import type { VoiceTakeoverPayload } from '@dracord/types';
@@ -130,6 +131,8 @@ interface VoiceSessionValue {
   /** İzlemeye devam et */
   resumeScreenShareView: () => void;
   setScreenVideoElement: (el: HTMLVideoElement | null) => void;
+  /** Odaktaki ekran paylaşımının WebRTC istatistikleri (istatistik katmanı) */
+  getScreenShareStats: () => Promise<RTCStatsReport | undefined>;
   setCameraVideoElement: (identity: string, el: HTMLVideoElement | null) => void;
   participants: VoiceParticipant[];
   participantVolumes: Record<string, number>;
@@ -1279,6 +1282,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const getScreenShareStats = useCallback(async (): Promise<RTCStatsReport | undefined> => {
+    const t = screenTrackRef.current as unknown as { getRTCStatsReport?: () => Promise<RTCStatsReport | undefined> } | null;
+    return t?.getRTCStatsReport?.();
+  }, []);
 
   const setScreenVideoElement = useCallback((el: HTMLVideoElement | null) => {
     const prev = screenVideoElRef.current;
@@ -2615,6 +2623,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         maxFramerate: shareCap.frameRate,
       },
       screenShareSimulcastLayers: screenShareSimulcastLayersForHeight(shareCap.height),
+      ...shareCodecPublishOptions(),
       degradationPreference: 'maintain-resolution' as const,
     };
 
@@ -3214,6 +3223,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       pauseScreenShareView,
       resumeScreenShareView,
       setScreenVideoElement,
+      getScreenShareStats,
       setCameraVideoElement,
       participants,
       participantVolumes,
@@ -3281,6 +3291,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       pauseScreenShareView,
       resumeScreenShareView,
       setScreenVideoElement,
+      getScreenShareStats,
       setCameraVideoElement,
       participants,
       participantVolumes,
