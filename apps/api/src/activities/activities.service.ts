@@ -182,6 +182,8 @@ export class ActivitiesService {
       status: s.status,
       playerIds: s.playerIds ?? [],
       spectatorIds: s.spectatorIds ?? [],
+      readyIds: s.readyIds ?? [],
+      waitForReady: Boolean(s.waitForReady),
       state: s.state ?? {},
       stateVersion: Number.isFinite(s.stateVersion) ? s.stateVersion : 0,
       createdAt: s.createdAt.toISOString(),
@@ -395,6 +397,7 @@ export class ActivitiesService {
   private finalizeAfterLeave(s: ActivitySession, userId: string): boolean {
     s.playerIds = (s.playerIds ?? []).filter((id) => id !== userId);
     s.spectatorIds = (s.spectatorIds ?? []).filter((id) => id !== userId);
+    s.readyIds = (s.readyIds ?? []).filter((id) => id !== userId);
     if (s.hostUserId === userId) {
       s.hostUserId = s.playerIds[0] ?? s.spectatorIds[0] ?? s.hostUserId;
     }
@@ -563,7 +566,9 @@ export class ActivitiesService {
     };
     if (!joinedMap[userId]) joinedMap[userId] = new Date().toISOString();
     s.state = { ...prevState, memberJoinedAt: joinedMap };
-    if (s.status === 'lobby' && s.playerIds.length >= s.minPlayers && s.kind !== 'watch_party') {
+    // izleyiciye geçen oyuncu hazır sayılmaz
+    s.readyIds = (s.readyIds ?? []).filter((id) => s.playerIds.includes(id));
+    if (s.status === 'lobby' && !s.waitForReady && s.playerIds.length >= s.minPlayers && s.kind !== 'watch_party') {
       s.status = 'playing';
     }
     if (s.kind === 'watch_party' && s.status === 'lobby') {
@@ -572,6 +577,63 @@ export class ActivitiesService {
     await this.em.save(s);
     const ch = await this.em.findOne(Channel, { where: { id: s.channelId } });
     await this.publishDracordActivity(userId, s, ch?.name);
+    const dto = this.toDto(s);
+    this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_UPSERT, dto);
+    return dto;
+  }
+
+  /** Lobi: hazırım / değilim. waitForReady açıksa ve herkes hazırsa oyun başlar. */
+  async setReady(sessionId: string, userId: string, ready: boolean): Promise<ActivitySessionDto> {
+    const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
+    if (!s || s.status === 'ended') throw new NotFoundException('Oturum yok');
+    if (!(s.playerIds ?? []).includes(userId)) throw new ForbiddenException('Yalnız oyuncular hazır olabilir');
+    const set = new Set(s.readyIds ?? []);
+    if (ready) set.add(userId);
+    else set.delete(userId);
+    s.readyIds = [...set].filter((id) => s.playerIds.includes(id));
+    this.maybeStartFromLobby(s);
+    await this.em.save(s);
+    return this.emitUpsert(s);
+  }
+
+  /** Lobi ayarı (host): oyun herkes hazır olana kadar beklesin mi */
+  async setLobbyMode(sessionId: string, userId: string, waitForReady: boolean): Promise<ActivitySessionDto> {
+    const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
+    if (!s || s.status === 'ended') throw new NotFoundException('Oturum yok');
+    if (s.hostUserId !== userId) throw new ForbiddenException('Yalnız oda sahibi');
+    if (s.kind === 'watch_party') throw new BadRequestException('Birlikte izlemede lobi yok');
+    if (s.status !== 'lobby' && waitForReady) throw new BadRequestException('Oyun başladı');
+    s.waitForReady = waitForReady;
+    this.maybeStartFromLobby(s);
+    await this.em.save(s);
+    return this.emitUpsert(s);
+  }
+
+  /** Host: lobiden oyunu başlat (en az oyuncu sayısı sağlanmalı) */
+  async startFromLobby(sessionId: string, userId: string): Promise<ActivitySessionDto> {
+    const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
+    if (!s || s.status === 'ended') throw new NotFoundException('Oturum yok');
+    if (s.hostUserId !== userId) throw new ForbiddenException('Yalnız oda sahibi');
+    if (s.status !== 'lobby') return this.toDto(s);
+    if ((s.playerIds ?? []).length < s.minPlayers) throw new BadRequestException(`En az ${s.minPlayers} oyuncu gerekli`);
+    s.status = 'playing';
+    await this.em.save(s);
+    return this.emitUpsert(s);
+  }
+
+  private maybeStartFromLobby(s: ActivitySession) {
+    if (s.status !== 'lobby' || s.kind === 'watch_party') return;
+    const players = s.playerIds ?? [];
+    if (players.length < s.minPlayers) return;
+    if (!s.waitForReady) {
+      s.status = 'playing';
+      return;
+    }
+    const ready = new Set(s.readyIds ?? []);
+    if (players.every((p) => ready.has(p))) s.status = 'playing';
+  }
+
+  private emitUpsert(s: ActivitySession): ActivitySessionDto {
     const dto = this.toDto(s);
     this.broadcast.emitToChannel(s.channelId, SocketEvents.ACTIVITY_UPSERT, dto);
     return dto;
@@ -670,7 +732,7 @@ export class ActivitiesService {
       clean,
     );
     s.stateVersion = activityNextVersion(currentVersion);
-    if (s.status === 'lobby' && s.kind !== 'watch_party') {
+    if (s.status === 'lobby' && s.kind !== 'watch_party' && !s.waitForReady) {
       s.status = 'playing';
     }
     await this.em.save(s);

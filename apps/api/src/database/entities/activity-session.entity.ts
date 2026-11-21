@@ -54,6 +54,14 @@ export class ActivitySession extends CuidEntity {
   @Column({ type: 'jsonb', default: {} })
   state!: Record<string, unknown>;
 
+  /** Lobi: "hazırım" diyen oyuncular */
+  @Column({ type: 'jsonb', default: [] })
+  readyIds!: string[];
+
+  /** Lobi: host herkes hazır olana / Başlat'a basana kadar oyunu bekletir */
+  @Column({ type: 'boolean', default: false })
+  waitForReady!: boolean;
+
   /** Optimistic concurrency — patch CAS */
   @Column({ type: 'int', default: 0 })
   stateVersion!: number;

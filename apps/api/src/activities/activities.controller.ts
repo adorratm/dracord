@@ -46,6 +46,21 @@ export class ActivitiesController {
     return this.activities.join(id, req.user.sub, Boolean(body?.spectator));
   }
 
+  @Post(':id/ready')
+  ready(@Req() req: { user: { sub: string } }, @Param('id') id: string, @Body() body: { ready?: boolean }) {
+    return this.activities.setReady(id, req.user.sub, body?.ready !== false);
+  }
+
+  @Post(':id/lobby')
+  lobby(@Req() req: { user: { sub: string } }, @Param('id') id: string, @Body() body: { waitForReady?: boolean }) {
+    return this.activities.setLobbyMode(id, req.user.sub, Boolean(body?.waitForReady));
+  }
+
+  @Post(':id/start')
+  startLobby(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+    return this.activities.startFromLobby(id, req.user.sub);
+  }
+
   @Post(':id/leave')
   leave(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
     return this.activities.leave(id, req.user.sub);

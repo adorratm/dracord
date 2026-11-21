@@ -2576,6 +2576,21 @@ export class DracordClient {
     });
   }
 
+  /** Oyun odası lobisi: hazırım / değilim */
+  async setActivityReady(sessionId: string, ready: boolean): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request(`/activities/${sessionId}/ready`, { method: 'POST', body: JSON.stringify({ ready }) });
+  }
+
+  /** Lobi (host): herkes hazır olana kadar bekle */
+  async setActivityLobbyMode(sessionId: string, waitForReady: boolean): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request(`/activities/${sessionId}/lobby`, { method: 'POST', body: JSON.stringify({ waitForReady }) });
+  }
+
+  /** Lobi (host): oyunu başlat */
+  async startActivityFromLobby(sessionId: string): Promise<import('@dracord/types').ActivitySessionDto> {
+    return this.request(`/activities/${sessionId}/start`, { method: 'POST' });
+  }
+
   async joinActivity(
     id: string,
     spectator = false,

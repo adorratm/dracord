@@ -17,7 +17,7 @@ import { WatchPartyRoom } from '@/components/activities/games/WatchPartyRoom';
 import { GameAudio } from '@/lib/game-audio';
 import { ActivityStageShell } from '@/components/activities/ActivityStageShell';
 import { trackGameJoin } from '@/lib/analytics';
-import { AppGameRoom } from '@dracord/ui';
+import { ActivityLobby, AppGameRoom } from '@dracord/ui';
 import type { ReactNode } from 'react';
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -651,7 +651,27 @@ function BuiltinActivityChannelView({
               />
             )}
 
-            {waiting && (
+            {session.status === 'lobby' && session.kind !== 'watch_party' && isMember ? (
+              <div
+                className={
+                  session.waitForReady
+                    ? 'absolute inset-0 z-20 flex items-center justify-center bg-[#11131e]/70 px-4 backdrop-blur-sm'
+                    : 'pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center px-4'
+                }
+              >
+                <ActivityLobby
+                  className="pointer-events-auto"
+                  session={session}
+                  meId={me ?? null}
+                  names={nameByUserId}
+                  inviteUrl={`${typeof window !== 'undefined' ? window.location.origin : 'https://dracord.com.tr'}/channels/${session.guildId}/${session.channelId}`}
+                  onReady={(r) => client.setActivityReady(session.id, r).then(setSession)}
+                  onWaitForReady={(w) => client.setActivityLobbyMode(session.id, w).then(setSession)}
+                  onStart={() => client.startActivityFromLobby(session.id).then(setSession)}
+                />
+              </div>
+            ) : null}
+            {waiting && !isMember && (
               <div className="pointer-events-none absolute inset-x-0 top-14 flex justify-center px-4">
                 <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-xl border border-[#bd93f9]/40 bg-[#11131e]/90 px-4 py-2 shadow-lg">
                   <span className="font-label-sm text-on-surface">

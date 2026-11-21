@@ -1027,6 +1027,10 @@ export interface ActivitySessionDto {
   status: ActivityStatus;
   playerIds: string[];
   spectatorIds: string[];
+  /** Lobi: hazır olan oyuncular */
+  readyIds?: string[];
+  /** Lobi: oyun herkes hazır olana / host başlatana kadar bekler */
+  waitForReady?: boolean;
   state: Record<string, unknown>;
   /** Optimistic concurrency — her başarılı state patch’te +1 (eski istemciler yok sayabilir) */
   stateVersion?: number;

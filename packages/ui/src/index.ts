@@ -328,3 +328,4 @@ export { StreamStatsOverlay } from './components/StreamStatsOverlay';
 export { summarizeStats, type StreamStats } from './lib/stream-stats';
 export { SHARE_CODECS, loadShareCodec, saveShareCodec, canSendCodec, shareCodecPublishOptions, type ShareCodec } from './lib/share-codec';
 export { ShareCodecSettings } from './components/ShareCodecSettings';
+export { ActivityLobby } from './components/ActivityLobby';

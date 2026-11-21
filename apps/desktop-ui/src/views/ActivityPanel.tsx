@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityKind, ActivitySessionDto, ChannelSummary, PublicUser } from '@dracord/types';
 import { DRACORD_BOT_USER_ID } from '@dracord/types';
 import { getActivityConflictSession, SocketEvents } from '@dracord/sdk';
-import { MemberList, type MemberListGroup } from '@dracord/ui';
+import { ActivityLobby, MemberList, type MemberListGroup } from '@dracord/ui';
 import { BilliardsGame } from '../../../web/components/activities/games/BilliardsGame';
 import { BlackjackGame } from '../../../web/components/activities/games/BlackjackGame';
 import { BowlingGame } from '../../../web/components/activities/games/BowlingGame';
@@ -593,6 +593,26 @@ export function ActivityPanel({
           </div>
         ) : (
           <>
+            {session.status === 'lobby' && session.kind !== 'watch_party' && isMember ? (
+              <div
+                className={
+                  session.waitForReady
+                    ? 'absolute inset-0 z-20 flex items-center justify-center bg-[#11131e]/70 px-4 backdrop-blur-sm'
+                    : 'pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4'
+                }
+              >
+                <ActivityLobby
+                  className="pointer-events-auto"
+                  session={session}
+                  meId={me ?? null}
+                  names={nameByUserId}
+                  inviteUrl={`https://dracord.com.tr/channels/${session.guildId}/${session.channelId}`}
+                  onReady={(r) => client.setActivityReady(session.id, r).then(setSession)}
+                  onWaitForReady={(w) => client.setActivityLobbyMode(session.id, w).then(setSession)}
+                  onStart={() => client.startActivityFromLobby(session.id).then(setSession)}
+                />
+              </div>
+            ) : null}
             {session.kind === 'billiards' && me && (
               <BilliardsGame
                 key={session.id}
