@@ -601,7 +601,7 @@ export function ChatPanel({
         {!hideHeader && (
           <header className="@container h-12 shrink-0 border-b border-outline-variant flex items-center gap-2 px-4">
             <span className="material-symbols-outlined text-on-surface-variant text-[22px]">tag</span>
-            <strong className="font-headline-md text-headline-md truncate">
+            <strong className="font-headline-md text-headline-md truncate min-w-0">
               {titleOverride ?? channel.name}
             </strong>
             {channel.topic && (
@@ -627,7 +627,7 @@ export function ChatPanel({
             )}
             <button
               type="button"
-              className="hidden @xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
               aria-label="Medya galerisi"
               title="Görseller, videolar ve dosyalar"
               onClick={() => setGalleryOpen(true)}
@@ -636,7 +636,7 @@ export function ChatPanel({
             </button>
             <button
               type="button"
-              className="hidden @xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
               aria-label="Beyaz tahta"
               title="Ortak beyaz tahta"
               onClick={() => setBoardOpen(true)}
@@ -679,14 +679,14 @@ export function ChatPanel({
               <span className="material-symbols-outlined text-[18px]">search</span>
             </button>
             {channel.isAnnouncement ? (
-              <span className="hidden @xl:inline-flex">
+              <span className="hidden @3xl:inline-flex">
                 <AnnouncementFollowButton client={client} channel={channel} guilds={followGuilds} />
               </span>
             ) : null}
             <button
               type="button"
               aria-label="Sabitlenen mesajlar"
-              className="hidden @xl:flex h-8 px-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface items-center gap-1 text-sm"
+              className="hidden @3xl:flex h-8 px-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface items-center gap-1 text-sm"
               onClick={() => {
                 setPinsOpen(true);
                 void client.listPinnedMessages(channel.id).then(setPins).catch(() => setPins([]));
@@ -697,7 +697,7 @@ export function ChatPanel({
             </button>
             <button
               type="button"
-              className="hidden @xl:flex h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface items-center justify-center"
+              className="hidden @3xl:flex h-8 w-8 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface items-center justify-center"
               aria-label="Son threadler"
               title="Son threadler"
               onClick={() => openThreadsPreview()}
@@ -705,7 +705,7 @@ export function ChatPanel({
               <span className="material-symbols-outlined text-[18px]">forum</span>
             </button>
             <HeaderOverflowMenu
-              className="@xl:hidden"
+              className="@3xl:hidden"
               items={[
                 {
                   id: 'pins',

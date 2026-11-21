@@ -3505,7 +3505,7 @@ export function GuildChannelView({
         </div>
       ) : (
         <div className="flex flex-1 min-w-0 min-h-0 flex-col bg-surface">
-          <header className="h-12 px-space-md flex items-center gap-space-sm border-b border-surface-container-high shadow-bar shrink-0">
+          <header className="@container h-12 px-space-md flex items-center gap-space-sm border-b border-surface-container-high shadow-bar shrink-0">
             <button
               type="button"
               className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
@@ -3523,7 +3523,7 @@ export function GuildChannelView({
             >
               {isForumView ? 'forum' : '#'}
             </span>
-            <span className="font-headline-md text-headline-md text-on-surface truncate">
+            <span className="font-headline-md text-headline-md text-on-surface truncate min-w-0">
               {channel?.name ?? 'kanal'}
             </span>
             {isForumView && (
@@ -3613,7 +3613,7 @@ export function GuildChannelView({
             </button>
             <button
               type="button"
-              className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
               aria-label="Sabitlenen mesajlar"
               onClick={() => setPinsOpen((v) => !v)}
             >
@@ -3623,7 +3623,7 @@ export function GuildChannelView({
               <>
                 <button
                   type="button"
-                  className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                   aria-label="Medya galerisi"
                   title="Görseller, videolar ve dosyalar"
                   onClick={() => setGalleryOpen(true)}
@@ -3632,7 +3632,7 @@ export function GuildChannelView({
                 </button>
                 <button
                   type="button"
-                  className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                   aria-label="Beyaz tahta"
                   title="Ortak beyaz tahta"
                   onClick={() => setBoardOpen(true)}
@@ -3644,7 +3644,7 @@ export function GuildChannelView({
             {!isForumView && (
               <button
                 type="button"
-                className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                 aria-label="Son threadler"
                 title="Son threadler (@threads)"
                 onClick={() => openThreadsPreview()}
@@ -3653,12 +3653,12 @@ export function GuildChannelView({
               </button>
             )}
             {channel?.isAnnouncement ? (
-              <span className="hidden sm:inline-flex">
+              <span className="hidden @3xl:inline-flex">
                 <AnnouncementFollowButton client={client} channel={channel} guilds={guilds.map((g) => ({ id: g.id, name: g.name }))} />
               </span>
             ) : null}
             <HeaderOverflowMenu
-              className="sm:hidden"
+              className="@3xl:hidden"
               items={[
                 { id: 'pins', icon: 'push_pin', label: 'Sabitlenenler', badge: pinCount || null, onClick: () => setPinsOpen(true) },
                 ...(channel && !isForumView ? [{ id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) }] : []),
@@ -3670,7 +3670,7 @@ export function GuildChannelView({
             {channel && canManageChannels && (
               <button
                 type="button"
-                className="hidden sm:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
                 aria-label="Kanalı düzenle"
                 onClick={() => openEditChannel(channel)}
               >
