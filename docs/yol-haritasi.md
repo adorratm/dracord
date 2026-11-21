@@ -95,8 +95,8 @@ Manuel: %150 ölçekli ekranda tık konumu · pencere paylaşımı · Ctrl+C/V �
 - [ ] **E2E smoke:** Playwright (web) + Windows desktop E2E — giriş, mesaj, ses, ekran paylaşımı, uzak kontrol.
 - [ ] **Erişilebilirlik/kontrast taraması:** tüm ekranlar koyu+açık tema (`ui-ux-pro-max`, `frontend-a11y`).
 - [ ] **Hata görünürlüğü:** istemci hata raporlama (Sentry/GlitchTip self-host) `(?)`
-- [ ] Repo temizliği: `apps/desktop/_tts-smoke*.js`, `tts-log*.txt`, `sync-test.txt`, kökteki
-  `youtube-cookies.*` (gitignore'da ama kökte duruyor) gözden geçir.
+- [x] Repo temizliği: test dosyaları kaldırıldı (`tts-smoke.mp3` son kalan); cookie dosyaları gitignore'da,
+  artık panelden giriliyor (Yönetim › Müzik botu).
 
 ---
 
@@ -302,9 +302,9 @@ Onaylı oyunun **adı veya adresi** değişirse otomatik yeniden incelemeye dü�
 - Admin: **Oyunlar** sayfası (sekmeler, kontrol listesi, sandbox önizleme, onay/red/askı + gerekçe).
 - Mintlify: `docs/mintlify/games/*` — genel bakış, hızlı başlangıç, SDK, doğrulama, çok oyunculu (COOMBIE örneği),
   mobil, yayın kuralları. Root `docs/docs.json` nav + `/games/*` yönlendirmeleri. `yarn docs:check` geçiyor.
-- [ ] `@dracord/embedded-sdk` npm publish (bot-sdk gibi workflow; NPM_TOKEN ile manuel).
-- [ ] OpenAPI'ye `/v1/games/verify` ekle.
-- [ ] COOMBIE'ye `connectFromDracord` entegrasyonu (oyun reposunda).
+- [x] `@dracord/embedded-sdk` npm publish (`publish-embedded-sdk.yml`, NPM_TOKEN ile manuel).
+- [x] OpenAPI'ye `/v1/games/verify` eklendi.
+- [x] COOMBIE'ye `connectFromDracord` entegrasyonu (oyun reposunda).
 
 ### Test listesi (C1)
 - [ ] Ayarlar → Gelişmiş → Oyunlarım → Yeni oyun (`http://localhost:5173`) → anahtar bir kez görünür.
