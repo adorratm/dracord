@@ -81,10 +81,23 @@ import {
 } from '@/lib/voice-settings';
 import { MusicPlayerBar } from '@/components/MusicPlayerBar';
 import { PinnedMessageBar } from '@/components/PinnedMessageBar';
-import { ActivityChannelView } from '@/components/activities/ActivityChannelView';
+import dynamic from 'next/dynamic';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
 import { AnnouncementFollowButton, ChannelExtrasSettings, MediaGalleryModal, GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
+
+// Oyun/etkinlik görünümü (three.js vb.) ayrı parçada — kanal sayfası daha hızlı açılır
+const ActivityChannelView = dynamic(
+  () => import('@/components/activities/ActivityChannelView').then((m) => m.ActivityChannelView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-1 items-center justify-center text-on-surface-variant" role="status">
+        <span className="material-symbols-outlined animate-spin text-[28px]">progress_activity</span>
+      </div>
+    ),
+  },
+);
 
 interface GuildChannelViewProps {
   guildId: string;

@@ -35,7 +35,7 @@ export default defineConfig({
     { name: 'public', testMatch: /public\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
     {
       name: 'signed-in',
-      testMatch: /(chat|resilience)\.spec\.ts/,
+      testMatch: /(chat|resilience|a11y\.app)\.spec\.ts/,
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'], storageState: '.auth/state.json', permissions: ['clipboard-read', 'clipboard-write'] },
     },

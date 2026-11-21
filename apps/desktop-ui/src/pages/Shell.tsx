@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import type {
   CategoryDto,
   ChannelSummary,
@@ -47,19 +47,15 @@ import { readGuildLastChannel, readLastChannel, rememberChannel } from '../lib/l
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from '../views/ChatPanel';
 import { VoicePanel } from '../views/VoicePanel';
-import { ActivityPanel } from '../views/ActivityPanel';
 import { AppGamePanel } from '../views/AppGamePanel';
 import { ActivitiesPicker } from '../views/ActivitiesPicker';
 import { DmPanel } from '../views/DmPanel';
 import { DmSidebar } from '../views/DmSidebar';
 import { AppTour } from '../components/AppTour';
 import { DracoEmpty } from '../components/Draco';
-import { DiscoverPage } from '../views/DiscoverPage';
-import { SettingsPage } from '../views/SettingsPage';
 import { FriendsHubView } from '../views/FriendsHub';
 import { SearchOverlay } from '../views/SearchOverlay';
 import { NotificationsPanel } from '../views/NotificationsPanel';
-import { GuildSettingsPage } from '../views/GuildSettingsPage';
 import { GuildEventsModal } from '../views/GuildEventsModal';
 import { useDesktopGamePresence } from '../hooks/useDesktopGamePresence';
 import { useDesktopOverlayBridge } from '../hooks/useDesktopOverlayBridge';
@@ -70,6 +66,48 @@ import { UpdateBanner } from '../components/UpdateBanner';
 import { ClipEditorHost } from '../components/ClipEditor';
 import { StandaloneClipChip } from '../components/StandaloneClipChip';
 import { AccountDeletionBanner, ChannelExtrasSettings, GuildOnboardingModal, VoiceSummonPrompt } from '@dracord/ui';
+
+// Ağır görünümler ayrı parçada (açılış süresi / bundle diyeti) — ilk açılışta yüklenir
+const ActivityPanelLazy = lazy(() => import('../views/ActivityPanel').then((m) => ({ default: m.ActivityPanel })));
+function ActivityPanel(props: ComponentProps<typeof ActivityPanelLazy>) {
+  return (
+    <Suspense fallback={<ViewLoading />}>
+      <ActivityPanelLazy {...props} />
+    </Suspense>
+  );
+}
+const DiscoverPageLazy = lazy(() => import('../views/DiscoverPage').then((m) => ({ default: m.DiscoverPage })));
+function DiscoverPage(props: ComponentProps<typeof DiscoverPageLazy>) {
+  return (
+    <Suspense fallback={<ViewLoading />}>
+      <DiscoverPageLazy {...props} />
+    </Suspense>
+  );
+}
+const SettingsPageLazy = lazy(() => import('../views/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+function SettingsPage(props: ComponentProps<typeof SettingsPageLazy>) {
+  return (
+    <Suspense fallback={<ViewLoading />}>
+      <SettingsPageLazy {...props} />
+    </Suspense>
+  );
+}
+const GuildSettingsPageLazy = lazy(() => import('../views/GuildSettingsPage').then((m) => ({ default: m.GuildSettingsPage })));
+function GuildSettingsPage(props: ComponentProps<typeof GuildSettingsPageLazy>) {
+  return (
+    <Suspense fallback={<ViewLoading />}>
+      <GuildSettingsPageLazy {...props} />
+    </Suspense>
+  );
+}
+function ViewLoading() {
+  return (
+    <div className="flex flex-1 items-center justify-center text-on-surface-variant" role="status">
+      <span className="material-symbols-outlined animate-spin text-[28px]">progress_activity</span>
+    </div>
+  );
+}
+
 
 type View =
   | { kind: 'home' }

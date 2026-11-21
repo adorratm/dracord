@@ -1,0 +1,57 @@
+name: Desktop E2E
+
+# Masaüstü uygulamasını paketlemeden açıp giriş ekranını, köprüyü (preload) ve sürümü doğrular.
+# Masaüstü sürümü çıktıktan sonra ve elle çalışır; sürümü engellemez.
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Desktop release']
+    types: [completed]
+
+concurrency:
+  group: desktop-e2e
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable Corepack
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+          cache-dependency-path: yarn.lock
+      - name: Install
+        run: yarn install --immutable
+      - name: Build UI
+        shell: bash
+        run: |
+          yarn workspace @dracord/desktop-ui build
+          node apps/desktop/scripts/copy-ui.js
+      - name: Electron E2E (Windows)
+        if: runner.os == 'Windows'
+        run: yarn workspace @dracord/e2e test:desktop
+        env:
+          CI: '1'
+      - name: Electron E2E (Linux, Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a yarn workspace @dracord/e2e test:desktop
+        env:
+          CI: '1'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: desktop-e2e-${{ matrix.os }}
+          path: |
+            apps/e2e/playwright-report-desktop
+            apps/e2e/test-results
+          retention-days: 7

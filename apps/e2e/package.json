@@ -7,7 +7,8 @@
     "install-browsers": "playwright install chromium",
     "test": "playwright test",
     "test:public": "playwright test --project=public",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "test:desktop": "playwright test -c playwright.desktop.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
