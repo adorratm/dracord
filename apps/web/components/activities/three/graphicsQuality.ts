@@ -72,6 +72,7 @@ export function graphicsProfile(q: GraphicsQuality = getGraphicsQuality()): Grap
     case 'ultra':
       return { maxDpr: deviceMax, minDpr: deviceMax, shadowMap: 4096, antialias: true, adaptive: false };
     default:
-      return { maxDpr: deviceMax, minDpr: 1, shadowMap: touch ? 2048 : 2048, antialias: true, adaptive: true };
+      // Telefonda 2x'in altına inme: uzaktaki masa/taşlar pikselleşiyordu
+      return { maxDpr: deviceMax, minDpr: Math.min(deviceMax, touch ? 2 : 1.25), shadowMap: 2048, antialias: true, adaptive: true };
   }
 }

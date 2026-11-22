@@ -143,7 +143,9 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
       };
       offQuality = onGraphicsQualityChange(applyProfile);
 
-      // Dinamik çözünürlük (Otomatik): ~2 sn ortalama < 40 fps → %15 düşür; > 57 fps 4 sn → geri çık
+      // Dinamik çözünürlük (Otomatik): ilk 6 sn (sahne yüklenirken takılır) sayılmaz; ~2 sn ortalama
+      // < 30 fps → %15 düşür; ≥ 50 fps 4 sn → geri çık (mobil WebView çoğu zaman 60'a kilitli değil)
+      const warmUntil = performance.now() + 6000;
       let last = performance.now();
       let acc = 0;
       let frames = 0;
@@ -160,13 +162,13 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
           const fps = (frames * 1000) / acc;
           acc = 0;
           frames = 0;
-          if (!profile.adaptive || document.hidden) return;
-          if (fps < 40 && dpr > profile.minDpr) {
+          if (!profile.adaptive || document.hidden || now < warmUntil) return;
+          if (fps < 30 && dpr > profile.minDpr) {
             dpr = Math.max(profile.minDpr, Math.round(dpr * 0.85 * 100) / 100);
             renderer.setPixelRatio(dpr);
             onResize();
             goodFor = 0;
-          } else if (fps > 57 && dpr < profile.maxDpr) {
+          } else if (fps >= 50 && dpr < profile.maxDpr) {
             goodFor += 2;
             if (goodFor >= 4) {
               dpr = Math.min(profile.maxDpr, Math.round((dpr + 0.25) * 100) / 100);

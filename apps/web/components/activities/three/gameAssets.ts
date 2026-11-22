@@ -2,6 +2,7 @@
  * Yüksek kaliteli prosedürel oyun asset’leri (PBR).
  * Harici GLB bağımlılığı yok — Three.js MeshPhysicalMaterial + canvas map.
  */
+import { getGraphicsQuality } from './graphicsQuality';
 import type {
   Group,
   Material,
@@ -36,6 +37,15 @@ function bag(): AssetBag {
   };
 }
 
+function textureScale(): number {
+  try {
+    if (getGraphicsQuality() === 'low') return 1;
+    return (window.devicePixelRatio || 1) >= 2 ? 2 : 1;
+  } catch {
+    return 1;
+  }
+}
+
 function canvasTex(
   THREE: Three,
   w: number,
@@ -43,10 +53,15 @@ function canvasTex(
   paint: (ctx: CanvasRenderingContext2D, w: number, h: number) => void,
   bagRef: AssetBag,
 ): Texture {
+  // Yüksek yoğunluklu ekranlarda (telefon) dokuyu 2x çiz: taş/kart yazıları ve çizgiler keskin kalsın.
+  // paint() aynı mantıksal boyutu görür (ctx ölçeklenir); büyük dokular (>512²) büyütülmez.
+  const s = w * h <= 512 * 512 ? textureScale() : 1;
   const cv = document.createElement('canvas');
-  cv.width = w;
-  cv.height = h;
-  paint(cv.getContext('2d')!, w, h);
+  cv.width = Math.round(w * s);
+  cv.height = Math.round(h * s);
+  const ctx = cv.getContext('2d')!;
+  if (s !== 1) ctx.scale(s, s);
+  paint(ctx, w, h);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;

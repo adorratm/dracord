@@ -15,10 +15,8 @@ import { GRAPHICS_LABEL, GRAPHICS_ORDER, getGraphicsQuality, setGraphicsQuality,
 export function GameSoundControls({ className }: { className?: string }) {
   const [muted, setMuted] = useState(false);
   const [vol, setVol] = useState(85);
-  const [gfx, setGfx] = useState<GraphicsQuality>('auto');
 
   useEffect(() => {
-    setGfx(getGraphicsQuality());
     setMuted(isGameAudioMuted());
     setVol(Math.round(getGameAudioVolume() * 100));
   }, []);
@@ -82,20 +80,32 @@ export function GameSoundControls({ className }: { className?: string }) {
       <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-[#f8f8f2]/70">
         {muted ? 'Kapalı' : `${vol}%`}
       </span>
-      <button
-        type="button"
-        onClick={() => {
-          const next = GRAPHICS_ORDER[(GRAPHICS_ORDER.indexOf(gfx) + 1) % GRAPHICS_ORDER.length]!;
-          setGraphicsQuality(next);
-          setGfx(next);
-        }}
-        title={`Grafik kalitesi: ${GRAPHICS_LABEL[gfx]} (değiştirmek için dokun)`}
-        aria-label={`Grafik kalitesi: ${GRAPHICS_LABEL[gfx]}`}
-        className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[#bd93f9]/15 px-2 text-[11px] font-semibold text-[#bd93f9] hover:bg-[#bd93f9]/25"
-      >
-        <span className="material-symbols-outlined text-[18px]">high_quality</span>
-        {GRAPHICS_LABEL[gfx]}
-      </button>
+
     </div>
+  );
+}
+
+/** Grafik kalitesi: Otomatik → Yüksek → Ultra → Düşük (dokununca değişir) */
+export function GraphicsQualityButton({ className }: { className?: string }) {
+  const [gfx, setGfx] = useState<GraphicsQuality>('auto');
+  useEffect(() => setGfx(getGraphicsQuality()), []);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const next = GRAPHICS_ORDER[(GRAPHICS_ORDER.indexOf(gfx) + 1) % GRAPHICS_ORDER.length]!;
+        setGraphicsQuality(next);
+        setGfx(next);
+      }}
+      title={`Grafik kalitesi: ${GRAPHICS_LABEL[gfx]} (değiştirmek için dokun)`}
+      aria-label={`Grafik kalitesi: ${GRAPHICS_LABEL[gfx]}`}
+      className={cn(
+        'pointer-events-auto flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[#bd93f9]/15 px-2 text-[11px] font-semibold text-[#bd93f9] hover:bg-[#bd93f9]/25',
+        className,
+      )}
+    >
+      <span className="material-symbols-outlined text-[18px]">high_quality</span>
+      {GRAPHICS_LABEL[gfx]}
+    </button>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { GraphicsQualityButton } from './GameSoundControls';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@dracord/ui';
 import {
@@ -105,6 +106,7 @@ export function GameHud({
           </div>
 
           <div className="pointer-events-auto flex shrink-0 items-start gap-1">
+            <GraphicsQualityButton className="h-8 border border-[#bd93f9]/35 bg-[#11131e]/88 shadow backdrop-blur-md sm:h-9" />
             {showFullscreenButton ? (
               <button
                 type="button"
