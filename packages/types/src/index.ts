@@ -401,6 +401,10 @@ export interface UserShowcaseDto {
   badge: GuildBadgeDto | null;
   /** O sunucudaki seviye (varsa) */
   level: number | null;
+  /** Oyun istatistikleri (en çok oynanan önce) */
+  games?: Array<{ kind: string; played: number; wins: number }>;
+  /** Kazanılan turnuva sayısı */
+  tournamentWins?: number;
 }
 
 // ── Sunucu tanıtım sayfası + özel URL (B3) ──

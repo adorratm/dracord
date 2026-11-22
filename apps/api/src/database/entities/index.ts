@@ -71,3 +71,4 @@ export type {
 } from './slash-command.entity';
 export { GuildSubscription, GuildSubscriptionCode, GuildSubscriptionTier } from './guild-subscription.entity';
 export { ClientError } from './client-error.entity';
+export { GameResult } from './game-result.entity';

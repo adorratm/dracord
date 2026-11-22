@@ -117,8 +117,8 @@ farklı bir taşıma katmanı ister.
   yönetir; Dracord kimlik (kısa ömürlü oyun token'ı), oda, davet ve ses kanalını sağlar.
   Aynı sunucu Steam sürümüne de hizmet eder.
 - [ ] **Girdi soyutlama:** klavye/fare, gamepad, mobil sanal joystick — oyun SDK'dan alır.
-- [ ] **Profilde oyun:** "COOMBIE oynuyor" durumu, başarımlar, skor tablosu (sunucu bazlı).
-- [ ] **Mobil performans profili:** three.js için düşük kalite modu, pil/ısı sınırı.
+- [x] **Profilde oyun:** profil kartında oyun başına galibiyet/oyun ve turnuva zaferleri ("oynuyor" durumu zaten var). Başarımlar/sunucu skor tablosu açık.
+- [x] **Mobil performans profili:** oyun HUD'unda grafik kalitesi (Otomatik dinamik çözünürlük / Yüksek / Ultra / Düşük), telefonda 3x DPR, en yüksek anizotropi, Android GPU katmanı.
 
 ### COOMBIE oyun içi notlar (oyun tarafında yapılacak — şimdilik park)
 - Boss'lar ve özel yetenekleri yok.

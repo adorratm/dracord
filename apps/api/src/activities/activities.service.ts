@@ -5,6 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { GameResult } from '@/database/entities/game-result.entity';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager } from 'typeorm';
 import {
@@ -582,6 +584,18 @@ export class ActivitiesService {
     return dto;
   }
 
+  /** Profil istatistiği: oyun bitti → oyuncu başına sonuç (oturum başına bir kez) */
+  private async recordResult(s: ActivitySession, players: string[], winner: string) {
+    if (players.length < 2) return;
+    await this.em
+      .createQueryBuilder()
+      .insert()
+      .into(GameResult)
+      .values(players.map((uid) => ({ id: `gr${createHash('sha1').update(`${s.id}:${uid}`).digest('hex').slice(0, 22)}`, userId: uid, kind: s.kind, sessionId: s.id, guildId: s.guildId ?? null, won: uid === winner })))
+      .orIgnore()
+      .execute();
+  }
+
   /** Lobi: hazırım / değilim. waitForReady açıksa ve herkes hazırsa oyun başlar. */
   async setReady(sessionId: string, userId: string, ready: boolean): Promise<ActivitySessionDto> {
     const s = await this.em.findOne(ActivitySession, { where: { id: sessionId } });
@@ -745,6 +759,7 @@ export class ActivitiesService {
       const winner = activityWinner(s.kind, s.state as Record<string, unknown>, players);
       if (winner && winner !== activityWinner(s.kind, prev, players)) {
         void this.tournaments.reportFromGame(s.guildId, s.kind, players, winner).catch(() => undefined);
+        void this.recordResult(s, players, winner).catch(() => undefined);
       }
     }
     return dto;

@@ -19,6 +19,16 @@ import { GuildBadgeChip, useUserShowcase } from './GuildBadge';
 import { openActivityUrl } from '../lib/open-activity-url';
 import { presenceLabelTr } from '../lib/presence';
 
+const GAME_LABEL: Record<string, string> = {
+  billiards: '🎱 Bilardo',
+  okey: '🀄 Okey',
+  bowling: '🎳 Bowling',
+  tavla: '🎲 Tavla',
+  blackjack: '🃏 Blackjack',
+  trivia: '❓ Bilgi',
+  words: '🔤 Kelime',
+};
+
 export interface UserProfileCardProps {
   open: boolean;
   onClose: () => void;
@@ -254,6 +264,27 @@ export function UserProfileCard({
               </div>
             ) : null}
             <SocialLinksRow links={user.socialLinks} className="mt-space-md" />
+            {showcase && ((showcase.games?.length ?? 0) > 0 || (showcase.tournamentWins ?? 0) > 0) ? (
+              <div className="mt-space-md">
+                <p className="mb-space-sm font-label-sm uppercase tracking-wider text-outline">Oyunlar</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(showcase.tournamentWins ?? 0) > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#ffb86c]/15 px-2 py-0.5 font-label-sm text-[#ffb86c]">
+                      🏆 {showcase.tournamentWins} turnuva
+                    </span>
+                  ) : null}
+                  {(showcase.games ?? []).map((g) => (
+                    <span
+                      key={g.kind}
+                      className="inline-flex items-center gap-1 rounded-full bg-surface-container-high px-2 py-0.5 font-label-sm text-on-surface"
+                      title={`${g.played} oyun, ${g.wins} galibiyet`}
+                    >
+                      {GAME_LABEL[g.kind] ?? g.kind} · {g.wins}/{g.played}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {topRoles.length > 0 && (
               <div className="mt-space-lg">
                 <p className="font-label-sm text-outline uppercase tracking-wider mb-space-sm">

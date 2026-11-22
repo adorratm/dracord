@@ -69,6 +69,16 @@ export class ShowcaseService {
       // Üyelik bitti / rozet kaldırıldı → gösterme
       if (guild?.badgeTag && member) dto = { userId, badge: this.toBadge(guild), level: level?.level ?? null };
     }
+    // Oyun istatistikleri + turnuva zaferleri
+    const [games, tw] = await Promise.all([
+      this.em.query(
+        `SELECT kind, count(*)::int AS played, sum(CASE WHEN won THEN 1 ELSE 0 END)::int AS wins
+           FROM game_results WHERE "userId" = $1 GROUP BY kind ORDER BY played DESC LIMIT 6`,
+        [userId],
+      ) as Promise<Array<{ kind: string; played: number; wins: number }>>,
+      this.em.query(`SELECT count(*)::int AS n FROM tournaments WHERE "winnerId" = $1 AND status = 'finished'`, [userId]) as Promise<Array<{ n: number }>>,
+    ]).catch(() => [[], [{ n: 0 }]] as const);
+    dto = { ...dto, games: [...games], tournamentWins: tw[0]?.n ?? 0 };
     this.cache.set(userId, { at: Date.now(), dto });
     if (this.cache.size > 5000) this.cache.delete(this.cache.keys().next().value!);
     return dto;
