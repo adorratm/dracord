@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@dracord/ui';
+import { graphicsProfile, onGraphicsQualityChange } from './graphicsQuality';
 
 export type ThreeSceneApi = {
   THREE: typeof import('three');
@@ -34,6 +35,8 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
     let cleanupScene: void | (() => void);
     let renderer: import('three').WebGLRenderer | null = null;
     let ro: ResizeObserver | null = null;
+    let offQuality: (() => void) | null = null;
+    let anisoTimer: ReturnType<typeof setInterval> | null = null;
 
     void (async () => {
       const THREE = await import('three');
@@ -58,12 +61,14 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
         camera.lookAt(0, 0, 0);
       }
 
+      let profile = graphicsProfile();
       renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: profile.antialias,
         alpha: false,
         powerPreference: 'high-performance',
       });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      let dpr = profile.maxDpr;
+      renderer.setPixelRatio(dpr);
       renderer.setSize(w, h, false);
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -84,7 +89,7 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
       const key = new THREE.DirectionalLight(0xfff4e8, 1.05);
       key.position.set(4, 18, 5);
       key.castShadow = true;
-      key.shadow.mapSize.set(2048, 2048);
+      key.shadow.mapSize.set(profile.shadowMap, profile.shadowMap);
       key.shadow.camera.near = 1;
       key.shadow.camera.far = 50;
       key.shadow.camera.left = -14;
@@ -101,14 +106,80 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
 
       cleanupScene = onReadyRef.current({ THREE, scene, camera, renderer, root: el });
 
+      // Doku keskinliği: eğik açıdaki zemin/çuha/pist bulanık olmasın — GPU'nun en yüksek anizotropisi
+      const maxAniso = renderer.capabilities.getMaxAnisotropy();
+      const seen = new WeakSet<object>();
+      const sharpen = () => {
+        scene.traverse((o) => {
+          const m = (o as unknown as { material?: unknown }).material;
+          const mats = (Array.isArray(m) ? m : m ? [m] : []) as Array<Record<string, unknown>>;
+          for (const mat of mats) {
+            for (const k of ['map', 'normalMap', 'roughnessMap', 'bumpMap', 'emissiveMap']) {
+              const t = mat[k] as { anisotropy?: number; needsUpdate?: boolean } | null | undefined;
+              if (!t || seen.has(t)) continue;
+              seen.add(t);
+              if ((t.anisotropy ?? 1) < maxAniso) {
+                t.anisotropy = maxAniso;
+                t.needsUpdate = true;
+              }
+            }
+          }
+        });
+      };
+      sharpen();
+      anisoTimer = setInterval(sharpen, 2000);
+
+      const applyProfile = () => {
+        if (!renderer) return;
+        profile = graphicsProfile();
+        dpr = profile.maxDpr;
+        renderer.setPixelRatio(dpr);
+        if (key.shadow.mapSize.x !== profile.shadowMap) {
+          key.shadow.mapSize.set(profile.shadowMap, profile.shadowMap);
+          key.shadow.map?.dispose();
+          key.shadow.map = null as unknown as typeof key.shadow.map;
+        }
+        onResize();
+      };
+      offQuality = onGraphicsQualityChange(applyProfile);
+
+      // Dinamik çözünürlük (Otomatik): ~2 sn ortalama < 40 fps → %15 düşür; > 57 fps 4 sn → geri çık
+      let last = performance.now();
+      let acc = 0;
+      let frames = 0;
+      let goodFor = 0;
       const tick = () => {
         if (disposed || !renderer) return;
         frame = requestAnimationFrame(tick);
         renderer.render(scene, camera);
+        const now = performance.now();
+        acc += now - last;
+        last = now;
+        frames++;
+        if (acc >= 2000) {
+          const fps = (frames * 1000) / acc;
+          acc = 0;
+          frames = 0;
+          if (!profile.adaptive || document.hidden) return;
+          if (fps < 40 && dpr > profile.minDpr) {
+            dpr = Math.max(profile.minDpr, Math.round(dpr * 0.85 * 100) / 100);
+            renderer.setPixelRatio(dpr);
+            onResize();
+            goodFor = 0;
+          } else if (fps > 57 && dpr < profile.maxDpr) {
+            goodFor += 2;
+            if (goodFor >= 4) {
+              dpr = Math.min(profile.maxDpr, Math.round((dpr + 0.25) * 100) / 100);
+              renderer.setPixelRatio(dpr);
+              onResize();
+              goodFor = 0;
+            }
+          } else goodFor = 0;
+        }
       };
       tick();
 
-      const onResize = () => {
+      function onResize() {
         if (!renderer || !hostRef.current) return;
         const nw = hostRef.current.clientWidth;
         const nh = hostRef.current.clientHeight;
@@ -126,7 +197,7 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
           camera.updateProjectionMatrix();
         }
         renderer.setSize(nw, nh, false);
-      };
+      }
       ro = new ResizeObserver(onResize);
       ro.observe(el);
     })();
@@ -135,6 +206,8 @@ export function ThreeSceneHost({ className, orthographic, onReady, children }: P
       disposed = true;
       cancelAnimationFrame(frame);
       ro?.disconnect();
+      offQuality?.();
+      if (anisoTimer) clearInterval(anisoTimer);
       try {
         cleanupScene?.();
       } catch {

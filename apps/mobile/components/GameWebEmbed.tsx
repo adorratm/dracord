@@ -196,6 +196,7 @@ export function GameWebEmbed({
           html={html}
           baseUrl={WEB_URL}
           label="Oyun"
+          gpu
           onBridgeMessage={onBridgeMessage}
           style={{ flex: 1, width: '100%', height: '100%', backgroundColor: '#11131e' }}
         />

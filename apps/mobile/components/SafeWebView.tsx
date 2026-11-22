@@ -155,6 +155,8 @@ export const SafeWebView = forwardRef<
     baseUrl?: string;
     /** Harici oyun: yalnız bu origin'de gezin; dışarı giden üst çerçeve gezinmeleri tarayıcıda açılır */
     lockToOrigin?: string | null;
+    /** WebGL oyunları: Android'de GPU katmanına zorla (yazılım katmanı bulanık/yavaş) */
+    gpu?: boolean;
   }
 >(function SafeWebView(
   {
@@ -168,6 +170,7 @@ export const SafeWebView = forwardRef<
     html,
     baseUrl,
     lockToOrigin,
+    gpu = false,
   },
   ref,
 ) {
@@ -248,6 +251,7 @@ export const SafeWebView = forwardRef<
         true;
       `}
       mixedContentMode="always"
+      {...(gpu ? { androidLayerType: 'hardware' as const, overScrollMode: 'never' as const, textZoom: 100 } : {})}
       setSupportMultipleWindows={false}
       sharedCookiesEnabled
       thirdPartyCookiesEnabled
