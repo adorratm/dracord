@@ -62,6 +62,7 @@ run_game() {
     --restart unless-stopped \
     --network "$NETWORK" --network-alias "$ALIAS" \
     --memory 768m --cpus 1 \
+    -v coombie-data:/app/data \
     -e NODE_ENV=production \
     -e CORS_ORIGIN="https://${HOST_NAME}" \
     -e DRACORD_API_URL="https://api.dracord.com.tr" \
