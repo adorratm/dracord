@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CAPTION_LIMITS, sanitizeCaption, type VoiceCaptionPayload } from '@dracord/types';
+import { preferredTranslateTarget, translateOnDevice } from './translate';
 import { pickCaptionEngine, startCaptions, WHISPER_DOWNLOAD_MB, type CaptionEngine, type CaptionSession } from './captions-local';
 
 export type CaptionLine = { key: string; userId: string; name: string; text: string; final: boolean; at: number };
@@ -19,6 +20,7 @@ export type MyCaptionState =
   | { kind: 'error'; message: string };
 
 const SHOW_KEY = 'dracord:captions-show';
+const TRANSLATE_KEY = 'dracord:captions-translate';
 
 /**
  * A7 — ses kanalı canlı altyazı. Görüntüleme herkese açık seçenek; kendi konuşmanı
@@ -38,6 +40,18 @@ export function useVoiceCaptions(
     }
   });
   const [lines, setLines] = useState<CaptionLine[]>([]);
+  // D3+A7: başkalarının kesinleşmiş altyazısını cihaz üstünde çevir (metin cihazdan çıkmaz)
+  const [translate, setTranslateState] = useState(() => {
+    try {
+      return localStorage.getItem(TRANSLATE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
+  const [translations, setTranslations] = useState<Map<string, string>>(new Map());
+  const [translateNote, setTranslateNote] = useState<string | null>(null);
   const [mine, setMine] = useState<MyCaptionState>({ kind: 'off' });
   const session = useRef<CaptionSession | null>(null);
   const ctxRef = useRef(ctx);
@@ -52,6 +66,35 @@ export function useVoiceCaptions(
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const setTranslate = useCallback((v: boolean) => {
+    setTranslateState(v);
+    setTranslateNote(null);
+    try {
+      localStorage.setItem(TRANSLATE_KEY, v ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const translateLine = useCallback((key: string, text: string, source: string | null) => {
+    const target = preferredTranslateTarget();
+    if (source && source === target) return;
+    // anahtarı açmak = model indirme onayı (kullanıcı jesti)
+    void translateOnDevice(text, { target, source: source ?? undefined, allowDownload: true }).then((r) => {
+      if (r.ok) {
+        if (r.text.trim() && r.text.trim() !== text.trim()) {
+          setTranslations((prev) => {
+            const next = new Map(prev);
+            next.set(key, r.text);
+            if (next.size > 40) next.delete(next.keys().next().value!);
+            return next;
+          });
+        }
+      } else if (r.reason === 'unsupported') setTranslateNote('Bu cihazda cihaz üstü çeviri yok');
+      else if (r.reason === 'unavailable_pair') setTranslateNote('Bu dil çifti için çeviri modeli yok');
+    });
   }, []);
 
   const upsert = useCallback((l: CaptionLine) => {
@@ -73,9 +116,11 @@ export function useVoiceCaptions(
       if (!c || !p || p.guildId !== c.guildId || p.channelId !== c.channelId) return;
       const uid = String((raw as VoiceCaptionPayload).userId ?? '');
       if (!uid) return;
-      upsert({ key: `${uid}:${p.id}`, userId: uid, name: (raw as VoiceCaptionPayload).userName || 'Üye', text: p.text, final: p.final, at: Date.now() });
+      const key = `${uid}:${p.id}`;
+      upsert({ key, userId: uid, name: (raw as VoiceCaptionPayload).userName || 'Üye', text: p.text, final: p.final, at: Date.now() });
+      if (p.final && translateRef.current) translateLine(key, p.text, p.lang ?? null);
     });
-  }, [client, ctxKey, upsert]);
+  }, [client, ctxKey, upsert, translateLine]);
 
   // Süresi dolanları temizle
   useEffect(() => {
@@ -136,7 +181,19 @@ export function useVoiceCaptions(
   }, [ctxKey, stopMine]);
   useEffect(() => () => session.current?.stop(), []);
 
-  return { show, setShow, lines, mine, startMine, stopMine, cancelConsent: () => setMine({ kind: 'off' }) };
+  return {
+    show,
+    setShow,
+    lines,
+    mine,
+    startMine,
+    stopMine,
+    cancelConsent: () => setMine({ kind: 'off' }),
+    translate,
+    setTranslate,
+    translations,
+    translateNote,
+  };
 }
 
 export type VoiceCaptionsController = ReturnType<typeof useVoiceCaptions>;

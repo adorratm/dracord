@@ -12,7 +12,14 @@ export function CaptionsOverlay({ ctl, className }: { ctl: VoiceCaptionsControll
       {ctl.lines.slice(-3).map((l) => (
         <p key={l.key} className="max-w-3xl rounded-lg bg-black/70 px-3 py-1 text-center text-[15px] leading-snug text-white shadow">
           <span className="font-semibold text-[#8be9fd]">{l.name}: </span>
-          <span className={l.final ? '' : 'opacity-80'}>{l.text}</span>
+          {ctl.translate && ctl.translations.get(l.key) ? (
+            <>
+              <span>{ctl.translations.get(l.key)}</span>
+              <span className="block text-[12px] text-white/60">{l.text}</span>
+            </>
+          ) : (
+            <span className={l.final ? '' : 'opacity-80'}>{l.text}</span>
+          )}
         </p>
       ))}
     </div>
@@ -55,6 +62,16 @@ export function CaptionsButton({ ctl }: { ctl: VoiceCaptionsController }) {
             <span>
               <span className="block font-label-md text-on-surface">Altyazıları göster</span>
               <span className="block font-body-sm text-on-surface-variant">Altyazıyı açan konuşmacıların sözleri ekranda görünür.</span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={ctl.translate} disabled={!ctl.show} onChange={(e) => ctl.setTranslate(e.target.checked)} />
+            <span>
+              <span className="block font-label-md text-on-surface">Altyazıları çevir</span>
+              <span className="block font-body-sm text-on-surface-variant">
+                Başka dilde konuşanların sözleri senin dilinde görünür. Çeviri cihazında yapılır; ilk kullanımda dil modeli inebilir.
+              </span>
+              {ctl.translateNote ? <span className="block font-body-sm text-error">{ctl.translateNote}</span> : null}
             </span>
           </label>
           <div className="border-t border-outline-variant/40 pt-3">
