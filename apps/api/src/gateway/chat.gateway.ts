@@ -17,6 +17,7 @@ import {
   normalizeVoiceChannelStatus,
   sanitizeAnnotation,
   sanitizeCaption,
+  sanitizeSpatial,
   type DmCallPayload,
   type RemoteControlInputPayload,
   type RemoteControlRequestPayload,
@@ -595,6 +596,36 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (cached.me === null) return { ok: false, error: 'not_in_channel' };
     const rooms = cached.ids.filter((id) => id !== user.sub).map((id) => `user:${id}`);
     if (rooms.length) this.server.to(rooms).emit(SocketEvents.VOICE_CAPTION, { ...p, userId: user.sub, userName: cached.me || null });
+    return { ok: true };
+  }
+
+  /** D3: Mahalle konumu — yalnız aynı ses kanalındakilere; saklanmaz */
+  private readonly spatialRate = new Map<string, { sec: number; n: number }>();
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(SocketEvents.VOICE_SPATIAL)
+  async handleVoiceSpatial(@ConnectedSocket() client: Socket, @MessageBody() body: unknown): Promise<{ ok: boolean; error?: string }> {
+    const user = client.data.user as WsUser;
+    const p = sanitizeSpatial(body);
+    if (!p) return { ok: false, error: 'bad_request' };
+    const sec = Math.floor(Date.now() / 1000);
+    const rate = this.spatialRate.get(user.sub);
+    if (rate && rate.sec === sec) {
+      if (++rate.n > 15) return { ok: false, error: 'rate_limited' };
+    } else this.spatialRate.set(user.sub, { sec, n: 1 });
+    if (this.spatialRate.size > 5000) this.spatialRate.clear();
+    const key = `${p.guildId}:${p.channelId}:${user.sub}`;
+    let cached = this.annotateMembers.get(key);
+    if (!cached || Date.now() - cached.at > 5000) {
+      const members = await this.voicePresence.listChannel(p.guildId, p.channelId);
+      const me = members.find((m) => m.id === user.sub);
+      cached = { at: Date.now(), ids: members.map((m) => m.id), me: me ? (me.displayName ?? '') : null };
+      this.annotateMembers.set(key, cached);
+      if (this.annotateMembers.size > 5000) this.annotateMembers.clear();
+    }
+    if (cached.me === null) return { ok: false, error: 'not_in_channel' };
+    const rooms = cached.ids.filter((id) => id !== user.sub).map((id) => `user:${id}`);
+    if (rooms.length) this.server.to(rooms).volatile.emit(SocketEvents.VOICE_SPATIAL, { ...p, userId: user.sub });
     return { ok: true };
   }
 

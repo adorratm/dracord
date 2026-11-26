@@ -909,6 +909,7 @@ export const SocketEvents = {
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
   VOICE_CAPTION: 'voice:caption',
+  VOICE_SPATIAL: 'voice:spatial',
   /** E3 — DM şifreleme durumu / cihaz listesi değişti */
   DM_E2EE_UPDATE: 'dm:e2ee',
   /**
@@ -2918,4 +2919,43 @@ export interface StreamAlertsListDto {
   /** Twitch için sunucuda TWITCH_CLIENT_ID/SECRET tanımlı mı */
   twitchEnabled: boolean;
   max: number;
+}
+
+// ── Mahalle: konumlu ses (D3) ──
+export interface VoiceSpatialPayload {
+  guildId: string;
+  channelId: string;
+  /** 0..1 harita koordinatı; null = mahalleden çıktı */
+  x: number | null;
+  y: number | null;
+  /** Sunucu doldurur */
+  userId?: string;
+}
+
+export function sanitizeSpatial(raw: unknown): VoiceSpatialPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const s = (v: unknown) => (typeof v === 'string' && v.length > 0 && v.length <= 64 ? v : null);
+  const guildId = s(r.guildId);
+  const channelId = s(r.channelId);
+  if (!guildId || !channelId) return null;
+  if (r.x === null || r.y === null) return { guildId, channelId, x: null, y: null };
+  const x = Number(r.x);
+  const y = Number(r.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const c = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+  return { guildId, channelId, x: c(x), y: c(y) };
+}
+
+/** konuşma mesafesi: bu yarıçap içinde tam ses, SPATIAL_FAR ötesinde sessiz */
+export const SPATIAL_NEAR = 0.12;
+export const SPATIAL_FAR = 0.45;
+
+/** iki konum arası ses kazancı (0..1), yumuşak düşüş */
+export function spatialGain(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const d = Math.hypot(a.x - b.x, a.y - b.y);
+  if (d <= SPATIAL_NEAR) return 1;
+  if (d >= SPATIAL_FAR) return 0;
+  const t = (d - SPATIAL_NEAR) / (SPATIAL_FAR - SPATIAL_NEAR);
+  return Math.round((1 - t * t * (3 - 2 * t)) * 100) / 100;
 }

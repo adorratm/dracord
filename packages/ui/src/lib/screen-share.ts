@@ -1,4 +1,4 @@
-import { gameVoiceLevel } from './game-audio';
+import { gameVoiceLevel, spatialGainFor } from './game-audio';
 import {
   Track,
   VideoPresets,
@@ -63,7 +63,8 @@ export function setRemoteSourceVolume(
   const pub = participant.getTrackPublication(source);
   const track = pub?.track as unknown as { setVolume?: (v: number) => void } | undefined;
   if (track && typeof track.setVolume === 'function') {
-    track.setVolume(level);
+    // Mahalle: mikrofon sesi mesafeye göre kısılır (ekran paylaşım sesi etkilenmez)
+    track.setVolume(source === Track.Source.Microphone ? level * spatialGainFor(participant.identity) : level);
   }
 }
 

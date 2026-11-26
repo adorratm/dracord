@@ -36,6 +36,9 @@ import {
   Whiteboard,
   KanbanBoard,
   FocusTimer,
+  SpatialRoom,
+  MahalleButton,
+  useSpatialVoice,
   TicketsPanel,
   SubscriptionsPanel,
   GiveawaysPanel,
@@ -216,6 +219,13 @@ export function GuildChannelView({
     user ? { id: user.id, name: user.displayName || user.username } : null,
     { muted: voice.muted || voice.deafened },
   );
+  const spatial = useSpatialVoice(
+    client,
+    voice.voiceGuildId && voice.voiceChannelId ? { guildId: voice.voiceGuildId, channelId: voice.voiceChannelId } : null,
+    user?.id,
+    voice.participants.map((p) => p.id),
+  );
+  const [mahalleOpen, setMahalleOpen] = useState(false);
   const annotations = useScreenAnnotations(
     client,
     voice.voiceGuildId && voice.voiceChannelId && annotSharer
@@ -3218,7 +3228,14 @@ export function GuildChannelView({
           voiceStatus={voice.voiceChannelId ? voiceStatuses[voice.voiceChannelId] ?? null : null}
           canEditVoiceStatus={inVoiceInThisGuild && Boolean(voice.voiceChannelId)}
           gameLayer={
-            games.openSession ? (
+            !games.openSession && mahalleOpen && inVoiceInThisGuild && user ? (
+              <SpatialRoom
+                spatial={spatial}
+                meId={user.id}
+                people={voice.participants.map((p) => ({ id: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl, speaking: p.speaking, muted: p.muted }))}
+                onClose={() => setMahalleOpen(false)}
+              />
+            ) : games.openSession ? (
               <GameFrame
                 client={client}
                 session={games.openSession}
@@ -3259,6 +3276,7 @@ export function GuildChannelView({
                 disabled={voice.deafened}
               />
               <CaptionsButton ctl={captions} />
+              <MahalleButton open={mahalleOpen} active={spatial.enabled} onToggle={() => setMahalleOpen((v) => !v)} />
               </>
             ) : null
           }

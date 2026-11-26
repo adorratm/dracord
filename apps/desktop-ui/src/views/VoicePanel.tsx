@@ -11,6 +11,9 @@ import {
   useScreenAnnotations,
   useVoiceCaptions,
   CaptionsButton,
+  MahalleButton,
+  SpatialRoom,
+  useSpatialVoice,
   presenceLabelTr,
   type MemberListAction,
   type MemberListGroup,
@@ -123,6 +126,13 @@ export function VoicePanel({
     user?.id,
   );
   useAnnotationMirror(annotations, inThisVoice && Boolean(voice.activeScreenShare?.isLocal));
+  const spatial = useSpatialVoice(
+    client,
+    voice.voiceGuildId && voice.voiceChannelId ? { guildId: voice.voiceGuildId, channelId: voice.voiceChannelId } : null,
+    user?.id,
+    voice.participants.map((p) => p.id),
+  );
+  const [mahalleOpen, setMahalleOpen] = useState(false);
   const games = useGameSessions(client, inThisVoice ? guildId : null, inThisVoice ? channel.id : null);
   const soundboard = useSoundboard(client, guildId, inThisVoice ? channel.id : null, {
     deafened: voice.deafened,
@@ -326,7 +336,14 @@ export function VoicePanel({
       voiceStatus={voiceStatus}
       canEditVoiceStatus={voice.voiceChannelId === channel.id}
       gameLayer={
-        games.openSession ? (
+        !games.openSession && mahalleOpen && inThisVoice && user ? (
+          <SpatialRoom
+            spatial={spatial}
+            meId={user.id}
+            people={voice.participants.map((p) => ({ id: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl, speaking: p.speaking, muted: p.muted }))}
+            onClose={() => setMahalleOpen(false)}
+          />
+        ) : games.openSession ? (
           <GameFrame
             client={client}
             session={games.openSession}
@@ -364,6 +381,7 @@ export function VoicePanel({
             disabled={voice.deafened}
           />
           <CaptionsButton ctl={captions} />
+          <MahalleButton open={mahalleOpen} active={spatial.enabled} onToggle={() => setMahalleOpen((v) => !v)} />
           <ClipButton
             shareKey={focused ? `${focused.identity}:${focused.isLocal ? 'l' : 'r'}` : null}
             shareName={focused ? (focused.isLocal ? 'Ekranım' : focused.displayName) : ''}

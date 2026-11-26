@@ -258,6 +258,8 @@ export {
   onVoiceActivity,
   registerGameFrame,
   reportVoiceActivity,
+  setSpatialGains,
+  spatialGainFor,
 } from './lib/game-audio';
 
 // A8 — bas-konuş / ses kısayolları
@@ -337,3 +339,5 @@ export { streakTierIcon, STREAK_TIERS } from './lib/streak';
 export { KanbanBoard, positionAt } from './components/KanbanBoard';
 export { FocusTimer } from './components/FocusTimer';
 export { StreamAlertsPanel } from './components/StreamAlertsPanel';
+export { useSpatialVoice, MAHALLE_ASPECT, type SpatialVoice, type SpatialClient } from './lib/use-spatial-voice';
+export { SpatialRoom, MahalleButton, type SpatialRoomPerson } from './components/SpatialRoom';

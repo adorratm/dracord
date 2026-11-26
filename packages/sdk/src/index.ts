@@ -2565,6 +2565,19 @@ export class DracordClient {
     return () => sock.off(SocketEvents.VOICE_CAPTION, handler);
   }
 
+  /** D3: Mahalle konumu (kayıp tolere edilir → volatile) */
+  sendVoiceSpatial(payload: import('@dracord/types').VoiceSpatialPayload) {
+    if (payload.x === null) this.socket?.emit(SocketEvents.VOICE_SPATIAL, payload);
+    else this.socket?.volatile.emit(SocketEvents.VOICE_SPATIAL, payload);
+  }
+
+  onVoiceSpatial(handler: (p: import('@dracord/types').VoiceSpatialPayload) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.VOICE_SPATIAL, handler);
+    return () => sock.off(SocketEvents.VOICE_SPATIAL, handler);
+  }
+
   /** A4: ekran paylaşımına çizim (kayıp tolere edilir → volatile) */
   sendScreenAnnotation(payload: import('@dracord/types').ScreenAnnotationPayload) {
     // Ara noktalar düşebilir; bitiş/temizle düşmemeli

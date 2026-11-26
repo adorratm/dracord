@@ -59,3 +59,22 @@ export function onVoiceActivity(f: (speaking: boolean) => void): () => void {
   speakListeners.add(f);
   return () => speakListeners.delete(f);
 }
+
+// ── Mahalle (konumlu ses): kişi başı kazanç; ses sağlayıcısı frame dinleyicileriyle yeniden uygular ──
+let spatial: Map<string, number> | null = null;
+
+/** null = konumlu ses kapalı (herkes tam ses) */
+export function setSpatialGains(gains: Map<string, number> | null): void {
+  if (gains === null && spatial === null) return;
+  if (gains && spatial && gains.size === spatial.size) {
+    let same = true;
+    for (const [k, v] of gains) if (Math.abs((spatial.get(k) ?? -1) - v) > 0.02) same = false;
+    if (same) return;
+  }
+  spatial = gains;
+  frameListeners.forEach((f) => f());
+}
+
+export function spatialGainFor(identity: string): number {
+  return spatial?.get(identity) ?? 1;
+}
