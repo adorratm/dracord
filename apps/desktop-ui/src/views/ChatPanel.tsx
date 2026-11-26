@@ -12,6 +12,7 @@ import {
   AnnouncementFollowButton,
   HeaderOverflowMenu,
   Whiteboard,
+  KanbanBoard,
   MediaGalleryModal,
   Avatar,
   ChatInput,
@@ -115,6 +116,7 @@ export function ChatPanel({
   // B8 — servers to send this announcement channel's posts to
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [kanbanOpen, setKanbanOpen] = useState(false);
   const [followGuilds, setFollowGuilds] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     if (!channel?.isAnnouncement) return;
@@ -643,6 +645,22 @@ export function ChatPanel({
             >
               <span className="material-symbols-outlined text-[18px]">draw</span>
             </button>
+            <button
+              type="button"
+              className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Pano"
+              title="Görev panosu"
+              onClick={() => setKanbanOpen(true)}
+            >
+              <span className="material-symbols-outlined text-[18px]">view_kanban</span>
+            </button>
+            {user ? (
+              <Modal open={kanbanOpen} title={`#${channel.name} · görev panosu`} onClose={() => setKanbanOpen(false)} className="sm:max-w-6xl">
+                <div className="h-[72vh]">
+                  {kanbanOpen ? <KanbanBoard client={client} channelId={channel.id} meId={user.id} members={members} canModerate={isDm || canManageMessages} /> : null}
+                </div>
+              </Modal>
+            ) : null}
             {user ? (
               <Modal open={boardOpen} title={`#${channel.name} · beyaz tahta`} onClose={() => setBoardOpen(false)} className="sm:max-w-6xl">
                 <div className="h-[72vh]">
@@ -719,6 +737,7 @@ export function ChatPanel({
                 },
                 { id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) },
                 { id: 'board', icon: 'draw', label: 'Beyaz tahta', onClick: () => setBoardOpen(true) },
+                { id: 'kanban', icon: 'view_kanban', label: 'Görev panosu', onClick: () => setKanbanOpen(true) },
                 { id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() },
               ]}
             />

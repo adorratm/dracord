@@ -51,6 +51,7 @@ import { useScheduledMessages } from '../lib/useScheduledMessages';
 import { Icon } from './Icon';
 import { useDataSaver } from '../lib/dataSaver';
 import { WhiteboardSheet } from './WhiteboardSheet';
+import { KanbanSheet } from './KanbanSheet';
 import { LinkifiedText } from './LinkifiedText';
 import { UserAvatar } from './UserAvatar';
 import {
@@ -120,6 +121,7 @@ export function ChatView({
   const [pins, setPins] = useState<MessageDto[]>([]);
   const [showPins, setShowPins] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [kanbanOpen, setKanbanOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(aroundMessageId ?? null);
   const [scrolledAway, setScrolledAway] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
@@ -883,6 +885,14 @@ export function ChatView({
           >
             <Icon name="draw" size={16} color={colors.text} />
           </Pressable>
+          <Pressable
+            onPress={() => setKanbanOpen(true)}
+            style={{ ...chipBtn, marginLeft: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Görev panosu"
+          >
+            <Icon name="view_kanban" size={16} color={colors.text} />
+          </Pressable>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 6, gap: 6 }}>
@@ -1544,6 +1554,7 @@ export function ChatView({
         onClose={() => setStickerMenuId(null)}
       />
       <WhiteboardSheet channelId={channel.id} open={boardOpen} onClose={() => setBoardOpen(false)} />
+      <KanbanSheet channelId={channel.id} open={kanbanOpen} onClose={() => setKanbanOpen(false)} />
     </KeyboardAvoidingView>
   );
 }

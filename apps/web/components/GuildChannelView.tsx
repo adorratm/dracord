@@ -34,6 +34,7 @@ import {
   GuildQuickActions,
   HeaderOverflowMenu,
   Whiteboard,
+  KanbanBoard,
   TicketsPanel,
   SubscriptionsPanel,
   GiveawaysPanel,
@@ -380,6 +381,7 @@ export function GuildChannelView({
   const [subsOpen, setSubsOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [kanbanOpen, setKanbanOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
   useEffect(() => {
@@ -3653,6 +3655,15 @@ export function GuildChannelView({
                 >
                   <span className="material-symbols-outlined text-[18px]">draw</span>
                 </button>
+                <button
+                  type="button"
+                  className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  aria-label="Pano"
+                  title="Görev panosu"
+                  onClick={() => setKanbanOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">view_kanban</span>
+                </button>
               </>
             ) : null}
             {!isForumView && (
@@ -3677,6 +3688,7 @@ export function GuildChannelView({
                 { id: 'pins', icon: 'push_pin', label: 'Sabitlenenler', badge: pinCount || null, onClick: () => setPinsOpen(true) },
                 ...(channel && !isForumView ? [{ id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) }] : []),
                 ...(channel && !isForumView ? [{ id: 'board', icon: 'draw', label: 'Beyaz tahta', onClick: () => setBoardOpen(true) }] : []),
+                ...(channel && !isForumView ? [{ id: 'kanban', icon: 'view_kanban', label: 'Görev panosu', onClick: () => setKanbanOpen(true) }] : []),
                 ...(!isForumView ? [{ id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() }] : []),
                 ...(channel && canManageChannels ? [{ id: 'edit', icon: 'edit', label: 'Kanalı düzenle', onClick: () => openEditChannel(channel) }] : []),
               ]}
@@ -5100,6 +5112,15 @@ export function GuildChannelView({
         )}
       </Modal>
 
+      {channel && user ? (
+        <Modal open={kanbanOpen} title={`#${channel.name} · görev panosu`} onClose={() => setKanbanOpen(false)} className="sm:max-w-6xl">
+          <div className="h-[72vh]">
+            {kanbanOpen ? (
+              <KanbanBoard client={client} channelId={channel.id} meId={user.id} members={guildMembers} canModerate={canManageMessages} />
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
       {channel && user ? (
         <Modal open={boardOpen} title={`#${channel.name} · beyaz tahta`} onClose={() => setBoardOpen(false)} className="sm:max-w-6xl">
           <div className="h-[72vh]">

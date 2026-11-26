@@ -2007,6 +2007,41 @@ export class DracordClient {
   }
 
   // ── G3: beyaz tahta ──
+  // ── D5: kanal panosu ──
+  async getKanban(channelId: string): Promise<import('@dracord/types').KanbanBoardDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/kanban`);
+  }
+
+  async createKanbanCard(channelId: string, input: import('@dracord/types').KanbanCardInput): Promise<import('@dracord/types').KanbanCardDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/kanban/cards`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateKanbanCard(channelId: string, cardId: string, input: import('@dracord/types').KanbanCardInput): Promise<import('@dracord/types').KanbanCardDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/kanban/cards/${encodeURIComponent(cardId)}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async deleteKanbanCard(channelId: string, cardId: string): Promise<{ ok: true }> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/kanban/cards/${encodeURIComponent(cardId)}`, { method: 'DELETE' });
+  }
+
+  async saveKanbanColumn(
+    channelId: string,
+    input: { id?: string; name?: string; color?: string | null; position?: number },
+  ): Promise<import('@dracord/types').KanbanColumnDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/kanban/columns`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async deleteKanbanColumn(channelId: string, columnId: string): Promise<{ ok: true; movedTo: string | null }> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/kanban/columns/${encodeURIComponent(columnId)}`, { method: 'DELETE' });
+  }
+
+  onKanbanEvent(handler: (e: import('@dracord/types').KanbanEvent) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.KANBAN_EVENT, handler);
+    return () => sock.off(SocketEvents.KANBAN_EVENT, handler);
+  }
+
   async getWhiteboard(channelId: string): Promise<import('@dracord/types').WhiteboardStroke[]> {
     return this.request(`/channels/${encodeURIComponent(channelId)}/whiteboard`);
   }

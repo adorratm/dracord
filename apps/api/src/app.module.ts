@@ -36,6 +36,7 @@ import { LevelsModule } from '@/levels/levels.module';
 import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
 import { RecapModule } from '@/recap/recap.module';
 import { StreaksModule } from '@/streaks/streaks.module';
+import { KanbanModule } from '@/kanban/kanban.module';
 import { GuildBackupModule } from '@/guild-backup/guild-backup.module';
 import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
@@ -97,6 +98,7 @@ import { GamesModule } from '@/games/games.module';
     RecapModule,
     GuildBackupModule,
     StreaksModule,
+    KanbanModule,
     ShowcaseModule,
     TournamentsModule,
     LfgModule,

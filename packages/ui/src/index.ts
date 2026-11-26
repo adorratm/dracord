@@ -334,3 +334,4 @@ export { renderRecapCard, shareRecapCard } from './lib/recap-card';
 export { GuildBackupPanel, readBackupFile } from './components/GuildBackupPanel';
 export { StreakCard } from './components/StreakCard';
 export { streakTierIcon, STREAK_TIERS } from './lib/streak';
+export { KanbanBoard, positionAt } from './components/KanbanBoard';

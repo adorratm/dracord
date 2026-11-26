@@ -903,6 +903,7 @@ export const SocketEvents = {
   VOICE_SUMMON: 'voice:summon',
   /** G3 beyaz tahta: çizgi eklendi / silindi / temizlendi (kanal odası) */
   WHITEBOARD_EVENT: 'whiteboard:event',
+  KANBAN_EVENT: 'kanban:event',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
@@ -2845,4 +2846,50 @@ export interface UserStreakDto {
   tier: number | null;
   /** İstanbul günü YYYY-MM-DD */
   day: string;
+}
+
+/** Kanal panosu (D5) — her metin kanalında "Pano" sekmesi */
+export interface KanbanColumnDto {
+  id: string;
+  name: string;
+  position: number;
+  color: string | null;
+}
+
+export interface KanbanCardDto {
+  id: string;
+  columnId: string;
+  title: string;
+  description: string | null;
+  assigneeIds: string[];
+  labels: string[];
+  dueAt: string | null;
+  position: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KanbanBoardDto {
+  channelId: string;
+  columns: KanbanColumnDto[];
+  cards: KanbanCardDto[];
+  /** sütun ekleme/silme (Kanalları yönet) */
+  canManage: boolean;
+}
+
+export type KanbanEvent =
+  | { channelId: string; kind: 'card'; card: KanbanCardDto }
+  | { channelId: string; kind: 'cardRemoved'; id: string }
+  | { channelId: string; kind: 'column'; column: KanbanColumnDto }
+  | { channelId: string; kind: 'columnRemoved'; id: string };
+
+export interface KanbanCardInput {
+  columnId?: string;
+  title?: string;
+  description?: string | null;
+  assigneeIds?: string[];
+  labels?: string[];
+  dueAt?: string | null;
+  position?: number;
 }
