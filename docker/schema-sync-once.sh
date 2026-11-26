@@ -52,7 +52,9 @@ echo "    run exit=$rc (124=timeout expected after sync)"
 
 echo "==> Tables:"
 "${COMPOSE[@]}" exec -T postgres \
-  psql -U "$PGUSER" -d "$PGDB" -c '\dt' | head -50
+  psql -U "$PGUSER" -d "$PGDB" -tAc "SELECT count(*) || ' tables' FROM pg_tables WHERE schemaname = 'public'"
+# Not: '\dt | head' kullanma — tablo sayısı büyüyünce head boruyu erken kapatır,
+# psql SIGPIPE alır ve pipefail tüm deploy'u düşürür.
 
 if ! "${COMPOSE[@]}" exec -T postgres \
   psql -U "$PGUSER" -d "$PGDB" -tAc "SELECT to_regclass('public.accounts');" | grep -q accounts; then
