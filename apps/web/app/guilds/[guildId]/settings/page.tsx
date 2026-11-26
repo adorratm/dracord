@@ -6,7 +6,8 @@ import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
 import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel,
-  GuildBackupPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings } from '@dracord/ui';
+  GuildBackupPanel,
+  StreamAlertsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -891,6 +892,20 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 Sunucunun aktifliği ve büyümesi. Yalnız sunucuyu yönetenler görür.
               </p>
               <GuildStatsPanel client={client} guildId={guildId} />
+            </section>
+          )}
+
+          {canManage && (
+            <section className="max-w-3xl mt-space-2xl" id="yayin">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Yayın bildirimleri</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Twitch ya da YouTube'da yayın açılınca veya yeni video gelince Dracord Bot seçtiğin kanala haber verir.
+              </p>
+              <StreamAlertsPanel
+                client={client}
+                guildId={guildId}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
             </section>
           )}
 

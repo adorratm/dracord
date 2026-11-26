@@ -2007,6 +2007,30 @@ export class DracordClient {
   }
 
   // ── G3: beyaz tahta ──
+  // ── D7: canlı yayın bildirimleri ──
+  async listStreamAlerts(guildId: string): Promise<import('@dracord/types').StreamAlertsListDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/stream-alerts`);
+  }
+
+  async createStreamAlert(
+    guildId: string,
+    input: { platform: import('@dracord/types').StreamPlatform; handle: string; channelId: string; message?: string | null },
+  ): Promise<import('@dracord/types').StreamAlertDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/stream-alerts`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateStreamAlert(guildId: string, id: string, input: { channelId?: string; message?: string | null }): Promise<import('@dracord/types').StreamAlertDto> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/stream-alerts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async deleteStreamAlert(guildId: string, id: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/stream-alerts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async testStreamAlert(guildId: string, id: string): Promise<{ ok: true }> {
+    return this.request(`/guilds/${encodeURIComponent(guildId)}/stream-alerts/${encodeURIComponent(id)}/test`, { method: 'POST' });
+  }
+
   // ── D6: ortak odak zamanlayıcısı ──
   async getFocus(channelId: string): Promise<import('@dracord/types').FocusSessionDto> {
     return this.request(`/channels/${encodeURIComponent(channelId)}/focus`);

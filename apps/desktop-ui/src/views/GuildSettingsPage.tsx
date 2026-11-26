@@ -13,7 +13,7 @@ import type {
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
 import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings, GuildStatsPanel,
-  GuildBackupPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+  GuildBackupPanel, StreamAlertsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -48,6 +48,7 @@ type Tab =
   | 'levels'
   | 'stats'
   | 'backup'
+  | 'streams'
   | 'public'
   | 'faq'
   | 'onboarding'
@@ -63,6 +64,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'slash', label: 'Slash komutları', icon: 'terminal', need: 'manage' },
     { id: 'levels', label: 'Seviyeler', icon: 'military_tech', need: 'manage' },
     { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
+    { id: 'streams', label: 'Yayın bildirimleri', icon: 'live_tv', need: 'manage' },
     { id: 'backup', label: 'Yedek ve şablon', icon: 'cloud_download', need: 'manage' },
     { id: 'public', label: 'Tanıtım sayfası', icon: 'public', need: 'manage' },
     { id: 'faq', label: 'SSS ve Draco', icon: 'quiz', need: 'manage' },
@@ -1013,6 +1015,20 @@ export function GuildSettingsPage({
                 Sunucunun aktifliği ve büyümesi. Yalnız sunucuyu yönetenler görür.
               </p>
               <GuildStatsPanel client={client} guildId={guildId} />
+            </section>
+          )}
+
+          {tab === 'streams' && canManage && (
+            <section className="max-w-3xl">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Yayın bildirimleri</h2>
+              <p className="font-body-sm text-on-surface-variant mb-space-md">
+                Twitch ya da YouTube'da yayın açılınca veya yeni video gelince Dracord Bot seçtiğin kanala haber verir.
+              </p>
+              <StreamAlertsPanel
+                client={client}
+                guildId={guildId}
+                channels={channels.filter((c) => c.type === 'TEXT').map((c) => ({ id: c.id, name: c.name }))}
+              />
             </section>
           )}
 

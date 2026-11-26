@@ -2896,3 +2896,26 @@ export interface KanbanCardInput {
 }
 
 export * from './focus';
+
+/** D7 — Twitch / YouTube canlı yayın bildirimi */
+export type StreamPlatform = 'twitch' | 'youtube';
+
+export interface StreamAlertDto {
+  id: string;
+  guildId: string;
+  channelId: string;
+  platform: StreamPlatform;
+  handle: string;
+  displayName: string;
+  message: string | null;
+  isLive: boolean;
+  lastNotifiedAt: string | null;
+  lastError: string | null;
+}
+
+export interface StreamAlertsListDto {
+  alerts: StreamAlertDto[];
+  /** Twitch için sunucuda TWITCH_CLIENT_ID/SECRET tanımlı mı */
+  twitchEnabled: boolean;
+  max: number;
+}

@@ -336,3 +336,4 @@ export { StreakCard } from './components/StreakCard';
 export { streakTierIcon, STREAK_TIERS } from './lib/streak';
 export { KanbanBoard, positionAt } from './components/KanbanBoard';
 export { FocusTimer } from './components/FocusTimer';
+export { StreamAlertsPanel } from './components/StreamAlertsPanel';

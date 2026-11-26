@@ -35,6 +35,7 @@ import { GameResultStats1763000000000 } from './migrations/1763000000000-GameRes
 import { UserStreaks1763010000000 } from './migrations/1763010000000-UserStreaks';
 import { Kanban1763020000000 } from './migrations/1763020000000-Kanban';
 import { FocusSessions1763030000000 } from './migrations/1763030000000-FocusSessions';
+import { StreamAlerts1763040000000 } from './migrations/1763040000000-StreamAlerts';
 
 loadEnv();
 
@@ -46,6 +47,6 @@ export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   entities: [],
-  migrations: [InitPlatformExtras1730000000000, ScheduledMessages1762700000000, MemberLevels1762710000000, GuildSounds1762720000000, GamePlatform1762730000000, GuildStats1762740000000, GuildVanity1762750000000, GuildBadges1762760000000, Tournaments1762770000000, WeeklyChallenges1762780000000, GuildAutomod1762790000000, GuildFaq1762800000000, SessionDevices1762810000000, UserPasskeys1762820000000, E2eeDm1762830000000, ChannelGameApp1762840000000, AccountDeletion1762850000000, GuildOnboarding1762860000000, LfgListings1762870000000, SlowModeAnnouncements1762880000000, Starboard1762890000000, GiveawaysBirthdays1762900000000, Tickets1762910000000, ProfileDecorations1762920000000, Whiteboard1762930000000, TournamentFormats1762940000000, GuildSubscriptions1762950000000, ClientErrors1762960000000, ActivityLobby1762970000000, GameResults1762980000000, RecapIndex1762990000000, GameResultStats1763000000000, UserStreaks1763010000000, Kanban1763020000000, FocusSessions1763030000000],
+  migrations: [InitPlatformExtras1730000000000, ScheduledMessages1762700000000, MemberLevels1762710000000, GuildSounds1762720000000, GamePlatform1762730000000, GuildStats1762740000000, GuildVanity1762750000000, GuildBadges1762760000000, Tournaments1762770000000, WeeklyChallenges1762780000000, GuildAutomod1762790000000, GuildFaq1762800000000, SessionDevices1762810000000, UserPasskeys1762820000000, E2eeDm1762830000000, ChannelGameApp1762840000000, AccountDeletion1762850000000, GuildOnboarding1762860000000, LfgListings1762870000000, SlowModeAnnouncements1762880000000, Starboard1762890000000, GiveawaysBirthdays1762900000000, Tickets1762910000000, ProfileDecorations1762920000000, Whiteboard1762930000000, TournamentFormats1762940000000, GuildSubscriptions1762950000000, ClientErrors1762960000000, ActivityLobby1762970000000, GameResults1762980000000, RecapIndex1762990000000, GameResultStats1763000000000, UserStreaks1763010000000, Kanban1763020000000, FocusSessions1763030000000, StreamAlerts1763040000000],
   synchronize: false,
 });

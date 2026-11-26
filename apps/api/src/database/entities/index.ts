@@ -75,3 +75,4 @@ export { GameResult } from './game-result.entity';
 export { UserStreak } from './user-streak.entity';
 export { KanbanColumn, KanbanCard } from './kanban.entity';
 export { FocusSession } from './focus-session.entity';
+export { StreamAlert } from './stream-alert.entity';
