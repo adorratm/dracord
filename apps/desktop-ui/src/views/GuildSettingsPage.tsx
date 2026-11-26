@@ -12,7 +12,8 @@ import type {
   RoleProfileBgKey,
 } from '@dracord/types';
 import { DISCOVER_CATEGORIES } from '@dracord/types';
-import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings, GuildStatsPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
+import { AutomodSettings, cn, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings, GuildStatsPanel,
+  GuildBackupPanel, LevelsPanel, RoleBadge, SearchableSelect } from '@dracord/ui';
 import { useAuth } from '../auth';
 
 const BADGE_OPTIONS: { id: RoleBadgeKey; label: string }[] = [
@@ -46,6 +47,7 @@ type Tab =
   | 'slash'
   | 'levels'
   | 'stats'
+  | 'backup'
   | 'public'
   | 'faq'
   | 'onboarding'
@@ -61,6 +63,7 @@ const NAV: { id: Tab; label: string; icon: string; need?: 'manage' | 'roles' | '
     { id: 'slash', label: 'Slash komutları', icon: 'terminal', need: 'manage' },
     { id: 'levels', label: 'Seviyeler', icon: 'military_tech', need: 'manage' },
     { id: 'stats', label: 'İstatistikler', icon: 'monitoring', need: 'manage' },
+    { id: 'backup', label: 'Yedek ve şablon', icon: 'cloud_download', need: 'manage' },
     { id: 'public', label: 'Tanıtım sayfası', icon: 'public', need: 'manage' },
     { id: 'faq', label: 'SSS ve Draco', icon: 'quiz', need: 'manage' },
     { id: 'onboarding', label: 'Topluluk araçları', icon: 'waving_hand', need: 'manage' },
@@ -96,7 +99,7 @@ export function GuildSettingsPage({
   onChannelsChanged: () => void;
   onInviteCreated?: (url: string) => void;
 }) {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const [guild, setGuild] = useState<GuildSummary | null>(null);
   const [name, setName] = useState('');
   const [discoverable, setDiscoverable] = useState(false);
@@ -1010,6 +1013,19 @@ export function GuildSettingsPage({
                 Sunucunun aktifliği ve büyümesi. Yalnız sunucuyu yönetenler görür.
               </p>
               <GuildStatsPanel client={client} guildId={guildId} />
+            </section>
+          )}
+
+          {tab === 'backup' && canManage && (
+            <section className="max-w-3xl">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Yedek ve şablon</h2>
+              <GuildBackupPanel
+                client={client}
+                guildId={guildId}
+                guildName={guild?.name ?? 'sunucu'}
+                isOwner={!!user && guild?.ownerId === user.id}
+                onCreated={() => onChannelsChanged()}
+              />
             </section>
           )}
 

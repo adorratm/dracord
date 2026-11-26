@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { readBackupFile } from '@dracord/ui';
 import { colors } from '@dracord/app-theme';
 import { useAuth } from '../auth';
 
@@ -46,6 +47,31 @@ export function CreateGuildModal({
       >
         Oluştur
       </button>
+      <label style={{ display: 'block', marginTop: 12, fontSize: 13, color: colors.textMuted, cursor: 'pointer' }}>
+        Ya da bir yedek/şablon dosyasından kur (.json)
+        <input
+          type="file"
+          accept="application/json,.json"
+          hidden
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            setBusy(true);
+            setError(null);
+            void readBackupFile(f)
+              .then((data) => client.createGuildFromBackup(data, name.trim() || undefined))
+              .then((r) => {
+                onCreated(r.guildId);
+                onClose();
+                setName('');
+              })
+              .catch((err) => setError(err instanceof Error ? err.message : 'Yedek yüklenemedi'))
+              .finally(() => setBusy(false));
+          }}
+        />
+      </label>
     </Modal>
   );
 }

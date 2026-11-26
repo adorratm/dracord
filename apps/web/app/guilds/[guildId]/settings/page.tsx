@@ -5,7 +5,8 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { useAuth } from '@/components/AuthProvider';
-import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings } from '@dracord/ui';
+import { AutomodSettings, GuildFaqSettings, GuildOnboardingSettings, GuildPublicPageSettings, GuildStatsPanel,
+  GuildBackupPanel, LevelsPanel, ReactionRolesSettings, StarboardSettings, GuildBirthdaySettings, TicketSettings, SubscriptionSettings } from '@dracord/ui';
 import { useGuildNav } from '@/hooks/useGuildNav';
 import { useUserPreferences } from '@/lib/user-preferences';
 import type { GuildSummary, RoleBadgeKey, RoleDto, RoleProfileBgKey } from '@dracord/types';
@@ -890,6 +891,19 @@ export default function GuildSettingsPage({ params }: PageProps) {
                 Sunucunun aktifliği ve büyümesi. Yalnız sunucuyu yönetenler görür.
               </p>
               <GuildStatsPanel client={client} guildId={guildId} />
+            </section>
+          )}
+
+          {canManage && (
+            <section className="max-w-3xl mt-space-2xl" id="yedek">
+              <h2 className="font-headline-lg text-on-surface mb-space-sm">Yedek ve şablon</h2>
+              <GuildBackupPanel
+                client={client}
+                guildId={guildId}
+                guildName={detail?.name ?? guild?.name ?? 'sunucu'}
+                isOwner={!!user && detail?.ownerId === user.id}
+                onCreated={(id) => router.push(`/channels/${id}`)}
+              />
             </section>
           )}
 

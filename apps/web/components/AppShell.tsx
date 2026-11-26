@@ -4,6 +4,7 @@ import type { GuildSummary } from '@dracord/types';
 import type { TitleBarNavId } from '@dracord/ui';
 import {
   Modal,
+  readBackupFile,
   SearchableSelect,
   ServerRail,
   TitleBar,
@@ -253,6 +254,25 @@ export function AppShell({
     }, 250);
     return () => window.clearTimeout(t);
   }, [exploreOpen, discoverQuery, client]);
+
+  const createServerFromFile = async (f: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await readBackupFile(f);
+      const r = await client.createGuildFromBackup(data, serverName.trim() || undefined);
+      setCreateOpen(false);
+      setServerName('');
+      setGuildsOverride(null);
+      invalidateGuildNavCache();
+      onGuildsChanged?.();
+      await openGuild(r.guildId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Yedek yüklenemedi');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const createServer = async () => {
     setBusy(true);
@@ -540,6 +560,20 @@ export function AppShell({
             onChange={(e) => setDiscoverable(e.target.checked)}
           />
           Keşfette göster
+        </label>
+        <label className="mt-space-sm block font-body-sm text-on-surface-variant cursor-pointer hover:text-on-surface">
+          Ya da bir yedek/şablon dosyasından kur (.json)
+          <input
+            type="file"
+            accept="application/json,.json"
+            hidden
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void createServerFromFile(f);
+            }}
+          />
         </label>
         {discoverable && (
           <label className="mt-space-sm flex flex-col gap-space-xs">

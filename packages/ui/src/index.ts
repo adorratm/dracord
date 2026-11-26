@@ -331,3 +331,4 @@ export { ShareCodecSettings } from './components/ShareCodecSettings';
 export { ActivityLobby } from './components/ActivityLobby';
 export { YearRecap, recapSeasonYear } from './components/YearRecap';
 export { renderRecapCard, shareRecapCard } from './lib/recap-card';
+export { GuildBackupPanel, readBackupFile } from './components/GuildBackupPanel';

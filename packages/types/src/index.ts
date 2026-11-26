@@ -2799,3 +2799,32 @@ export interface YearRecapDto {
   tournamentsWon: number;
   persona: { id: string; title: string; desc: string; emoji: string };
 }
+
+// ── Sunucu yedeği / şablonu ──
+export interface GuildBackupV1 {
+  kind: 'dracord-guild-backup';
+  version: 1;
+  exportedAt: string;
+  guild: { name: string; publicDescription?: string | null; afkTimeoutMinutes?: number };
+  roles: Array<{ key: string; name: string; color: string; position: number; hoist: boolean; permissions: string[] }>;
+  categories: Array<{ key: string; name: string; position: number }>;
+  channels: Array<{
+    name: string;
+    type: string;
+    categoryKey: string | null;
+    position: number;
+    topic: string | null;
+    slowModeSec: number;
+    isAnnouncement: boolean;
+    gameKind: string | null;
+    /** yalnız rol overwrite'ları (üye overwrite'ları yedeğe girmez) */
+    overwrites: Array<{ roleKey: string; allow: string[]; deny: string[] }>;
+  }>;
+}
+export interface GuildBackupRestoreResult {
+  guildId: string;
+  roles: number;
+  categories: number;
+  channels: number;
+  skipped: number;
+}
