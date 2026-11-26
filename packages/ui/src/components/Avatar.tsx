@@ -64,7 +64,12 @@ export function Avatar({
           {initialsFromName(displayName)}
         </div>
       )}
-      {decoration && size !== 'sm' ? <span className={cn('avatar-deco', `avatar-deco--${decoration}`)} aria-hidden /> : null}
+      {decoration && size !== 'sm' ? (
+        /* halka avatar kutusuna sabit: kapsayıcı (flex satırında) uzasa da daire kalır */
+        <span className={cn('pointer-events-none absolute left-0 top-0', s.box)} aria-hidden>
+          <span className={cn('avatar-deco', `avatar-deco--${decoration}`)} />
+        </span>
+      ) : null}
       {status && statusRing && (
         <span
           className={cn(
