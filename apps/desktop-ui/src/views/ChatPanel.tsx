@@ -13,6 +13,7 @@ import {
   HeaderOverflowMenu,
   Whiteboard,
   KanbanBoard,
+  FocusTimer,
   MediaGalleryModal,
   Avatar,
   ChatInput,
@@ -117,6 +118,7 @@ export function ChatPanel({
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [kanbanOpen, setKanbanOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [followGuilds, setFollowGuilds] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
     if (!channel?.isAnnouncement) return;
@@ -654,6 +656,27 @@ export function ChatPanel({
             >
               <span className="material-symbols-outlined text-[18px]">view_kanban</span>
             </button>
+            <button
+              type="button"
+              className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+              aria-label="Odak zamanlayıcısı"
+              title="Ortak odak zamanlayıcısı (Pomodoro)"
+              onClick={() => setFocusOpen(true)}
+            >
+              <span className="material-symbols-outlined text-[18px]">timer</span>
+            </button>
+            <Modal open={focusOpen} title={`#${channel.name} · odak zamanlayıcısı`} onClose={() => setFocusOpen(false)}>
+              {focusOpen ? (
+                <FocusTimer
+                  client={client}
+                  channelId={channel.id}
+                  nameOf={(id) => {
+                    const m = members.find((x) => x.id === id);
+                    return m?.displayName || m?.username;
+                  }}
+                />
+              ) : null}
+            </Modal>
             {user ? (
               <Modal open={kanbanOpen} title={`#${channel.name} · görev panosu`} onClose={() => setKanbanOpen(false)} className="sm:max-w-6xl">
                 <div className="h-[72vh]">
@@ -738,6 +761,7 @@ export function ChatPanel({
                 { id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) },
                 { id: 'board', icon: 'draw', label: 'Beyaz tahta', onClick: () => setBoardOpen(true) },
                 { id: 'kanban', icon: 'view_kanban', label: 'Görev panosu', onClick: () => setKanbanOpen(true) },
+                { id: 'focus', icon: 'timer', label: 'Odak zamanlayıcısı', onClick: () => setFocusOpen(true) },
                 { id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() },
               ]}
             />

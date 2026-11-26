@@ -35,6 +35,7 @@ import {
   HeaderOverflowMenu,
   Whiteboard,
   KanbanBoard,
+  FocusTimer,
   TicketsPanel,
   SubscriptionsPanel,
   GiveawaysPanel,
@@ -382,6 +383,7 @@ export function GuildChannelView({
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [kanbanOpen, setKanbanOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [tournamentFocus, setTournamentFocus] = useState<string | null>(null);
   // Bildirim bağlantısı: ?tournament=<id>
   useEffect(() => {
@@ -3664,6 +3666,15 @@ export function GuildChannelView({
                 >
                   <span className="material-symbols-outlined text-[18px]">view_kanban</span>
                 </button>
+                <button
+                  type="button"
+                  className="hidden @3xl:flex h-8 w-8 rounded-lg items-center justify-center text-outline hover:bg-surface-container hover:text-on-surface"
+                  aria-label="Odak zamanlayıcısı"
+                  title="Ortak odak zamanlayıcısı (Pomodoro)"
+                  onClick={() => setFocusOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">timer</span>
+                </button>
               </>
             ) : null}
             {!isForumView && (
@@ -3689,6 +3700,7 @@ export function GuildChannelView({
                 ...(channel && !isForumView ? [{ id: 'media', icon: 'photo_library', label: 'Medya', onClick: () => setGalleryOpen(true) }] : []),
                 ...(channel && !isForumView ? [{ id: 'board', icon: 'draw', label: 'Beyaz tahta', onClick: () => setBoardOpen(true) }] : []),
                 ...(channel && !isForumView ? [{ id: 'kanban', icon: 'view_kanban', label: 'Görev panosu', onClick: () => setKanbanOpen(true) }] : []),
+                ...(channel && !isForumView ? [{ id: 'focus', icon: 'timer', label: 'Odak zamanlayıcısı', onClick: () => setFocusOpen(true) }] : []),
                 ...(!isForumView ? [{ id: 'threads', icon: 'forum', label: 'Son threadler', onClick: () => openThreadsPreview() }] : []),
                 ...(channel && canManageChannels ? [{ id: 'edit', icon: 'edit', label: 'Kanalı düzenle', onClick: () => openEditChannel(channel) }] : []),
               ]}
@@ -5113,6 +5125,19 @@ export function GuildChannelView({
       </Modal>
 
       {channel && user ? (
+        <>
+        <Modal open={focusOpen} title={`#${channel.name} · odak zamanlayıcısı`} onClose={() => setFocusOpen(false)}>
+          {focusOpen ? (
+            <FocusTimer
+              client={client}
+              channelId={channel.id}
+              nameOf={(id) => {
+                const m = guildMembers.find((g) => g.id === id);
+                return m?.displayName || m?.username;
+              }}
+            />
+          ) : null}
+        </Modal>
         <Modal open={kanbanOpen} title={`#${channel.name} · görev panosu`} onClose={() => setKanbanOpen(false)} className="sm:max-w-6xl">
           <div className="h-[72vh]">
             {kanbanOpen ? (
@@ -5120,6 +5145,7 @@ export function GuildChannelView({
             ) : null}
           </div>
         </Modal>
+        </>
       ) : null}
       {channel && user ? (
         <Modal open={boardOpen} title={`#${channel.name} · beyaz tahta`} onClose={() => setBoardOpen(false)} className="sm:max-w-6xl">

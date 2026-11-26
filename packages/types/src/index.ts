@@ -904,6 +904,7 @@ export const SocketEvents = {
   /** G3 beyaz tahta: çizgi eklendi / silindi / temizlendi (kanal odası) */
   WHITEBOARD_EVENT: 'whiteboard:event',
   KANBAN_EVENT: 'kanban:event',
+  FOCUS_EVENT: 'focus:event',
   /** A4 ekran paylaşımı üzerine çizim (ses kanalındakilere) */
   SCREEN_ANNOTATE: 'screen:annotate',
   /** A7 canlı altyazı (konuşanın cihazında üretilir, yalnız metin) */
@@ -2893,3 +2894,5 @@ export interface KanbanCardInput {
   dueAt?: string | null;
   position?: number;
 }
+
+export * from './focus';

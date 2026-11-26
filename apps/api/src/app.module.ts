@@ -37,6 +37,7 @@ import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
 import { RecapModule } from '@/recap/recap.module';
 import { StreaksModule } from '@/streaks/streaks.module';
 import { KanbanModule } from '@/kanban/kanban.module';
+import { FocusModule } from '@/focus/focus.module';
 import { GuildBackupModule } from '@/guild-backup/guild-backup.module';
 import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
@@ -99,6 +100,7 @@ import { GamesModule } from '@/games/games.module';
     GuildBackupModule,
     StreaksModule,
     KanbanModule,
+    FocusModule,
     ShowcaseModule,
     TournamentsModule,
     LfgModule,

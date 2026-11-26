@@ -2007,6 +2007,29 @@ export class DracordClient {
   }
 
   // ── G3: beyaz tahta ──
+  // ── D6: ortak odak zamanlayıcısı ──
+  async getFocus(channelId: string): Promise<import('@dracord/types').FocusSessionDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/focus`);
+  }
+
+  async startFocus(
+    channelId: string,
+    cfg: { focusMin?: number; breakMin?: number; longBreakMin?: number; longEvery?: number },
+  ): Promise<import('@dracord/types').FocusSessionDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/focus`, { method: 'POST', body: JSON.stringify(cfg) });
+  }
+
+  async stopFocus(channelId: string): Promise<import('@dracord/types').FocusSessionDto> {
+    return this.request(`/channels/${encodeURIComponent(channelId)}/focus`, { method: 'DELETE' });
+  }
+
+  onFocusEvent(handler: (e: import('@dracord/types').FocusSessionDto) => void): () => void {
+    const sock = this.socket;
+    if (!sock) return () => undefined;
+    sock.on(SocketEvents.FOCUS_EVENT, handler);
+    return () => sock.off(SocketEvents.FOCUS_EVENT, handler);
+  }
+
   // ── D5: kanal panosu ──
   async getKanban(channelId: string): Promise<import('@dracord/types').KanbanBoardDto> {
     return this.request(`/channels/${encodeURIComponent(channelId)}/kanban`);

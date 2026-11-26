@@ -52,6 +52,7 @@ import { Icon } from './Icon';
 import { useDataSaver } from '../lib/dataSaver';
 import { WhiteboardSheet } from './WhiteboardSheet';
 import { KanbanSheet } from './KanbanSheet';
+import { FocusSheet } from './FocusSheet';
 import { LinkifiedText } from './LinkifiedText';
 import { UserAvatar } from './UserAvatar';
 import {
@@ -122,6 +123,7 @@ export function ChatView({
   const [showPins, setShowPins] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [kanbanOpen, setKanbanOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(aroundMessageId ?? null);
   const [scrolledAway, setScrolledAway] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
@@ -893,6 +895,14 @@ export function ChatView({
           >
             <Icon name="view_kanban" size={16} color={colors.text} />
           </Pressable>
+          <Pressable
+            onPress={() => setFocusOpen(true)}
+            style={{ ...chipBtn, marginLeft: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Odak zamanlayıcısı"
+          >
+            <Icon name="timer" size={16} color={colors.text} />
+          </Pressable>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 6, gap: 6 }}>
@@ -1555,6 +1565,7 @@ export function ChatView({
       />
       <WhiteboardSheet channelId={channel.id} open={boardOpen} onClose={() => setBoardOpen(false)} />
       <KanbanSheet channelId={channel.id} open={kanbanOpen} onClose={() => setKanbanOpen(false)} />
+      <FocusSheet channelId={channel.id} open={focusOpen} onClose={() => setFocusOpen(false)} />
     </KeyboardAvoidingView>
   );
 }
