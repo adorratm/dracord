@@ -341,3 +341,7 @@ export { FocusTimer } from './components/FocusTimer';
 export { StreamAlertsPanel } from './components/StreamAlertsPanel';
 export { useSpatialVoice, MAHALLE_ASPECT, type SpatialVoice, type SpatialClient } from './lib/use-spatial-voice';
 export { SpatialRoom, MahalleButton, type SpatialRoomPerson } from './components/SpatialRoom';
+export { Draco, DracoEmpty, type DracoMood, type DracoProps, type DracoEmptyProps } from './components/Draco';
+export { AppTour, type AppTourProps } from './components/AppTour';
+export { GuildEventsModal, type GuildEventsClient } from './components/GuildEventsModal';
+export { NotificationBell, type NotificationBellProps, type NotificationBellClient } from './components/NotificationBell';
