@@ -406,6 +406,8 @@ export interface UserShowcaseDto {
   games?: Array<{ kind: string; played: number; wins: number; name?: string; best?: number }>;
   /** Kazanılan turnuva sayısı */
   tournamentWins?: number;
+  /** Günlük seri rozeti */
+  streak?: { current: number; best: number; tier: number | null } | null;
 }
 
 // ── Sunucu tanıtım sayfası + özel URL (B3) ──
@@ -2827,4 +2829,20 @@ export interface GuildBackupRestoreResult {
   categories: number;
   channels: number;
   skipped: number;
+}
+
+/** Günlük seri (D2) — mesaj veya ses ile her gün aktif olunca artar */
+export interface UserStreakDto {
+  current: number;
+  best: number;
+  activeToday: boolean;
+  /** kaçırılan günü kurtaran dondurucu */
+  freezes: number;
+  maxFreezes: number;
+  freezesUsed: number;
+  nextMilestone: number | null;
+  /** ulaşılan en yüksek eşik (3, 7, 14, 30, 50, 100, 200, 365) */
+  tier: number | null;
+  /** İstanbul günü YYYY-MM-DD */
+  day: string;
 }

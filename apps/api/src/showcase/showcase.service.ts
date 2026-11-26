@@ -1,3 +1,4 @@
+import { dayKey, liveCurrent, streakTier } from '@/streaks/streak-math';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, In, Not, IsNull } from 'typeorm';
 import type { GuildBadgeDto, UserShowcaseDto } from '@dracord/types';
@@ -96,7 +97,11 @@ export class ShowcaseService {
         return r ? { ...g, name: r.name, ...(r.best ? { best: r.best } : {}) } : g;
       });
     }
-    dto = { ...dto, games: named, tournamentWins: tw[0]?.n ?? 0 };
+    const sr = (await this.em
+      .query(`SELECT current, best, "lastDay", freezes, "freezesUsed" FROM user_streaks WHERE "userId" = $1`, [userId])
+      .catch(() => [])) as Array<{ current: number; best: number; lastDay: string | null; freezes: number; freezesUsed: number }>;
+    const streak = sr[0] ? { current: liveCurrent(sr[0], dayKey()), best: sr[0].best, tier: streakTier(sr[0].best) } : null;
+    dto = { ...dto, games: named, tournamentWins: tw[0]?.n ?? 0, streak: streak && (streak.current >= 2 || streak.tier) ? streak : null };
     this.cache.set(userId, { at: Date.now(), dto });
     if (this.cache.size > 5000) this.cache.delete(this.cache.keys().next().value!);
     return dto;

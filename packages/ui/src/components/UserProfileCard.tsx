@@ -19,6 +19,8 @@ import { GuildBadgeChip, useUserShowcase } from './GuildBadge';
 import { openActivityUrl } from '../lib/open-activity-url';
 import { presenceLabelTr } from '../lib/presence';
 
+import { streakTierIcon } from '../lib/streak';
+
 const GAME_LABEL: Record<string, string> = {
   billiards: '🎱 Bilardo',
   okey: '🀄 Okey',
@@ -264,6 +266,26 @@ export function UserProfileCard({
               </div>
             ) : null}
             <SocialLinksRow links={user.socialLinks} className="mt-space-md" />
+            {showcase?.streak ? (
+              <div className="mt-space-md flex flex-wrap gap-1.5">
+                {showcase.streak.current >= 2 ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-[#ff7a45]/15 px-2 py-0.5 font-label-sm text-[#ff9a6b]"
+                    title={`${showcase.streak.current} gündür her gün aktif`}
+                  >
+                    🔥 {showcase.streak.current} günlük seri
+                  </span>
+                ) : null}
+                {showcase.streak.tier ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-surface-container-high px-2 py-0.5 font-label-sm text-on-surface"
+                    title={`En uzun seri: ${showcase.streak.best} gün`}
+                  >
+                    {streakTierIcon(showcase.streak.tier)} {showcase.streak.tier}+ gün rozeti
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {showcase && ((showcase.games?.length ?? 0) > 0 || (showcase.tournamentWins ?? 0) > 0) ? (
               <div className="mt-space-md">
                 <p className="mb-space-sm font-label-sm uppercase tracking-wider text-outline">Oyunlar</p>

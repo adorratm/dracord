@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { StreaksService } from '@/streaks/streaks.service';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createId } from '@paralleldrive/cuid2';
 import { EntityManager, In } from 'typeorm';
 import {
@@ -55,6 +56,7 @@ export class LevelsService {
     private readonly notifications: NotificationsService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly broadcast: SocketBroadcastService,
+    @Optional() private readonly streaks?: StreaksService,
   ) {}
 
   // ── config ──────────────────────────────────────────────────────
@@ -182,6 +184,8 @@ export class LevelsService {
         Math.floor((Date.now() - new Date(joinedAtIso).getTime()) / 60_000),
       );
       if (!Number.isFinite(minutes) || minutes < 1) return;
+      // seri: 5+ dk seste bulunmak o günü sayar (seviye sistemi kapalı olsa da)
+      if (minutes >= 5) void this.streaks?.touch(userId);
       const cfg = await this.getConfig(guildId);
       if (!cfg.enabled || cfg.voiceXpPerMinute <= 0) return;
       if (cfg.noXpChannelIds.includes(channelId)) return;

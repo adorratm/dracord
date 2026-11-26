@@ -61,6 +61,7 @@ import { AutomodService } from '@/moderation/automod.service';
 import { AutomodRulesService } from '@/automod-rules/automod-rules.service';
 import { DracoService } from '@/draco/draco.service';
 import { LevelsService } from '@/levels/levels.service';
+import { StreaksService } from '@/streaks/streaks.service';
 import { QueuesService } from '@/queues/queues.service';
 import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { LinkPreviewService } from './link-preview.service';
@@ -92,6 +93,7 @@ export class MessagesService {
     private readonly draco: DracoService,
     @Optional() private readonly queues?: QueuesService,
     @Optional() private readonly levels?: LevelsService,
+    @Optional() private readonly streaks?: StreaksService,
     @Optional() private readonly onboarding?: OnboardingService,
   ) {}
 
@@ -573,6 +575,7 @@ export class MessagesService {
       void this.crosspostAnnouncement(channelRow, message).catch(() => undefined);
     }
     // Seviye/XP — asla gönderimi bozmaz
+    if (msgType === 'default') void this.streaks?.touch(userId);
     if (msgType === 'default' && channelRow?.guildId) {
       void this.levels?.onMessage(channelRow.guildId, channelId, userId).catch(() => undefined);
     }

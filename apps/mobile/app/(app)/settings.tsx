@@ -1,4 +1,5 @@
 import { YearRecapView } from '../../components/YearRecapView';
+import { StreakView } from '../../components/StreakView';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
@@ -993,6 +994,7 @@ export default function SettingsScreen() {
         {tab === 'recap' && (
           <>
             <H1>Yıl Özeti</H1>
+            <StreakView client={client} />
             <YearRecapView client={client} name={user?.displayName || user?.username || ''} />
           </>
         )}

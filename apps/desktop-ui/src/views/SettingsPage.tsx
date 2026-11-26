@@ -24,6 +24,7 @@ import {
   MyBirthdaySettings,
   formatDeletionDate,
   ShareCodecSettings,
+  StreakCard,
 } from '@dracord/ui';
 import {
   SCREEN_SHARE_FPS_PRESETS,
@@ -403,7 +404,7 @@ export function SettingsPage({
             item('privacy', 'Veri ve Gizlilik', 'shield'),
             item('messaging', 'Mesajlaşma İzinleri', 'forum'),
             item('bookmarks', 'Yer İmleri', 'bookmark'),
-            item('recap', 'Yıl Özeti', 'auto_awesome'),
+            item('recap', 'Seri ve Yıl Özeti', 'auto_awesome'),
             item('notifications', 'Bildirimler', 'notifications'),
           ],
         },
@@ -1281,7 +1282,13 @@ export function SettingsPage({
       )}
 
       {tab === 'recap' && (
-        <SettingsPageBody title="Yıl Özeti" description="Dracord'da geçirdiğin yılın hikâyesi: mesajların, ses saatlerin, arkadaşların ve oyunların.">
+        <SettingsPageBody title="Seri ve Yıl Özeti" description="Günlük serin ve Dracord'da geçirdiğin yılın hikâyesi.">
+          <SettingsSection>
+            <StreakCard client={client} />
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Her gün bir mesaj ya da 5 dk ses o günü sayar. Her 7 günde bir dondurucu kazanırsın; kaçırdığın bir günü kurtarır (en fazla 2).
+            </p>
+          </SettingsSection>
           <SettingsSection>
             <div className="flex flex-wrap gap-2">
               {[new Date().getFullYear(), new Date().getFullYear() - 1].map((y) => (

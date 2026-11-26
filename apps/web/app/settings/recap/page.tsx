@@ -1,14 +1,19 @@
 'use client';
 
+import { StreakCard } from '@dracord/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { SettingsPage, SettingsSection, SettingsNote } from '@/components/settings/SettingsControls';
 
 export default function RecapSettingsPage() {
-  const { user } = useAuth();
+  const { user, client } = useAuth();
   const now = new Date();
   const years = [now.getFullYear(), now.getFullYear() - 1];
   return (
-    <SettingsPage title="Yıl Özeti" description="Dracord'da geçirdiğin yılın hikâyesi: mesajların, ses saatlerin, arkadaşların ve oyunların.">
+    <SettingsPage title="Seri ve Yıl Özeti" description="Günlük serin ve Dracord'da geçirdiğin yılın hikâyesi.">
+      <SettingsSection title="Günlük seri">
+        <StreakCard client={client} />
+        <SettingsNote>Her gün bir mesaj atmak ya da 5 dakika seste kalmak o günü sayar. Her 7 günde bir dondurucu kazanırsın; kaçırdığın bir günü otomatik kurtarır (en fazla 2). Gün İstanbul saatiyle gece yarısı döner.</SettingsNote>
+      </SettingsSection>
       <SettingsSection title="Özetini aç">
         <div className="flex flex-wrap gap-2">
           {years.map((y) => (

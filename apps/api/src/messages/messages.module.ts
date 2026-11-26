@@ -1,3 +1,4 @@
+import { StreaksModule } from '@/streaks/streaks.module';
 import { MediaGalleryService } from './media-gallery.service';
 import { MediaGalleryController, StarboardController } from './starboard.controller';
 import { StarboardConfigService } from './starboard-config.service';
@@ -33,6 +34,7 @@ import { DracoService } from '@/draco/draco.service';
     NotificationsModule,
     QueuesModule,
     LevelsModule,
+    StreaksModule,
     AutomodRulesModule,
     OnboardingModule,
     forwardRef(() => MusicModule),

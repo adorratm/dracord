@@ -72,3 +72,4 @@ export type {
 export { GuildSubscription, GuildSubscriptionCode, GuildSubscriptionTier } from './guild-subscription.entity';
 export { ClientError } from './client-error.entity';
 export { GameResult } from './game-result.entity';
+export { UserStreak } from './user-streak.entity';

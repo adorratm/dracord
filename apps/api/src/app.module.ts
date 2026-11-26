@@ -35,6 +35,7 @@ import { DiscoveryModule } from '@/discovery/discovery.module';
 import { LevelsModule } from '@/levels/levels.module';
 import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
 import { RecapModule } from '@/recap/recap.module';
+import { StreaksModule } from '@/streaks/streaks.module';
 import { GuildBackupModule } from '@/guild-backup/guild-backup.module';
 import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
@@ -95,6 +96,7 @@ import { GamesModule } from '@/games/games.module';
     GuildStatsModule,
     RecapModule,
     GuildBackupModule,
+    StreaksModule,
     ShowcaseModule,
     TournamentsModule,
     LfgModule,
