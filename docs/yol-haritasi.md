@@ -234,7 +234,8 @@ Sıralama önerisi — küçük ve bağımsız olanlar önce, büyük altyapı p
   "Orijinali göster".
 - Desteklemeyen her yer (Electron desktop, Firefox, Safari, mobil): **Çevir** → Google Çeviri
   sayfası/uygulaması kullanıcının cihazında açılır.
-- [ ] Sonraki adım: transformers.js + opus-mt (Web Worker) ile Electron'da da cihaz üstü çeviri.
+- [x] Electron/Firefox'ta cihaz üstü çeviri (transformers.js + opus-mt, Web Worker, onaylı indirme).
+- [ ] Mobilde cihaz üstü çeviri: native ML modülü ister (yeni mağaza sürümü); şimdilik Google Çeviri'ye açılır.
 
 ### Test listesi (Dalga 1)
 - [ ] İki kullanıcı aynı ses kanalında: biri durum yazar → diğerinin kanal listesinde anında görünür; herkes çıkınca kaybolur.
@@ -333,15 +334,16 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] B3 Sunucu tanıtım sayfası + özel adres — `dracord.com.tr/s/<adres>` (SSR, OG önizleme) ve `/invite/<adres>` süresiz davet. Ayar: web Sunucu ayarları › Tanıtım sayfası, desktop ayrı sekme (MANAGE_GUILD). Sayfa yalnız açıkça açılırsa görünür; mesaj göstermez, yalnız kilitsiz/izin kısıtı olmayan metin kanalı adları. Ayrıca: girişsiz davet açılınca girişten sonra davete dönülür; `returnUrl` açık yönlendirme (`//`) kapatıldı.
 - [x] B4 Sunucu rozeti + profil vitrini — yönetici rozet etiketi (2–5 harf) + emoji belirler (Tanıtım sayfası bölümü); üye Ayarlar › Profil'de bir sunucu rozetini seçer; profil kartında (web/desktop/mobil) rozet + o sunucudaki seviye görünür. Üyelikten çıkınca / rozet kalkınca otomatik gizlenir. API: `showcase/*`.
 - [x] C2 Turnuva modu — tek eleme 1v1 (tavla, bilardo, bowling, kelime, bilgi yarışması, harici oyun). Kayıt → rastgele tohum + otomatik bye → maç hazır bildirimi → iki oyuncu sonucu bildirir (uyuşursa ya da kaybeden kabul ederse biter; uyuşmazsa düzenleyiciye bildirim) → şampiyon bildirimi. Canlı güncelleme `tournament:update`. Web/desktop: sunucu menüsü › Turnuvalar (oluştur/yönet); mobil: Sunucu menüsü › Turnuva (katıl/bildir/yönet, oluşturma yok).
-  - [ ] Sonraki: okey (4'lü masa) formatı, maçı doğrudan etkinlikten başlatıp sonucu oyundan otomatik alma, çift eleme / round-robin.
+  - [x] Okey 4'lü masa, lig (round-robin), çift eleme (C6). Okey sonucu da artık oyundan otomatik alınır (101 cezada elenen; masada tek kişi kalınca kazanan). Maç kartında **Oyun odasına git** (sunucuda o oyunun odası varsa).
 - [x] C3 Haftalık görevler + sezon — her sunucuya her hafta 3 görev (mesaj / ses dakikası / XP; kademe hafta+sunucuya göre belirlenimli), tamamlanınca "Ödülü al" ile bir kez bonus XP (seviye atlatır). Haftalık ve aylık sezon skor tablosu (puan = kazanılan XP + görev ödülü), geçen sezonun ilk üçü. Yeni `member_weekly_stats` + `challenge_claims`; seviye sistemi kapalıysa kapalı. Web/desktop: Seviyeler penceresi; mobil: Seviyeler sekmesi. Sayım bu sürümden itibaren başlar.
 - [x] C4 Oyun overlay iyileştirme — konuşan HUD artık sayfayı yeniden yüklemiyor (titreme yok, yerinde güncelleme); konum (4 köşe), aynı anda 1–6 kişi, aç/kapat; kendi mikrofon kapalı / sağır uyarısı; isteğe bağlı CPU/RAM/saat göstergesi. Ayar: Masaüstü › Ayarlar › Overlay › Konuşan HUD.
   - [ ] Oyun FPS'i: Electron'dan ölçülemez; Windows'ta PresentMon (MIT) gibi harici araçla entegrasyon gerekir — ayrı karar.
 - [x] A3 Klip kaydı (desktop) — ses kanalında ekran paylaşımı varken kontrol çubuğunda **Klip**: arabelleği açar; "Klibi kaydet" ya da **Ctrl+Shift+K** (oyundayken de) son 30–60 sn'yi `Videolar/Dracord Klipleri` klasörüne .webm olarak yazar. Kendi paylaşımın ya da izlediğin paylaşım (görüntü + paylaşım sesi). İki kademeli MediaRecorder; ek kodlama yok. İzlenen paylaşımda kalite izlediğin kaliteyle aynıdır.
-  - [ ] Sonraki: paylaşım yokken doğrudan oyun penceresinden klip, kırpma/paylaşma (kanala yükle).
+  - [x] Paylaşımsız oyun penceresinden klip, kırpma, kanala gönderme (C7).
 - [x] A4 Ekran paylaşımına çizim — paylaşımın sol altında kalem: 6 renk, "çizimlerimi sil"; çizgiler herkeste canlı görünür, ~3,5 sn sonra solar (lazer kalem). Yalnız aynı ses kanalındakilere gider (sunucu doğrular, saniyede 40 mesaj sınırı). Desktop'ta paylaşan kişi çizimleri **kendi gerçek ekranında** da görür (şeffaf, tıklanamaz, yakalamaya girmeyen pencere; ekran paylaşımı — pencere paylaşımında yok). Mobil: çizimleri görür (çizim yok).
 - [x] A7 Canlı altyazı (cihaz üstü, bütçe 0) — ses kontrol çubuğunda **Altyazı**: "Altyazıları göster" (izleyen) ve "Konuşmamı altyazıla" (konuşan, ayrı onay). Tanıma konuşanın cihazında: Chrome/Edge masaüstünde Web Speech `processLocally` (SODA dil paketi), Electron/Firefox'ta Whisper-base (~80 MB, bir kez, onaylı; transformers.js Worker, basit VAD ile parçalı). Bulut tanıma hiç kullanılmaz; yalnız metin aynı ses kanalına gider, saklanmaz; susturunca durur. Mobil: altyazıları görür.
-  - [ ] Sonraki: altyazıyı çeviriyle birleştirme (D3), mobilde kendi konuşmanı altyazılama.
+  - [x] Altyazı + çeviri: **Altyazıları çevir** — başkalarının kesinleşen altyazısı cihazında senin diline çevrilir (Chrome/Edge yerleşik çevirmen, Electron/Firefox'ta opus-mt); orijinal altta küçük görünür.
+  - [ ] Mobilde kendi konuşmanı altyazılama: cihaz üstü konuşma tanıma native modül ister → yeni mağaza sürümü gerekir (OTA ile verilemez).
 - [x] D2 Otomatik moderasyon (model yok) — sunucu başına: yasaklı kelime/ifade (Türkçe + leet + aralıklı yazım normalize; kelime parçası yanlış pozitifine karşı sınırlı eşleşme) ve düzenli ifade (ReDoS riskli kalıplar reddedilir); spam: hız (10 sn), tekrar (30 sn), etiket, bağlantı, büyük harf, başka sunucu daveti, zalgo; tekrarlayan ihlalde otomatik zaman aşımı; rol/kanal muafiyeti (mesaj yönetenler ve botlar her zaman muaf); "Dene" kutusu; son 500 olay günlüğü. Ayar: Sunucu ayarları › Otomatik moderasyon (web), Moderasyon sekmesi (desktop). Not: hız/tekrar sayaçları API süreç belleğinde (çok örnekte örnek başına).
 - [x] D4 Draco yardımcı bot (kural tabanlı, model yok) — `/draco <soru>` (Dracord özellikleri bilgi tabanı, 20 konu), `/sss <soru>` (sunucunun kendi SSS'i; soru + anahtar kelime eşleşmesi, Türkçe ek kırpma), `/zar [2d6]`, `/yazitura`, `/sec a | b | c`, `/seviye`. Yöneticiler Sunucu ayarları › **SSS ve Draco**'dan soru/cevap ekler; isteğe bağlı "?" ile biten mesaja güçlü eşleşmede otomatik yanıt (kanal başına dakikada bir, kanal seçilebilir). Komutlar slash listesinde görünür (web/desktop/mobil).
 - [x] E2 Oturum / cihaz yönetimi — erişim belirteci artık oturum kimliği (`sid`) taşıyor ve her istekte doğrulanıyor (30 sn önbellek) → oturum kapatılınca belirteç anında geçersiz; soket bağlantıları da düşer ve istemci otomatik çıkış yapar. Yenilemede oturum kimliği korunur (yalnız belirteç döner). Cihaz bilgisi (tarayıcı/uygulama, işletim sistemi, son kullanım, IP son kısmı gizli). Ayarlar › Şifre ve Güvenlik › Oturumlar (web/desktop), Hesap Durumu (mobil): tek tek ya da "diğer tüm cihazlardan çıkış". "Çıkış yap" artık sunucudaki oturumu da kapatıyor. Eski sürüm belirteçleri (sid'siz) süresi dolana dek (≤7 gün) çalışır.
@@ -349,14 +351,15 @@ Hepsi **kod tamam, canlıda test bekliyor** — test listeleri yukarıda.
 - [x] E3 Uçtan uca şifreli DM — isteğe bağlı (sohbet başına), çok cihazlı: X25519 cihaz anahtarları + mesaj başına anahtar (tweetnacl), 1:1 ve grup DM, güvenlik kodu, cihaz değişikliği uyarısı, ayarlarda cihaz listesi. Sınırlar: yalnız metin; arama/düzenleme/şikâyet içeriği yok; yeni cihaz eski mesajları okuyamaz. Mobil için yeni build gerekir (expo-crypto).
 
 ### Öncelik 3 — Faz 1 optimizasyon ve sağlamlık
-- [x] Kopya kod ortak pakete: `useRemoteControl`, `buildSidebarCategories`, ayar bileşenleri (`SettingsPage/Section/Toggle/Select/Note/Slider`) artık `@dracord/ui`'da; web ve desktop-ui kopyaları silindi. Mobil için DOM'suz giriş `@dracord/ui/core` (`useScheduledMessages`, `useVoiceChannelStatuses`) — mobil kopyalar kaldırıldı. Kalan: `Draco`, `NotificationBell`, `GuildEventsModal`, `AppTour` uygulamaya özel farklar içeriyor (ayrı ayrı birleştirilmeli).
+- [x] Kopya kod ortak pakete: `useRemoteControl`, `buildSidebarCategories`, ayar bileşenleri (`SettingsPage/Section/Toggle/Select/Note/Slider`) artık `@dracord/ui`'da; web ve desktop-ui kopyaları silindi. Mobil için DOM'suz giriş `@dracord/ui/core` (`useScheduledMessages`, `useVoiceChannelStatuses`) — mobil kopyalar kaldırıldı. `Draco`, `NotificationBell`, `GuildEventsModal`, `AppTour` de `@dracord/ui`'da birleşti (2026-11-26): desktop etkinliklerde ilgilen (RSVP) + sahne etkinliği, hatırlatma erteleme kazandı; web Draco'su benzersiz SVG kimlikleri aldı.
 - [x] E2E smoke (web) — `apps/e2e` (Playwright): herkese açık sayfalar (canlıya karşı 7/7 geçti), oturumlu sohbet (mesaj, Ctrl+V görsel yükleme, tam ekran önizleme) ve bağlantı kopması testleri. `yarn e2e:public` / `yarn e2e`; her dağıtımdan sonra `.github/workflows/e2e-smoke.yml`. Oturumlu testler için test hesabı + `E2E_REFRESH_TOKEN` + `E2E_CHANNEL` gerekir (bkz. `apps/e2e/README.md`).
   - [ ] Sonraki: Windows desktop E2E (Electron), ses/ekran paylaşımı/uzak kontrol (iki hesap + LiveKit gerektirir).
 - [~] Performans — web ölçümü (canlı, 10 Mbps/40 ms): her herkese açık sayfa ~520 KB (sıkıştırılmış) / 1,8 MB JS indiriyordu; en büyük parça LiveKit (~600 KB) kök layout'tan geliyordu. Ana sayfa LCP 5,5 sn (oturum kontrolü bitene kadar yalnız maskot).
   - [x] LiveKit + ses sağlayıcısı (`VoiceGate`/`VoiceShell`) yalnız uygulama sayfalarında tembel yüklenir, bir kez yüklenince bağlı kalır (arama kopmaz); herkese açık sayfada boşta önceden ısıtılır.
   - [x] Ctrl+K araması yalnız oturum açıkken yüklenir; `@dracord/ui` `sideEffects: false` + `optimizePackageImports`.
   - [x] Ana sayfa içeriği oturum kontrolünü beklemeden sunucudan gelir (LCP).
-  - [ ] Dağıtımdan sonra yeniden ölç; desktop açılış süresi ve mobil soğuk açılış ölçümü.
+  - [x] Yeniden ölçüm (2026-11-26, canlı, 10 Mbps/40 ms): giriş LCP 0,8 sn, indirme 0,5 sn, JS ~450 KB (önce ~520). Ana sayfada asıl yük ikon fontuydu (Material Symbols tüm eksenleriyle **3,9 MB**) → yalnız kullanılan FILL ekseni: **453 KB** (−%88). Desktop'ta FILL'siz font dolu ikonları boş gösteriyordu, o da düzeldi.
+  - [ ] Desktop açılış süresi (Windows) ve mobil soğuk açılış: gerçek cihazda ölçülmeli.
 - [x] Bağlantı dayanıklılığı — **hata düzeltildi:** socket.io v4'te `reconnect` Socket'te değil Manager'da yayıldığı için `onSocketReconnect` hiç çalışmıyordu ve yeniden bağlanınca kanal odalarına geri katılınmıyordu (açık kanala canlı mesaj gelmiyordu). SDK artık katılınan kanalları izleyip her yeniden bağlantıda tekrar katılıyor; sunucu bağlantıyı kendisi keserse (süresi dolmuş belirteç) belirteci yenileyip bağlanıyor; uyanma / `online` / sekme görünür olunca beklemeden bağlanıyor; mobilde AppState `active` aynı işi yapıyor. Açık sohbet (web/desktop/mobil) yeniden bağlanınca son 50 mesajı çekip kaçırılanları ekliyor (`mergeLatestMessages`).
 - [x] Erişilebilirlik/kontrast taraması — herkese açık sayfalar (ana sayfa, giriş, indirme) koyu+açık temada axe WCAG 2 A/AA: **0 ihlal**; kalıcı test `apps/e2e/tests/a11y.public.spec.ts`. Uygulama içi kod taraması: adsız simge düğmesi 3 → 0, etiketsiz form alanı 13 → 0 (aria-label). Kalan: oturumlu ekranların axe taraması (test hesabı ile `signed-in` projesine eklenecek).
 - [x] Repo temizliği: `apps/desktop` deneme betikleri/günlükleri ve `apps/mobile/console.log(m.width` (boş) depodan çıkarıldı, `.gitignore`'a eklendi. Kökteki `youtube-cookies.*` zaten gitignore'da ve depoda yok (yerel dosyan, dokunulmadı).
@@ -392,6 +395,30 @@ Hepsi varsayılan kapalı/opsiyonel açılır, üç platform birlikte; ücretli 
 - [x] C6 Turnuva devamı — biçimler: tek eleme, lig (puan durumu, ikili averaj), 4'lü masa (okey; masa kazananı üst tura). Tavla/bilardo/bowling'de maçın oyuncuları sunucunun oyun kanalında oynayınca sonuç kendiliğinden işlenir ("sonuç oyundan"). Çift eleme yapılmadı (lig onun yerine).
 - [x] C7 Klip devamı (desktop) — paylaşım/ses gerekmeden oyun penceresinden klip (Ayarlar › Overlay › Klipler; yalnız yerel), düzenleyici: kırp, kırpılmışı kaydet, kanala gönder (50 MB üstü küçültülür).
 - [x] F2 Sunucu abonelikleri — para Dracord'dan geçmez: sahip kademe (rol, avantaj, fiyat metni, kendi https ödeme sayfası) tanımlar; üyeliği elle (süreli/süresiz) ya da kodla verir; rol otomatik verilir, süre dolunca alınır. Web/desktop; mobil görünüm sonra.
+
+## Faz 5 — Yeni özellikler (karar 2026-11-26: hepsi)
+
+Hepsi isteğe bağlı, ücretli API yok, mevcut mobil sürümleri bozmaz (yeni kanal türü / native modül eklenmedi).
+
+- [x] **Yıl Özeti (Dracord Wrapped)** — `GET users/me/recap?year=`: mesaj, ses saati, en çok yazılan sunucu/kanal/kişi, tepkiler, oyun ve turnuvalar, ay ay etkinlik, "kişilik". Hikâye kartları + paylaşılabilir görsel (web/desktop), metin paylaşımı (mobil). Aralıkta banner. Ayarlar › Seri ve Yıl Özeti. 6 saat önbellek, yeni indeksler.
+- [x] **Günlük seri** — mesaj atmak ya da 5+ dk seste kalmak günü sayar (İstanbul gece yarısı). Her 7 günde bir dondurucu (en fazla 2) kaçırılan günü kurtarır. Rozetler 3/7/14/30/50/100/200/365 gün; profil kartında 🔥 seri + rozet. Kullanıcı başı günde en fazla bir DB yazımı.
+- [x] **Mahalle (konumlu ses)** — ses kanalında 2B harita (meydan, çay bahçesi, kahvehane, park, sahil); yanına yürüdüğünü yüksek, uzaktakini kısık duyarsın (12–45% mesafe, yumuşak düşüş). Konum yalnız aynı kanaldakilere gider, saklanmaz. Girmeyenler tam ses duyar/duyulur. Web/desktop (kontrol çubuğu › Mahalle); mobil şimdilik tam ses.
+- [x] **Sunucu yedeği ve şablonlar** — roller (izinleriyle), kategoriler, kanallar ve rol bazlı kanal izinleri JSON olarak iner; aynı sunucuya geri yüklenir (yalnız ekler, aynı adlıları atlar) ya da "bu yapıyla yeni sunucu" / "dosyadan yeni sunucu". Mesaj ve üye girmez. Geri yükleme yalnız sahip; dakikada bir.
+- [x] **Görev panosu (kanban)** — her metin kanalında **Pano**: sütunlar (yöneticiler), kartlar (yazabilen herkes), sürükle-bırak, atama, etiket, son tarih, "benim kartlarım"; canlı. Mobilde sütun sekmeleri + dokun-taşı. Yeni kanal türü yerine sekme: eski mobil sürümler bozulmaz.
+- [x] **COOMBIE ↔ Dracord** — oyun bitince skor/leş/süre/MVP profile işlenir (en iyi puan rozeti); solo ya da MVP koşu ses kanalı sohbetine bot mesajı. Oyun sunucusu `DRACORD_GAME_SECRET` ile imzalar (istemcide sır yok).
+- [x] **Odak zamanlayıcısı (Pomodoro)** — kanal başına ortak sayaç (25/5, 50/10, 90/15; her 4 turda uzun mola); evre başlangıç anından hesaplanır (sunucu zamanlayıcısı yok, yeniden başlatmaya dayanıklı). Zil (web/desktop), titreşim (mobil).
+- [x] **Yayın bildirimleri** — YouTube (RSS, anahtar gerekmez: yeni video/yayın) ve Twitch (Helix; `TWITCH_CLIENT_ID/SECRET` gerekir, ücretsiz). Sunucu ayarları › Yayın bildirimleri; özel mesaj şablonu, "Dene". Birden çok API kopyasında satır sahiplenme ile tek bildirim.
+- [x] Dağıtım düzeltmesi: tablo listesi `head` ile kesilince SIGPIPE deploy'u düşürüyordu → yalnız tablo sayısı yazılıyor.
+
+### Test listesi (Faz 5)
+- [ ] İki hesap aynı ses kanalında Mahalle'yi açar; biri uzaklaşınca ses kısılır, yaklaşınca açılır.
+- [ ] Pano: iki pencerede kart taşı → diğerinde anında görünür.
+- [ ] Odak: biri başlatır, diğer kullanıcıda aynı sayaç ve evre değişiminde zil.
+- [ ] YouTube kanalı ekle → bir sonraki videoda bot mesajı; Twitch için anahtarlar eklenince canlı yayın.
+- [ ] Sunucu yedeğini indir, "dosyadan yeni sunucu" ile kur; roller/kanallar/izinler aynı mı.
+- [ ] Yıl Özeti kartları ve paylaşım görseli; Aralık banner'ı.
+- [ ] Seri: iki gün üst üste mesaj → 2 günlük seri; profil kartında 🔥.
+- [ ] COOMBIE: Dracord'dan açılan koşu bitince profilde oyun satırı ve en iyi puan.
 
 ## Karar bekleyen sorular
 
@@ -430,3 +457,5 @@ Hepsi varsayılan kapalı/opsiyonel açılır, üç platform birlikte; ücretli 
   sayfasından girilir (.env'yi ezer, 30 sn'de devreye girer, son deneme sonucu görünür). Müzik botu artık her
   deploy'da CI'da derlenip güncelleniyor. Masaüstü güncellemeleri artık fark indirmesi yapıyor (latest*.yml tag
   adreslerine işaret ediyor; önceden her sürümde ~150 MB'ın tamamı iniyordu).
+- 2026-11-26 — Faz 5 (8 özellik) + kalanlar: okey sonucu oyundan, maç odasına git, altyazı çevirisi, 4 kopya bileşen
+  ortak pakete, ikon fontu 3,9 MB → 453 KB, deploy SIGPIPE düzeltmesi. Birim testleri: seri, odak, Mahalle, yayın akışı, okey sonucu.
