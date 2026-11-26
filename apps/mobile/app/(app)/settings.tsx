@@ -1,3 +1,4 @@
+import { YearRecapView } from '../../components/YearRecapView';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
@@ -73,6 +74,7 @@ type Tab =
   | 'privacy'
   | 'messaging'
   | 'bookmarks'
+  | 'recap'
   | 'notifications'
   | 'nitro'
   | 'boost'
@@ -106,6 +108,7 @@ const NAV: NavSection[] = [
       { id: 'privacy', labelKey: 'nav.privacy', icon: 'shield' },
       { id: 'messaging', labelKey: 'nav.messaging', icon: 'forum' },
       { id: 'bookmarks', labelKey: 'nav.bookmarks', icon: 'bookmark' },
+      { id: 'recap', labelKey: 'nav.recap', icon: 'auto_awesome' },
       { id: 'notifications', labelKey: 'nav.notifications', icon: 'notifications' },
     ],
   },
@@ -984,6 +987,13 @@ export default function SettingsScreen() {
                 patchSettings({ messaging: { ...settings.messaging, spellcheck: v } })
               }
             />
+          </>
+        )}
+
+        {tab === 'recap' && (
+          <>
+            <H1>Yıl Özeti</H1>
+            <YearRecapView client={client} name={user?.displayName || user?.username || ''} />
           </>
         )}
 

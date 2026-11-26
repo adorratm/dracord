@@ -115,6 +115,7 @@ type Tab =
   | 'privacy'
   | 'messaging'
   | 'bookmarks'
+  | 'recap'
   | 'notifications'
   | 'nitro'
   | 'boost'
@@ -402,6 +403,7 @@ export function SettingsPage({
             item('privacy', 'Veri ve Gizlilik', 'shield'),
             item('messaging', 'Mesajlaşma İzinleri', 'forum'),
             item('bookmarks', 'Yer İmleri', 'bookmark'),
+            item('recap', 'Yıl Özeti', 'auto_awesome'),
             item('notifications', 'Bildirimler', 'notifications'),
           ],
         },
@@ -1274,6 +1276,26 @@ export function SettingsPage({
               checked={prefs.messaging.filterExplicit}
               onChange={(v) => setSection('messaging', { filterExplicit: v })}
             />
+          </SettingsSection>
+        </SettingsPageBody>
+      )}
+
+      {tab === 'recap' && (
+        <SettingsPageBody title="Yıl Özeti" description="Dracord'da geçirdiğin yılın hikâyesi: mesajların, ses saatlerin, arkadaşların ve oyunların.">
+          <SettingsSection>
+            <div className="flex flex-wrap gap-2">
+              {[new Date().getFullYear(), new Date().getFullYear() - 1].map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('dracord:open-recap', { detail: y }))}
+                  className="rounded-full bg-gradient-to-r from-[#4a1d7a] to-[#d9467a] px-5 py-2 font-semibold text-white"
+                >
+                  ✨ {y} özeti
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 font-body-sm text-on-surface-variant">Özet yalnız sana görünür. Son kartta görsel olarak kaydedip paylaşabilirsin.</p>
           </SettingsSection>
         </SettingsPageBody>
       )}

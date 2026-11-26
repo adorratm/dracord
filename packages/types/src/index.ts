@@ -2760,3 +2760,41 @@ export interface GuildSubscriptionsOverview {
   mine: GuildSubscriptionDto[];
   canManage: boolean;
 }
+
+// ── Yıl özeti (Dracord Wrapped) ──
+export interface YearRecapPerson {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  messages: number;
+}
+export interface YearRecapPlace {
+  id: string;
+  name: string;
+  iconUrl?: string | null;
+  guildName?: string;
+  messages: number;
+}
+export interface YearRecapDto {
+  year: number;
+  generatedAt: string;
+  messages: number;
+  /** günlük mesaj sayısı (aylık, 12 eleman) */
+  byMonth: number[];
+  activeDays: number;
+  longestStreak: number;
+  voiceMinutes: number;
+  reactionsGiven: number;
+  firstMessageAt: string | null;
+  busiestDay: { day: string; messages: number } | null;
+  /** 0–23, İstanbul saati */
+  busiestHour: number | null;
+  topGuilds: YearRecapPlace[];
+  topChannels: YearRecapPlace[];
+  topFriends: YearRecapPerson[];
+  topEmojis: { emoji: string; count: number }[];
+  games: { played: number; won: number; topKind: string | null };
+  tournamentsWon: number;
+  persona: { id: string; title: string; desc: string; emoji: string };
+}

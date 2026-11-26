@@ -329,3 +329,5 @@ export { summarizeStats, type StreamStats } from './lib/stream-stats';
 export { SHARE_CODECS, loadShareCodec, saveShareCodec, canSendCodec, shareCodecPublishOptions, type ShareCodec } from './lib/share-codec';
 export { ShareCodecSettings } from './components/ShareCodecSettings';
 export { ActivityLobby } from './components/ActivityLobby';
+export { YearRecap, recapSeasonYear } from './components/YearRecap';
+export { renderRecapCard, shareRecapCard } from './lib/recap-card';

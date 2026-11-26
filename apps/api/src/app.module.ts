@@ -34,6 +34,7 @@ import { MetricsModule } from '@/metrics/metrics.module';
 import { DiscoveryModule } from '@/discovery/discovery.module';
 import { LevelsModule } from '@/levels/levels.module';
 import { GuildStatsModule } from '@/guild-stats/guild-stats.module';
+import { RecapModule } from '@/recap/recap.module';
 import { ShowcaseModule } from '@/showcase/showcase.module';
 import { TournamentsModule } from '@/tournaments/tournaments.module';
 import { LfgModule } from '@/lfg/lfg.module';
@@ -91,6 +92,7 @@ import { GamesModule } from '@/games/games.module';
     DiscoveryModule,
     LevelsModule,
     GuildStatsModule,
+    RecapModule,
     ShowcaseModule,
     TournamentsModule,
     LfgModule,

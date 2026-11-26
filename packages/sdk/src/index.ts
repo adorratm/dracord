@@ -1242,6 +1242,11 @@ export class DracordClient {
     return this.request(`/public/guilds/${encodeURIComponent(slug)}`);
   }
 
+  // ── Yıl özeti (Dracord Wrapped) ──
+  async getYearRecap(year?: number): Promise<import('@dracord/types').YearRecapDto> {
+    return this.request(`/users/me/recap${year ? `?year=${year}` : ''}`);
+  }
+
   // ── Sunucu istatistikleri (B2, MANAGE_GUILD) ──
   async getGuildStats(guildId: string, days: GuildStatsRange = 30): Promise<GuildStatsDto> {
     return this.request(`/guilds/${guildId}/stats?days=${days}`);

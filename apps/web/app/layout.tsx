@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
 import { AccountDeletionBar } from '@/components/AccountDeletionBar';
+import { YearRecapBar } from '@/components/YearRecapBar';
 import { Analytics } from '@/components/Analytics';
 import { GlobalSearchLazy } from '@/components/GlobalSearchLazy';
 import { OnboardingGate } from '@/components/OnboardingGate';
@@ -158,6 +159,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Suspense>
                 <SettingsReturnTracker />
                 <AccountDeletionBar />
+                <YearRecapBar />
                 {/* Ses kabuğu (LiveKit) yalnız uygulama sayfalarında yüklenir */}
                 <VoiceGate>{children}</VoiceGate>
                 <AppToaster />

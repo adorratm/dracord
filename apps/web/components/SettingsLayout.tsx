@@ -50,6 +50,7 @@ const NAV: NavDef[] = [
       },
       { id: 'family', labelKey: 'nav.family', icon: 'family_restroom', href: '/settings/family' },
       { id: 'bookmarks', labelKey: 'nav.bookmarks', icon: 'bookmark', href: '/settings/bookmarks' },
+      { id: 'recap', labelKey: 'nav.recap', icon: 'auto_awesome', href: '/settings/recap' },
       {
         id: 'notifications',
         labelKey: 'nav.notifications',

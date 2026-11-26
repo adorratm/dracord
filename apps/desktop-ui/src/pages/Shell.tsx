@@ -1,3 +1,4 @@
+import { YearRecapBar } from '../components/YearRecapBar';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import type {
   CategoryDto,
@@ -1296,6 +1297,7 @@ export function Shell() {
         }}
       />
       <AccountDeletionBanner user={user} client={client} onCancelled={() => void refreshUser()} />
+      <YearRecapBar />
       {activeGuild ? (
         <GuildOnboardingModal
           key={activeGuild.id}
