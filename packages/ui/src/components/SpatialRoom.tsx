@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { SPATIAL_FAR, SPATIAL_NEAR } from '@dracord/types';
 import { MAHALLE_ASPECT, type SpatialVoice } from '../lib/use-spatial-voice';
 import { Avatar } from './Avatar';
@@ -36,7 +36,21 @@ const SPOTS = [
 /** D3 — Mahalle haritası: tıkla/sürükle ya da ok tuşlarıyla yürü; yakındakini daha yüksek duyarsın */
 export function SpatialRoom({ spatial, meId, people, onClose }: SpatialRoomProps) {
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const areaRef = useRef<HTMLDivElement | null>(null);
   const dragging = useRef(false);
+  // harita her zaman tam 16:10 — kapsayıcıya sığacak en büyük boyut
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      const w = Math.min(r.width, r.height * ASPECT);
+      setSize({ w: Math.floor(w), h: Math.floor(w / ASPECT) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const toPos = useCallback((e: PointerEvent) => {
     const r = boxRef.current?.getBoundingClientRect();
@@ -86,7 +100,7 @@ export function SpatialRoom({ spatial, meId, people, onClose }: SpatialRoomProps
           </button>
         )}
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center">
+      <div ref={areaRef} className="relative flex min-h-0 flex-1 items-center justify-center">
         <div
           ref={boxRef}
           role="application"
@@ -106,10 +120,11 @@ export function SpatialRoom({ spatial, meId, people, onClose }: SpatialRoomProps
             if (p) spatial.moveTo(p);
           }}
           onPointerUp={() => (dragging.current = false)}
-          className="relative max-h-full w-full cursor-crosshair touch-none select-none overflow-hidden rounded-2xl outline-none ring-primary focus-visible:ring-2"
+          className="relative shrink-0 cursor-crosshair touch-none select-none overflow-hidden rounded-2xl outline-none ring-primary focus-visible:ring-2"
           style={{
-            aspectRatio: `${ASPECT}`,
-            maxWidth: `calc((100vh - 220px) * ${ASPECT})`,
+            width: size.w || undefined,
+            height: size.h || undefined,
+            visibility: size.w ? 'visible' : 'hidden',
             background:
               'radial-gradient(circle at 50% 55%, #2a2440 0%, #1b1d2b 55%, #15161f 100%), repeating-linear-gradient(0deg, transparent 0 39px, #ffffff07 39px 40px)',
           }}
