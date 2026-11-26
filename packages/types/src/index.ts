@@ -402,7 +402,8 @@ export interface UserShowcaseDto {
   /** O sunucudaki seviye (varsa) */
   level: number | null;
   /** Oyun istatistikleri (en çok oynanan önce) */
-  games?: Array<{ kind: string; played: number; wins: number }>;
+  /** harici oyunlarda `name` (oyun adı) ve `best` (en iyi puan) da gelir */
+  games?: Array<{ kind: string; played: number; wins: number; name?: string; best?: number }>;
   /** Kazanılan turnuva sayısı */
   tournamentWins?: number;
 }

@@ -21,6 +21,10 @@ export class GameResult extends CuidEntity {
   @Column({ type: 'boolean' })
   won!: boolean;
 
+  /** Harici oyunlar: puan, leş, süre… (oyun sunucusu bildirir) */
+  @Column({ type: 'jsonb', nullable: true })
+  stats!: Record<string, number | string | boolean> | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

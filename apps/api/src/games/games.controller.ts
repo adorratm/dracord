@@ -104,4 +104,13 @@ export class GamesPublicController {
   verify(@Headers('authorization') auth: string | undefined, @Body() body: { token?: string }) {
     return this.games.verify(auth, body?.token ?? '');
   }
+
+  /** Maç sonucu: profil istatistiği + isteğe bağlı kanala sonuç kartı */
+  @Post('results')
+  results(
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { token?: string; runId?: string; won?: boolean; stats?: Record<string, unknown>; share?: boolean; summary?: string },
+  ) {
+    return this.games.reportResult(auth, body ?? {});
+  }
 }

@@ -78,7 +78,25 @@ export class ShowcaseService {
       ) as Promise<Array<{ kind: string; played: number; wins: number }>>,
       this.em.query(`SELECT count(*)::int AS n FROM tournaments WHERE "winnerId" = $1 AND status = 'finished'`, [userId]) as Promise<Array<{ n: number }>>,
     ]).catch(() => [[], [{ n: 0 }]] as const);
-    dto = { ...dto, games: [...games], tournamentWins: tw[0]?.n ?? 0 };
+    // harici oyunlar (app:<id>): adı + en iyi puan
+    const apps = games.filter((g) => g.kind.startsWith('app:'));
+    let named: Array<{ kind: string; played: number; wins: number; name?: string; best?: number }> = [...games];
+    if (apps.length) {
+      const rows = (await this.em
+        .query(
+          `SELECT ga.id, ga.name, max(NULLIF(gr.stats->>'score', '')::numeric)::int AS best
+             FROM game_apps ga LEFT JOIN game_results gr ON gr.kind = 'app:' || ga.id AND gr."userId" = $1
+            WHERE ga.id = ANY($2) GROUP BY ga.id, ga.name`,
+          [userId, apps.map((g) => g.kind.slice(4))],
+        )
+        .catch(() => [])) as Array<{ id: string; name: string; best: number | null }>;
+      const by = new Map(rows.map((r) => [`app:${r.id}`, r]));
+      named = games.map((g) => {
+        const r = by.get(g.kind);
+        return r ? { ...g, name: r.name, ...(r.best ? { best: r.best } : {}) } : g;
+      });
+    }
+    dto = { ...dto, games: named, tournamentWins: tw[0]?.n ?? 0 };
     this.cache.set(userId, { at: Date.now(), dto });
     if (this.cache.size > 5000) this.cache.delete(this.cache.keys().next().value!);
     return dto;

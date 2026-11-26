@@ -28,6 +28,7 @@ import type { E2eePayload } from '@dracord/types';
 @Index(['channelId', 'createdAt'])
 @Index(['threadRootId', 'createdAt'])
 @Index(['channelId', 'pinnedAt'])
+@Index('IDX_messages_author_created', ['authorId', 'createdAt'])
 export class Message extends CuidEntity {
   @Column({ type: 'varchar' })
   channelId!: string;

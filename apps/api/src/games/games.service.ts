@@ -22,6 +22,10 @@ import {
 } from '@dracord/types';
 import { PlatformAdminService } from '@/auth/platform-admin.service';
 import { GameApp } from '@/database/entities/game-app.entity';
+import { GameResult } from '@/database/entities/game-result.entity';
+import { MessagesService } from '@/messages/messages.service';
+import { BotService } from '@/bot/bot.service';
+import { DRACORD_BOT_USER_ID } from '@/bot/bot.constants';
 import { GameSession } from '@/database/entities/game-session.entity';
 import { User } from '@/database/entities/user.entity';
 import { SocketBroadcastService } from '@/gateway/socket-broadcast.service';
@@ -65,6 +69,8 @@ export class GamesService {
     private readonly notifications: NotificationsService,
     private readonly notificationsRealtime: NotificationsRealtimeService,
     private readonly platformAdmin: PlatformAdminService,
+    private readonly messages: MessagesService,
+    private readonly bot: BotService,
   ) {}
 
   private tokenSecret(): string {
@@ -429,6 +435,56 @@ export class GamesService {
       testMode: Boolean(p.tm),
       exp: p.exp,
     };
+  }
+
+  /**
+   * Oyun sunucusu → bir maçın sonucu (profilde oyun istatistiği; isteğe bağlı sonuç kartı
+   * oturumun kanalına bot mesajı olarak düşer). Token, verify ile aynı kurallarla doğrulanır.
+   */
+  async reportResult(
+    authHeader: string | undefined,
+    body: { token?: string; runId?: string; won?: boolean; stats?: Record<string, unknown>; share?: boolean; summary?: string },
+  ): Promise<{ ok: true; shared: boolean }> {
+    const claims = await this.verify(authHeader, body?.token ?? '');
+    const runId = String(body?.runId ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'run';
+    // istatistik: düz anahtar → sayı/kısa metin, en fazla 12 alan
+    const stats: Record<string, number | string | boolean> = {};
+    for (const [k, v] of Object.entries(body?.stats ?? {}).slice(0, 12)) {
+      const key = k.replace(/[^A-Za-z0-9_]/g, '').slice(0, 24);
+      if (!key) continue;
+      if (typeof v === 'number' && Number.isFinite(v)) stats[key] = Math.round(v * 100) / 100;
+      else if (typeof v === 'boolean') stats[key] = v;
+      else if (typeof v === 'string') stats[key] = v.slice(0, 60);
+    }
+    await this.em
+      .createQueryBuilder()
+      .insert()
+      .into(GameResult)
+      .values({
+        userId: claims.userId,
+        kind: `app:${claims.gameId}`,
+        sessionId: `${claims.sessionId}:${runId}`,
+        guildId: claims.guildId,
+        won: Boolean(body?.won),
+        stats: Object.keys(stats).length ? stats : null,
+      })
+      .orIgnore()
+      .execute();
+    let shared = false;
+    const summary = String(body?.summary ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300);
+    if (body?.share && summary && claims.channelId && !claims.testMode) {
+      const app = await this.em.findOne(GameApp, { where: { id: claims.gameId } });
+      try {
+        if (claims.guildId) await this.bot.ensureBotInGuild(claims.guildId);
+        // @everyone / rol etiketleri ve linkler yerine düz metin
+        const safe = summary.replace(/@/g, '@\u200b').replace(/https?:\/\//gi, '');
+        await this.messages.createMessage(claims.channelId, DRACORD_BOT_USER_ID, `🎮 **${app?.name ?? 'Oyun'}** — **${claims.displayName}** ${safe}`);
+        shared = true;
+      } catch {
+        /* kanal yoksa / yazılamıyorsa sessizce geç */
+      }
+    }
+    return { ok: true, shared };
   }
 
   // ── Admin ──

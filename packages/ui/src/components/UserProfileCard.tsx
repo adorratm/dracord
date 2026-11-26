@@ -277,9 +277,10 @@ export function UserProfileCard({
                     <span
                       key={g.kind}
                       className="inline-flex items-center gap-1 rounded-full bg-surface-container-high px-2 py-0.5 font-label-sm text-on-surface"
-                      title={`${g.played} oyun, ${g.wins} galibiyet`}
+                      title={`${g.played} oyun, ${g.wins} galibiyet${g.best ? `, en iyi ${g.best.toLocaleString('tr-TR')} puan` : ''}`}
                     >
-                      {GAME_LABEL[g.kind] ?? g.kind} · {g.wins}/{g.played}
+                      {GAME_LABEL[g.kind] ?? (g.name ? `🎮 ${g.name}` : g.kind)} · {g.wins}/{g.played}
+                      {g.best ? <span className="text-outline">· 🏅 {g.best.toLocaleString('tr-TR')}</span> : null}
                     </span>
                   ))}
                 </div>

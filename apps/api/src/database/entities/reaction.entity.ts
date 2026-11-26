@@ -1,5 +1,6 @@
 import {
   Column,
+  Index,
   CreateDateColumn,
   Entity,
   JoinColumn,
@@ -11,6 +12,7 @@ import type { Message } from './message.entity';
 import type { User } from './user.entity';
 
 @Entity('reactions')
+@Index('IDX_reactions_user_created', ['userId', 'createdAt'])
 @Unique(['messageId', 'userId', 'emoji'])
 export class Reaction extends CuidEntity {
   @Column({ type: 'varchar' })

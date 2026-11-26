@@ -4,11 +4,13 @@ import { AuthModule } from '@/auth/auth.module';
 import { GuildsModule } from '@/guilds/guilds.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
 import { VoicePresenceModule } from '@/voice/voice-presence.module';
+import { MessagesModule } from '@/messages/messages.module';
+import { BotModule } from '@/bot/bot.module';
 import { GamesController, GamesPublicController } from './games.controller';
 import { GamesService } from './games.service';
 
 @Module({
-  imports: [JwtModule.register({}), AuthModule, GuildsModule, NotificationsModule, VoicePresenceModule],
+  imports: [JwtModule.register({}), AuthModule, GuildsModule, NotificationsModule, VoicePresenceModule, MessagesModule, BotModule],
   controllers: [GamesController, GamesPublicController],
   providers: [GamesService],
   exports: [GamesService],
