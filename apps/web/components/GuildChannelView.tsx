@@ -5249,7 +5249,21 @@ export function GuildChannelView({
       <Modal open={tournamentsOpen} title="Turnuvalar" onClose={() => setTournamentsOpen(false)} className="sm:max-w-3xl">
         <div className="max-h-[75vh] overflow-y-auto pr-1">
           {tournamentsOpen && user && (
-            <TournamentsPanel client={client} guildId={guildId} meId={user.id} canManage={canManageGuild} initialId={tournamentFocus} />
+            <TournamentsPanel
+              client={client}
+              guildId={guildId}
+              meId={user.id}
+              canManage={canManageGuild}
+              initialId={tournamentFocus}
+              onPlayGame={(game) => {
+                const room = channels.find((c) => c.type === 'GAME' && c.gameKind === game);
+                if (!room) return undefined;
+                return () => {
+                  setTournamentsOpen(false);
+                  router.push(`/channels/${guildId}/${room.id}`);
+                };
+              }}
+            />
           )}
         </div>
       </Modal>

@@ -1,9 +1,10 @@
 import { bowlingParseFrames, bowlingReadFrames, bowlingScoreRolls } from './bowling';
+import { readOkey101 } from './okey101';
 import { tavlaReadBoard } from './tavla';
 
 /**
  * Oyun durumundan kazananı çıkar (turnuva otomatik sonucu, C6). Belirsizse / berabereyse null.
- * Yalnız sonucu durumdan kesin okunan oyunlar: tavla, bilardo, bowling.
+ * Yalnız sonucu durumdan kesin okunan oyunlar: tavla, bilardo, bowling, okey (101 cezada elenen; masada tek kişi kalınca biter).
  */
 export function activityWinner(kind: string, state: Record<string, unknown>, playerIds: string[]): string | null {
   if (kind === 'tavla') {
@@ -34,6 +35,12 @@ export function activityWinner(kind: string, state: Record<string, unknown>, pla
       } else if (sc === bestScore) tie = true;
     }
     return tie ? null : best;
+  }
+  if (kind === 'okey') {
+    if (playerIds.length < 2) return null;
+    const { eliminated } = readOkey101(state);
+    const left = playerIds.filter((id) => !eliminated.includes(id));
+    return left.length === 1 && eliminated.length >= playerIds.length - 1 ? left[0]! : null;
   }
   return null;
 }

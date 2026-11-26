@@ -81,12 +81,15 @@ export function TournamentsPanel({
   meId,
   canManage,
   initialId,
+  onPlayGame,
 }: {
   client: TournamentsClient;
   guildId: string;
   meId: string;
   canManage: boolean;
   initialId?: string | null;
+  /** oyunun odası varsa oraya götür; yoksa undefined döndür (düğme gizlenir) */
+  onPlayGame?: (game: TournamentGame) => (() => void) | undefined;
 }) {
   const [list, setList] = useState<TournamentDto[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(initialId ?? null);
@@ -122,7 +125,7 @@ export function TournamentsPanel({
   const open = list?.find((t) => t.id === openId) ?? null;
 
   if (open) {
-    return <TournamentDetail t={open} client={client} meId={meId} canManage={canManage || open.creatorId === meId} onBack={() => setOpenId(null)} onChange={upsert} />;
+    return <TournamentDetail t={open} client={client} meId={meId} canManage={canManage || open.creatorId === meId} onBack={() => setOpenId(null)} onChange={upsert} onPlay={onPlayGame?.(open.game)} />;
   }
 
   return (
@@ -275,6 +278,7 @@ function TournamentDetail({
   canManage,
   onBack,
   onChange,
+  onPlay,
 }: {
   t: TournamentDto;
   client: TournamentsClient;
@@ -282,6 +286,7 @@ function TournamentDetail({
   canManage: boolean;
   onBack: () => void;
   onChange: (t: TournamentDto) => void;
+  onPlay?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -372,6 +377,7 @@ function TournamentDetail({
           label={roundName(m.round, t.rounds, format, m)}
           auto={TOURNAMENT_AUTO_RESULT_GAMES.includes(t.game) ? TOURNAMENT_GAME_LABEL[t.game] : null}
           onReport={(w) => run(() => client.reportTournamentMatch(t.id, m.id, w))}
+          onPlay={t.status === 'running' ? onPlay : undefined}
         />
       ))}
 
@@ -411,6 +417,7 @@ function MyMatchCard({
   label,
   auto,
   onReport,
+  onPlay,
 }: {
   m: TournamentMatch;
   meId: string;
@@ -420,6 +427,8 @@ function MyMatchCard({
   /** Sonucu oyundan alınan oyunun adı */
   auto: string | null;
   onReport: (winnerId: string) => void;
+  /** oyun odasına git (sunucuda uygun oda varsa) */
+  onPlay?: () => void;
 }) {
   const players = tournamentMatchPlayers(m);
   const others = players.filter((p) => p !== meId);
@@ -450,6 +459,11 @@ function MyMatchCard({
         </p>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
+        {onPlay && m.status !== 'done' ? (
+          <button type="button" onClick={onPlay} className="rounded-lg bg-[#50fa7b] px-3 py-1.5 font-label-md text-[#11131e]">
+            ▶ Oyun odasına git
+          </button>
+        ) : null}
         <button type="button" disabled={busy || mine === meId} onClick={() => onReport(meId)} className="rounded-lg bg-primary px-3 py-1.5 font-label-md text-on-primary disabled:opacity-50">
           Ben kazandım
         </button>

@@ -1901,7 +1901,20 @@ export function Shell() {
         <Modal open={tournamentsOpen} title="Turnuvalar" onClose={() => setTournamentsOpen(false)} className="sm:max-w-3xl">
           <div className="max-h-[75vh] overflow-y-auto pr-1">
             {tournamentsOpen && user && (
-              <TournamentsPanel client={client} guildId={activeGuildId} meId={user.id} canManage={canManageGuild} />
+              <TournamentsPanel
+                client={client}
+                guildId={activeGuildId}
+                meId={user.id}
+                canManage={canManageGuild}
+                onPlayGame={(game) => {
+                  const room = channels.find((c) => c.type === 'GAME' && c.gameKind === game);
+                  if (!room) return undefined;
+                  return () => {
+                    setTournamentsOpen(false);
+                    selectChannel(room);
+                  };
+                }}
+              />
             )}
           </div>
         </Modal>

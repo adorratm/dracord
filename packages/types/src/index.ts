@@ -1787,7 +1787,7 @@ export const TOURNAMENT_GAME_LABEL: Record<TournamentGame, string> = {
   external: 'Harici oyun',
 };
 /** Oyundan sonucu kendiliğinden alınabilen oyunlar (C6) */
-export const TOURNAMENT_AUTO_RESULT_GAMES: readonly TournamentGame[] = ['tavla', 'billiards', 'bowling'];
+export const TOURNAMENT_AUTO_RESULT_GAMES: readonly TournamentGame[] = ['tavla', 'billiards', 'bowling', 'okey'];
 export const TOURNAMENT_FORMATS = ['single', 'double', 'round_robin', 'table4'] as const;
 export type TournamentFormat = (typeof TOURNAMENT_FORMATS)[number];
 export const TOURNAMENT_FORMAT_LABEL: Record<TournamentFormat, string> = {
