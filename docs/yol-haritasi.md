@@ -110,18 +110,18 @@ Gözlem: Mevcut aktiviteler (okey, tavla, bilardo, blackjack, trivia, words, wat
 (PROTOCOL-Z: NestJS + socket.io + three.js, aynı Yarn 4/TS 6 yığını) ise gerçek zamanlı aksiyon →
 farklı bir taşıma katmanı ister.
 
-- [ ] **Dracord Embedded SDK** (`@dracord/embedded-sdk`): iframe/webview içindeki oyuna kimlik,
+- [x] **Dracord Embedded SDK** (`@dracord/embedded-sdk`, protokol v1 + `verifyDracordToken`): iframe/webview içindeki oyuna kimlik,
   oda üyeleri, davet, ses kanalı durumu, `postMessage` köprüsü. Harici geliştiricilere de açılabilir.
 - [x] **Oyun odası (lobby) modeli:** (hazırım, host başlatır / herkes hazır olunca başlar, izleyici, davet linki) ses kanalına bağlı oda, hazır ol, host, izleyici, davet linki.
-- [ ] **Gerçek zamanlı taşıma — karar: oyunun kendi sunucusu.** COOMBIE API (socket.io) oyunu
+- [x] **Gerçek zamanlı taşıma — karar: oyunun kendi sunucusu.** COOMBIE API (socket.io) oyunu
   yönetir; Dracord kimlik (kısa ömürlü oyun token'ı), oda, davet ve ses kanalını sağlar.
   Aynı sunucu Steam sürümüne de hizmet eder.
-- [ ] **Girdi soyutlama:** klavye/fare, gamepad, mobil sanal joystick — oyun SDK'dan alır.
+- [~] **Girdi soyutlama:** klavye/fare ve mobil sanal joystick + jiroskop COOMBIE'de var; **gamepad yok** (oyun tarafı iş).
 - [x] **Profilde oyun:** profil kartında oyun başına galibiyet/oyun ve turnuva zaferleri ("oynuyor" durumu zaten var). Başarımlar/sunucu skor tablosu açık.
 - [x] **Mobil performans profili:** oyun HUD'unda grafik kalitesi (Otomatik dinamik çözünürlük / Yüksek / Ultra / Düşük), telefonda 3x DPR, en yüksek anizotropi, Android GPU katmanı.
 
 ### COOMBIE oyun içi notlar (oyun tarafında yapılacak — şimdilik park)
-- Boss'lar ve özel yetenekleri yok.
+- ~~Boss'lar ve özel yetenekleri yok.~~ Boss evreleri eklendi (2026-11).
 - Başlangıçta çok fazla spawn.
 - Silah hasarı / zombi canı dengesizliği çok yüksek (başta çok mermi gidiyor).
 - Zombiler oyun ilerledikçe güçlenmeli (dalga/zamanla ölçeklenen can, hız, hasar).
