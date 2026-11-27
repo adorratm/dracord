@@ -81,6 +81,9 @@ contextBridge.exposeInMainWorld('dracordDesktop', {
   setGameOverlayState: (state) => ipcRenderer.invoke('overlay:set-state', state),
   setOverlayPrefs: (prefs) => ipcRenderer.invoke('overlay:set-prefs', prefs),
   getOverlayPrefs: () => ipcRenderer.invoke('overlay:get-prefs'),
+  /** Oyun FPS'i (Windows, PresentMon) */
+  getFpsStatus: () => ipcRenderer.invoke('overlay:fps-status'),
+  setupFpsPermission: () => ipcRenderer.invoke('overlay:fps-setup'),
   setWatchPartyAdblock: (enabled) =>
     ipcRenderer.invoke('adblock:set-enabled', Boolean(enabled)),
   /** Uzak kontrol (ekran paylaşımı host) */

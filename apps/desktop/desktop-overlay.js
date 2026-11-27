@@ -4,6 +4,7 @@
  * Exclusive fullscreen oyunlarda güvenilir değildir; borderless önerilir.
  */
 const { BrowserWindow, globalShortcut, screen, ipcMain } = require('electron');
+const presentmon = require('./presentmon');
 const os = require('os');
 const path = require('path');
 
@@ -30,6 +31,7 @@ const HUD_POSITIONS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-r
  *  hudPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
  *  hudMax: number,
  *  perfHud: boolean,
+ *  fpsHud: boolean,
  * }} */
 let prefs = {
   enabled: true,
@@ -43,6 +45,7 @@ let prefs = {
   hudPosition: 'top-left',
   hudMax: HUD_MAX_DEFAULT,
   perfHud: false,
+  fpsHud: false,
 };
 
 /** @type {{
@@ -287,7 +290,10 @@ function speakingHudHtml() {
         if (d.self) root.appendChild(el('div', 'row self', d.self));
         if (d.perf) {
           var p = el('div', 'perf');
-          [['CPU', d.perf.cpu + '%'], ['RAM', d.perf.ram + '%'], ['', d.perf.time]].forEach(function (x) {
+          var rows = [];
+          if (d.perf.fps) rows.push(['FPS', String(d.perf.fps.fps)]);
+          if (d.perf.cpu != null) rows.push(['CPU', d.perf.cpu + '%'], ['RAM', d.perf.ram + '%'], ['', d.perf.time]);
+          rows.forEach(function (x) {
             var span = el('span'); if (x[0]) span.appendChild(document.createTextNode(x[0] + ' ')); span.appendChild(el('b', '', x[1])); p.appendChild(span);
           });
           root.appendChild(p);
@@ -314,6 +320,14 @@ function sampleCpuPercent() {
   if (!prev || total <= prev.total) return 0;
   return Math.max(0, Math.min(100, Math.round(100 * (1 - (idle - prev.idle) / (total - prev.total)))));
 }
+/** FPS ölçümü yalnız gerektiğinde çalışır: HUD açık + FPS tercihi + seste */
+function syncPresentMon() {
+  const want = process.platform === 'win32' && prefs.hudEnabled && prefs.fpsHud && overlayState.inVoice;
+  const st = presentmon.getStatus().status;
+  if (want && (st === 'off' || st === 'error')) presentmon.start();
+  else if (!want && (st === 'running' || st === 'starting')) presentmon.stop();
+}
+
 function perfSnapshot() {
   const ram = Math.round(100 * (1 - os.freemem() / Math.max(1, os.totalmem())));
   const d = new Date();
@@ -358,7 +372,7 @@ function positionSpeakingHud(win) {
   const display = targetDisplay();
   const { x, y, width, height } = display.workArea;
   const w = Math.min(240, width);
-  const h = Math.min(60 + 46 * hudMax() + (prefs.perfHud ? 30 : 0), height);
+  const h = Math.min(60 + 46 * hudMax() + (prefs.perfHud || prefs.fpsHud ? 30 : 0), height);
   const pos = HUD_POSITIONS.has(prefs.hudPosition) ? prefs.hudPosition : 'top-left';
   const nx = pos.endsWith('right') ? x + width - w - 10 : x + 10;
   const ny = pos.startsWith('bottom') ? y + height - h - 10 : y + 10;
@@ -508,14 +522,15 @@ function renderSpeakingHud() {
           ? 'Mikrofonun kapalı'
           : ''
       : '';
-  const perfOn = prefs.hudEnabled && prefs.perfHud && overlayState.inVoice;
-  if (perfOn && Date.now() - lastPerfAt > 1500) {
-    lastPerf = perfSnapshot();
+  const perfOn = prefs.hudEnabled && (prefs.perfHud || prefs.fpsHud) && overlayState.inVoice;
+  syncPresentMon();
+  if (perfOn && Date.now() - lastPerfAt > 1000) {
+    lastPerf = { ...(prefs.perfHud ? perfSnapshot() : {}), fps: prefs.fpsHud ? presentmon.currentFps() : null };
     lastPerfAt = Date.now();
   }
   const perf = perfOn ? lastPerf : null;
   const show = speakers.length > 0 || Boolean(self) || Boolean(perf);
-  const fp = `${hudFingerprint(speakers)}#${self}#${perf ? `${perf.cpu}/${perf.ram}/${perf.time}` : ''}#${prefs.hudPosition}`;
+  const fp = `${hudFingerprint(speakers)}#${self}#${perf ? `${perf.cpu}/${perf.ram}/${perf.time}/${perf.fps ? `${perf.fps.app}:${perf.fps.fps}` : ''}` : ''}#${prefs.hudPosition}`;
   if (prefs.followDisplay) positionSpeakingHud(win);
   applyFullscreenAffinity(win);
   try {
@@ -654,6 +669,7 @@ function applyPrefs(next) {
     hudPosition: HUD_POSITIONS.has(next?.hudPosition) ? next.hudPosition : 'top-left',
     hudMax: Math.max(1, Math.min(6, Math.floor(Number(next?.hudMax) || HUD_MAX_DEFAULT))),
     perfHud: Boolean(next?.perfHud),
+    fpsHud: Boolean(next?.fpsHud),
   };
   if (prev.hotkey !== prefs.hotkey || prev.enabled !== prefs.enabled) {
     registerHotkey(prefs.hotkey);
@@ -676,6 +692,7 @@ function applyPrefs(next) {
     lastHudFingerprint = '';
     renderSpeakingHud();
   }
+  syncPresentMon();
   return { ...prefs };
 }
 
@@ -690,6 +707,7 @@ function applyOverlayState(state) {
     selfMuted: Boolean(state?.selfMuted),
     selfDeafened: Boolean(state?.selfDeafened),
   };
+  syncPresentMon();
   if (!overlayState.inVoice) {
     recentSpeakers.clear();
   } else {
@@ -750,6 +768,8 @@ function registerGameOverlay(deps) {
   });
   ipcMain.handle('overlay:is-visible', () => visible);
   ipcMain.handle('overlay:get-prefs', () => ({ ...prefs }));
+  ipcMain.handle('overlay:fps-status', () => presentmon.getStatus());
+  ipcMain.handle('overlay:fps-setup', () => presentmon.setupPermission());
   ipcMain.handle('overlay:set-prefs', (_e, next) => {
     const applied = applyPrefs(next || {});
     deps.onPrefs?.(applied);

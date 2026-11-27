@@ -164,6 +164,8 @@ type DracordDesktopApi = {
     watchPartyAdblock?: boolean;
   }) => Promise<unknown>;
   getOverlayPrefs?: () => Promise<Record<string, unknown>>;
+  getFpsStatus?: () => Promise<{ status: 'off' | 'unsupported' | 'starting' | 'running' | 'needs_setup' | 'error'; error: string | null }>;
+  setupFpsPermission?: () => Promise<{ ok: boolean; needsSignOut?: boolean; error?: string }>;
   setWatchPartyAdblock?: (enabled: boolean) => Promise<unknown>;
   setRemoteControlBounds?: (bounds: {
     x?: number;

@@ -13,7 +13,7 @@
     "start": "node ./scripts/make-icons.js && node ./scripts/ensure-ui.js && electron .",
     "prebuild": "node ./scripts/make-icons.js && yarn workspace @dracord/desktop-ui build && node ./scripts/copy-ui.js",
     "build": "electron-builder --publish never",
-    "build:win": "yarn prebuild && electron-builder --win --x64 --publish never",
+    "build:win": "yarn prebuild && node ./scripts/fetch-presentmon.js && electron-builder --win --x64 --publish never",
     "build:mac": "yarn prebuild && electron-builder --mac --publish never",
     "build:linux": "yarn prebuild && electron-builder --linux --publish never",
     "publish:win": "yarn prebuild && electron-builder --win --x64 --publish always",
@@ -71,6 +71,15 @@
     },
     "win": {
       "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "vendor/presentmon",
+          "to": "presentmon",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ],
       "target": [
         {
           "target": "nsis",

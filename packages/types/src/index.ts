@@ -1169,6 +1169,8 @@ export interface ClientSettings {
     hudMax: number;
     /** HUD altında CPU / RAM / saat */
     perfHud: boolean;
+    /** HUD'da oyunun FPS'i (Windows, PresentMon) */
+    fpsHud: boolean;
   };
   language: {
     locale: 'tr' | 'en';

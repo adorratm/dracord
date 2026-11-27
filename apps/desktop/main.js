@@ -1691,6 +1691,11 @@ if (!gotLock) {
   });
 
   app.on('before-quit', () => {
+    try {
+      require('./presentmon').stop();
+    } catch {
+      /* yoksay */
+    }
     trayEnabled = false;
   });
 }

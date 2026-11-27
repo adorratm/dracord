@@ -43,3 +43,6 @@ apps/desktop/_tts-smoke*.js
 apps/desktop/tts-log*.txt
 apps/desktop/tts-test-out*.txt
 apps/desktop/sync-test.txt
+
+# derleme sırasında indirilen üçüncü taraf ikililer (ör. PresentMon)
+apps/desktop/vendor/

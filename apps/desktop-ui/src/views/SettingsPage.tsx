@@ -2250,10 +2250,15 @@ export function SettingsPage({
             />
             <SettingsToggle
               label="Performans göstergesi"
-              description="HUD altında sistem CPU ve RAM kullanımı ile saat. Oyunun FPS değeri ölçülemez (oyuna müdahale gerektirir)."
+              description="HUD altında sistem CPU ve RAM kullanımı ile saat."
               checked={Boolean(prefs.overlay.perfHud)}
               disabled={prefs.overlay.hudEnabled === false}
               onChange={(v) => setSection('overlay', { perfHud: v })}
+            />
+            <FpsHudSetting
+              checked={Boolean(prefs.overlay.fpsHud)}
+              disabled={prefs.overlay.hudEnabled === false}
+              onChange={(v) => setSection('overlay', { fpsHud: v })}
             />
           </SettingsSection>
           <SettingsSection title="Watch Party">
@@ -3299,5 +3304,89 @@ function SpotifyConnectionsSection({
         )}
       </div>
     </SettingsSection>
+  );
+}
+
+/** Oyun FPS'i (Windows, PresentMon): durum + tek seferlik izin */
+function FpsHudSetting({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+  const bridge = typeof window !== 'undefined' ? window.dracordDesktop : undefined;
+  const [st, setSt] = useState<{ status: string; error: string | null } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!bridge?.getFpsStatus) return;
+    let alive = true;
+    const tick = () => void bridge.getFpsStatus!().then((s) => alive && setSt(s)).catch(() => undefined);
+    tick();
+    const id = window.setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [bridge]);
+
+  if (st?.status === 'unsupported') {
+    return (
+      <SettingsToggle
+        label="Oyun FPS'i"
+        description="Yalnız Windows'ta kullanılabilir."
+        checked={false}
+        disabled
+        onChange={() => undefined}
+      />
+    );
+  }
+
+  const statusLine =
+    !checked || !st
+      ? null
+      : st.status === 'running'
+        ? 'Ölçülüyor — seste ve oyundayken HUD’da görünür.'
+        : st.status === 'starting'
+          ? 'Başlıyor…'
+          : st.status === 'needs_setup'
+            ? 'Windows bu ölçüm için bir kez izin istiyor.'
+            : st.status === 'error'
+              ? `Ölçüm başlatılamadı: ${st.error ?? 'bilinmeyen hata'}`
+              : 'Bir ses kanalına girince başlar.';
+
+  return (
+    <div>
+      <SettingsToggle
+        label="Oyun FPS'i"
+        description="HUD'da oynadığın oyunun saniyedeki kare sayısı. Intel PresentMon ile ölçülür; oyuna dokunmaz."
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+      />
+      {statusLine ? <p className="mt-1 text-sm text-on-surface-variant">{statusLine}</p> : null}
+      {checked && st?.status === 'needs_setup' && bridge?.setupFpsPermission ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              setMsg(null);
+              void bridge.setupFpsPermission!()
+                .then((r) =>
+                  setMsg(
+                    r.ok
+                      ? 'Tamam. Windows oturumunu kapatıp yeniden açınca FPS görünmeye başlar.'
+                      : `Etkinleştirilemedi: ${r.error ?? 'bilinmeyen hata'}`,
+                  ),
+                )
+                .finally(() => setBusy(false));
+            }}
+            className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary disabled:opacity-50"
+          >
+            {busy ? 'Bekleniyor…' : 'Etkinleştir (bir kez yönetici izni)'}
+          </button>
+          <span className="text-xs text-on-surface-variant">Kullanıcın Windows'un "Performance Log Users" grubuna eklenir.</span>
+        </div>
+      ) : null}
+      {msg ? <p className="mt-1 text-sm text-on-surface">{msg}</p> : null}
+    </div>
   );
 }

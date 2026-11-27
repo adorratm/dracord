@@ -65,6 +65,7 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     hudPosition: 'top-left',
     hudMax: 3,
     perfHud: false,
+    fpsHud: false,
   },
   language: {
     locale: 'tr',
