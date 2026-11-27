@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Linking,
   Modal,
   Pressable,
@@ -11,7 +12,8 @@ import {
 import type { MessageDto } from '@dracord/types';
 import { colors } from '@dracord/app-theme';
 import { Icon } from './Icon';
-import { externalTranslateUrl } from '../lib/translate';
+import { externalTranslateUrl, preferredTranslateTarget } from '../lib/translate';
+import { canTranslateOnDevice, translateOnDevice } from '../lib/native-ml';
 
 const MENU_QUICK = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
 const REACT_MORE = [
@@ -199,9 +201,23 @@ export function MessageActionsSheet({
         icon: 'translate',
         label: 'Çevir',
         onPress: () => {
-          // Sunucu maliyeti yok: cihazdaki Google Çeviri uygulaması / tarayıcı açılır
-          void Linking.openURL(externalTranslateUrl(message.content ?? '')).catch(() => undefined);
+          const text = message.content ?? '';
+          const openExternal = () => void Linking.openURL(externalTranslateUrl(text)).catch(() => undefined);
           onClose();
+          // Yeni sürümde cihaz üstü (ML Kit, metin cihazdan çıkmaz); eski sürümde Google Çeviri açılır
+          if (!canTranslateOnDevice()) return openExternal();
+          void translateOnDevice(text, preferredTranslateTarget()).then((r) => {
+            if (r.ok) {
+              Alert.alert('Çeviri', r.text, [
+                { text: 'Google Çeviri', onPress: openExternal },
+                { text: 'Tamam', style: 'cancel' },
+              ]);
+            } else if (r.reason === 'same_language') {
+              Alert.alert('Çeviri', 'Bu mesaj zaten senin dilinde.');
+            } else {
+              openExternal();
+            }
+          });
         },
       });
     }

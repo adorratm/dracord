@@ -2,7 +2,7 @@
   "expo": {
     "name": "Dracord",
     "slug": "dracord",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "default",
     "scheme": "dracord",
     "userInterfaceStyle": "automatic",
@@ -101,7 +101,14 @@
       "@config-plugins/react-native-webrtc",
       "./plugins/withVoiceForegroundService.js",
       "expo-audio",
-      "expo-updates"
+      "expo-updates",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Sesli odalarda konuşmak ve konuşmanı altyazıya çevirmek için mikrofon gerekir.",
+          "speechRecognitionPermission": "Ses kanalında kendi konuşmanı altyazı olarak göstermek için konuşma tanıma kullanılır."
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "https://api.dracord.com.tr",

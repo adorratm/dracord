@@ -1508,6 +1508,8 @@ __metadata:
     "@livekit/react-native-expo-plugin": "npm:^1.1.0"
     "@livekit/react-native-webrtc": "npm:^150.1.1"
     "@react-native-async-storage/async-storage": "npm:3.1.1"
+    "@react-native-ml-kit/identify-languages": "npm:2.0.0"
+    "@react-native-ml-kit/translate-text": "npm:0.5.0"
     "@supersami/rn-foreground-service": "npm:^2.2.5"
     "@types/react": "npm:~19.3.0"
     "@types/three": "npm:^0.187.0"
@@ -1527,6 +1529,7 @@ __metadata:
     expo-notifications: "npm:^58.1.7"
     expo-router: "npm:~58.0.29"
     expo-secure-store: "npm:~58.0.2"
+    expo-speech-recognition: "npm:~58.0.1"
     expo-status-bar: "npm:~58.0.4"
     expo-updates: "npm:^58.0.20"
     expo-video: "npm:~58.0.13"
@@ -4917,6 +4920,26 @@ __metadata:
     react: ">=16"
     react-native: ">=0.57"
   checksum: 10c0/4ec84b7af2ded49dc21f17cc723a0ef341076cbe40cf758dd2daff8734bea63ba83e2fee7e63958984385314b8915b6804135997e07697abdd4141217c847fe9
+  languageName: node
+  linkType: hard
+
+"@react-native-ml-kit/identify-languages@npm:2.0.0":
+  version: 2.0.0
+  resolution: "@react-native-ml-kit/identify-languages@npm:2.0.0"
+  peerDependencies:
+    react: ">=16.8.1"
+    react-native: ">=0.60.0-rc.0 <1.0.x"
+  checksum: 10c0/69e9fee356a3131e04b6972c43486363ef6a47a5ba1290ad5d807caec4596d5c78725d323294e950b0700ba7f4a34a89c6cef9a0bb682abb1a32f0724d32fe2f
+  languageName: node
+  linkType: hard
+
+"@react-native-ml-kit/translate-text@npm:0.5.0":
+  version: 0.5.0
+  resolution: "@react-native-ml-kit/translate-text@npm:0.5.0"
+  peerDependencies:
+    react: ">=16.8.1"
+    react-native: ">=0.60.0-rc.0 <1.0.x"
+  checksum: 10c0/1fa6d9f2314d616a9489874aafb17474d31c82526274e857c559bfff0958e35257a1e452bd6e0704f0ad3bc1feff574e3b79c69a47ce66700fe2afd6beac8472
   languageName: node
   linkType: hard
 
@@ -9319,6 +9342,17 @@ __metadata:
   version: 58.0.6
   resolution: "expo-server@npm:58.0.6"
   checksum: 10c0/f604dc15ce82eab9af157f14d2154065071736df4402fbdc57ec47f3aca3cfb0fb292e90ab2215081051374dde9236e6021ddcedb1eaaf6dbabb16da7ff0a9a0
+  languageName: node
+  linkType: hard
+
+"expo-speech-recognition@npm:~58.0.1":
+  version: 58.0.1
+  resolution: "expo-speech-recognition@npm:58.0.1"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/3a1ac47886e71d0e1a0c809f7aaa7fafd7ff1f8085c9d7336e6406bb6405f30f8d88598b88f130b6373521687dfc99115570209e75091ef95e221c4fb1de6c7e
   languageName: node
   linkType: hard
 

@@ -338,7 +338,14 @@ export function VoiceRoom({
         </View>
       ) : null}
 
-      {inThisChannel && guildId ? <CaptionsStrip client={client} guildId={guildId} channelId={channel.id} /> : null}
+      {inThisChannel && guildId ? (
+        <CaptionsStrip
+          client={client}
+          guildId={guildId}
+          channelId={channel.id}
+          me={user ? { id: user.id, name: user.displayName || user.username } : null}
+        />
+      ) : null}
       {inThisChannel && guildId && user
         ? voice.peers
             .filter((p) => p.screenShare && p.id !== user.id)
