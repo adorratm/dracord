@@ -201,6 +201,14 @@ jobs:
             echo "Code signing: skipped (no CSC_LINK)"
           fi
 
+          # Sertifika yokken macOS'ta ad-hoc imza: imzasız uygulamada mikrofon izni kalıcı olmuyor
+          # ("İzin ver" desen de tekrar soruyor) ve entitlement'lar (audio-input) hiç uygulanmıyor.
+          EXTRA_ARGS=""
+          if [ "${RUNNER_OS}" = "macOS" ] && [ -z "${CSC_LINK_RAW:-}" ]; then
+            EXTRA_ARGS="-c.mac.identity=-"
+            echo "Code signing: macOS ad-hoc (identity -)"
+          fi
+
           if [ -n "${APPLE_ID_RAW:-}" ]; then
             export APPLE_ID="$APPLE_ID_RAW"
             export APPLE_APP_SPECIFIC_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD_RAW:-}"
@@ -208,7 +216,7 @@ jobs:
             export ASC_PROVIDER="${ASC_PROVIDER_RAW:-}"
           fi
 
-          yarn ${{ matrix.script }}
+          yarn ${{ matrix.script }} ${EXTRA_ARGS}
 
       # Yalnız installer paketleri — mac .app / win unpacked içeriği Release’e gitmesin
       - name: Stage distributables

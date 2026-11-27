@@ -94,6 +94,42 @@ function registerApiOriginBridge() {
 /** @type {{ sourceId: string, systemAudio: boolean } | null} */
 let pendingDisplayMediaSelection = null;
 
+/**
+ * macOS mikrofon/kamera izni: zaten verildiyse sormaz; ilk seferde sistem penceresini açar.
+ * Reddedildiyse Sistem Ayarları › Gizlilik › Mikrofon'u açmayı önerir (tek sefer).
+ */
+let macPrivacyHintShown = false;
+async function ensureMacMediaAccess(mediaTypes) {
+  const wanted = [];
+  if (mediaTypes.includes('audio')) wanted.push('microphone');
+  if (mediaTypes.includes('video')) wanted.push('camera');
+  if (!wanted.length) return true;
+  for (const kind of wanted) {
+    const status = systemPreferences.getMediaAccessStatus(kind);
+    if (status === 'granted') continue;
+    if (status === 'not-determined') {
+      const ok = await systemPreferences.askForMediaAccess(kind);
+      if (ok) continue;
+    }
+    // denied / restricted: macOS bir daha sormaz — kullanıcıyı ayara yönlendir
+    if (!macPrivacyHintShown) {
+      macPrivacyHintShown = true;
+      const pane = kind === 'microphone' ? 'Privacy_Microphone' : 'Privacy_Camera';
+      const label = kind === 'microphone' ? 'Mikrofon' : 'Kamera';
+      const { response } = await dialog.showMessageBox({
+        type: 'warning',
+        buttons: ['Ayarları aç', 'Kapat'],
+        defaultId: 0,
+        message: `Dracord için ${label.toLowerCase()} izni kapalı`,
+        detail: `Sistem Ayarları › Gizlilik ve Güvenlik › ${label} bölümünde Dracord'u aç, sonra uygulamayı yeniden başlat.`,
+      });
+      if (response === 0) void shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${pane}`);
+    }
+    return false;
+  }
+  return true;
+}
+
 async function listDesktopCaptureSources() {
   if (process.platform === 'darwin') {
     const status = systemPreferences.getMediaAccessStatus('screen');
@@ -120,7 +156,7 @@ async function listDesktopCaptureSources() {
 function registerMediaCaptureHandlers() {
   const ses = session.defaultSession;
 
-  ses.setPermissionRequestHandler((_wc, permission, callback) => {
+  ses.setPermissionRequestHandler((_wc, permission, callback, details) => {
     const allow = [
       'media',
       'display-capture',
@@ -129,7 +165,15 @@ function registerMediaCaptureHandlers() {
       'notifications',
       'clipboard-sanitized-write',
     ].includes(permission);
-    callback(allow);
+    if (!allow) return callback(false);
+    // macOS: sistem (TCC) iznini uygulama adına iste; yoksa Chromium kendi isteğini
+    // her bağlantıda yeniden tetikler ve "İzin ver" kalıcı olmaz.
+    if (process.platform === 'darwin' && permission === 'media') {
+      const types = Array.isArray(details && details.mediaTypes) ? details.mediaTypes : ['audio'];
+      ensureMacMediaAccess(types).then(callback, () => callback(false));
+      return;
+    }
+    callback(true);
   });
 
   ses.setPermissionCheckHandler((_wc, permission) => {
