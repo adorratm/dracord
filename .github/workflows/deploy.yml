@@ -228,13 +228,13 @@ jobs:
             CHANGED=true
           elif [[ -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
             if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" \
-              | grep -E '^(apps/desktop/|apps/desktop-ui/)' >/dev/null; then
+              | grep -E '^(apps/desktop/|apps/desktop-ui/|packages/(ui|sdk|types|game-core|app-theme)/)' >/dev/null; then
               CHANGED=true
             fi
           else
-            # shallow / ilk push — desktop dosyalarına bak
+            # shallow / ilk push — desktop dosyalarına bak (ortak paketler de masaüstüne gömülür)
             if git ls-tree -r --name-only "${{ github.sha }}" \
-              | grep -E '^(apps/desktop/|apps/desktop-ui/)' >/dev/null; then
+              | grep -E '^(apps/desktop/|apps/desktop-ui/|packages/(ui|sdk|types|game-core|app-theme)/)' >/dev/null; then
               CHANGED=true
             fi
           fi
