@@ -40,6 +40,7 @@ export { PasskeysPanel } from './components/PasskeysPanel';
 export { E2eeDmBar } from './components/E2eeDmBar';
 export { buildSidebarCategories } from './lib/sidebar-channels';
 export { useRemoteControl } from './lib/use-remote-control';
+export { type RcRoomLike, sanitizeRcInput } from './lib/remote-control-rtc';
 export type { RemoteControlUi } from './lib/use-remote-control';
 export { E2eeDevicesPanel } from './components/E2eeDevicesPanel';
 export type { E2eeDevicesClient } from './components/E2eeDevicesPanel';

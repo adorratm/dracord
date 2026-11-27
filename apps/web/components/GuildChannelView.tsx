@@ -89,7 +89,7 @@ import { PinnedMessageBar } from '@/components/PinnedMessageBar';
 import dynamic from 'next/dynamic';
 import { GuildEventsModal } from '@/components/GuildEventsModal';
 import { useImageModeration } from '@/lib/use-image-moderation';
-import { AnnouncementFollowButton, ChannelExtrasSettings, MediaGalleryModal, GuildOnboardingModal, buildSidebarCategories, useRemoteControl } from '@dracord/ui';
+import { AnnouncementFollowButton, ChannelExtrasSettings, MediaGalleryModal, GuildOnboardingModal, buildSidebarCategories, useRemoteControl, type RcRoomLike } from '@dracord/ui';
 
 // Oyun/etkinlik görünümü (three.js vb.) ayrı parçada — kanal sayfası daha hızlı açılır
 const ActivityChannelView = dynamic(
@@ -186,6 +186,7 @@ export function GuildChannelView({
       ? user?.id
       : voice.activeScreenShare?.identity ?? null,
     localSharing: Boolean(voice.screenSharing),
+    room: voice.room as unknown as RcRoomLike | null,
   });
 
   // Uzak kontrol: kontrol edende en yüksek yayın katmanı, paylaşanda metin netliği

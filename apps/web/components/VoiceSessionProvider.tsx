@@ -99,6 +99,8 @@ export interface ActiveScreenShare {
 }
 
 interface VoiceSessionValue {
+  /** Etkin LiveKit odası (uzak kontrol veri kanalı vb.) */
+  room: Room | null;
   /** A8 — push-to-talk mode is on / the key is held right now */
   pushToTalk: boolean;
   pttHeld: boolean;
@@ -3207,6 +3209,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<VoiceSessionValue>(
     () => ({
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- oda bağlantı/katılımcı değişince memo zaten yenilenir
+      room: roomRef.current,
       pushToTalk: voiceInput.mode === 'ptt',
       pttHeld,
       voiceChannelId,

@@ -24,7 +24,7 @@ import {
   SCREEN_SHARE_VIEW_QUALITY_SPECS,
 } from '@/lib/voice-settings';
 import { useAuth } from '../auth';
-import { useRemoteControl } from '@dracord/ui';
+import { useRemoteControl, type RcRoomLike } from '@dracord/ui';
 import { loadLocalPrefs } from '../lib/client-settings';
 import { useVoiceSession } from '../voice/VoiceSession';
 import { ChatPanel } from './ChatPanel';
@@ -94,6 +94,7 @@ export function VoicePanel({
       ? user?.id
       : voice.activeScreenShare?.identity ?? null,
     localSharing: Boolean(voice.screenSharing),
+    room: voice.room as unknown as RcRoomLike | null,
   });
 
   // Uzak kontrol: kontrol edende en yüksek yayın katmanı, paylaşanda metin netliği

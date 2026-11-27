@@ -75,6 +75,8 @@ export class VoiceService {
       room: roomName,
       canPublish: true,
       canSubscribe: true,
+      // uzak kontrol girdisi doğrudan veri kanalından (açıkça; sunucu varsayılanına bırakılmaz)
+      canPublishData: true,
     });
 
     const jwt = await token.toJwt();

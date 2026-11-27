@@ -43,11 +43,17 @@ export function RemoteControlSurface({
   onPointer,
   onKey,
   onStop,
+  transport,
+  latencyMs,
 }: {
   mapPointerToNorm: (clientX: number, clientY: number) => Norm | null;
   onPointer?: (ev: RemoteControlPointerEvent) => void;
   onKey?: (ev: RemoteControlKeyEvent) => void;
   onStop?: () => void;
+  /** girdinin yolu: doğrudan (LiveKit) ya da sunucu üstünden */
+  transport?: 'direct' | 'server';
+  /** doğrudan yolda ölçülen gidiş-dönüş (ms) */
+  latencyMs?: number | null;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const lastNorm = useRef<Norm>({ nx: 0.5, ny: 0.5 });
@@ -317,6 +323,16 @@ export function RemoteControlSurface({
               ? 'Kontrol ediyorsun · Esc basılı tut = bırak'
               : 'Klavye için yüzeye tıkla'}
         </span>
+        {transport ? (
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 font-label-sm tabular-nums ${
+              transport === 'server' ? 'bg-white/10 text-white/70' : latencyMs != null && latencyMs > 120 ? 'bg-dracula-orange/30 text-white' : 'bg-dracula-green/25 text-white'
+            }`}
+            title={transport === 'direct' ? 'Girdi doğrudan ses bağlantısından gidiyor (sunucuya uğramıyor)' : 'Girdi sunucu üstünden gidiyor'}
+          >
+            {transport === 'direct' ? (latencyMs != null ? `${latencyMs} ms` : 'doğrudan') : 'sunucu'}
+          </span>
+        ) : null}
         <button
           type="button"
           className="h-7 shrink-0 rounded-full bg-dracula-orange/90 px-3 font-label-sm text-black hover:bg-dracula-orange"

@@ -85,6 +85,8 @@ export interface VoiceStageProps {
     controllerName?: string | null;
     pendingFromName?: string | null;
     notice?: string | null;
+    transport?: 'direct' | 'server';
+    latencyMs?: number | null;
   } | null;
   onRequestRemoteControl?: () => void;
   onAcceptRemoteControl?: () => void;
@@ -579,6 +581,8 @@ export function VoiceStage({
                           onPointer={onRemoteControlPointer}
                           onKey={onRemoteControlKey}
                           onStop={onStopRemoteControl}
+                          transport={remoteControl?.transport}
+                          latencyMs={remoteControl?.latencyMs}
                         />
                       )}
                     {remoteControl?.isSharer &&

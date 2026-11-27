@@ -62,7 +62,7 @@ Plan:
 **E. Gecikme / akıcılık**
 - Her olay: socket → API → socket → IPC → PowerShell `ConvertFrom-Json`. Fare hareketi 30 Hz.
 - [x] Fare hareketi socket **volatile** (tıkanınca birikmez), 60 Hz. Satır tabanlı protokol (JSON parse yok).
-- [ ] LiveKit data channel'a taşıma — ölçüm sonrası gerekirse.
+- [x] LiveKit veri kanalı: girdiler artık doğrudan paylaşanın kimliğine gider (hareket kayıplı, tık/tuş güvenilir), sunucuya uğramaz. Paylaşan yalnız sunucunun onayladığı kontrol edenden (LiveKit'in doğruladığı kimlik) ve oturum etkinken gelen veriyi uygular; girdi ayrıca daraltılır. Kontrol eden önce ping atar: paylaşan yanıt verirse doğrudan, vermezse (eski sürüm) ya da 6 sn susarsa/gönderim düşerse sunucu yolu — karışık sürümlerde kontrol kopmaz. Kontrol çubuğunda ölçülen gecikme (ms) ya da "sunucu" görünür. Mobil kontrol eden sunucu yolunu kullanmaya devam eder.
 - [x] `mouse_event/keybd_event` yerine `SendInput`. (Native modül/koffi gerekirse sonra.)
 
 **F. Görüntü kalitesi**

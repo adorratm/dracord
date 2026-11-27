@@ -6,6 +6,7 @@ import type {
   RemoteControlStatePayload,
 } from '@dracord/types';
 import type { DracordClient } from '@dracord/sdk';
+import { decodeRc, rcCanDirect, rcRoute, rcSend, RC_TOPIC, type RcDataListener, type RcInput, type RcRoomLike } from './remote-control-rtc';
 
 export type RemoteControlUi = {
   status: 'idle' | 'pending' | 'active';
@@ -15,7 +16,14 @@ export type RemoteControlUi = {
   pendingFromName: string | null;
   /** Paylaşan tarafta uyarı (ör. macOS Erişilebilirlik izni) */
   notice?: string | null;
+  /** Kontrol eden: girdinin yolu (doğrudan LiveKit / sunucu) ve ölçülen gidiş-dönüş */
+  transport?: 'direct' | 'server';
+  latencyMs?: number | null;
 };
+
+const PING_EVERY_MS = 2000;
+/** bu süre yanıt gelmezse doğrudan yol bırakılır, sunucuya dönülür */
+const PONG_TIMEOUT_MS = 6000;
 
 /**
  * Ekran paylaşımı uzak kontrol — sunucu tek controller otoritesi.
@@ -29,8 +37,14 @@ export function useRemoteControl(opts: {
   sharerId: string | null | undefined;
   /** Yerel ekran paylaşımı açık mı */
   localSharing: boolean;
+  /** LiveKit odası (varsa girdiler doğrudan gider) */
+  room?: RcRoomLike | null;
 }) {
-  const { client, userId, guildId, channelId, sharerId, localSharing } = opts;
+  const { client, userId, guildId, channelId, sharerId, localSharing, room } = opts;
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  /** son pong zamanı: paylaşan doğrudan yolu desteklediğini böyle kanıtlar (eski sürüm yanıt vermez) */
+  const [lastPongAt, setLastPongAt] = useState(0);
+  const lastPongRef = useRef(0);
   const [state, setState] = useState<RemoteControlStatePayload | null>(null);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const moveThrottle = useRef(0);
@@ -68,6 +82,18 @@ export function useRemoteControl(opts: {
     });
     const offInput = client.onRemoteControlInput((payload) => {
       if (payload.sharerId !== userId) return;
+      injectRef.current(payload);
+    });
+    return () => {
+      offState();
+      offReq();
+      offInput();
+    };
+  }, [client, channelId, sharerId, userId, localSharing]);
+
+  // Paylaşan: girdiyi masaüstüne uygula (socket ve LiveKit yolu aynı fonksiyondan geçer)
+  const injectRef = useRef<(p: RcInput) => void>(() => undefined);
+  injectRef.current = (payload: RcInput) => {
       const desktop = (
         window as Window & {
           dracordDesktop?: {
@@ -94,13 +120,43 @@ export function useRemoteControl(opts: {
           setNotice('Bu işletim sisteminde uzak kontrol desteklenmiyor.');
         }
       }).catch(() => undefined);
-    });
-    return () => {
-      offState();
-      offReq();
-      offInput();
+  };
+
+  // Paylaşan: LiveKit verisi — yalnız sunucunun onayladığı kontrol edenden, oturum etkinken
+  const authRef = useRef<{ controllerId: string | null; active: boolean }>({ controllerId: null, active: false });
+  authRef.current = {
+    controllerId: state?.controllerId ?? null,
+    active: Boolean(localSharing && userId && state?.sharerId === userId && state.status === 'active'),
+  };
+  // Kontrol eden: ping yanıtları
+  const pingsRef = useRef(new Map<number, number>());
+  useEffect(() => {
+    if (!room) return;
+    const onData: RcDataListener = (data, participant, _kind, topic) => {
+      if (topic !== RC_TOPIC || !participant) return;
+      const m = decodeRc(data);
+      if (!m) return;
+      if (m.k === 'pong') {
+        const sentAt = pingsRef.current.get(m.id);
+        if (sentAt !== undefined) {
+          pingsRef.current.delete(m.id);
+          const rtt = Math.round(performance.now() - sentAt);
+          setLatencyMs((prev) => (prev == null ? rtt : Math.round(prev * 0.6 + rtt * 0.4)));
+          lastPongRef.current = performance.now();
+          setLastPongAt(lastPongRef.current);
+        }
+        return;
+      }
+      const a = authRef.current;
+      if (!a.active || !a.controllerId || participant.identity !== a.controllerId) return;
+      if (m.k === 'ping') rcSend(room, participant.identity, { v: 1, k: 'pong', id: m.id });
+      else injectRef.current(m.p);
     };
-  }, [client, channelId, sharerId, userId, localSharing]);
+    room.on('dataReceived', onData);
+    return () => {
+      room.off('dataReceived', onData);
+    };
+  }, [room]);
 
   // Paylaşım bitince sunucu oturumunu da düşür + lokal state sıfırla
   useEffect(() => {
@@ -231,6 +287,61 @@ export function useRemoteControl(opts: {
 
   stopRef.current = stop;
 
+  const controlling = Boolean(state?.status === 'active' && state.controllerId === userId);
+  const reachable = controlling && rcCanDirect(room, sharerId);
+  /** doğrudan yol yalnız paylaşan yakın zamanda pong verdiyse (sürüm desteği + bağlantı kanıtı) */
+  const directOk = () =>
+    rcRoute({ reachable, lastPongAt: lastPongRef.current, now: performance.now(), timeoutMs: PONG_TIMEOUT_MS }) === 'direct';
+  const direct = reachable && lastPongAt > 0;
+
+  /** Kontrol eden: doğrudan (LiveKit) ya da sunucu üstünden gönder */
+  const deliver = useCallback(
+    (payload: RemoteControlInputPayload) => {
+      if (room && sharerId && directOk()) {
+        const { guildId: _g, channelId: _c, sharerId: _s, ...p } = payload;
+        rcSend(room, sharerId, { v: 1, k: 'in', p }, () => {
+          // gönderim başarısız: bu olayı sunucudan ilet, doğrudan yolu bırak
+          lastPongRef.current = 0;
+          setLastPongAt(0);
+          client.sendRemoteControlInput(payload);
+        });
+      } else {
+        client.sendRemoteControlInput(payload);
+      }
+    },
+    // directOk ref okur; reachable değişince yeniden oluşur
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [client, room, sharerId, reachable],
+  );
+
+  // Kontrol eden: el sıkışma + gecikme ölçümü; yanıt kesilirse sunucu yoluna dön
+  useEffect(() => {
+    if (!reachable || !room || !sharerId) {
+      setLatencyMs(null);
+      lastPongRef.current = 0;
+      setLastPongAt(0);
+      pingsRef.current.clear();
+      return;
+    }
+    let id = 0;
+    const t = window.setInterval(() => {
+      id += 1;
+      pingsRef.current.set(id, performance.now());
+      if (pingsRef.current.size > 10) pingsRef.current.delete(pingsRef.current.keys().next().value!);
+      rcSend(room, sharerId, { v: 1, k: 'ping', id });
+      if (lastPongRef.current > 0 && performance.now() - lastPongRef.current > PONG_TIMEOUT_MS) {
+        lastPongRef.current = 0;
+        setLastPongAt(0);
+        setLatencyMs(null);
+      }
+    }, PING_EVERY_MS);
+    // ilk ping hemen: el sıkışma beklemesin
+    id += 1;
+    pingsRef.current.set(id, performance.now());
+    rcSend(room, sharerId, { v: 1, k: 'ping', id });
+    return () => window.clearInterval(t);
+  }, [reachable, room, sharerId]);
+
   const sendPointer = useCallback(
     (ev: {
       type: 'move' | 'down' | 'up' | 'wheel';
@@ -256,9 +367,9 @@ export function useRemoteControl(opts: {
         button: ev.button,
         deltaY: ev.deltaY,
       };
-      client.sendRemoteControlInput(payload);
+      deliver(payload);
     },
-    [client, guildId, channelId, sharerId, state, userId],
+    [deliver, guildId, channelId, sharerId, state, userId],
   );
 
   const sendKey = useCallback(
@@ -274,7 +385,7 @@ export function useRemoteControl(opts: {
     }) => {
       if (!guildId || !channelId || !sharerId) return;
       if (state?.status !== 'active' || state.controllerId !== userId) return;
-      client.sendRemoteControlInput({
+      deliver({
         guildId,
         channelId,
         sharerId,
@@ -288,7 +399,7 @@ export function useRemoteControl(opts: {
         meta: ev.meta,
       });
     },
-    [client, guildId, channelId, sharerId, state, userId],
+    [deliver, guildId, channelId, sharerId, state, userId],
   );
 
   const ui: RemoteControlUi | null = useMemo(() => {
@@ -303,8 +414,10 @@ export function useRemoteControl(opts: {
       controllerName: state?.controllerName ?? null,
       pendingFromName: isSharer && status === 'pending' ? pendingName : null,
       notice: isSharer && status === 'active' ? notice : null,
+      transport: isController && status === 'active' ? (direct ? 'direct' : 'server') : undefined,
+      latencyMs: isController && direct ? latencyMs : null,
     };
-  }, [state, userId, localSharing, sharerId, pendingName, notice]);
+  }, [state, userId, localSharing, sharerId, pendingName, notice, direct, latencyMs]);
 
   return {
     remoteControl: ui,
