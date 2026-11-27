@@ -4,7 +4,20 @@
  * Exclusive fullscreen oyunlarda güvenilir değildir; borderless önerilir.
  */
 const { BrowserWindow, globalShortcut, screen, ipcMain } = require('electron');
-const presentmon = require('./presentmon');
+// FPS modülü isteğe bağlı: yüklenemezse uygulama açılmaya devam eder, yalnız FPS kapalı kalır
+let presentmon;
+try {
+  presentmon = require('./presentmon');
+} catch (e) {
+  console.warn('[desktop] presentmon yüklenemedi:', e && e.message);
+  presentmon = {
+    start() {},
+    stop() {},
+    currentFps: () => null,
+    getStatus: () => ({ status: 'error', error: 'FPS modülü yüklenemedi' }),
+    setupPermission: async () => ({ ok: false, error: 'FPS modülü yüklenemedi' }),
+  };
+}
 const os = require('os');
 const path = require('path');
 
