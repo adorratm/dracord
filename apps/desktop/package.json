@@ -1,6 +1,6 @@
 {
   "name": "@dracord/desktop",
-  "version": "0.1.64",
+  "version": "0.1.65",
   "private": true,
   "description": "Dracord native masaüstü istemcisi (Electron + desktop-ui)",
   "author": "Dracord",
@@ -53,7 +53,7 @@
       "dealer-tts.js",
       "desktop-games.js",
       "desktop-overlay.js",
-    "presentmon.js",
+      "presentmon.js",
       "desktop-adblock.js",
       "remote-input.js",
       "remote-input-mac.js",
