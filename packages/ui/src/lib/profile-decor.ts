@@ -7,19 +7,20 @@ const STYLE_ID = 'dracord-profile-decor-css';
 const ring = (bg: string) => `background:${bg};`;
 
 export const PROFILE_DECOR_CSS = `
-.avatar-deco{position:absolute;inset:-14%;border-radius:9999px;pointer-events:none;z-index:1;
+.avatar-deco{--deco-a:0deg;position:absolute;left:-14%;top:-14%;width:128%;height:auto;aspect-ratio:1;border-radius:9999px;pointer-events:none;z-index:1;
   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3.5px),#000 calc(100% - 3px));
           mask:radial-gradient(farthest-side,transparent calc(100% - 3.5px),#000 calc(100% - 3px));}
-.avatar-deco--neon{${ring('conic-gradient(from 0deg,#ff79c6,#bd93f9,#8be9fd,#50fa7b,#ff79c6)')}animation:deco-spin 3s linear infinite;filter:drop-shadow(0 0 4px #bd93f9);}
-.avatar-deco--dracula{${ring('conic-gradient(from 90deg,#bd93f9,#6272a4,#ff79c6,#6272a4,#bd93f9)')}animation:deco-spin 6s linear infinite;}
-.avatar-deco--fire{${ring('conic-gradient(from 180deg,#ff5555,#ffb86c,#f1fa8c,#ffb86c,#ff5555)')}animation:deco-flicker .9s ease-in-out infinite;filter:drop-shadow(0 0 5px #ff8a3d);}
-.avatar-deco--ice{${ring('conic-gradient(from 0deg,#e0fbff,#8be9fd,#5bc0eb,#e0fbff,#8be9fd)')}animation:deco-spin 8s linear infinite;filter:drop-shadow(0 0 4px #8be9fd);}
-.avatar-deco--sakura{${ring('conic-gradient(from 0deg,#ffd1dc,#ff9ec7,#ffffff,#ff9ec7,#ffd1dc)')}animation:deco-spin 10s linear infinite;}
-.avatar-deco--galaxy{${ring('conic-gradient(from 0deg,#1b1464,#6a0dad,#c471ed,#12c2e9,#1b1464)')}animation:deco-spin 4s linear infinite;filter:drop-shadow(0 0 5px #c471ed);}
-.avatar-deco--gold{${ring('conic-gradient(from 0deg,#b8860b,#ffd700,#fff4b0,#ffd700,#b8860b)')}animation:deco-spin 5s linear infinite;filter:drop-shadow(0 0 3px #ffd700);}
-.avatar-deco--rainbow{${ring('conic-gradient(red,orange,yellow,lime,cyan,blue,violet,red)')}animation:deco-spin 2.5s linear infinite;}
-@keyframes deco-spin{to{transform:rotate(360deg)}}
-@keyframes deco-flicker{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.8;transform:scale(1.04)}}
+.avatar-deco--neon{${ring('conic-gradient(from calc(var(--deco-a) + 0deg),#ff79c6,#bd93f9,#8be9fd,#50fa7b,#ff79c6)')}animation:deco-spin 3s linear infinite;filter:drop-shadow(0 0 4px #bd93f9);}
+.avatar-deco--dracula{${ring('conic-gradient(from calc(var(--deco-a) + 90deg),#bd93f9,#6272a4,#ff79c6,#6272a4,#bd93f9)')}animation:deco-spin 6s linear infinite;}
+.avatar-deco--fire{${ring('conic-gradient(from calc(var(--deco-a) + 180deg),#ff5555,#ffb86c,#f1fa8c,#ffb86c,#ff5555)')}animation:deco-flicker .9s ease-in-out infinite;filter:drop-shadow(0 0 5px #ff8a3d);}
+.avatar-deco--ice{${ring('conic-gradient(from calc(var(--deco-a) + 0deg),#e0fbff,#8be9fd,#5bc0eb,#e0fbff,#8be9fd)')}animation:deco-spin 8s linear infinite;filter:drop-shadow(0 0 4px #8be9fd);}
+.avatar-deco--sakura{${ring('conic-gradient(from calc(var(--deco-a) + 0deg),#ffd1dc,#ff9ec7,#ffffff,#ff9ec7,#ffd1dc)')}animation:deco-spin 10s linear infinite;}
+.avatar-deco--galaxy{${ring('conic-gradient(from calc(var(--deco-a) + 0deg),#1b1464,#6a0dad,#c471ed,#12c2e9,#1b1464)')}animation:deco-spin 4s linear infinite;filter:drop-shadow(0 0 5px #c471ed);}
+.avatar-deco--gold{${ring('conic-gradient(from calc(var(--deco-a) + 0deg),#b8860b,#ffd700,#fff4b0,#ffd700,#b8860b)')}animation:deco-spin 5s linear infinite;filter:drop-shadow(0 0 3px #ffd700);}
+.avatar-deco--rainbow{${ring('conic-gradient(from var(--deco-a),red,orange,yellow,lime,cyan,blue,violet,red)')}animation:deco-spin 2.5s linear infinite;}
+@property --deco-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes deco-spin{to{--deco-a:360deg}}
+@keyframes deco-flicker{0%,100%{opacity:1}50%{opacity:.75}}
 
 .profile-fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2;border-radius:inherit}
 .profile-fx::before,.profile-fx::after{content:'';position:absolute;left:0;right:0;top:-100%;height:200%;background-repeat:repeat;animation:fx-fall 9s linear infinite}
