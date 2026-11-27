@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { channelIdFromHtml, parseHandle, parseYoutubeFeed, renderAlert } from './feeds';
+import { channelIdFromHtml, kickDecision, parseHandle, parseYoutubeFeed, renderAlert } from './feeds';
 
 const XML = `<?xml version="1.0"?><feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"><title>Kanal &amp; Ben</title>
 <entry><yt:videoId>old11111111</yt:videoId><title>Eski</title><published>2026-11-01T10:00:00+00:00</published></entry>
@@ -36,5 +36,25 @@ describe('stream feeds', () => {
     const v = { name: 'Ayşe', title: 'Okey\ngecesi', url: 'https://twitch.tv/ayse', platform: 'twitch' as const, live: true };
     assert.match(renderAlert(null, v), /Ayşe.*Okey gecesi/);
     assert.equal(renderAlert('{name} yayında!', v), 'Ayşe yayında!\nhttps://twitch.tv/ayse');
+  });
+});
+
+describe('kick', () => {
+  it('normalizes kick input', () => {
+    assert.deepEqual(parseHandle('kick', 'https://kick.com/Ayse_Oyun'), { platform: 'kick', handle: 'ayse_oyun' });
+    assert.deepEqual(parseHandle('kick', '@xqc'), { platform: 'kick', handle: 'xqc' });
+    assert.equal(parseHandle('kick', 'a b'), null);
+  });
+
+  it('notifies once per stream and marks offline', () => {
+    const now = Date.parse('2026-11-27T20:00:00Z');
+    const live = { live: true, startedAt: '2026-11-27T19:58:00Z', title: 'Okey' };
+    const fresh = { isLive: false, lastItemId: null, lastError: null };
+    assert.deepEqual(kickDecision(fresh, live, now), { kind: 'live', itemId: live.startedAt, notify: true });
+    assert.deepEqual(kickDecision({ ...fresh, isLive: true, lastItemId: live.startedAt }, live, now), { kind: 'none' });
+    const old = { ...live, startedAt: '2026-11-27T15:00:00Z' };
+    assert.deepEqual(kickDecision(fresh, old, now), { kind: 'live', itemId: old.startedAt, notify: false });
+    assert.deepEqual(kickDecision({ ...fresh, isLive: true, lastItemId: 'x' }, { live: false, startedAt: null, title: '' }, now), { kind: 'offline' });
+    assert.match(renderAlert(null, { name: 'ayse', title: 'Okey', url: 'https://kick.com/ayse', platform: 'kick', live: true }), /Kick'te canlı/);
   });
 });

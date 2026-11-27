@@ -18,9 +18,10 @@ export interface StreamAlertsPanelProps {
   channels: Array<{ id: string; name: string }>;
 }
 
-const PLATFORM: Record<StreamPlatform, { label: string; color: string; placeholder: string }> = {
-  twitch: { label: 'Twitch', color: '#9146ff', placeholder: 'twitch.tv/kullanici ya da kullanıcı adı' },
-  youtube: { label: 'YouTube', color: '#ff0033', placeholder: 'youtube.com/@kanal ya da /channel/UC…' },
+const PLATFORM: Record<StreamPlatform, { label: string; color: string; ink: string; placeholder: string }> = {
+  youtube: { label: 'YouTube', color: '#ff0033', ink: '#ffffff', placeholder: 'youtube.com/@kanal ya da /channel/UC…' },
+  twitch: { label: 'Twitch', color: '#9146ff', ink: '#ffffff', placeholder: 'twitch.tv/kullanici ya da kullanıcı adı' },
+  kick: { label: 'Kick', color: '#53fc18', ink: '#0b0e0f', placeholder: 'kick.com/kanal ya da kanal adı' },
 };
 
 const field = 'h-10 rounded-lg bg-surface-container-highest px-space-sm font-body-sm text-on-surface outline-none focus:ring-1 focus:ring-primary';
@@ -79,19 +80,19 @@ export function StreamAlertsPanel({ client, guildId, channels }: StreamAlertsPan
             setData((d) => (d ? { ...d, alerts: [...d.alerts, a] } : d));
             setHandle('');
             setMessage('');
-            return `${a.displayName} eklendi. Yeni ${platform === 'twitch' ? 'yayınlar' : 'videolar ve yayınlar'} #${chName(a.channelId)} kanalına düşecek.`;
+            return `${a.displayName} eklendi. Yeni ${platform === 'youtube' ? 'videolar ve yayınlar' : 'yayınlar'} #${chName(a.channelId)} kanalına düşecek.`;
           });
         }}
       >
         <div className="flex rounded-lg bg-surface-container-highest p-0.5 sm:row-span-1">
-          {(['youtube', 'twitch'] as const).map((p) => (
+          {(['youtube', 'twitch', 'kick'] as const).map((p) => (
             <button
               key={p}
               type="button"
               onClick={() => setPlatform(p)}
               aria-pressed={platform === p}
-              className={`rounded-md px-3 py-1.5 font-label-md ${platform === p ? 'text-white' : 'text-on-surface-variant hover:text-on-surface'}`}
-              style={platform === p ? { background: PLATFORM[p].color } : undefined}
+              className={`rounded-md px-3 py-1.5 font-label-md ${platform === p ? '' : 'text-on-surface-variant hover:text-on-surface'}`}
+              style={platform === p ? { background: PLATFORM[p].color, color: PLATFORM[p].ink } : undefined}
             >
               {PLATFORM[p].label}
             </button>
@@ -118,7 +119,7 @@ export function StreamAlertsPanel({ client, guildId, channels }: StreamAlertsPan
         <div className="flex items-center gap-space-sm sm:col-span-2">
           <button
             type="submit"
-            disabled={!!busy || full || !handle.trim() || !channelId || (platform === 'twitch' && !data.twitchEnabled)}
+            disabled={!!busy || full || !handle.trim() || !channelId || (platform === 'twitch' && !data.twitchEnabled) || (platform === 'kick' && !data.kickEnabled)}
             className="rounded-lg bg-primary px-4 py-2 font-label-md text-on-primary disabled:opacity-50"
           >
             {busy === 'add' ? 'Ekleniyor…' : 'Ekle'}
@@ -126,6 +127,7 @@ export function StreamAlertsPanel({ client, guildId, channels }: StreamAlertsPan
           <span className="font-label-sm text-on-surface-variant">
             {data.alerts.length}/{data.max}
             {platform === 'twitch' && !data.twitchEnabled ? ' · Twitch henüz bu sunucuda açılmadı' : ''}
+            {platform === 'kick' && !data.kickEnabled ? ' · Kick henüz bu sunucuda açılmadı' : ''}
           </span>
         </div>
       </form>
@@ -138,7 +140,7 @@ export function StreamAlertsPanel({ client, guildId, channels }: StreamAlertsPan
         <ul className="divide-y divide-outline-variant/40 rounded-xl bg-surface-container-high">
           {data.alerts.map((a) => (
             <li key={a.id} className="flex flex-wrap items-center gap-space-sm p-space-sm">
-              <span className="rounded px-1.5 py-0.5 font-label-sm text-white" style={{ background: PLATFORM[a.platform].color }}>
+              <span className="rounded px-1.5 py-0.5 font-label-sm" style={{ background: PLATFORM[a.platform].color, color: PLATFORM[a.platform].ink }}>
                 {PLATFORM[a.platform].label}
               </span>
               <span className="min-w-0 flex-1">

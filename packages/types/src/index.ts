@@ -2899,7 +2899,7 @@ export interface KanbanCardInput {
 export * from './focus';
 
 /** D7 — Twitch / YouTube canlı yayın bildirimi */
-export type StreamPlatform = 'twitch' | 'youtube';
+export type StreamPlatform = 'twitch' | 'youtube' | 'kick';
 
 export interface StreamAlertDto {
   id: string;
@@ -2918,6 +2918,8 @@ export interface StreamAlertsListDto {
   alerts: StreamAlertDto[];
   /** Twitch için sunucuda TWITCH_CLIENT_ID/SECRET tanımlı mı */
   twitchEnabled: boolean;
+  /** Kick için sunucuda KICK_CLIENT_ID/SECRET tanımlı mı */
+  kickEnabled: boolean;
   max: number;
 }
 

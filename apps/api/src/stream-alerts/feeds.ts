@@ -2,10 +2,12 @@
 
 export type ParsedHandle =
   | { platform: 'twitch'; handle: string }
+  | { platform: 'kick'; handle: string }
   | { platform: 'youtube'; channelId: string }
   | { platform: 'youtube'; at: string };
 
 const TWITCH_LOGIN = /^[a-zA-Z0-9_]{3,25}$/;
+const KICK_SLUG = /^[a-zA-Z0-9_-]{3,25}$/;
 const YT_CHANNEL = /^UC[a-zA-Z0-9_-]{22}$/;
 const YT_AT = /^@?[a-zA-Z0-9._-]{3,30}$/;
 
@@ -17,6 +19,11 @@ export function parseHandle(platform: string, raw: string): ParsedHandle | null 
     const m = s.match(/twitch\.tv\/([a-zA-Z0-9_]+)/i);
     const login = (m ? m[1]! : s.replace(/^@/, '')).toLowerCase();
     return TWITCH_LOGIN.test(login) ? { platform: 'twitch', handle: login } : null;
+  }
+  if (platform === 'kick') {
+    const m = s.match(/kick\.com\/([a-zA-Z0-9_-]+)/i);
+    const slug = (m ? m[1]! : s.replace(/^@/, '')).toLowerCase();
+    return KICK_SLUG.test(slug) ? { platform: 'kick', handle: slug } : null;
   }
   if (platform === 'youtube') {
     const ch = s.match(/(UC[a-zA-Z0-9_-]{22})/);
@@ -71,16 +78,40 @@ export function channelIdFromHtml(html: string): string | null {
 /** bildirim metni: kullanıcı şablonu ya da varsayılan; Markdown kırıcı karakterler kırpılır */
 export function renderAlert(
   template: string | null,
-  v: { name: string; title: string; url: string; platform: 'twitch' | 'youtube'; live: boolean },
+  v: { name: string; title: string; url: string; platform: 'twitch' | 'youtube' | 'kick'; live: boolean },
 ): string {
   const clean = (s: string) => s.replace(/[\r\n]+/g, ' ').slice(0, 200);
   const def =
     v.platform === 'twitch'
       ? '🔴 **{name}** Twitch\'te canlı: {title}\n{url}'
+      : v.platform === 'kick'
+        ? '🟢 **{name}** Kick\'te canlı: {title}\n{url}'
       : v.live
         ? '🔴 **{name}** YouTube\'da canlı: {title}\n{url}'
         : '▶️ **{name}** yeni video yükledi: {title}\n{url}';
   const t = template?.trim() ? template : def;
   const out = t.replace(/\{name\}/g, clean(v.name)).replace(/\{title\}/g, clean(v.title) || '—').replace(/\{url\}/g, v.url);
   return out.includes(v.url) ? out : `${out}\n${v.url}`;
+}
+
+export interface KickChannelState {
+  live: boolean;
+  /** yayının başlangıcı — Kick yayın kimliği vermez, tekrar bildirmeyi bununla önleriz */
+  startedAt: string | null;
+  title: string;
+}
+
+/** Kick satırı için ne yapılacak: hiçbir şey / çevrimdışı işaretle / yeni yayın (bildir ya da sessizce kaydet) */
+export function kickDecision(
+  row: { isLive: boolean; lastItemId: string | null; lastError: string | null },
+  s: KickChannelState | undefined,
+  now: number,
+): { kind: 'none' } | { kind: 'offline' } | { kind: 'live'; itemId: string; notify: boolean } {
+  if (!s || !s.live) return row.isLive || row.lastError ? { kind: 'offline' } : { kind: 'none' };
+  const itemId = (s.startedAt ?? 'live').slice(0, 64);
+  if (itemId === row.lastItemId) return { kind: 'none' };
+  const started = s.startedAt ? Date.parse(s.startedAt) : NaN;
+  // ilk eklemede yalnız son 15 dk içinde başladıysa bildir (eski yayına geç bildirim yok)
+  const recent = Number.isFinite(started) && now - started < 15 * 60_000;
+  return { kind: 'live', itemId, notify: !!row.lastItemId || recent };
 }

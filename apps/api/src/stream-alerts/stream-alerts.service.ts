@@ -16,7 +16,7 @@ import { ChannelType } from '@/database/enums';
 import { StreamAlert } from '@/database/entities/stream-alert.entity';
 import { GuildsService } from '@/guilds/guilds.service';
 import { MessagesService } from '@/messages/messages.service';
-import { channelIdFromHtml, parseHandle, parseYoutubeFeed, renderAlert } from './feeds';
+import { channelIdFromHtml, kickDecision, parseHandle, parseYoutubeFeed, renderAlert, type KickChannelState } from './feeds';
 
 const MAX_PER_GUILD = 10;
 const POLL_MS = 60_000;
@@ -42,6 +42,7 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private twitchToken: { value: string; exp: number } | null = null;
+  private kickToken: { value: string; exp: number } | null = null;
 
   constructor(
     private readonly em: EntityManager,
@@ -52,6 +53,10 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
 
   get twitchEnabled(): boolean {
     return !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET);
+  }
+
+  get kickEnabled(): boolean {
+    return !!(process.env.KICK_CLIENT_ID && process.env.KICK_CLIENT_SECRET);
   }
 
   onModuleInit(): void {
@@ -89,7 +94,7 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
   async list(guildId: string, userId: string): Promise<StreamAlertsListDto> {
     await this.assertManage(guildId, userId);
     const rows = await this.em.find(StreamAlert, { where: { guildId }, order: { createdAt: 'ASC' } });
-    return { alerts: rows.map((r) => this.dto(r)), twitchEnabled: this.twitchEnabled, max: MAX_PER_GUILD };
+    return { alerts: rows.map((r) => this.dto(r)), twitchEnabled: this.twitchEnabled, kickEnabled: this.kickEnabled, max: MAX_PER_GUILD };
   }
 
   async create(
@@ -98,13 +103,24 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
     raw: { platform?: unknown; handle?: unknown; channelId?: unknown; message?: unknown },
   ): Promise<StreamAlertDto> {
     await this.assertManage(guildId, userId);
-    const platform = raw?.platform === 'twitch' || raw?.platform === 'youtube' ? raw.platform : null;
-    if (!platform) throw new BadRequestException('Platform twitch ya da youtube olmalı');
+    const platform = raw?.platform === 'twitch' || raw?.platform === 'youtube' || raw?.platform === 'kick' ? raw.platform : null;
+    if (!platform) throw new BadRequestException('Platform twitch, youtube ya da kick olmalı');
+    if (platform === 'kick' && !this.kickEnabled) {
+      throw new BadRequestException('Kick bildirimleri bu sunucuda henüz açılmadı (yönetici KICK_CLIENT_ID/SECRET eklemeli)');
+    }
     if (platform === 'twitch' && !this.twitchEnabled) {
       throw new BadRequestException('Twitch bildirimleri bu sunucuda henüz açılmadı (yönetici TWITCH_CLIENT_ID/SECRET eklemeli)');
     }
     const parsed = parseHandle(platform, typeof raw.handle === 'string' ? raw.handle : '');
-    if (!parsed) throw new BadRequestException(platform === 'twitch' ? 'Geçerli bir Twitch kullanıcı adı ya da bağlantısı gir' : 'Geçerli bir YouTube kanal bağlantısı (@kullanıcı ya da /channel/UC…) gir');
+    if (!parsed) {
+      throw new BadRequestException(
+        platform === 'twitch'
+          ? 'Geçerli bir Twitch kullanıcı adı ya da bağlantısı gir'
+          : platform === 'kick'
+            ? 'Geçerli bir Kick kanal adı ya da bağlantısı (kick.com/kanal) gir'
+            : 'Geçerli bir YouTube kanal bağlantısı (@kullanıcı ya da /channel/UC…) gir',
+      );
+    }
     const channelId = typeof raw.channelId === 'string' ? raw.channelId : '';
     const ch = await this.em.findOne(Channel, { where: { id: channelId, guildId } });
     if (!ch || ch.type !== ChannelType.TEXT) throw new BadRequestException('Bildirim kanalı bu sunucudaki bir metin kanalı olmalı');
@@ -118,6 +134,13 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
     if (parsed.platform === 'twitch') {
       handle = parsed.handle;
       displayName = await this.twitchDisplayName(handle).catch(() => handle);
+    } else if (parsed.platform === 'kick') {
+      handle = parsed.handle;
+      const found = await this.kickChannels([handle]).catch(() => {
+        throw new BadRequestException('Kick\'e ulaşılamadı — biraz sonra tekrar dene');
+      });
+      if (!found.has(handle)) throw new BadRequestException('Kick kanalı bulunamadı');
+      displayName = handle;
     } else {
       handle = 'channelId' in parsed ? parsed.channelId : await this.resolveYoutubeAt(parsed.at);
       const feed = parseYoutubeFeed(await getText(`https://www.youtube.com/feeds/videos.xml?channel_id=${handle}`).catch(() => {
@@ -163,7 +186,12 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
     await this.assertManage(guildId, userId);
     const row = await this.em.findOne(StreamAlert, { where: { id, guildId } });
     if (!row) throw new NotFoundException('Bildirim bulunamadı');
-    const url = row.platform === 'twitch' ? `https://www.twitch.tv/${row.handle}` : `https://www.youtube.com/channel/${row.handle}`;
+    const url =
+      row.platform === 'twitch'
+        ? `https://www.twitch.tv/${row.handle}`
+        : row.platform === 'kick'
+          ? `https://kick.com/${row.handle}`
+          : `https://www.youtube.com/channel/${row.handle}`;
     await this.post(row, `🧪 Deneme · ${renderAlert(row.message, { name: row.displayName, title: 'Örnek yayın başlığı', url, platform: row.platform as StreamPlatform, live: true })}`);
     return { ok: true };
   }
@@ -197,8 +225,10 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
 
   private async checkRows(rows: StreamAlert[]): Promise<void> {
     const tw = rows.filter((r) => r.platform === 'twitch');
+    const kk = rows.filter((r) => r.platform === 'kick');
     const yt = rows.filter((r) => r.platform === 'youtube');
     if (tw.length && this.twitchEnabled) await this.checkTwitch(tw).catch((e) => this.markError(tw, e));
+    if (kk.length && this.kickEnabled) await this.checkKick(kk).catch((e) => this.markError(kk, e));
     for (const r of yt) await this.checkYoutube(r).catch((e) => this.markError([r], e));
   }
 
@@ -273,6 +303,61 @@ export class StreamAlertsService implements OnModuleInit, OnModuleDestroy {
       await this.em.update(StreamAlert, { id: r.id }, { isLive: true, lastItemId: s.id, lastError: null, ...(notify ? { lastNotifiedAt: new Date() } : {}) });
       if (notify) {
         await this.post(r, renderAlert(r.message, { name: s.user_name || r.displayName, title: s.title, url: `https://www.twitch.tv/${r.handle}`, platform: 'twitch', live: true }));
+      }
+    }
+  }
+
+  // ── Kick (resmî public API, uygulama belirteci) ──────────────────
+
+  private async kickAuth(): Promise<string> {
+    if (this.kickToken && this.kickToken.exp > Date.now() + 60_000) return this.kickToken.value;
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: process.env.KICK_CLIENT_ID!,
+      client_secret: process.env.KICK_CLIENT_SECRET!,
+    });
+    const j = JSON.parse(
+      await getText('https://id.kick.com/oauth/token', { method: 'POST', body, headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
+    ) as { access_token?: string; expires_in?: number | string };
+    if (!j.access_token) throw new Error('Kick kimlik doğrulaması başarısız');
+    this.kickToken = { value: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+    return j.access_token;
+  }
+
+  /** slug → kanal durumu (yalnız bulunanlar) */
+  private async kickChannels(slugs: string[]): Promise<Map<string, KickChannelState>> {
+    const token = await this.kickAuth();
+    const out = new Map<string, KickChannelState>();
+    for (let i = 0; i < slugs.length; i += 50) {
+      const q = slugs.slice(i, i + 50).map((s) => `slug=${encodeURIComponent(s)}`).join('&');
+      const j = JSON.parse(await getText(`https://api.kick.com/public/v1/channels?${q}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } })) as {
+        data?: Array<{ slug?: string; stream_title?: string; stream?: { is_live?: boolean; start_time?: string } | null }>;
+      };
+      for (const c of j.data ?? []) {
+        if (!c.slug) continue;
+        out.set(c.slug.toLowerCase(), {
+          live: !!c.stream?.is_live,
+          startedAt: c.stream?.start_time ?? null,
+          title: c.stream_title ?? '',
+        });
+      }
+    }
+    return out;
+  }
+
+  private async checkKick(rows: StreamAlert[]): Promise<void> {
+    const states = await this.kickChannels([...new Set(rows.map((r) => r.handle))]);
+    for (const r of rows) {
+      const s = states.get(r.handle);
+      const d = kickDecision(r, s, Date.now());
+      if (d.kind === 'none') continue;
+      if (d.kind === 'offline') {
+        await this.em.update(StreamAlert, { id: r.id }, { isLive: false, lastError: null });
+        continue;
+      }
+      await this.em.update(StreamAlert, { id: r.id }, { isLive: true, lastItemId: d.itemId, lastError: null, ...(d.notify ? { lastNotifiedAt: new Date() } : {}) });
+      if (d.notify) {
+        await this.post(r, renderAlert(r.message, { name: r.displayName, title: s!.title, url: `https://kick.com/${r.handle}`, platform: 'kick', live: true }));
       }
     }
   }

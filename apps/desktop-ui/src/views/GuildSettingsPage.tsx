@@ -1022,7 +1022,7 @@ export function GuildSettingsPage({
             <section className="max-w-3xl">
               <h2 className="font-headline-lg text-on-surface mb-space-sm">Yayın bildirimleri</h2>
               <p className="font-body-sm text-on-surface-variant mb-space-md">
-                Twitch ya da YouTube'da yayın açılınca veya yeni video gelince Dracord Bot seçtiğin kanala haber verir.
+                YouTube, Twitch ya da Kick'te yayın açılınca veya yeni video gelince Dracord Bot seçtiğin kanala haber verir.
               </p>
               <StreamAlertsPanel
                 client={client}
