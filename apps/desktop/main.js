@@ -130,18 +130,58 @@ async function ensureMacMediaAccess(mediaTypes) {
   return true;
 }
 
-async function listDesktopCaptureSources() {
-  if (process.platform === 'darwin') {
-    const status = systemPreferences.getMediaAccessStatus('screen');
-    if (status !== 'granted') {
-      console.warn('[desktop] screen capture permission:', status);
-    }
-  }
-  const sources = await desktopCapturer.getSources({
-    types: ['screen', 'window'],
-    thumbnailSize: { width: 320, height: 180 },
-    fetchWindowIcons: true,
+/**
+ * macOS ekran kaydı izni (TCC). Ad-hoc imzalı sürümlerde her güncelleme imzayı değiştirir;
+ * listede "açık" görünen eski kayıt yeni sürüm için geçersiz kalır → getSources hata verir
+ * ya da yalnızca duvar kağıdını döndürür. Kullanıcıyı doğru ayara yönlendir.
+ */
+const MAC_SCREEN_PERMISSION_MESSAGE =
+  'macOS ekran kaydı izni yok. Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Sesi Kaydı bölümünde Dracord’u aç, sonra Dracord’u tamamen kapatıp yeniden başlat.';
+let macScreenHintAt = 0;
+async function macScreenPermissionHint() {
+  // aynı oturumda art arda pencere açma (10 sn)
+  if (Date.now() - macScreenHintAt < 10_000) return;
+  macScreenHintAt = Date.now();
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Ayarları aç', 'Kapat'],
+    defaultId: 0,
+    message: 'Ekran paylaşımı için macOS izni gerekli',
+    detail:
+      'Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Sesi Kaydı bölümünde Dracord’u aç.\n\n' +
+      'Dracord listede zaten açıksa: güncelleme sonrası eski izin geçersiz kalmış olabilir. ' +
+      'Dracord’u seçip “−” ile kaldır, “+” ile tekrar ekle (veya kapatıp aç).\n\n' +
+      'Ardından Dracord’u tamamen kapat (⌘Q) ve yeniden aç.',
   });
+  if (response === 0) {
+    void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+  }
+}
+
+async function listDesktopCaptureSources() {
+  const mac = process.platform === 'darwin';
+  const granted = !mac || systemPreferences.getMediaAccessStatus('screen') === 'granted';
+  let sources;
+  try {
+    // izin yokken de çağır: ilk seferde macOS izin penceresini açar ve Dracord'u listeye ekler
+    sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: true,
+    });
+  } catch (err) {
+    console.warn('[desktop] getSources failed', err);
+    if (mac) {
+      void macScreenPermissionHint();
+      throw new Error(MAC_SCREEN_PERMISSION_MESSAGE);
+    }
+    throw new Error('Ekran kaynakları alınamadı. Uygulamayı yeniden başlatıp tekrar dene.');
+  }
+  if (!granted) {
+    console.warn('[desktop] screen capture permission not granted');
+    void macScreenPermissionHint();
+    throw new Error(MAC_SCREEN_PERMISSION_MESSAGE);
+  }
   return sources.map((s) => ({
     id: s.id,
     name: s.name,
@@ -244,6 +284,7 @@ function registerMediaCaptureHandlers() {
         } catch (err) {
           console.error('[desktop] displayMedia handler', err);
           pendingDisplayMediaSelection = null;
+          if (process.platform === 'darwin') void macScreenPermissionHint();
           callback({});
         }
       },

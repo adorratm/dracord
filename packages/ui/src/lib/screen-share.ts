@@ -29,9 +29,26 @@ export function screenShareSimulcastLayersForHeight(height: number): VideoPreset
   return [VideoPresets.h180];
 }
 
+/** Electron IPC hatası önekini at: "Error invoking remote method 'x': Error: asıl mesaj" */
+export function stripIpcErrorPrefix(msg: string): string {
+  return msg.replace(/^Error invoking remote method '[^']*':\s*(?:\w*Error:\s*)?/, '');
+}
+
+const MAC_SCREEN_PERMISSION_HINT =
+  'macOS ekran kaydı izni yok. Sistem Ayarları › Gizlilik ve Güvenlik › Ekran ve Sistem Sesi Kaydı bölümünde Dracord’u aç, sonra Dracord’u tamamen kapatıp yeniden başlat.';
+
+function isMacPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Mac/i.test(navigator.platform || navigator.userAgent || '');
+}
+
 export function screenShareErrorMessage(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
-  const msg = err instanceof Error ? err.message : String(err);
+  const msg = stripIpcErrorPrefix(err instanceof Error ? err.message : String(err));
+  // macOS: sistem (TCC) reddi — kullanıcı iptal etmedi, izin eksik
+  if (/by system|failed to get sources/i.test(msg) || (isMacPlatform() && name === 'NotReadableError')) {
+    return isMacPlatform() ? MAC_SCREEN_PERMISSION_HINT : 'Ekran paylaşımı sistem tarafından engellendi.';
+  }
   if (
     name === 'NotAllowedError' ||
     /permission denied|notallowed|denied by user/i.test(msg)

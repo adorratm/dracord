@@ -455,7 +455,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setPickerOpen(false);
       setPickerLoading(false);
-      setStatus(err instanceof Error ? err.message : 'Ekran kaynakları alınamadı');
+      setStatus(err instanceof Error ? screenShareErrorMessage(err) : 'Ekran kaynakları alınamadı');
       return null;
     }
   }, []);
